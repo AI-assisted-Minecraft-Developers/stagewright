@@ -34,6 +34,29 @@ public final class SceneContext {
         this.origin = origin;
     }
 
+    /** The backing server level — for scenes that drive entities/avatars directly. */
+    public ServerLevel level() { return level; }
+
+    /** Absolute origin of this scene's grid cell (scene code should prefer rel()). */
+    public BlockPos origin() { return origin; }
+
+    private final Deque<Runnable> cleanups = new ArrayDeque<>();
+
+    /**
+     * Register teardown to run when the scene resolves — on PASS, FAIL and
+     * TIMEOUT alike (LIFO). Use for avatar discard, config unpin, entity kill:
+     * anything that must not leak into the next scene.
+     */
+    public void cleanup(Runnable r) { cleanups.addFirst(r); }
+
+    /** Harness-internal: drain cleanups; exceptions logged, never thrown. */
+    public void runCleanups(Consumer<String> warn) {
+        for (Runnable r : cleanups) {
+            try { r.run(); } catch (Throwable t) { warn.accept("cleanup failed: " + t); }
+        }
+        cleanups.clear();
+    }
+
     // ---- world ops (origin-relative; scenes never see absolute coordinates) ----
 
     public BlockPos rel(int dx, int dy, int dz) {

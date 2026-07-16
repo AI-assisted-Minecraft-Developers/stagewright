@@ -1,6 +1,8 @@
 package net.magicterra.testkit.scene;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.ServiceLoader;
 import net.minecraft.world.level.block.Blocks;
 
 /**
@@ -10,7 +12,17 @@ import net.minecraft.world.level.block.Blocks;
 public final class Scenes {
     private Scenes() {}
 
+    /** Built-in scenes first, then downstream {@link SceneProvider} contributions in
+     *  ServiceLoader discovery order — execution order mirrors this concatenation. */
     public static List<Scene> all() {
+        List<Scene> out = new ArrayList<>(builtin());
+        for (SceneProvider p : ServiceLoader.load(SceneProvider.class)) {
+            out.addAll(p.scenes());
+        }
+        return List.copyOf(out);
+    }
+
+    private static List<Scene> builtin() {
         return List.of(
                 // -- walking-skeleton scenes --
                 Scene.of("floorAssert", 100, ctx -> {

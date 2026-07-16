@@ -89,14 +89,14 @@ public final class TestkitHarness {
                     sceneStartMs = System.currentTimeMillis();
                 }
                 phaseTicks++;
-                if (level.hasChunkAt(origin)) {
+                if (allChunksLoaded(level, origin)) {
                     ctx = new SceneContext(level, origin);
                     phase = Phase.RUN;
                     phaseTicks = 0;
                 } else if (phaseTicks > PREP_BUDGET_TICKS) {
                     record(scene, SceneOutcome.ENV_FAIL, 0, "arena chunks not loaded within "
                             + PREP_BUDGET_TICKS + " ticks");
-                    teardown(level, origin);
+                    teardown(scene, level, origin);
                 }
             }
             case RUN -> {
@@ -106,22 +106,22 @@ public final class TestkitHarness {
                     SceneContext.Progress p = ctx.advance();
                     if (p == SceneContext.Progress.DONE) {
                         record(scene, SceneOutcome.PASS, ctx.ticks(), null);
-                        teardown(level, origin);
+                        teardown(scene, level, origin);
                     } else if (p == SceneContext.Progress.STEP_TIMEOUT) {
                         record(scene, SceneOutcome.TIMEOUT, ctx.ticks(), ctx.failureReason());
-                        teardown(level, origin);
+                        teardown(scene, level, origin);
                     } else if (ctx.ticks() > scene.budgetTicks()) {
                         record(scene, SceneOutcome.TIMEOUT, ctx.ticks(),
                                 "scene budget " + scene.budgetTicks() + " ticks exhausted");
-                        teardown(level, origin);
+                        teardown(scene, level, origin);
                     }
                 } catch (SceneFailure f) {
                     record(scene, SceneOutcome.FAIL, ctx.ticks(), f.getMessage());
-                    teardown(level, origin);
+                    teardown(scene, level, origin);
                 } catch (Throwable t) {
                     record(scene, SceneOutcome.FAIL, ctx.ticks(),
                             "unexpected " + t.getClass().getSimpleName() + ": " + t.getMessage());
-                    teardown(level, origin);
+                    teardown(scene, level, origin);
                 }
             }
             case ADVANCE_DONE -> nextScene();
@@ -136,8 +136,26 @@ public final class TestkitHarness {
         phase = Phase.ADVANCE_DONE;
     }
 
-    private void teardown(ServerLevel level, BlockPos origin) {
+    /** Single confluence point for every outcome (PASS/FAIL/TIMEOUT/ENV_FAIL): drain the
+     *  scene's cleanups — if it got far enough to have a ctx — before releasing the arena's
+     *  forced chunks. A leaked avatar or dangling cleanup here poisons the next scene, so
+     *  this runs regardless of how the scene resolved. ENV_FAIL fires from PREP before ctx
+     *  is ever constructed, so there is nothing to drain in that case. */
+    private void teardown(Scene scene, ServerLevel level, BlockPos origin) {
+        if (ctx != null) {
+            ctx.runCleanups(msg -> TestkitCommon.LOG.warn("[{}] {}: {}", TestkitCommon.MOD_ID, scene.name(), msg));
+        }
         forceChunks(level, origin, false);
+    }
+
+    /** PREP waits for the full 3x3 force-loaded neighborhood, not just the origin chunk —
+     *  matching forceChunks' 3x3 footprint so scene bodies never touch a not-yet-loaded
+     *  neighbor chunk on their first tick. */
+    private boolean allChunksLoaded(ServerLevel level, BlockPos origin) {
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++)
+                if (!level.hasChunkAt(origin.offset(dx * 16, 0, dz * 16))) return false;
+        return true;
     }
 
     private void nextScene() {
