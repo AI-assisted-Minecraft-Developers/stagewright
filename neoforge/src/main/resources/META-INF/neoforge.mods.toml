@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="mc_testkit"
+version="${version}"
+displayName="mc-testkit"
+authors="AI-assisted-Minecraft-Developers"
+description='''Cross-loader Minecraft mod test framework: scene harness, assertions, orchestrated topologies.'''
+
+[[dependencies.mc_testkit]]
+    modId="neoforge"
+    type="required"
+    versionRange="[21,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.mc_testkit]]
+    modId="minecraft"
+    type="required"
+    versionRange="[1.21.1,1.22)"
+    ordering="NONE"
+    side="BOTH"

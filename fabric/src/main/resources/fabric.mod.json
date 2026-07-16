@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "mc_testkit",
+  "version": "${version}",
+  "name": "mc-testkit",
+  "description": "Cross-loader Minecraft mod test framework: scene harness, assertions, orchestrated topologies.",
+  "authors": [
+    "AI-assisted-Minecraft-Developers"
+  ],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "net.magicterra.testkit.fabric.TestkitFabric"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16",
+    "fabric-api": "*",
+    "minecraft": ">=1.21",
+    "java": ">=21"
+  }
+}
