@@ -105,12 +105,76 @@ def check_version_shape(ctx):
         raise ContractFailure(f"uptimeMs not a non-negative int: {v.get('uptimeMs')!r}")
 
 
+def check_unknown_method(ctx):
+    result, error = ctx.call_raw("mc.no.suchMethod")
+    if error is None:
+        raise ContractFailure(f"unknown method answered result={result!r} instead of error")
+    if "unknown method" not in error:
+        raise ContractFailure(f"error shape drifted: {error!r}")
+
+
+def check_invalid_params_missing(ctx):
+    # NOTE: the brief's draft asserted this against mc.observe.eventsSince, but
+    # AgentApi.java:107 defaults a missing `cursor` to 0L and ObserveActionTools.java's
+    # schema declares cursor as integer().min(0) with no .req() — cursor is optional,
+    # so that call round-trips clean (verified live with ctx.call_raw before writing
+    # this). Substituted mc.system.waitTicks, whose SystemTools.java schema is
+    # object().req("ticks", integer(0, 200)) — a genuinely required int key.
+    result, error = ctx.call_raw("mc.system.waitTicks", {})
+    if error is None:
+        raise ContractFailure(f"missing required key accepted: {result!r}")
+    if "invalid params" not in error and "ticks" not in error:
+        raise ContractFailure(f"error shape drifted: {error!r}")
+
+
+def check_invalid_params_wrong_type(ctx):
+    # Same substitution as above (mc.observe.eventsSince's cursor is optional, so a
+    # wrong-typed cursor isn't a clean "required key" probe) — mc.system.waitTicks's
+    # `ticks` is a required, closed-schema integer.
+    result, error = ctx.call_raw("mc.system.waitTicks", {"ticks": "not-a-number"})
+    if error is None:
+        raise ContractFailure(f"wrong-typed param accepted: {result!r}")
+
+
+def check_invalid_params_unknown_key(ctx):
+    result, error = ctx.call_raw("mc.system.waitTicks", {"ticks": 1, "bogusKey": 1})
+    if error is None:
+        raise ContractFailure(f"unexpected key accepted: {result!r}")
+    if "unexpected key" not in error and "invalid params" not in error:
+        raise ContractFailure(f"error shape drifted: {error!r}")
+
+
+def check_client_only_verb(ctx):
+    # instrument face must fail LOUDLY on a dedicated server, never silently no-op
+    result, error = ctx.call_raw("mc.bot.status")
+    if error is None:
+        raise ContractFailure(f"mc.bot.* answered on dedicated server: {result!r}")
+    if "client only" not in error:
+        raise ContractFailure(f"error shape drifted: {error!r}")
+
+
+def check_script_eval_parity(ctx):
+    # in-JVM route (invokeJson) must agree with the external transport
+    r = ctx.call("mc.script.eval",
+                 {"source": "Agent.invoke('mc.system.version').modid", "timeoutMs": 5000})
+    if r.get("error"):
+        raise ContractFailure(f"script error: {r['error']}")
+    if r.get("result") != "agent_driver":
+        raise ContractFailure(f"in-JVM route parity broken: {r.get('result')!r}")
+
+
 def canary_must_fail(ctx):
     raise ContractFailure("canary: this check must be reported as FAIL")
 
 
 CHECKS = [
     ("system.versionShape", "NONE", check_version_shape),
+    ("route.unknownMethod", "NONE", check_unknown_method),
+    ("route.invalidParams.missingKey", "NONE", check_invalid_params_missing),
+    ("route.invalidParams.wrongType", "NONE", check_invalid_params_wrong_type),
+    ("route.invalidParams.unknownKey", "NONE", check_invalid_params_unknown_key),
+    ("route.clientOnlyVerb", "NONE", check_client_only_verb),
+    ("script.evalParity", "NONE", check_script_eval_parity),
     ("canary.mustFail", "MUST_FAIL", canary_must_fail),
     ("canary.mustSwallow", "MUST_SWALLOW", None),  # registered, never executed
 ]
