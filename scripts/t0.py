@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""mc-testkit T0 orchestrator (contract v0).
+
+Provisions the loader's run-testkit dir, launches the plain dedicated server run
+(:testkit-<loader>:runTestkitServer, armed by -Dtestkit.autorun), wall-caps it,
+then judges testkit-results.jsonl:
+
+  exit 0  GREEN  — footer present, registered==executed (swallow-canaries excepted),
+                   every canary on its expected outcome, every non-canary PASS
+  exit 1  RED    — a non-canary scene failed/timed out, or reconciliation failed
+  exit 2  DEAD   — a canary landed on the WRONG outcome: the framework can no longer
+                   catch failures; the whole run's results are void (spec §5)
+  exit 3  ENV    — launch failed / results file missing / no suite header
+
+The orchestrator is the verdict authority; the server process exit code is NOT
+consulted (halt() exits 0 regardless of scene outcomes).
+"""
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+CANARY_EXPECT = {"MUST_FAIL": "FAIL", "MUST_TIMEOUT": "TIMEOUT"}
+
+
+def run_dir(loader):
+    return os.path.join(REPO_ROOT, "mc-testkit", loader, "run-testkit")
+
+
+def provision(loader):
+    d = run_dir(loader)
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "eula.txt"), "w") as f:
+        f.write("eula=true\n")
+    with open(os.path.join(d, "server.properties"), "w") as f:
+        f.write("server-port=25599\nlevel-type=minecraft\\:flat\nonline-mode=false\n"
+                "spawn-protection=0\nsync-chunk-writes=false\nmotd=mc-testkit T0\n")
+    shutil.rmtree(os.path.join(d, "world"), ignore_errors=True)
+    results = os.path.join(d, "testkit-results.jsonl")
+    if os.path.exists(results):
+        os.remove(results)
+    return results
+
+
+def sweep():
+    """Kill leftover testkit server JVMs by explicit PID (pkill is banned)."""
+    out = subprocess.run(["ps", "-eo", "pid,args"], capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        if "testkit.autorun" in line and "java" in line:
+            pid = line.strip().split()[0]
+            print(f"[t0] killing leftover testkit JVM pid={pid}")
+            subprocess.run(["kill", "-9", pid])
+
+
+def launch(loader, wall, results):
+    """Launch the server run and wait for the DONE FOOTER, not for gradle.
+
+    Task-3 smoke finding: after the harness halt()s the server, the game JVM
+    exits cleanly in seconds but the gradle run task does NOT return control.
+    So gradle's exit is neither awaited as the happy path nor consulted for the
+    verdict (contract v0): we poll the results file for the done footer, give a
+    short grace for final writes, then sweep whatever is left and move to judge.
+    """
+    import time
+    cmd = ["./gradlew", f":testkit-{loader}:runTestkitServer"]
+    print(f"[t0] launching: {' '.join(cmd)} (wall={wall}s, waiting on done footer)")
+    proc = subprocess.Popen(cmd, cwd=REPO_ROOT,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    deadline = time.monotonic() + wall
+    footer = False
+    while time.monotonic() < deadline:
+        if os.path.exists(results):
+            with open(results, encoding="utf-8", errors="replace") as f:
+                if '"type":"done"' in f.read():
+                    footer = True
+                    break
+        if proc.poll() is not None:
+            break  # gradle actually returned (crash or clean) — judge whatever exists
+        time.sleep(2)
+    if footer:
+        print("[t0] done footer observed — reaping the run")
+        time.sleep(3)  # grace for file flush + server teardown
+    else:
+        print(f"[t0] no done footer within {wall}s — wall timeout")
+    if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    sweep()
+    return 0 if footer else 124
+
+
+def judge(lines):
+    """Pure verdict from parsed JSONL lines. Returns (exit_code, report_lines)."""
+    report = []
+    suite, done, scenes = None, None, {}
+    for rec in lines:
+        if rec["type"] == "suite":
+            suite = rec
+        elif rec["type"] == "scene":
+            scenes[rec["name"]] = rec
+        elif rec["type"] == "done":
+            done = rec
+    if suite is None:
+        return 3, ["no suite header — server never armed"]
+    if done is None:
+        return 1, ["no done footer — harness died mid-run"]
+
+    code = 0
+    for reg in suite["registered"]:
+        name, canary = reg["name"], reg["canary"]
+        rec = scenes.get(name)
+        if canary == "MUST_SWALLOW":
+            if rec is not None:
+                return 2, [f"DEAD: swallow-canary '{name}' was executed — skip gate broken"]
+            report.append(f"canary '{name}': correctly omitted (swallow gate alive)")
+        elif canary in CANARY_EXPECT:
+            if rec is None:
+                return 2, [f"DEAD: canary '{name}' has no record — catch gate broken"]
+            if rec["outcome"] != CANARY_EXPECT[canary]:
+                return 2, [f"DEAD: canary '{name}' -> {rec['outcome']}, expected {CANARY_EXPECT[canary]}"]
+            report.append(f"canary '{name}': caught as {rec['outcome']} (expected)")
+        else:
+            if rec is None:
+                code = max(code, 1)
+                report.append(f"SWALLOWED: '{name}' registered but never recorded")
+            elif rec["outcome"] != "PASS":
+                if reg["required"]:
+                    code = max(code, 1)
+                report.append(f"{'FAIL' if reg['required'] else 'fail(optional)'}: "
+                              f"'{name}' -> {rec['outcome']} — {rec.get('reason', '')}")
+            else:
+                report.append(f"pass: '{name}' ({rec['ticks']} ticks, {rec['wallMs']} ms)")
+    drifted = set(scenes) - {r["name"] for r in suite["registered"]}
+    if drifted:
+        code = max(code, 1)
+        report.append(f"DRIFTED: records for unregistered names {sorted(drifted)}")
+    return code, report
+
+
+def parse(path):
+    with open(path, encoding="utf-8") as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+# ---- embedded self-test fixtures ----
+
+F_SUITE = {"type": "suite", "loader": "x", "registered": [
+    {"name": "a", "required": True, "canary": "NONE"},
+    {"name": "cf", "required": True, "canary": "MUST_FAIL"},
+    {"name": "ct", "required": True, "canary": "MUST_TIMEOUT"},
+    {"name": "cs", "required": True, "canary": "MUST_SWALLOW"}]}
+
+
+def _scene(name, outcome):
+    return {"type": "scene", "name": name, "outcome": outcome, "ticks": 1, "wallMs": 1, "reason": ""}
+
+
+F_DONE = {"type": "done", "scenes": 3}
+F_GREEN = [F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), F_DONE]
+
+
+def self_test():
+    checks = [
+        ("green run -> 0", judge(F_GREEN)[0] == 0),
+        ("real scene FAIL -> 1",
+         judge([F_SUITE, _scene("a", "FAIL"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), F_DONE])[0] == 1),
+        ("real scene swallowed -> 1",
+         judge([F_SUITE, _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), F_DONE])[0] == 1),
+        ("canary wrong outcome -> 2 DEAD",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "PASS"), _scene("ct", "TIMEOUT"), F_DONE])[0] == 2),
+        ("swallow-canary executed -> 2 DEAD",
+         judge(F_GREEN[:-1] + [_scene("cs", "PASS"), F_DONE])[0] == 2),
+        ("missing footer -> 1",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT")])[0] == 1),
+        ("missing header -> 3",
+         judge([_scene("a", "PASS")])[0] == 3),
+        ("drifted record -> 1",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"),
+                _scene("ghost", "PASS"), F_DONE])[0] == 1),
+    ]
+    failed = [n for n, ok in checks if not ok]
+    for n, ok in checks:
+        print(f"  [{'PASS' if ok else 'FAIL'}] {n}")
+    return 0 if not failed else 1
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--loader", choices=["neoforge", "fabric"])
+    ap.add_argument("--wall", type=int, default=900)
+    ap.add_argument("--self-test", action="store_true")
+    args = ap.parse_args()
+    if args.self_test:
+        sys.exit(self_test())
+    if not args.loader:
+        ap.error("--loader is required (or use --self-test)")
+
+    sweep()
+    results = provision(args.loader)
+    rc = launch(args.loader, args.wall, results)
+    print(f"[t0] launch rc={rc} (informational only — verdict comes from the results file)")
+    if not os.path.exists(results):
+        print("[t0] ENV: results file missing")
+        sys.exit(3)
+    code, report = judge(parse(results))
+    for line in report:
+        print(f"[t0] {line}")
+    print(f"[t0] VERDICT: {['GREEN', 'RED', 'DEAD', 'ENV'][code]}")
+    sys.exit(code)
+
+
+if __name__ == "__main__":
+    main()
