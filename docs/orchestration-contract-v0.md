@@ -62,7 +62,7 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
   业务场景本身（P1c 例：三个 `ad.*` 场景均 `required=true, canary=NONE`）。
 - **发现路径**：`META-INF/services/net.magicterra.testkit.scene.SceneProvider`，
   文件内容一行一个实现类全限定名。P1c 例（neoforge 模块）：该文件单行为
-  `net.magicterra.agent_driver.testkit.AgentDriverScenes`。
+  `net.magicterra.agent.neoforge.testkit.AgentDriverScenes`。
 
 ## done.scenes 对账
 P1c 新增的完整性检查（编排器 `verdict.judge()`），比"场景被吞"（SWALLOWED：某个
@@ -76,8 +76,9 @@ P1c 新增的完整性检查（编排器 `verdict.judge()`），比"场景被吞
   实际读到的条数对不上"（文件维度的完整性）——例如异步 writer 队列在 shutdown
   竞态下漏 flush 掉几条记录，即便每个名字看起来都对上了也可能被这条抓到。
 - **缺字段容忍（前向兼容）**：若 `done` 记录没有 `scenes` 字段，这条检查直接跳过
-  （不计入裁决），不判 RED。这是刻意的前向兼容——v0 契约允许旧版本 harness（P1a/
-  P1b 时期，尚未加 `scenes` 字段）产出的结果文件仍能被新版编排器正常裁决，字段
-  缺失本身不是完整性违规。
+  （不计入裁决），不判 RED。这不是对本仓库 harness 历史版本的兼容——本仓库
+  `ResultsJsonl` 自 P1a 第一个 harness commit（`936f4f2`）起就一直携带 `scenes`
+  字段，从未缺过。容忍的是**第三方/未来 harness 实现**：v0 契约本身不强制 footer
+  必须携带该字段，缺字段的结果文件不能被这条新增的检查判定为完整性违规。
 - 本节语义只收紧（新增一条完整性门），不放松、不改既有字段/退出码含义，故契约
   仍冻结在 v0，不升版。
