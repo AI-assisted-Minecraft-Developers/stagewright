@@ -9,6 +9,8 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 - 编排器负责预备 runDir：`eula.txt`、`server.properties`（server-port=25599、
   level-type=minecraft\:flat、online-mode=false、spawn-protection=0）、删 `world/`
   与旧结果文件；跑前按显式 PID 清扫命令行含 `testkit.autorun` 的残留 JVM（禁 pkill）。
+  以上为契约相关键，编排器实际写入的完整集以 `scripts/testkit/t0.py` 的
+  `provision()` 为准（非穷举列表）。
 - harness 跑完注册表后自行 `MinecraftServer.halt(false)` 正常停机；
   **服务器进程退出码不是裁决依据**，裁决唯一来源是结果文件。
 - **编排器的完成信号 = 结果文件的 done 尾记录，不是 gradle 退出**（实证：halt 后
@@ -22,6 +24,8 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 - 尾 `{"type":"done","scenes":N}`（缺尾 = harness 中途死亡 = RED）
 - `canary` ∈ NONE | MUST_FAIL | MUST_TIMEOUT | MUST_SWALLOW；
   MUST_SWALLOW 场景**不得**有场景记录（有 = 门死）。
+  金丝雀场景若记录为 `ENV_FAIL`（例如 PREP 阶段区块加载失败）同样按 outcome
+  不匹配处理 → exit 2 DEAD；这是保守裁决——即便根因是环境问题，整轮结果仍作废。
 
 ## 退出码
 | code | 含义 |
