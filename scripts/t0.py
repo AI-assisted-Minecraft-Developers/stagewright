@@ -154,26 +154,29 @@ F_SUITE = {"type": "suite", "loader": "x", "registered": [
     {"name": "a", "required": True, "canary": "NONE"},
     {"name": "cf", "required": True, "canary": "MUST_FAIL"},
     {"name": "ct", "required": True, "canary": "MUST_TIMEOUT"},
-    {"name": "cs", "required": True, "canary": "MUST_SWALLOW"}]}
+    {"name": "cs", "required": True, "canary": "MUST_SWALLOW"},
+    {"name": "opt", "required": False, "canary": "NONE"}]}
 
 
 def _scene(name, outcome):
     return {"type": "scene", "name": name, "outcome": outcome, "ticks": 1, "wallMs": 1, "reason": ""}
 
 
-F_DONE = {"type": "done", "scenes": 3}
-F_GREEN = [F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), F_DONE]
+F_DONE = {"type": "done", "scenes": 4}
+F_GREEN = [F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), _scene("opt", "PASS"), F_DONE]
 
 
 def self_test():
     checks = [
         ("green run -> 0", judge(F_GREEN)[0] == 0),
         ("real scene FAIL -> 1",
-         judge([F_SUITE, _scene("a", "FAIL"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), F_DONE])[0] == 1),
+         judge([F_SUITE, _scene("a", "FAIL"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"),
+                _scene("opt", "PASS"), F_DONE])[0] == 1),
         ("real scene swallowed -> 1",
-         judge([F_SUITE, _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), F_DONE])[0] == 1),
+         judge([F_SUITE, _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), _scene("opt", "PASS"), F_DONE])[0] == 1),
         ("canary wrong outcome -> 2 DEAD",
-         judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "PASS"), _scene("ct", "TIMEOUT"), F_DONE])[0] == 2),
+         judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "PASS"), _scene("ct", "TIMEOUT"),
+                _scene("opt", "PASS"), F_DONE])[0] == 2),
         ("swallow-canary executed -> 2 DEAD",
          judge(F_GREEN[:-1] + [_scene("cs", "PASS"), F_DONE])[0] == 2),
         ("missing footer -> 1",
@@ -181,8 +184,14 @@ def self_test():
         ("missing header -> 3",
          judge([_scene("a", "PASS")])[0] == 3),
         ("drifted record -> 1",
-         judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"),
+         judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), _scene("opt", "PASS"),
                 _scene("ghost", "PASS"), F_DONE])[0] == 1),
+        ("optional scene FAIL tolerated -> 0",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("opt", "FAIL"), _scene("cf", "FAIL"),
+                _scene("ct", "TIMEOUT"), F_DONE])[0] == 0),
+        ("optional scene swallowed still -> 1",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"),
+                _scene("ct", "TIMEOUT"), F_DONE])[0] == 1),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
