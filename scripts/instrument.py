@@ -5,7 +5,7 @@ stack by design (spec §4.2): green here => testkit setup/asserts may trust
 the driver's instrument face. Verdict semantics mirror contract v0 via the
 shared verdict module (registered==executed reconciliation, canary
 mis-judgement => DEAD)."""
-import argparse, base64, hashlib, json, os, socket, struct, subprocess, sys, time
+import argparse, base64, json, os, socket, struct, subprocess, sys, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from verdict import parse, judge
@@ -399,7 +399,7 @@ def launch(loader, wall):
         return None
     # RPC comes up (onServerStarting) before attachServer (onServerStarted) —
     # confirmed live on fabric (2026-07-16): mc.system.version answers with no
-    # server attached at all (it doesn't call ApiSupport.level()), so probing
+    # server attached at all (it doesn't call AgentApi.level()), so probing
     # with it raced attachServer and lost on a fast fabric boot (RPC-listen to
     # "Done" ~1s), producing "AgentApi not attached to a server" on every
     # check needing api.level() (ObserveApi.player() etc. call api.level() as
