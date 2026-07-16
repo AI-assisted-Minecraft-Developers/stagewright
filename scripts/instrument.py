@@ -134,6 +134,11 @@ def check_invalid_params_wrong_type(ctx):
     result, error = ctx.call_raw("mc.system.waitTicks", {"ticks": "not-a-number"})
     if error is None:
         raise ContractFailure(f"wrong-typed param accepted: {result!r}")
+    # Approved carry-over from batch A review: tighten past "any error" to the real
+    # shape. SchemaValidator.typeErr (SchemaValidator.java:123-125) renders wrong-type
+    # violations as "'ticks' must be integer, got string (...)" — assert on it.
+    if "must be integer" not in error:
+        raise ContractFailure(f"error shape drifted: {error!r}")
 
 
 def check_invalid_params_unknown_key(ctx):
@@ -163,6 +168,152 @@ def check_script_eval_parity(ctx):
         raise ContractFailure(f"in-JVM route parity broken: {r.get('result')!r}")
 
 
+def _cmd(ctx, cmd):
+    r = ctx.call("mc.action.runCommand", {"cmd": cmd})
+    if not r.get("ok"):
+        raise ContractFailure(f"command dispatch failed: {cmd!r} -> {r!r}")
+    return r
+
+
+def check_setblock_query_readback(ctx):
+    _cmd(ctx, "setblock 0 200 0 minecraft:gold_block")
+    rows = ctx.call("mc.query", {"q": "blocks", "center": {"x": 0, "y": 200, "z": 0},
+                                 "filter": {"in_radius": 1, "type": "minecraft:gold_block"}})
+    if len(rows) != 1 or rows[0]["pos"] != {"x": 0, "y": 200, "z": 0}:
+        raise ContractFailure(f"driver read disagrees with vanilla write: {rows!r}")
+
+
+def check_fill_count(ctx):
+    r = ctx.call("mc.action.fill", {"from": {"x": 4, "y": 200, "z": 4},
+                                    "to": {"x": 6, "y": 202, "z": 6},
+                                    "type": "minecraft:polished_andesite"})
+    if not r.get("ok") or r.get("placed") != 27:
+        raise ContractFailure(f"fill 3x3x3 placed={r.get('placed')!r} != 27")
+    rows = ctx.call("mc.query", {"q": "blocks", "center": {"x": 5, "y": 201, "z": 5},
+                                 "filter": {"in_radius": 2, "type": "minecraft:polished_andesite"}})
+    if len(rows) != 27:
+        raise ContractFailure(f"query readback {len(rows)} != 27")
+
+
+def check_snapshot_restore(ctx):
+    snap = ctx.call("mc.world.snapshot", {"from": {"x": 10, "y": 200, "z": 10},
+                                          "to": {"x": 12, "y": 202, "z": 12}})
+    if not snap.get("ok"):
+        raise ContractFailure(f"snapshot failed: {snap!r}")
+    _cmd(ctx, "setblock 11 201 11 minecraft:emerald_block")
+    r = ctx.call("mc.world.restore", {"id": snap["id"], "discard": True})
+    if not r.get("ok"):
+        raise ContractFailure(f"restore failed: {r!r}")
+    rows = ctx.call("mc.query", {"q": "blocks", "center": {"x": 11, "y": 201, "z": 11},
+                                 "filter": {"in_radius": 2, "type": "minecraft:emerald_block"}})
+    if rows:
+        raise ContractFailure(f"restore left the marker block behind: {rows!r}")
+
+
+def check_container_durability(ctx):
+    # #42 permanent assertion, dual-source: vanilla write path vs driver read path
+    _cmd(ctx, "setblock 20 200 20 minecraft:chest")
+    _cmd(ctx, "item replace block 20 200 20 container.0 with minecraft:diamond_pickaxe[minecraft:damage=123] 1")
+    r = ctx.call("mc.observe.container", {"pos": {"x": 20, "y": 200, "z": 20}})
+    if not r.get("present"):
+        raise ContractFailure(f"chest not present: {r!r}")
+    s0 = (r.get("slots") or [None])[0]
+    if not s0 or s0.get("id") != "minecraft:diamond_pickaxe":
+        raise ContractFailure(f"slot0={s0!r}")
+    if s0.get("damage") != 123 or s0.get("maxDamage") != 1561 or s0.get("durability") != 1438:
+        raise ContractFailure(
+            f"#42 wear fields drifted: damage={s0.get('damage')!r} "
+            f"maxDamage={s0.get('maxDamage')!r} durability={s0.get('durability')!r}")
+
+
+def check_player_absent_pin(ctx):
+    # documented semantics: empty PlayerList => {present:false}, never a throw
+    r = ctx.call("mc.observe.player")
+    if r.get("present") is not False:
+        raise ContractFailure(f"expected present:false on empty dedicated server, got {r!r}")
+
+
+def check_entity_query(ctx):
+    _cmd(ctx, "time set midnight")  # keep the zombie from burning at y=200 open sky
+    _cmd(ctx, "summon minecraft:zombie 30.5 200.0 30.5 {NoAI:1b,PersistenceRequired:1b}")
+    rows = ctx.call("mc.query", {"q": "entities", "center": {"x": 30, "y": 200, "z": 30},
+                                 "filter": {"in_radius": 4, "type": "zombie"}})
+    if len(rows) != 1:
+        raise ContractFailure(f"expected exactly 1 zombie, got {len(rows)}: {rows!r}")
+    if not isinstance(rows[0].get("health"), (int, float)) or rows[0]["health"] <= 0:
+        raise ContractFailure(f"living row lacks health: {rows[0]!r}")
+    _cmd(ctx, "kill @e[type=zombie]")
+
+
+def check_command_result_event(ctx):
+    # ⚠️ assertion-drift fixes (binding rule), evidence below:
+    #
+    # 1. mc.observe.cursor routes to ObserveApi.cursor() (ObserveApi.java:49-52),
+    #    which returns a bare `long` — NOT {"cursor": N}. The brief's draft did
+    #    ctx.call("mc.observe.cursor")["cursor"], which would TypeError on a plain
+    #    int. Tightened to use the raw return value directly.
+    # 2. mc.observe.eventsSince routes DIRECTLY to
+    #    ObserveApi.eventsSince(cursor, types, limit) (AgentApi.java:107-118),
+    #    which returns a bare List<AgentEvent> (ObserveApi.java:54-76) — unlike
+    #    mc.wait.event / mc.wait.condition, which wrap the same call in
+    #    {events, timedOut, cursor, ms} (WaitApi.java:139-164). There is no
+    #    envelope key here; the RPC result IS the array. Tightened accordingly
+    #    (and asserting isinstance(evs, list) so a future re-wrap is caught, not
+    #    silently reinterpreted).
+    # 3. A plain `setblock <x> <y> <z> <plain-id>` command takes ActionApi's
+    #    fast-path (ActionApi.java:126-163), which returns BEFORE the
+    #    `command.result` emit at ActionApi.java:232 — only the Brigadier branch
+    #    (any other verb, or a bracketed/keep|destroy|replace setblock) emits it.
+    #    The brief's draft used a plain setblock, which would never produce a
+    #    command.result event. Substituted vanilla `/fill` (single-cell region)
+    #    for a verb the fast-path never intercepts, forcing the Brigadier path.
+    cur = ctx.call("mc.observe.cursor")
+    _cmd(ctx, "fill 40 200 40 40 200 40 minecraft:iron_block")
+    evs = ctx.call("mc.observe.eventsSince", {"cursor": cur, "types": ["command.result"]})
+    if not isinstance(evs, list):
+        raise ContractFailure(f"eventsSince shape drifted (expected a bare array): {evs!r}")
+    hits = [e for e in evs if "iron_block" in json.dumps(e)]
+    if not hits:
+        raise ContractFailure("no command.result event for a dispatched command")
+    data = hits[0].get("data")
+    payload = json.loads(data) if isinstance(data, str) else data
+    if payload.get("success") is not True:
+        raise ContractFailure(f"success flag wrong on a succeeding command: {payload!r}")
+
+
+def check_cursor_monotonic(ctx):
+    # same unwrapped-cursor fix as check_command_result_event above (evidence there)
+    c1 = ctx.call("mc.observe.cursor")
+    _cmd(ctx, "setblock 42 200 42 minecraft:copper_block")
+    c2 = ctx.call("mc.observe.cursor")
+    if not (isinstance(c1, int) and isinstance(c2, int) and c2 > c1):
+        raise ContractFailure(f"cursor not monotonic: {c1!r} -> {c2!r}")
+
+
+def check_wait_ticks(ctx):
+    t0 = time.time()
+    r = ctx.call("mc.system.waitTicks", {"ticks": 10})
+    ms = (time.time() - t0) * 1000
+    # ⚠️ tightened: SystemApi.waitTicks (SystemApi.java:34-49) returns
+    # Map.of("waited", ticks) unconditionally on the non-interrupted path — it
+    # never returns a boolean True. The brief's draft tolerated either shape;
+    # there is only one real shape, so assert it exactly.
+    if r.get("waited") != 10:
+        raise ContractFailure(f"waitTicks answer drifted: {r!r}")
+    if ms < 300:  # 10 ticks nominal 500ms; <300ms means it did not actually wait
+        raise ContractFailure(f"waitTicks returned too fast ({ms:.0f}ms) — did not block on ticks")
+
+
+def check_wait_condition_value(ctx):
+    _cmd(ctx, "setblock 50 200 50 minecraft:chest")
+    _cmd(ctx, "item replace block 50 200 50 container.2 with minecraft:stone 7")
+    r = ctx.call("mc.wait.condition", {
+        "invoke": "mc.observe.container", "params": {"pos": {"x": 50, "y": 200, "z": 50}},
+        "field": "slots.2.count", "value": 7, "timeoutMs": 5000, "pollMs": 200})
+    if not r.get("satisfied") or r.get("value") != 7:
+        raise ContractFailure(f"wait.condition value semantics broken: {r!r}")
+
+
 def canary_must_fail(ctx):
     raise ContractFailure("canary: this check must be reported as FAIL")
 
@@ -175,6 +326,16 @@ CHECKS = [
     ("route.invalidParams.unknownKey", "NONE", check_invalid_params_unknown_key),
     ("route.clientOnlyVerb", "NONE", check_client_only_verb),
     ("script.evalParity", "NONE", check_script_eval_parity),
+    ("world.setblockQueryReadback", "NONE", check_setblock_query_readback),
+    ("world.fillCount", "NONE", check_fill_count),
+    ("world.snapshotRestore", "NONE", check_snapshot_restore),
+    ("obs.containerDurability", "NONE", check_container_durability),
+    ("obs.playerAbsentPin", "NONE", check_player_absent_pin),
+    ("obs.entityQuery", "NONE", check_entity_query),
+    ("events.commandResult", "NONE", check_command_result_event),
+    ("events.cursorMonotonic", "NONE", check_cursor_monotonic),
+    ("wait.ticks", "NONE", check_wait_ticks),
+    ("wait.conditionValue", "NONE", check_wait_condition_value),
     ("canary.mustFail", "MUST_FAIL", canary_must_fail),
     ("canary.mustSwallow", "MUST_SWALLOW", None),  # registered, never executed
 ]
