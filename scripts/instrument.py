@@ -485,9 +485,9 @@ def self_test():
         ("must-fail canary PASS -> 2", judge([reg, rec("a", "PASS"), rec("cf", "PASS"), done],
                                              record_type="check")[0] == 2),
         ("swallow canary executed -> 2", judge([reg, rec("a", "PASS"), rec("cf", "FAIL"),
-                                                rec("cs", "PASS"), done],
+                                                rec("cs", "PASS"), {"type": "done", "scenes": 3}],
                                                record_type="check")[0] == 2),
-        ("real check swallowed -> 1", judge([reg, rec("cf", "FAIL"), done],
+        ("real check swallowed -> 1", judge([reg, rec("cf", "FAIL"), {"type": "done", "scenes": 1}],
                                             record_type="check")[0] == 1),
     ]
     failed = [n for n, ok in checks if not ok]

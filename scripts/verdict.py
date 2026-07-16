@@ -58,6 +58,11 @@ def judge(lines, record_type="scene"):
     if drifted:
         code = max(code, 1)
         report.append(f"DRIFTED: records for unregistered names {sorted(drifted)}")
+    declared = done.get("scenes")
+    records_by_name_all = sum(dup_counts.values())
+    if isinstance(declared, int) and declared != records_by_name_all:
+        code = max(code, 1)
+        report.append(f"TRUNCATED: done.scenes={declared} but {records_by_name_all} {record_type} records")
     return code, report
 
 

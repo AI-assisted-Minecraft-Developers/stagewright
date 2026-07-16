@@ -33,8 +33,13 @@ def run_dir(loader):
     return os.path.join(REPO_ROOT, "mc-testkit", loader, "run-testkit")
 
 
-def provision(loader):
-    d = run_dir(loader)
+def default_results(loader):
+    return os.path.join(run_dir(loader), "testkit-results.jsonl")
+
+
+def provision(results):
+    """Provision the run dir holding `results` (dirname-derived) and return `results`."""
+    d = os.path.dirname(results)
     os.makedirs(d, exist_ok=True)
     with open(os.path.join(d, "eula.txt"), "w") as f:
         f.write("eula=true\n")
@@ -42,7 +47,6 @@ def provision(loader):
         f.write("server-port=25599\nlevel-type=minecraft\\:flat\nonline-mode=false\n"
                 "spawn-protection=0\nsync-chunk-writes=false\nmotd=mc-testkit T0\n")
     shutil.rmtree(os.path.join(d, "world"), ignore_errors=True)
-    results = os.path.join(d, "testkit-results.jsonl")
     if os.path.exists(results):
         os.remove(results)
     return results
@@ -58,8 +62,8 @@ def sweep():
             subprocess.run(["kill", "-9", pid])
 
 
-def launch(loader, wall, results):
-    """Launch the server run and wait for the DONE FOOTER, not for gradle.
+def launch(task, wall, results):
+    """Launch the gradle `task` and wait for the DONE FOOTER, not for gradle.
 
     Task-3 smoke finding: after the harness halt()s the server, the game JVM
     exits cleanly in seconds but the gradle run task does NOT return control.
@@ -68,7 +72,7 @@ def launch(loader, wall, results):
     short grace for final writes, then sweep whatever is left and move to judge.
     """
     import time
-    cmd = ["./gradlew", f":testkit-{loader}:runTestkitServer"]
+    cmd = ["./gradlew", task]
     print(f"[t0] launching: {' '.join(cmd)} (wall={wall}s, waiting on done footer)")
     proc = subprocess.Popen(cmd, cwd=REPO_ROOT,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -125,28 +129,35 @@ def self_test():
          judge([F_SUITE, _scene("a", "FAIL"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"),
                 _scene("opt", "PASS"), F_DONE])[0] == 1),
         ("real scene swallowed -> 1",
-         judge([F_SUITE, _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), _scene("opt", "PASS"), F_DONE])[0] == 1),
+         judge([F_SUITE, _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), _scene("opt", "PASS"),
+                {"type": "done", "scenes": 3}])[0] == 1),
         ("canary wrong outcome -> 2 DEAD",
          judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "PASS"), _scene("ct", "TIMEOUT"),
                 _scene("opt", "PASS"), F_DONE])[0] == 2),
         ("swallow-canary executed -> 2 DEAD",
-         judge(F_GREEN[:-1] + [_scene("cs", "PASS"), F_DONE])[0] == 2),
+         judge(F_GREEN[:-1] + [_scene("cs", "PASS"), {"type": "done", "scenes": 5}])[0] == 2),
         ("missing footer -> 1",
          judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT")])[0] == 1),
         ("missing header -> 3",
          judge([_scene("a", "PASS")])[0] == 3),
         ("drifted record -> 1",
          judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"), _scene("ct", "TIMEOUT"), _scene("opt", "PASS"),
-                _scene("ghost", "PASS"), F_DONE])[0] == 1),
+                _scene("ghost", "PASS"), {"type": "done", "scenes": 5}])[0] == 1),
         ("optional scene FAIL tolerated -> 0",
          judge([F_SUITE, _scene("a", "PASS"), _scene("opt", "FAIL"), _scene("cf", "FAIL"),
                 _scene("ct", "TIMEOUT"), F_DONE])[0] == 0),
         ("optional scene swallowed still -> 1",
          judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"),
-                _scene("ct", "TIMEOUT"), F_DONE])[0] == 1),
+                _scene("ct", "TIMEOUT"), {"type": "done", "scenes": 3}])[0] == 1),
         ("duplicate scene record (FAIL then PASS) does not judge GREEN -> 1",
          judge([F_SUITE, _scene("a", "FAIL"), _scene("a", "PASS"), _scene("cf", "FAIL"),
-                _scene("ct", "TIMEOUT"), _scene("opt", "PASS"), F_DONE])[0] == 1),
+                _scene("ct", "TIMEOUT"), _scene("opt", "PASS"), {"type": "done", "scenes": 5}])[0] == 1),
+        ("done.scenes mismatch -> 1",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("opt", "PASS"), _scene("cf", "FAIL"),
+                _scene("ct", "TIMEOUT"), {"type": "done", "scenes": 99}])[0] == 1),
+        ("done.scenes absent tolerated -> 0",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("opt", "PASS"), _scene("cf", "FAIL"),
+                _scene("ct", "TIMEOUT"), {"type": "done"}])[0] == 0),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
@@ -159,15 +170,22 @@ def main():
     ap.add_argument("--loader", choices=["neoforge", "fabric"])
     ap.add_argument("--wall", type=int, default=900)
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--run-task", default=None,
+                    help="gradle run task (default :testkit-<loader>:runTestkitServer)")
+    ap.add_argument("--results", default=None,
+                    help="results JSONL path (default mc-testkit/<loader>/run-testkit/testkit-results.jsonl)")
     args = ap.parse_args()
     if args.self_test:
         sys.exit(self_test())
     if not args.loader:
         ap.error("--loader is required (or use --self-test)")
 
+    results_path = args.results or default_results(args.loader)
+    task = args.run_task or f":testkit-{args.loader}:runTestkitServer"
+
     sweep()
-    results = provision(args.loader)
-    rc = launch(args.loader, args.wall, results)
+    results = provision(results_path)
+    rc = launch(task, args.wall, results)
     print(f"[t0] launch rc={rc} (informational only — verdict comes from the results file)")
     if not os.path.exists(results):
         print("[t0] ENV: results file missing")
