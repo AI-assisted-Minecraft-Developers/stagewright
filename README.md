@@ -17,5 +17,14 @@ body runs once on its first tick, builds an origin-relative arena, asserts, and
 may register `ctx.await(cond).within(ticks).then(action)` continuations. Bodies
 never block, never sleep, never touch absolute coordinates.
 
-Status: P1a walking skeleton (this). Next: P1b instrument-contract subset
-(agent_driver wiring), P1c dogfood migration of agent-driver arenas.
+Status: P1a walking skeleton done. P1b instrument-contract subset landed
+(below). Next: P1c dogfood migration of agent-driver arenas.
+
+## Instrument contract (trust chain)
+
+    python3 scripts/testkit/instrument.py --loader neoforge   # or fabric
+
+Bare-RPC contract checks against a plain agent-driver dedicated server —
+the instrument face testkit itself depends on (spec §4). Green here is the
+precondition for trusting any scene's setup/assertions. Contract:
+`../docs/testkit/instrument-contract-v0.md`.
