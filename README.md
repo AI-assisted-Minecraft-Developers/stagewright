@@ -50,7 +50,7 @@ appendix (discovery order, name-uniqueness enforcement, canary ownership):
 implementation, e.g.
 `neoforge/src/main/resources/META-INF/services/net.magicterra.testkit.scene.SceneProvider`:
 
-    net.magicterra.agent_driver.testkit.AgentDriverScenes
+    net.magicterra.agent.neoforge.testkit.AgentDriverScenes
 
 ## Instrument contract (trust chain)
 
