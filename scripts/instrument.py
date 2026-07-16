@@ -397,13 +397,23 @@ def launch(loader, wall):
         proc.kill()
         sweep()
         return None
-    # RPC comes up before attachServer(onServerStarted); wait until version answers
+    # RPC comes up (onServerStarting) before attachServer (onServerStarted) —
+    # confirmed live on fabric (2026-07-16): mc.system.version answers with no
+    # server attached at all (it doesn't call ApiSupport.level()), so probing
+    # with it raced attachServer and lost on a fast fabric boot (RPC-listen to
+    # "Done" ~1s), producing "AgentApi not attached to a server" on every
+    # check needing api.level() (ObserveApi.player() etc. call api.level() as
+    # an explicit "assert attached" first line). mc.observe.player is
+    # side-effect-free (a read-only PlayerList probe, {present:false} on an
+    # empty dedicated server, never throws on content) and DOES call
+    # api.level() first, so waiting on it is a true readiness gate, not just
+    # a transport-up gate.
     deadline = time.time() + 120
     while time.time() < deadline:
         try:
             ws = Ws("127.0.0.1", port)
             ctx = Ctx(ws)
-            ctx.call("mc.system.version")
+            ctx.call("mc.observe.player")
             return ctx
         except Exception:
             time.sleep(2)
