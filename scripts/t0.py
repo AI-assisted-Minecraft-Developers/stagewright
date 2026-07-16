@@ -98,11 +98,15 @@ def launch(loader, wall, results):
 def judge(lines):
     """Pure verdict from parsed JSONL lines. Returns (exit_code, report_lines)."""
     report = []
-    suite, done, scenes = None, None, {}
+    suite, done, scenes, dup_counts = None, None, {}, {}
     for rec in lines:
         if rec["type"] == "suite":
             suite = rec
         elif rec["type"] == "scene":
+            # last-wins: a duplicate name lets a later record silently overwrite an
+            # earlier one (e.g. FAIL then PASS) and mask a real failure as GREEN —
+            # count occurrences per name so that hole gets flagged below.
+            dup_counts[rec["name"]] = dup_counts.get(rec["name"], 0) + 1
             scenes[rec["name"]] = rec
         elif rec["type"] == "done":
             done = rec
@@ -112,6 +116,10 @@ def judge(lines):
         return 1, ["no done footer — harness died mid-run"]
 
     code = 0
+    for name in sorted(n for n, count in dup_counts.items() if count > 1):
+        code = max(code, 1)
+        report.append(f"DUPLICATE: '{name}' has {dup_counts[name]} scene records "
+                       f"— last-wins can mask an earlier FAIL as GREEN")
     for reg in suite["registered"]:
         name, canary = reg["name"], reg["canary"]
         rec = scenes.get(name)
@@ -192,6 +200,9 @@ def self_test():
         ("optional scene swallowed still -> 1",
          judge([F_SUITE, _scene("a", "PASS"), _scene("cf", "FAIL"),
                 _scene("ct", "TIMEOUT"), F_DONE])[0] == 1),
+        ("duplicate scene record (FAIL then PASS) does not judge GREEN -> 1",
+         judge([F_SUITE, _scene("a", "FAIL"), _scene("a", "PASS"), _scene("cf", "FAIL"),
+                _scene("ct", "TIMEOUT"), _scene("opt", "PASS"), F_DONE])[0] == 1),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
