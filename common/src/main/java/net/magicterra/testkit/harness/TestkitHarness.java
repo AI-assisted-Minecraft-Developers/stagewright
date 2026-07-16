@@ -1,6 +1,8 @@
 package net.magicterra.testkit.harness;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.magicterra.testkit.TestkitCommon;
 import net.magicterra.testkit.scene.Canary;
 import net.magicterra.testkit.scene.Scene;
@@ -46,8 +48,22 @@ public final class TestkitHarness {
         this.server = server;
         this.scenes = scenes;
         this.out = out;
+        rejectDuplicateNames(scenes);
         out.writeSuiteHeader(loader, scenes);
         TestkitCommon.LOG.info("[{}] harness armed: {} scenes", TestkitCommon.MOD_ID, scenes.size());
+    }
+
+    /** A duplicate scene name lets a later record silently overwrite an earlier one
+     *  in the orchestrator's last-wins map, masking a real FAIL as GREEN. Reject the
+     *  whole registry loudly before the suite header is ever written (spec §5/§10). */
+    private static void rejectDuplicateNames(List<Scene> scenes) {
+        Set<String> seen = new HashSet<>();
+        for (Scene s : scenes) {
+            if (!seen.add(s.name())) {
+                throw new IllegalStateException("duplicate scene name '" + s.name()
+                        + "' in registry — scene names must be unique");
+            }
+        }
     }
 
     public void tick() {

@@ -22,8 +22,11 @@ import net.magicterra.testkit.scene.SceneOutcome;
  * dogfood arenas (P1c) this must be revisited (async writer precedent:
  * agent-driver GameTestManifest).
  *
- * Names/reasons are escaped minimally (quote+backslash) — scene names are Java
- * identifiers, reasons are free text we generate ourselves.
+ * Names/reasons are escaped (quote+backslash+control chars) — scene names are
+ * ordinarily Java identifiers, but reasons are free text: the harness's
+ * catch(Throwable) path feeds raw exception messages into `reason`, and those can
+ * contain newlines/tabs that would otherwise split one JSON record across
+ * physical lines and crash the orchestrator's line-oriented parser.
  */
 public final class ResultsJsonl {
     private final Path file;
@@ -38,7 +41,7 @@ public final class ResultsJsonl {
         for (int i = 0; i < scenes.size(); i++) {
             Scene s = scenes.get(i);
             if (i > 0) sb.append(',');
-            sb.append("{\"name\":\"").append(s.name())
+            sb.append("{\"name\":\"").append(escape(s.name()))
               .append("\",\"required\":").append(s.required())
               .append(",\"canary\":\"").append(s.canary()).append("\"}");
         }
@@ -47,7 +50,7 @@ public final class ResultsJsonl {
     }
 
     public void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs, String reason) {
-        write("{\"type\":\"scene\",\"name\":\"" + name + "\",\"outcome\":\"" + outcome
+        write("{\"type\":\"scene\",\"name\":\"" + escape(name) + "\",\"outcome\":\"" + outcome
                 + "\",\"ticks\":" + ticks + ",\"wallMs\":" + wallMs
                 + ",\"reason\":\"" + escape(reason == null ? "" : reason) + "\"}\n", false);
     }
@@ -74,6 +77,24 @@ public final class ResultsJsonl {
     }
 
     private static String escape(String s) {
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\' -> sb.append("\\\\");
+                case '"' -> sb.append("\\\"");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> {
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+                }
+            }
+        }
+        return sb.toString();
     }
 }
