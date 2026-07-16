@@ -20,7 +20,7 @@ ephemeral 经 `agent-rpc.port` 发现）。退出码同编排契约 v0：
 ## 运行器时序（Task 5 现场发现，已修复）
 
 `launch()` 的就绪门原探针 `mc.system.version`——该方法不调用
-`ApiSupport.level()`，RPC 在 `onServerStarting` 起来即可回应,比
+`AgentApi.level()`，RPC 在 `onServerStarting` 起来即可回应,比
 `onServerStarted`（`AgentApi.attachServer()` 所在）早。fabric 首次全量 17 项
 真跑（Task 5 Step 1）在快速 flat-world 首启（RPC 监听到 `Done` 仅约 1s）下
 输了这场竞态：探针在 attach 前就返回就绪，8/17 项touch `api.level()` 的检查
