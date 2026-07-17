@@ -61,8 +61,11 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
   贡献自己的金丝雀——框架"抓失败"的能力由内建金丝雀单点验证一次即可，下游只贡献
   业务场景本身（P1c 例：三个 `ad.*` 场景均 `required=true, canary=NONE`）。
 - **发现路径**：`META-INF/services/net.magicterra.testkit.scene.SceneProvider`，
-  文件内容一行一个实现类全限定名。P1c 例（neoforge 模块）：该文件单行为
-  `net.magicterra.agent.neoforge.testkit.AgentDriverScenes`。
+  文件内容一行一个实现类全限定名。现行例（P1.6 起 provider 移入 loader 共享的
+  common 模块，一份注册服务所有 loader）：该文件单行为
+  `net.magicterra.agent.bot.testkit.AgentDriverScenes`（P1c 时曾位于 neoforge 模块，
+  已随 P1.6 搬迁删除；全源码树内每个 provider 只允许一份 service 文件，重复注册会
+  触发重名门 RED）。
 
 ## done.scenes 对账
 P1c 新增的完整性检查（编排器 `verdict.judge()`），比"场景被吞"（SWALLOWED：某个
