@@ -180,6 +180,83 @@ knot 客户端 + `into_world`/GUI 驱动先例）；neoforge 客户端对等延�
 **场景体跨线程阻塞铁律**（场景体在服务器 tick 上 inline 跑，绝不可阻塞等客户端），
 因此 P2b 的客户端断言全部经 `instrument_client.py` 仪表面交付，而非 in-game 场景体。
 
+## JUnit 5 attach (out-of-process) — P2c
+
+`mc-testkit/junit` (`:testkit-junit`) is a **pure-JVM** JUnit 5 module: no game
+classes, no Minecraft on its classpath. Its live UI tests **attach** to an
+already-online T1 topology over RPC, so a UI scene body runs on the JUnit test
+thread — free to `await` an asynchronous client screen — instead of inline on a
+server tick (the cross-thread blocking rule that kept in-game UI scenes out of
+P2b). It is the correct home for the first-batch UI scenes P2b deferred.
+
+**Attach contract.** The module discovers the live topology through the
+`TESTKIT_ENDPOINT` environment variable, which names an absolute path to a
+descriptor file written by `t1.py --hold`. The descriptor is a frozen schema-v1
+JSON record — `{version, topology, loader, rpcHost, rpcPort, worldName, holdPid,
+writtenAtEpochMs}`, written atomically (`.tmp` → `os.replace`) so an attaching
+reader never sees a partial file. The authoritative schema and key-by-key
+semantics live in the **attach appendix** of
+`../docs/testkit/orchestration-contract-v0.md`
+（`## TESTKIT_ENDPOINT attach 契约（v0 附录，P2c T1）`）. `Endpoint.parse` rejects
+a missing key **loudly** (`IllegalArgumentException`) rather than defaulting it —
+a truncated descriptor never attaches to a wrong port.
+
+**Fail-fast.** When no live endpoint is configured — `TESTKIT_ENDPOINT` unset (or
+empty) and no `testkit.endpoint` property, or the named file is absent — `attach`
+throws `TestkitAttachException` carrying the exact operator hint
+
+    python3 scripts/testkit/t1.py --hold
+
+so a developer who runs a UI test with no topology up gets the one command that
+brings one up, never a silent hang or a mystery connection refusal.
+
+**Serial lease.** One `--hold` topology serves **one** attach client. The
+extension attaches a single shared `Testkit` **singleton** once per JVM (guarded
+by a lock; a failed attach is re-thrown as a LOUD container-level error on every
+later use, never downgraded to a skip), matching the `t1.py` serial-lease rule —
+no second topology instance, no concurrent attach.
+
+**Two-layer test structure.** The module's tests split into two layers that can
+never silently shrink each other:
+
+- **Pure self-tests** (`SelfTest`) — endpoint parse/round-trip, envelope codec,
+  `pollUntil` timeout-vs-return, `TestkitTimeoutException` ≠ `AssertionError` —
+  always run; they need no game and no socket.
+- **Live UI tests** (`ui.*`) — gated `@EnabledIfEnvironmentVariable(TESTKIT_ENDPOINT)`;
+  they run only when a live endpoint is present.
+
+The two attach **fail-fast** self-tests are the symmetric counterpart: they are
+`@DisabledIfEnvironmentVariable(TESTKIT_ENDPOINT)`, because the "no endpoint
+configured" branch they assert is only reachable when the env is **absent** (with
+it present, `attach` succeeds and defeats the `assertThrows`). So the gating is a
+mirror, not a hole: **env-off** ⇒ the 2 fail-fast self-tests run + the 6 live UI
+tests skip; **env-on** ⇒ the 2 fail-fast self-tests skip + the 5 runnable live UI
+tests run. Every test runs in exactly one of the two modes and JUnit reports the
+skips honestly — a test can never fall through both gates and vanish.
+
+**Command walkthrough.**
+
+    python3 scripts/testkit/t1.py --hold          # boots the T1 client (autorun OFF), stays online,
+                                                  # prints:  export TESTKIT_ENDPOINT=<abs path>
+    export TESTKIT_ENDPOINT=<abs path>            # eval the printed line (fabric: fabric/run-t1/testkit-endpoint.json)
+    ./gradlew :testkit-junit:test                 # live UI tests attach and run; SIGINT the t1.py
+                                                  # PID when done — it deletes the descriptor on exit.
+
+`t1.py --hold --loader neoforge` writes the same schema-v1 descriptor for a
+**neoforge** client (P2c closed the P2b deviation-1: the client topology now
+generalizes across both loaders), so the identical JUnit module attaches to either
+loader with no code change.
+
+**⭐containerFurnace 延后（task#90，偏差延续）**：`ui.containerFurnace` 是一个
+**可见、有论证的 `@Disabled` 标记**（绝非静默缩编）——它要**右键世界里的方块**打开
+方块实体容器屏（`FurnaceScreen`），而仪表面上没有任何 verb 能做世界右键：
+`mc.client.input.click` 只在已开屏内点 widget、`mc.client.input.key` 只走键盘绑定
+（原版「使用/放置」绑在右键，`glfwKeyCode` 不映射），唯一能右键世界方块的
+`mc.bot.useItem` 是模块纪律禁依赖的行为面 verb。**inventory / chat 屏已被覆盖**
+（键盘可开），缺的只是**世界右键**这一维——真修 = 一个 instrument 级的 world-use
+verb（`task#90` 双 verb 之一，与持键回读 verb 同批），归 controller 择期。完整证据见
+`../../.superpowers/sdd/task-3-report.md`。
+
 ## Verbs & namespace policy (P2a)
 
 The driver exposes a public paired-registration entry so a mod (or the testkit
