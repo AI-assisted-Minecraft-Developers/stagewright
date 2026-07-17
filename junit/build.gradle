@@ -1,0 +1,52 @@
+// mc-testkit/junit — pure-JVM JUnit 5 attach module (project name: testkit-junit).
+//
+// This module is deliberately NOT a Minecraft/loader module: it carries no
+// architectury/loom plugins, no Minecraft classpath, no agent-driver classes.
+// It is the OUT-OF-PROCESS consumer of a live testkit endpoint (TESTKIT_ENDPOINT,
+// written by scripts/testkit/t1.py --hold), talking to the driver purely over the
+// bare-RPC websocket. The root build's `subprojects {}` block applies loom to every
+// subproject unconditionally; this module is scoped OUT of that block by name in the
+// root build.gradle (`if (project.name == 'testkit-junit') return`). group/version
+// still flow from the root `allprojects {}` block.
+plugins {
+    id 'java-library'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+repositories {
+    // Non-loom module: loom is not here to auto-inject the essential repos, so we
+    // declare mavenCentral ourselves (the root subprojects.repositories block is
+    // empty and settings.gradle has no dependencyResolutionManagement).
+    mavenCentral()
+}
+
+dependencies {
+    // gson is part of the PUBLIC surface (JsonObject appears in TestkitRpc.call and
+    // the Testkit facade return types), so it is `api`, not `implementation`.
+    api 'com.google.code.gson:gson:2.11.0'
+
+    // TestkitExtension implements JUnit 5 BeforeAllCallback + ParameterResolver in the
+    // MAIN source set, and third-party tests @ExtendWith(TestkitExtension.class) against
+    // it, so junit-jupiter-api must be a MAIN (api) dependency — not test-only. The
+    // engine + full aggregator stay on the test face.
+    api platform('org.junit:junit-bom:5.11.3')
+    api 'org.junit.jupiter:junit-jupiter-api'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+}
+
+test {
+    useJUnitPlatform()
+    // Pass the ambient TESTKIT_ENDPOINT straight through (empty when unset) so the
+    // self-tests run live-free and attach()'s fail-fast is exercised honestly.
+    environment 'TESTKIT_ENDPOINT', System.getenv('TESTKIT_ENDPOINT') ?: ''
+}
