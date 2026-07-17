@@ -85,9 +85,9 @@ P1c 新增的完整性检查（编排器 `verdict.judge()`），比"场景被吞
 
 ## --expect-scene 外部期望门（v0 附录，P1.5a）
 `t0.py --expect-scene name1,name2,...`：逗号分隔的场景名列表，每个名字**必须**出现在
-suite header 的 `registered[]` 里，否则整轮判 RED（报告行 `expected scene missing:
-<name>`）。实现 = `verdict.judge(records, expected=[...])` 对 `registered[]` 与
-`expected` 做集合比对，与场景本身的 outcome 无关。
+suite header 的 `registered[]` 里，否则整轮判 RED（报告行 `MISSING-EXPECTED: <name>
+not in registered`）。实现 = `verdict.judge(records, expected=[...])` 对 `registered[]`
+与 `expected` 做集合比对，与场景本身的 outcome 无关。
 
 - **抓的是什么**：这条检查独立于、且早于 SWALLOWED/TRUNCATED 两门——那两门都假定
   场景"已注册"（在 `registered[]` 里）为前提，只检查"注册了但没执行"或"文件被截断"。
@@ -127,6 +127,8 @@ suite header 的 `registered[]` 里，否则整轮判 RED（报告行 `expected 
   黄金基线，不能静默挪动。
 - Slot 号冲突（两个场景显式 pin 同一个 slot）在 harness 构造期抛
   `IllegalStateException`，与撞名门同一时机失败，同样按 exit 3 ENV 裁决。
+- 本节语义只新增一种坐标分配方式（默认自动分配行为不变），不改现有字段/退出码含义，
+  契约仍冻结在 v0，不升版。
 
 ## chunkRadius 声明武器（v0 附录，P1.5a）
 `Scene.withChunkRadius(int r)`（默认 `r=1`）声明该场景需要多大的强制加载窗口，
@@ -145,3 +147,5 @@ PREP 阶段等 `(2r+1)×(2r+1)` 个区块全部 `hasChunkAt` 为真才放行场�
 - **声明式，非自动推断**：harness 不会替场景猜测足迹；场景作者必须显式选择半径。
   写错（半径太小）的后果是该场景独有的环境类不稳定（PREP 超 `PREP_BUDGET_TICKS`
   会记 `ENV_FAIL`），不影响其他场景。
+- 本节语义只新增一种可选窗口声明（默认 `r=1` 行为不变），不改现有字段/退出码含义，
+  契约仍冻结在 v0，不升版。
