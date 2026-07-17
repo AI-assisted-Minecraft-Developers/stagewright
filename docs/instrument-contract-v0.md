@@ -419,9 +419,10 @@ server-attached poll ring（**逐字节沿用 P2b 行为，零回归**）；T2�
   attach（不拥有客户端进程），本 Task 未开放该路（argparse 拒）；常驻-server-复用（reuse 路）
   才是 T2 的验收面与价值面。
 
-**常驻服务器证据**：`_resident_server_pid(run_dir)` 读 cwd==run-t2 的专服 JVM PID；逐轮记录，
-**跨全部轮必须不变**（客户端重进、server 复用从不重启 = 进程池复用收益）。PID 漂移 = 复用模型
-违约，报告里 loud 标注。
+**常驻服务器证据**：`_resident_server_pid(run_dir)` 读 cwd==run-t2 的专服 JVM PID；逐轮记录
+为复用**证据**（期望跨全部轮不变=进程池复用收益）。PID 漂移会在报告里 loud 标注
+（`RESIDENT`/`CHANGED`），但**判决本身只 key 检查结果**——PID 变化不单独判 BLOCKED，
+它间接由重连失败/结果漂移抓到（final-review Minor 3 的诚实措辞收敛）。
 
 ### T2 验收结果（本 Task 实测，attach `t2.py --hold`）
 
