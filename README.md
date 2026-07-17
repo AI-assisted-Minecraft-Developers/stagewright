@@ -263,6 +263,102 @@ loader with no code change.
 verb（`task#90` 双 verb 之一，与持键回读 verb 同批），归 controller 择期。完整证据见
 `../.superpowers/sdd/task-3-report.md`。
 
+## T2: production topology (dedicated + client) — P3a
+
+T2 is the **production-isomorphic** topology: a **dedicated server** JVM and a
+**real client** JVM, wired over a genuine multiplayer connection — the same shape
+a `SurvivalTest` run has (real client on a real dedicated server), not the
+integrated single-JVM server T1 hosts. Two agent-driver RPC sockets are live at
+once: one on the **client** face and one on the **dedicated server** face. This
+is the topology that closes P1b's headless gap for real — the server-side
+observation/assertion checks now run against a **dedicated** `PlayerList` holding
+a real `ServerPlayer` that arrived over the network, not a FakePlayer stand-in.
+
+    python3 scripts/testkit/t2.py                     # scored, fabric (default)
+    python3 scripts/testkit/t2.py --loader neoforge   # scored, neoforge
+    python3 scripts/testkit/t2.py --hold              # stand the topology up, run NO scenes, stay online for attach
+
+The scored run boots `:<loader>:runT2Server` (a dedicated server on a pinned port
+— fabric 25597, neoforge 25596, dogfood's 25599 all distinct) and the T1
+`runTestkitClient` under its own PID-tracked Xvfb, drives the client
+**title → Multiplayer → Direct Connection → 127.0.0.1:<port>** by label-matched
+widget clicks (`guidrive.py`), runs a **dual-end probe** (client `mc.client.player`
+AND server `mc.observe.player` must both see the same player at the same position),
+then triggers the scene suite and harvests the same `verdict.py` footer as T0/T1.
+The template world is copied in before launch and the copy deleted after; the
+cached per-loader template archive (`.t2-world-template-<loader>`) is the only
+persistent artifact. Exit codes: **0 GREEN / 1 RED / 2 DEAD / 3 ENV**, as T1.
+
+### `mc.test.run` — on-demand scene trigger
+
+T2 does not autorun the scene suite at world-load the way the dogfood/T1 servers
+do. Instead the orchestrator, once the dual-end probe passes, calls **`mc.test.run`**
+on the **server** face: an on-demand trigger that runs the registered scene suite
+and appends its footer to `testkit-results.jsonl`. It is **idempotent** — a
+second call while a run is in flight is rejected by an in-flight latch rather than
+starting an overlapping run — and it is the **first testkit consumer of the P2a
+`registerVerb` SPI** (the product's own paired-registration entry, dogfooded).
+The **autorun path is untouched**: T0/T1 still arm and run at world-entry exactly
+as before (the fabric/neoforge dogfood gates regression-prove the footer still
+emits on the autorun path), so `mc.test.run` is an additive second door, not a
+rewrite of the trigger.
+
+Because production `runServer` now arms the `mc.test.*` verbs (the loader
+forwarding is unconditional — see the adjudication note in `TODO.md`), the trigger
+is reachable on any dedicated server, not only the testkit run configuration; this
+is trust-model-consistent (the RPC surface is already a first-party capability
+面) and recorded as a testkit-wiring reclassification rather than a behavior change.
+
+### Dual-socket instrument (`instrument_client.py --topology t2`)
+
+The client instrument contract has a T2 face that speaks to **both** sockets. The
+#41/#45/#55 permanent assertions (full 36-slot inventory, attack cooldown, damage
+source) stage-and-observe on the **server** face — the dedicated `PlayerList`,
+which is exactly where P1b's headless gap lived; the #280 unknown-key live E2E
+and `mc.test.reset` land on the **client** face. **#55 crosses the real packet
+boundary** here: the damage is dealt server-side and its attribution is observed
+across the genuine network round-trip a production client sees, not the in-process
+shortcut a headless/integrated run takes — the headless gap is closed *in the
+production topology itself*, not merely simulated.
+
+    export TESTKIT_ENDPOINT=<abs>                                        # from `t2.py --hold`
+    python3 scripts/testkit/instrument_client.py --topology t2 --attach            # one pass
+    python3 scripts/testkit/instrument_client.py --topology t2 --attach --rounds 3 # resident-server reuse, N rounds
+
+`--rounds` on T2 **disconnects the client and re-connects it to the SAME resident
+dedicated server** (the server is **never restarted** — the per-round
+resident-server PID is recorded and asserted unchanged), then `mc.test.reset`s;
+per-check outcomes must be identical across all rounds or the run is **BLOCKED**
+(a reset-completeness gap). T2 is **attach-only** — it **requires** `--attach` and
+has **no `--fresh-process`** mode: the reuse surface T2 exercises is precisely
+*resident-server reuse across a real reconnect*, which is the seed of P3b's client
+process pool. (T1's `--fresh-process` discard-restart fallback needs process
+ownership T2's attach-only face does not hold.)
+
+### JUnit attach on T2
+
+The **same** `:testkit-junit` UI tests attach to a T2 topology with **no code
+change**: `t2.py --hold` writes the same `TESTKIT_ENDPOINT` descriptor, tagged
+`topology: "dedicated_plus_client"` and carrying one extra key — **`serverRpcPort`**
+(the dedicated server's RPC port, alongside the client `rpcPort`). `serverRpcPort`
+is an **optional** key: the frozen schema-v1 required-8 set is unchanged, a T1
+descriptor omits it and still parses, and `Endpoint.parse` tolerates its absence —
+so backward compatibility with v1 T1 endpoints is preserved.
+
+    python3 scripts/testkit/t2.py --hold          # prints: export TESTKIT_ENDPOINT=<abs path>
+    export TESTKIT_ENDPOINT=<abs path>            # fabric/run-t2/testkit-endpoint.json
+    ./gradlew :testkit-junit:test --rerun-tasks   # same UI tests attach over the dedicated_plus_client endpoint
+
+### 世界模板两端一致性声明
+
+Per spec §11, both ends run the **same jar** on the **same machine**: the client
+and the dedicated server are the identical agent-driver build (one `./gradlew`
+tree, one loader per run), and the T2 world derives from a single per-loader
+template archive copied into the server's run directory. There is no cross-machine
+version skew and no template divergence between the two ends — the client joins a
+server whose world, mod set, and protocol are byte-identical to what the same
+checkout would produce standalone.
+
 ## Verbs & namespace policy (P2a)
 
 The driver exposes a public paired-registration entry so a mod (or the testkit
