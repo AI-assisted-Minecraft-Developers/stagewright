@@ -433,7 +433,13 @@ def round_drift(round_outcomes):
     """Pure: cross-round per-check outcome drift. round_outcomes is a list (one dict per
     round) of {check-name: outcome}. Returns {name: [outcome-per-round]} for every check
     whose outcome is NOT identical across all rounds (insertion order preserved). Empty
-    dict ⇒ perfect reuse (every round judged every check the same)."""
+    dict ⇒ perfect reuse (every round judged every check the same).
+
+    A round with an EMPTY outcomes dict never ran its checks (transition failure /
+    ENV round) — its absence is already carried by round_codes, so it must not
+    manufacture phantom drift (PASS→None). Empty rounds show as "(not run)" in the
+    per-check seq but are excluded from drift detection: only rounds that actually
+    judged their checks can disagree."""
     names, seen = [], set()
     for ro in round_outcomes:
         for n in ro:
@@ -442,8 +448,9 @@ def round_drift(round_outcomes):
                 names.append(n)
     drift = {}
     for n in names:
-        seq = [ro.get(n) for ro in round_outcomes]
-        if len(set(seq)) > 1:
+        seq = [ro.get(n) if ro else "(not run)" for ro in round_outcomes]
+        judged = {o for ro, o in zip(round_outcomes, seq) if ro}
+        if len(judged) > 1:
             drift[n] = seq
     return drift
 
@@ -499,9 +506,15 @@ def combine_round_verdict(round_codes, round_outcomes, transition_failures=None)
         return 3, ["ENV: a round could not run (see per-round report)"]
     drift = round_drift(round_outcomes)
     if drift or any(c == 4 for c in round_codes):
-        report = [f"BLOCKED: inter-round outcome drift across {n} rounds — reset "
-                  "completeness gap (residue survived a reset). Fix mc.test.reset, do "
-                  "NOT loosen a check."]
+        if drift:
+            head = (f"BLOCKED: inter-round outcome drift across {n} rounds — reset "
+                    "completeness gap (residue survived a reset). Fix mc.test.reset, do "
+                    "NOT loosen a check.")
+        else:
+            head = (f"BLOCKED: reuse transition failed after a clean round ({n}-round "
+                    "run) — client no longer re-enterable = reuse-residue-suspect. Fix "
+                    "mc.test.reset, do NOT loosen a check.")
+        report = [head]
         if drift:
             report += render_drift_table(round_outcomes, drift)
         if transition_failures:
@@ -708,6 +721,19 @@ def self_test():
         ("combine: any ENV round -> ENV(3)",
          combine_round_verdict([0, 3, 0],
                                [{"a": "PASS"}, {}, {"a": "PASS"}])[0] == 3),
+        ("round_drift: empty round (never ran) -> no phantom drift",
+         round_drift([{"a": "PASS", "b": "PASS"}, {}]) == {}),
+        ("round_drift: empty round shown '(not run)', live rounds still drift",
+         round_drift([{"a": "PASS"}, {}, {"a": "FAIL"}])
+         == {"a": ["PASS", "(not run)", "FAIL"]}),
+        ("combine: transition-only BLOCKED -> no drift table, transition head",
+         (lambda cr: cr[0] == 4
+          and not any("difference table" in ln for ln in cr[1])
+          and "reuse transition failed" in cr[1][0]
+          and any("boom" in ln for ln in cr[1]))(
+             combine_round_verdict([0, 4],
+                                   [{"a": "PASS"}, {}],
+                                   transition_failures=["round 2: boom"]))),
         ("_outcomes: parses check records, skips suite/done",
          _outcomes([json.dumps({"type": "suite"}),
                     json.dumps({"type": "check", "name": "x", "outcome": "PASS"}),
