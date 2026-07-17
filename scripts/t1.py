@@ -54,6 +54,7 @@ WORLD_DIR = os.path.join(SAVES, WORLD_NAME)
 TEMPLATE_DIR = os.path.join(TESTKIT_DIR, ".t1-world-template")
 RUN_TASK = ":fabric:runTestkitClient"
 DEFAULT_EXPECT = os.path.join("scripts", "testkit", "expected-scenes-fabric.txt")
+ENDPOINT_FILE = os.path.join(RUN_DIR, "testkit-endpoint.json")
 
 
 # --------------------------------------------------------- pure decisions ----
@@ -86,6 +87,30 @@ def probe_free_display():
 def template_reuse(template_dir):
     """Reuse the cached template iff it exists and is non-empty (pure, for self-test)."""
     return os.path.isdir(template_dir) and bool(os.listdir(template_dir))
+
+
+def write_endpoint(path, loader, port, pid):
+    """Write the TESTKIT_ENDPOINT descriptor (schema v1, frozen — see File Structure of
+    the P2c plan and the attach-contract appendix in orchestration-contract-v0.md) to
+    ``path`` atomically (write to ``<path>.tmp`` then os.replace, so a JUnit-side reader
+    never observes a partial file). Pure aside from the filesystem write — takes every
+    varying value as a parameter — so self-test can exercise it without a live client.
+    Returns the dict that was written."""
+    doc = {
+        "version": 1,
+        "topology": "integrated_plus_client",
+        "loader": loader,
+        "rpcHost": "127.0.0.1",
+        "rpcPort": port,
+        "worldName": WORLD_NAME,
+        "holdPid": pid,
+        "writtenAtEpochMs": int(time.time() * 1000),
+    }
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(doc, f, indent=2)
+    os.replace(tmp, path)
+    return doc
 
 
 # ------------------------------------------------------------ process mgmt ----
@@ -245,9 +270,10 @@ async def mint_session(wall):
         await gd.quit_to_title(rpc)
 
 
-async def run_session(wall, hold):
+async def run_session(wall, hold, hold_pid=None):
     """Scored run (autorun ON, template reuse): connect, drive into world, harvest.
-    Returns footer_seen."""
+    Returns footer_seen. ``hold_pid`` is the CLIENT JVM pid (only meaningful when
+    ``hold`` is True — it becomes the endpoint file's holdPid)."""
     deadline = time.monotonic() + wall
     port = await gd.discover_port(Path(PORT_FILE),
                                   timeout=max(30, int(deadline - time.monotonic())))
@@ -265,6 +291,14 @@ async def run_session(wall, hold):
             # (a live server to /give /damage against). A --hold with autorun ON would
             # run the scenes then get disconnected to a DisconnectedScreen, useless for
             # attach. So hold ⇒ live idle world, not a post-suite world.
+            #
+            # In-world + port known ⇒ the attach surface is ready: write the
+            # TESTKIT_ENDPOINT descriptor (schema v1) for an out-of-process JUnit
+            # consumer to discover this topology, and echo the export line the
+            # human/CI driving t1.py needs to wire it into the JUnit run's env.
+            # loader is hardcoded "fabric" here — Task 4 generalizes via --loader.
+            write_endpoint(ENDPOINT_FILE, "fabric", port, hold_pid)
+            print(f"export TESTKIT_ENDPOINT={ENDPOINT_FILE}")
             print(f"[t1] in-world '{WORLD_NAME}' — integrated server up, NO scenes "
                   "(autorun off for --hold); staying online for instrument_client --attach. "
                   "Ctrl-C to release.")
@@ -394,7 +428,7 @@ def run(args):
         client, _ = launch_client(env, args.wall, autorun=not args.hold)
         t_launch = time.monotonic()
         try:
-            footer = asyncio.run(run_session(args.wall, args.hold))
+            footer = asyncio.run(run_session(args.wall, args.hold, client.pid))
         except Exception as e:  # noqa: BLE001 — any drive/connect failure = ENV
             env_err = e
             print(f"[t1] session error (ENV): {e}")
@@ -408,6 +442,15 @@ def run(args):
             stop_client(client)
     finally:
         kill_pid(xvfb.pid, "Xvfb")
+        # A stale TESTKIT_ENDPOINT descriptor is the most dangerous residue this run can
+        # leave behind — a JUnit consumer would happily attach to a port that now belongs
+        # to a dead (or worse, unrelated future) process. Delete on every exit path
+        # (Ctrl-C included — finally runs regardless of exception type), tolerant of it
+        # never having been written (non-hold runs, or a hold run that died before the
+        # in-world+port milestone).
+        if os.path.exists(ENDPOINT_FILE):
+            os.remove(ENDPOINT_FILE)
+            print(f"[t1] deleted endpoint file {ENDPOINT_FILE}")
         if not args.keep_world:
             shutil.rmtree(WORLD_DIR, ignore_errors=True)
             print(f"[t1] deleted world copy {WORLD_DIR}")
@@ -447,6 +490,9 @@ def self_test():
          _parse([]).expected == _expected_from_default()),
         ("parse_args --expect-file overrides",
          _parse(["--expect-file", _expect_fixture()]).expected == ["ad.one", "ad.two"]),
+        ("write_endpoint: full schema key set + value/type fidelity", _check_write_endpoint()),
+        ("write_endpoint: atomic overwrite leaves no .tmp, second call wins",
+         _check_write_endpoint_overwrite()),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
@@ -477,6 +523,55 @@ def _reuse_populated():
     try:
         open(os.path.join(d, "level.dat"), "w").close()
         return template_reuse(d)
+    finally:
+        shutil.rmtree(d)
+
+
+def _check_write_endpoint():
+    """write_endpoint's returned dict, and what actually landed on disk, must carry every
+    schema v1 key with the right value AND the right JSON type (rpcPort/holdPid/
+    writtenAtEpochMs are numbers, not stringly-typed — a JUnit-side gson record parse
+    would fail loudly on that, but self-test should catch it first)."""
+    import tempfile
+    d = tempfile.mkdtemp()
+    try:
+        path = os.path.join(d, "testkit-endpoint.json")
+        doc = write_endpoint(path, "fabric", 39843, 12345)
+        if not os.path.isfile(path):
+            return False
+        with open(path, encoding="utf-8") as f:
+            on_disk = json.load(f)
+        if on_disk != doc:
+            return False
+        if set(doc.keys()) != {"version", "topology", "loader", "rpcHost", "rpcPort",
+                                "worldName", "holdPid", "writtenAtEpochMs"}:
+            return False
+        return (
+            doc["version"] == 1
+            and doc["topology"] == "integrated_plus_client"
+            and doc["loader"] == "fabric"
+            and doc["rpcHost"] == "127.0.0.1"
+            and doc["rpcPort"] == 39843 and isinstance(doc["rpcPort"], int)
+            and doc["worldName"] == WORLD_NAME
+            and doc["holdPid"] == 12345 and isinstance(doc["holdPid"], int)
+            and isinstance(doc["writtenAtEpochMs"], int) and doc["writtenAtEpochMs"] > 0
+        )
+    finally:
+        shutil.rmtree(d)
+
+
+def _check_write_endpoint_overwrite():
+    import tempfile
+    d = tempfile.mkdtemp()
+    try:
+        path = os.path.join(d, "testkit-endpoint.json")
+        write_endpoint(path, "fabric", 1111, 111)
+        write_endpoint(path, "fabric", 2222, 222)
+        if os.path.exists(path + ".tmp"):
+            return False
+        with open(path, encoding="utf-8") as f:
+            on_disk = json.load(f)
+        return on_disk["rpcPort"] == 2222 and on_disk["holdPid"] == 222
     finally:
         shutil.rmtree(d)
 
