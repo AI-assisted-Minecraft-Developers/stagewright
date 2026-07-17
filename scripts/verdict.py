@@ -1,12 +1,21 @@
 """Shared pure-verdict logic for testkit runners (t0 scenes, instrument checks). Semantics frozen by docs/testkit/orchestration-contract-v0.md — do not change judge() behavior without a contract review."""
 import json
+import sys
 
 
 CANARY_EXPECT = {"MUST_FAIL": "FAIL", "MUST_TIMEOUT": "TIMEOUT"}
 
 
-def judge(lines, record_type="scene"):
-    """Pure verdict from parsed JSONL lines. Returns (exit_code, report_lines)."""
+def judge(lines, record_type="scene", expected=None):
+    """Pure verdict from parsed JSONL lines. Returns (exit_code, report_lines).
+
+    expected: optional iterable of names that MUST appear in the suite header's
+    registered[] (by raw name — this module has no norm() helper today, so
+    matching is plain string equality against registered[]'s "name" field).
+    Any name absent from registered[] raises code to at least 1 and appends a
+    MISSING-EXPECTED report line. expected=None (the default) leaves existing
+    behavior byte-for-byte unchanged.
+    """
     report = []
     suite, done, scenes, dup_counts = None, None, {}, {}
     for rec in lines:
@@ -30,6 +39,12 @@ def judge(lines, record_type="scene"):
         code = max(code, 1)
         report.append(f"DUPLICATE: '{name}' has {dup_counts[name]} {record_type} records "
                        f"— last-wins can mask an earlier FAIL as GREEN")
+    if expected:
+        reg_names = {r["name"] for r in suite["registered"]}
+        for want in expected:
+            if want not in reg_names:
+                code = max(code, 1)
+                report.append(f"MISSING-EXPECTED: {want} not in registered")
     for reg in suite["registered"]:
         name, canary = reg["name"], reg["canary"]
         rec = scenes.get(name)
@@ -67,5 +82,24 @@ def judge(lines, record_type="scene"):
 
 
 def parse(path):
+    """Parse a JSONL results file into a list of dicts.
+
+    Undecodable lines are dropped and warned to stderr rather than raising —
+    this can only push a verdict further toward RED, never toward a false
+    GREEN: a dropped footer line fails the "no done footer" check, a dropped
+    scene/check record surfaces as SWALLOWED, and a dropped header line fails
+    the "no suite header" ENV check. There is no escape path to GREEN through
+    a truncated/corrupted results file.
+    """
+    records = []
     with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
+        for i, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                print(f"[verdict] WARN: dropped undecodable line {i}: {line[:80]!r}",
+                      file=sys.stderr)
+    return records

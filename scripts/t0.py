@@ -21,6 +21,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 
 # Import verdict module from same directory
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -158,11 +159,34 @@ def self_test():
         ("done.scenes absent tolerated -> 0",
          judge([F_SUITE, _scene("a", "PASS"), _scene("opt", "PASS"), _scene("cf", "FAIL"),
                 _scene("ct", "TIMEOUT"), {"type": "done"}])[0] == 0),
+        ("expected scene present -> 0",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("opt", "PASS"), _scene("cf", "FAIL"),
+                _scene("ct", "TIMEOUT"), F_DONE], expected=["a"])[0] == 0),
+        ("expected scene missing -> 1",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("opt", "PASS"), _scene("cf", "FAIL"),
+                _scene("ct", "TIMEOUT"), F_DONE], expected=["ghost"])[0] == 1),
+        ("expected=None unchanged -> 0",
+         judge([F_SUITE, _scene("a", "PASS"), _scene("opt", "PASS"), _scene("cf", "FAIL"),
+                _scene("ct", "TIMEOUT"), F_DONE])[0] == 0),
+        ("parse drops undecodable line without raising",
+         _check_parse_bad_line()),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
         print(f"  [{'PASS' if ok else 'FAIL'}] {n}")
     return 0 if not failed else 1
+
+
+def _check_parse_bad_line():
+    with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as f:
+        f.write(json.dumps({"type": "done", "scenes": 0}) + "\n")
+        f.write("{not valid json\n")
+        path = f.name
+    try:
+        records = parse(path)
+        return len(records) == 1 and records[0]["type"] == "done"
+    finally:
+        os.remove(path)
 
 
 def main():
@@ -174,14 +198,19 @@ def main():
                     help="gradle run task (default :testkit-<loader>:runTestkitServer)")
     ap.add_argument("--results", default=None,
                     help="results JSONL path (default mc-testkit/<loader>/run-testkit/testkit-results.jsonl)")
+    ap.add_argument("--expect-scene", default=None,
+                    help="comma-separated scene names that MUST appear in registered[] (RED if absent)")
     args = ap.parse_args()
     if args.self_test:
         sys.exit(self_test())
     if not args.loader:
         ap.error("--loader is required (or use --self-test)")
 
+    if args.results and not os.path.isabs(args.results):
+        args.results = os.path.join(REPO_ROOT, args.results)
     results_path = args.results or default_results(args.loader)
     task = args.run_task or f":testkit-{args.loader}:runTestkitServer"
+    expected = [s.strip() for s in args.expect_scene.split(",")] if args.expect_scene else None
 
     sweep()
     results = provision(results_path)
@@ -190,7 +219,7 @@ def main():
     if not os.path.exists(results):
         print("[t0] ENV: results file missing")
         sys.exit(3)
-    code, report = judge(parse(results))
+    code, report = judge(parse(results), expected=expected)
     for line in report:
         print(f"[t0] {line}")
     print(f"[t0] VERDICT: {['GREEN', 'RED', 'DEAD', 'ENV'][code]}")
