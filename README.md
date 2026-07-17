@@ -37,20 +37,38 @@ runs in a row).
     python3 scripts/testkit/t0.py --loader neoforge \
         --run-task :neoforge:runDogfoodServer \
         --results neoforge/run-dogfood/testkit-results.jsonl \
-        --expect-scene ad.ascendMovementNoop,ad.ascendDeadZoneWatchdog,ad.diagonalAscentSpeed,ad.selfShaftDigUp,ad.descentYaw
+        --expect-file scripts/testkit/expected-scenes-neoforge.txt
 
 Boots a full dedicated server with **both** agent_driver and mc-testkit
 loaded (`neoforge/build.gradle` run config `dogfoodServer`, `testkit.autorun`
 armed) — this is what proves the T0 orchestrator generalizes beyond its own
 bare-bones testkit-neoforge module to a real, feature-loaded mod. Same exit
 codes as plain T0 above; the suite header's `registered[]` carries the
-built-in scenes plus every downstream `ad.*` scene. `--expect-scene` names
-every `ad.*` scene the orchestrator externally expects to see registered —
-see `docs/testkit/orchestration-contract-v0.md`'s appendix for why this is
-load-bearing (it is the precondition for deleting the legacy `@GameTest`
-twins: without it, a broken `ServiceLoader` discovery chain would silently
-drop `ad.*` from `registered[]` and the suite would self-consistently go
-GREEN on fewer scenes than intended).
+built-in scenes plus every downstream `ad.*` scene.
+
+`--expect-file scripts/testkit/expected-scenes-neoforge.txt` is the **canonical
+external-expectation gate**: a checked-in manifest (one scene name per line,
+`#` comments and comma-separated names allowed) naming every `ad.*` scene the
+orchestrator expects to see in `registered[]`. Each migrated `ad.*` scene MUST
+be added to this file **in the same commit** that adds the scene — the manifest
+lives beside the code and reviews with it, so a scene missing from *both* the
+file and `registered[]` is exactly the silent-composition hole the gate exists
+to close. If the resolved expectation set is empty (file missing, or present but
+containing no names after stripping comments/blanks) the orchestrator **fails
+loudly** — `--expect-file not found` / `expectation source given but contains no
+scene names`, argparse exit 2 — rather than silently degrading to "expect
+nothing". See `docs/testkit/orchestration-contract-v0.md`'s appendix for why
+this is load-bearing (it is the precondition for deleting the legacy
+`@GameTest` twins: without it, a broken `ServiceLoader` discovery chain would
+silently drop `ad.*` from `registered[]` and the suite would self-consistently
+go GREEN on fewer scenes than intended).
+
+`--expect-scene name1,name2,...` remains supported as an **ad-hoc** override for
+one-off runs (e.g. asserting a subset while iterating on a single new scene);
+when both are given they are **unioned and de-duplicated**. The checked-in
+`--expect-file` is the canonical form for acceptance — prefer it so the
+expectation set is version-controlled and can never drift from the migrated
+scene list.
 
 Downstream mods contribute scenes via the `SceneProvider` SPI in three
 lines — see `docs/testkit/orchestration-contract-v0.md` for the full
