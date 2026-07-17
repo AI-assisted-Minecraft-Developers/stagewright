@@ -121,6 +121,58 @@ the instrument face testkit itself depends on (spec §4). Green here is the
 precondition for trusting any scene's setup/assertions. Contract:
 `../docs/testkit/instrument-contract-v0.md`.
 
+## T1: client topology (fabric, under Xvfb) — P2b
+
+T1 proves the same `ad.*` scene suite runs on a **real Fabric client hosting an
+integrated (singleplayer) server**, not just the dedicated dogfood server T0
+drives. The orchestrator self-manages a headless client end-to-end:
+
+    python3 scripts/testkit/t1.py
+
+It probes a free X display, launches its own **Xvfb** on it (PID-tracked, killed
+by PID on exit — never `pkill`, never the live dev client's `:99`/`:97`), boots
+`:fabric:runTestkitClient` (a **client** JVM, not a server), drives title →
+singleplayer → world by **label-matched widget clicks** (`guidrive.py`, RPC-driven,
+no window manager), lets world-entry start the integrated server which arms the
+harness, then judges the run through the **reused** `verdict.py` against
+`--expect-file`. The template world is copied in before launch and the copy is
+deleted after — the cached template archive is the only persistent artifact.
+Exit codes: **0 GREEN / 1 RED / 2 DEAD** (a canary landed on the wrong outcome —
+framework void) **/ 3 ENV** (client never came up / GUI drive failed / no footer).
+
+`--hold` boots the shell with `-Pt1Autorun=false` (no scenes) and leaves the
+in-world client online for a second tool to attach; `--attach` reuses that
+already-online client instead of self-launching.
+
+### Client instrument contract (`instrument_client.py`)
+
+The T1 counterpart of `instrument.py`: bare-RPC contract checks that need a
+**real player in the integrated server's PlayerList** (so #41 full 36-slot
+inventory, #45 attack cooldown, #55 damage source — which a dedicated-server
+FakePlayer cannot exercise), plus the #280 unknown-key live E2E and
+`mc.test.reset` client-entry reset behavior.
+
+    python3 scripts/testkit/instrument_client.py              # self-launch (reuses the t1.py shell, autorun OFF)
+    python3 scripts/testkit/instrument_client.py --attach     # reuse an online `t1.py --hold` client
+    python3 scripts/testkit/instrument_client.py --rounds 3   # client-pool reuse: quit-to-title → re-enter → mc.test.reset, N rounds
+    python3 scripts/testkit/instrument_client.py --rounds 2 --fresh-process   # discard-and-relaunch fallback instead of in-place re-enter
+
+Cold client boot is the expensive step (~30s); `--rounds` reuse re-enters the
+same world (a `mc.test.reset` between rounds) at roughly **7-8× cheaper** per
+extra round, which is what proves the reset restores a clean per-round state.
+`--wall N` caps self-launch (default 900). Exit codes: **0/1/2/3** as above,
+plus **4 = BLOCKED** on multi-round runs when a round's verdict flips between
+rounds (inter-round drift — the reuse contract is not deterministic). The full
+contract (checks, canaries, `--hold` autorun-OFF topology, reuse semantics) is
+the **client appendix** of `../docs/testkit/instrument-contract-v0.md`
+（"P2b 附录 — 客户端仪表契约（T1 面）"）.
+
+**偏差声明（P2b）**：T1 目前 **仅 fabric**（唯一有成熟客户端工装的 loader —
+knot 客户端 + `into_world`/GUI 驱动先例）；neoforge 客户端对等延后。首批
+**in-game UI 授权场景**（场景体内直接断言客户端 UI）随 **P2c** 再议——理由是
+**场景体跨线程阻塞铁律**（场景体在服务器 tick 上 inline 跑，绝不可阻塞等客户端），
+因此 P2b 的客户端断言全部经 `instrument_client.py` 仪表面交付，而非 in-game 场景体。
+
 ## Verbs & namespace policy (P2a)
 
 The driver exposes a public paired-registration entry so a mod (or the testkit
