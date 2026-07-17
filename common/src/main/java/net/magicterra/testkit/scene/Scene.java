@@ -26,4 +26,11 @@ public record Scene(String name, int budgetTicks, boolean required, Canary canar
     public Scene withChunkRadius(int r) {
         return new Scene(name, budgetTicks, required, canary, body, originSlot, r);
     }
+
+    /** Mark this scene optional: FAIL/TIMEOUT is recorded per-run but does not
+     *  break GREEN (contract v0 required/optional carve-out). Being swallowed
+     *  still REDs regardless. Use for faithful sensors of known product bugs. */
+    public Scene withRequired(boolean req) {
+        return new Scene(name, budgetTicks, req, canary, body, originSlot, chunkRadius);
+    }
 }
