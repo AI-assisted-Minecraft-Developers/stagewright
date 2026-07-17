@@ -2,6 +2,7 @@ package net.magicterra.testkit.junit;
 
 import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -55,7 +56,14 @@ class SelfTest {
         assertTrue(ex.getMessage().contains("writtenAtEpochMs"), ex.getMessage());
     }
 
+    // The two attach-fail-fast tests below exercise the "no endpoint configured" branch,
+    // which is only reachable when TESTKIT_ENDPOINT is UNSET (attach() reads the env first
+    // and, when it names a real live endpoint, succeeds — defeating the assertThrows). The
+    // live-acceptance command sets TESTKIT_ENDPOINT, so gate these off when it is present.
+    // This is the symmetric counterpart to the ui.* scenes' @EnabledIfEnvironmentVariable:
+    // env-off ⇒ fail-fast self-tests run; env-on ⇒ live scenes run.
     @Test
+    @DisabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT", matches = ".+")
     void attachWithNoEndpointThrowsWithHint() {
         // TESTKIT_ENDPOINT is passed empty by the gradle test task; clear the property too.
         String saved = System.getProperty("testkit.endpoint");
@@ -72,6 +80,7 @@ class SelfTest {
     }
 
     @Test
+    @DisabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT", matches = ".+")
     void attachWithMissingFileThrowsWithHint() {
         String saved = System.getProperty("testkit.endpoint");
         System.setProperty("testkit.endpoint", "/nonexistent/testkit-endpoint.json");
