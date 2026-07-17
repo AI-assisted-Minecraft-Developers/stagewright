@@ -113,6 +113,18 @@ public final class TestkitCommon {
                     + " on this server — refusing to re-run (idempotent; the JSONL done footer is the "
                     + "sole completion signal).");
         }
+        // Hardening (Task-1 review Minor 2): guard the accept against a stopping server. A stopping
+        // MinecraftServer silently DROPS anything handed to server.execute() — so accepting here would
+        // return {accepted:true} while the scheduled harness build never ran, latching onDemandRequested
+        // forever with no suite. Check isRunning() BEFORE accepting and fail loudly instead (minimal
+        // correct form — a pre-accept guard rather than a post-accept best-effort in the lambda, since
+        // once we've returned {accepted:true} the RPC caller has no further error channel).
+        if (!server.isRunning()) {
+            throw new IllegalStateException(
+                    "mc.test.run: the server is stopping — refusing to accept (a stopping server.execute() "
+                    + "queue would silently drop the scheduled harness build, latching the suite as "
+                    + "\"already started\" with nothing ever running).");
+        }
         onDemandRequested = true;
         List<Scene> scenes = resolvedScenes;
         String loader = armedLoader;
@@ -120,8 +132,17 @@ public final class TestkitCommon {
         // sets `harness` on the server thread) cannot double-build.
         server.execute(() -> {
             synchronized (TestkitCommon.class) {
-                if (harness == null) {
+                if (harness != null) return;
+                try {
                     harness = new TestkitHarness(server, loader, scenes, new ResultsJsonl(Path.of(OUT_FILE)));
+                } catch (Throwable t) {
+                    // Hardening (Task-1 review Minor 1): the harness ctor can throw (duplicate scene
+                    // name / origin-slot collision — see TestkitHarness). If it does, RELEASE the
+                    // on-demand latch so a later mc.test.run can retry instead of being permanently told
+                    // "already been started" when nothing was ever built. harness stays null.
+                    onDemandRequested = false;
+                    LOG.error("[{}] mc.test.run: harness build failed on the server thread — "
+                            + "released the on-demand latch for retry", MOD_ID, t);
                 }
             }
         });
