@@ -157,14 +157,21 @@ FakePlayer cannot exercise), plus the #280 unknown-key live E2E and
     python3 scripts/testkit/instrument_client.py --rounds 3   # client-pool reuse: quit-to-title → re-enter → mc.test.reset, N rounds
     python3 scripts/testkit/instrument_client.py --rounds 2 --fresh-process   # discard-and-relaunch fallback instead of in-place re-enter
 
-Cold client boot is the expensive step (~30s); `--rounds` reuse re-enters the
-same world (a `mc.test.reset` between rounds) at roughly **7-8× cheaper** per
-extra round, which is what proves the reset restores a clean per-round state.
-`--wall N` caps self-launch (default 900). Exit codes: **0/1/2/3** as above,
-plus **4 = BLOCKED** on multi-round runs when a round's verdict flips between
-rounds (inter-round drift — the reuse contract is not deterministic). The full
-contract (checks, canaries, `--hold` autorun-OFF topology, reuse semantics) is
-the **client appendix** of `../docs/testkit/instrument-contract-v0.md`
+Cold client boot is the expensive step (~28-30s); `--rounds` reuse re-enters
+the same world (a `mc.test.reset` between rounds) at roughly **≈7× cheaper**
+per extra round, which is what proves the reset restores a clean per-round
+state. `--wall N` caps self-launch (default 900). Exit codes: **0/1/2/3** as
+above, plus **4 = BLOCKED** on multi-round runs when a CHECK's outcome drifts
+across rounds (per-check inter-round drift — the reuse contract is not
+deterministic). A reuse-transition exception (quit-to-title → re-enter)
+occurring AFTER at least one round has cleanly completed is also classified
+BLOCKED rather than ENV — a client that finished a round but can no longer
+re-enter is reuse-residue-suspect, not environment; a genuine environment
+cause would reproduce in single-round mode, which still reports ENV.
+First-entry failures (before any round completes) and `--fresh-process`
+transitions remain ENV. The full contract (checks, canaries, `--hold`
+autorun-OFF topology, reuse semantics) is the **client appendix** of
+`../docs/testkit/instrument-contract-v0.md`
 （"P2b 附录 — 客户端仪表契约（T1 面）"）.
 
 **偏差声明（P2b）**：T1 目前 **仅 fabric**（唯一有成熟客户端工装的 loader —
