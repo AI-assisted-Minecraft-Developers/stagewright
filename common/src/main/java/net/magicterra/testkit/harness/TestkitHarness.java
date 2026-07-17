@@ -1,7 +1,9 @@
 package net.magicterra.testkit.harness;
 
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.magicterra.testkit.TestkitCommon;
 import net.magicterra.testkit.scene.Canary;
@@ -36,6 +38,7 @@ public final class TestkitHarness {
     private final MinecraftServer server;
     private final List<Scene> scenes;
     private final ResultsJsonl out;
+    private final Map<String, Integer> slotByName;
 
     private int index;
     private Phase phase = Phase.PREP;
@@ -49,6 +52,7 @@ public final class TestkitHarness {
         this.scenes = scenes;
         this.out = out;
         rejectDuplicateNames(scenes);
+        this.slotByName = assignSlots(scenes);
         out.writeSuiteHeader(loader, scenes);
         TestkitCommon.LOG.info("[{}] harness armed: {} scenes", TestkitCommon.MOD_ID, scenes.size());
     }
@@ -66,6 +70,34 @@ public final class TestkitHarness {
         }
     }
 
+    /** Two-pass origin slot allocation: explicit pins (spec'd scenes needing byte-
+     *  determinism) claim their slot first, then auto scenes fill the remaining
+     *  slots in registry order, skipping any slot a pin already claimed. With no
+     *  pins in the registry this reduces to slot == registry index — identical to
+     *  the pre-pinning origin assignment (Step-4 regression proves this). */
+    private static Map<String, Integer> assignSlots(List<Scene> scenes) {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        Set<Integer> taken = new HashSet<>();
+        for (Scene s : scenes) {                       // pass 1: explicit pins
+            if (s.originSlot() >= 0) {
+                if (!taken.add(s.originSlot())) {
+                    throw new IllegalStateException("origin slot collision: " + s.originSlot()
+                            + " (scene " + s.name() + ")");
+                }
+                out.put(s.name(), s.originSlot());
+            }
+        }
+        int next = 0;
+        for (Scene s : scenes) {                       // pass 2: auto scenes skip pinned slots
+            if (s.originSlot() < 0) {
+                while (taken.contains(next)) next++;
+                taken.add(next);
+                out.put(s.name(), next);
+            }
+        }
+        return out;
+    }
+
     public void tick() {
         if (finished) return;
         if (index >= scenes.size()) { finish(); return; }
@@ -80,23 +112,24 @@ public final class TestkitHarness {
         }
 
         ServerLevel level = server.overworld();
-        BlockPos origin = originFor(index);
+        BlockPos origin = originFor(slotByName.get(scene.name()));
+        int radius = scene.chunkRadius();
 
         switch (phase) {
             case PREP -> {
                 if (phaseTicks == 0) {
-                    forceChunks(level, origin, true);
+                    forceChunks(level, origin, radius, true);
                     sceneStartMs = System.currentTimeMillis();
                 }
                 phaseTicks++;
-                if (allChunksLoaded(level, origin)) {
+                if (allChunksLoaded(level, origin, radius)) {
                     ctx = new SceneContext(level, origin);
                     phase = Phase.RUN;
                     phaseTicks = 0;
                 } else if (phaseTicks > PREP_BUDGET_TICKS) {
                     record(scene, SceneOutcome.ENV_FAIL, 0, "arena chunks not loaded within "
                             + PREP_BUDGET_TICKS + " ticks");
-                    teardown(scene, level, origin);
+                    teardown(scene, level, origin, radius);
                 }
             }
             case RUN -> {
@@ -106,22 +139,22 @@ public final class TestkitHarness {
                     SceneContext.Progress p = ctx.advance();
                     if (p == SceneContext.Progress.DONE) {
                         record(scene, SceneOutcome.PASS, ctx.ticks(), null);
-                        teardown(scene, level, origin);
+                        teardown(scene, level, origin, radius);
                     } else if (p == SceneContext.Progress.STEP_TIMEOUT) {
                         record(scene, SceneOutcome.TIMEOUT, ctx.ticks(), ctx.failureReason());
-                        teardown(scene, level, origin);
+                        teardown(scene, level, origin, radius);
                     } else if (ctx.ticks() > scene.budgetTicks()) {
                         record(scene, SceneOutcome.TIMEOUT, ctx.ticks(),
                                 "scene budget " + scene.budgetTicks() + " ticks exhausted");
-                        teardown(scene, level, origin);
+                        teardown(scene, level, origin, radius);
                     }
                 } catch (SceneFailure f) {
                     record(scene, SceneOutcome.FAIL, ctx.ticks(), f.getMessage());
-                    teardown(scene, level, origin);
+                    teardown(scene, level, origin, radius);
                 } catch (Throwable t) {
                     record(scene, SceneOutcome.FAIL, ctx.ticks(),
                             "unexpected " + t.getClass().getSimpleName() + ": " + t.getMessage());
-                    teardown(scene, level, origin);
+                    teardown(scene, level, origin, radius);
                 }
             }
             case ADVANCE_DONE -> nextScene();
@@ -141,19 +174,19 @@ public final class TestkitHarness {
      *  forced chunks. A leaked avatar or dangling cleanup here poisons the next scene, so
      *  this runs regardless of how the scene resolved. ENV_FAIL fires from PREP before ctx
      *  is ever constructed, so there is nothing to drain in that case. */
-    private void teardown(Scene scene, ServerLevel level, BlockPos origin) {
+    private void teardown(Scene scene, ServerLevel level, BlockPos origin, int radius) {
         if (ctx != null) {
             ctx.runCleanups(msg -> TestkitCommon.LOG.warn("[{}] {}: {}", TestkitCommon.MOD_ID, scene.name(), msg));
         }
-        forceChunks(level, origin, false);
+        forceChunks(level, origin, radius, false);
     }
 
-    /** PREP waits for the full 3x3 force-loaded neighborhood, not just the origin chunk —
-     *  matching forceChunks' 3x3 footprint so scene bodies never touch a not-yet-loaded
-     *  neighbor chunk on their first tick. */
-    private boolean allChunksLoaded(ServerLevel level, BlockPos origin) {
-        for (int dx = -1; dx <= 1; dx++)
-            for (int dz = -1; dz <= 1; dz++)
+    /** PREP waits for the full (2r+1)x(2r+1) force-loaded neighborhood, not just the
+     *  origin chunk — matching forceChunks' footprint so scene bodies never touch a
+     *  not-yet-loaded neighbor chunk on their first tick. */
+    private boolean allChunksLoaded(ServerLevel level, BlockPos origin, int radius) {
+        for (int dx = -radius; dx <= radius; dx++)
+            for (int dz = -radius; dz <= radius; dz++)
                 if (!level.hasChunkAt(origin.offset(dx * 16, 0, dz * 16))) return false;
         return true;
     }
@@ -176,14 +209,14 @@ public final class TestkitHarness {
         server.halt(false);
     }
 
-    private static BlockPos originFor(int i) {
-        return new BlockPos(GRID_X0 + i * GRID_STEP, GRID_Y, GRID_Z0);
+    private static BlockPos originFor(int slot) {
+        return new BlockPos(GRID_X0 + slot * GRID_STEP, GRID_Y, GRID_Z0);
     }
 
-    private static void forceChunks(ServerLevel level, BlockPos origin, boolean force) {
+    private static void forceChunks(ServerLevel level, BlockPos origin, int radius, boolean force) {
         int cx = origin.getX() >> 4, cz = origin.getZ() >> 4;
-        for (int dx = -1; dx <= 1; dx++)
-            for (int dz = -1; dz <= 1; dz++)
+        for (int dx = -radius; dx <= radius; dx++)
+            for (int dz = -radius; dz <= radius; dz++)
                 level.setChunkForced(cx + dx, cz + dz, force);
     }
 }

@@ -21,6 +21,10 @@ public final class TestkitCommon {
     private TestkitCommon() {}
 
     public static void onServerStarted(MinecraftServer server, String loader) {
+        if (harness != null) {
+            LOG.warn("[{}] harness already armed — ignoring duplicate onServerStarted", MOD_ID);
+            return;
+        }
         if (!Boolean.getBoolean("testkit.autorun")) {
             LOG.info("[{}] present but idle (testkit.autorun not set)", MOD_ID);
             return;
