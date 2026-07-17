@@ -292,6 +292,11 @@ autoEat 原值；`reset.behavior` 由 reset 自身清 screen/chat）——检查
   仍判 `ENV` 不变：**首轮之前**（自起/首次进世界失败，尚未证明客户端-世界组合可用）、
   `--fresh-process`（弃用重启）路径的过渡失败（全新 boot 天然无残留可赖）、以及
   check-phase 基础设施异常（RPC socket 连接失败，与轮间过渡是不同阶段）。
+- **空轮不制造幻影漂移**（re-review 收尾修）：过渡失败的轮没有 outcomes（空集），
+  其缺席已由该轮的 judge code 承载；`round_drift` 把空轮在差异表里标 `(not run)`
+  且**只在真正跑过检查的轮之间**判漂移——纯过渡失败的 BLOCKED 报告用专门的
+  "reuse transition failed after a clean round" 头，不打逐轮差异表（没有真漂移可打），
+  过渡异常原文照常附上。
 
 **`--fresh-process` 降级（弃用重启）**
 
