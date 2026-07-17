@@ -82,3 +82,66 @@ P1c 新增的完整性检查（编排器 `verdict.judge()`），比"场景被吞
   必须携带该字段，缺字段的结果文件不能被这条新增的检查判定为完整性违规。
 - 本节语义只收紧（新增一条完整性门），不放松、不改既有字段/退出码含义，故契约
   仍冻结在 v0，不升版。
+
+## --expect-scene 外部期望门（v0 附录，P1.5a）
+`t0.py --expect-scene name1,name2,...`：逗号分隔的场景名列表，每个名字**必须**出现在
+suite header 的 `registered[]` 里，否则整轮判 RED（报告行 `expected scene missing:
+<name>`）。实现 = `verdict.judge(records, expected=[...])` 对 `registered[]` 与
+`expected` 做集合比对，与场景本身的 outcome 无关。
+
+- **抓的是什么**：这条检查独立于、且早于 SWALLOWED/TRUNCATED 两门——那两门都假定
+  场景"已注册"（在 `registered[]` 里）为前提，只检查"注册了但没执行"或"文件被截断"。
+  `--expect-scene` 抓的是**注册这一层本身**：SceneProvider 走 `ServiceLoader` 发现
+  （`META-INF/services` 一行一个 FQCN），如果这根线断了（打包遗漏该文件、jar 未上
+  classpath、typo、编译顺序问题），下游 `ad.*` 场景会从 `registered[]` 里**整体消失**
+  ——而套件本身仍然自洽地跑完注册到的那些场景、判 GREEN。这是套件组装层的自洽假绿，
+  SWALLOWED/TRUNCATED 两门结构性地管不到它。
+- **为何是外部而非内部**：由编排器（而非游戏内 harness 自己）断言"这些名字必须出现"，
+  不依赖套件自证——组装链路断裂时，游戏内 harness 本身没有任何信号可以感知"本该有
+  一个 provider 没被发现"。
+- **legacy 删除前置**（终审 Important，记录见本文件 SceneProvider 附录 + TODO.md）：
+  legacy `@GameTest` 三胞胎（及 P1.5a 新增的 `ad.selfShaftDigUp`/`ad.descentYaw` 对应
+  legacy 双胞胎）的删除条件之一就是这道门已武装并稳定通过——只有外部期望门在场，才能
+  确认"legacy 删了之后 ad.\* 仍然真的在跑"，而不是套件组装链路悄悄断裂后自洽空转。
+- 语义只新增一条外部检查、不改现有字段/退出码含义，契约仍 v0。
+
+## originSlot 坐标钉扎（v0 附录，P1.5a）
+`Scene.withOriginSlot(int slot)`（`Scene.java`/`TestkitHarness.assignSlots`）为确定性
+敏感场景固定 grid 分配的坐标格，与其余场景的注册顺序解耦：
+
+- **默认（自动）分配**：无 `withOriginSlot` 的场景按注册顺序分配自增 slot（0,1,2,...，
+  跳过任何显式 pin 占用的号），`origin = (100000 + slot*512, 200, 100000)`
+  （`TestkitHarness` 的 `GRID_X0`/`GRID_Z0`/`GRID_Y`/`GRID_STEP`）。**新增/删除任何一个
+  场景都会让后续所有自动分配场景的坐标整体平移**——对绝大多数场景无所谓（arena 自
+  包含，搬到哪个网格格子物理行为不变），但对双精度物理敏感的确定性场景不该把"坐标
+  平移带来的浮点误差"和"真回归"混为一谈。
+- **`withOriginSlot(int slot)`**：显式指定一个远高于自动分配范围的固定 slot，该场景
+  的坐标从此与注册表增长完全解耦。P1.5a 例：`ad.descentYaw` 用 `slot=4000`
+  （origin x = 100000 + 4000×512 = 2,148,000，在世界边界 ±30,000,000 内，永不与自动
+  增长的注册表相撞）——这是 P0 探针事故（server 线程同步 IO 打破了这个场景的字节级
+  确定性，A/B 定罪后修为异步 writer）之后对同一类"任何微小扰动都可能翻转轨迹"敏感度
+  的延伸防护：坐标漂移本身不该成为另一个扰动源。
+- **发布后不得变更**：一旦某个 pinned slot 的基线值（本任务记录 `ad.descentYaw` 的
+  `sumAbsDyaw=871°`/`backSteps=53`，2026-07-16 测得，见两个 twin 文件的 javadoc）被
+  写入文档或用作回归门槛，挪动 slot 号即视为破坏性变更——必须连带重新测量并更新
+  黄金基线，不能静默挪动。
+- Slot 号冲突（两个场景显式 pin 同一个 slot）在 harness 构造期抛
+  `IllegalStateException`，与撞名门同一时机失败，同样按 exit 3 ENV 裁决。
+
+## chunkRadius 声明武器（v0 附录，P1.5a）
+`Scene.withChunkRadius(int r)`（默认 `r=1`）声明该场景需要多大的强制加载窗口，
+PREP 阶段等 `(2r+1)×(2r+1)` 个区块全部 `hasChunkAt` 为真才放行场景体开始 tick
+（`TestkitHarness.allChunksLoaded`/`forceChunks`）。
+
+- **默认窗口**：`r=1` 覆盖以 origin 所在区块为中心的 3×3 区块，即 origin 相对
+  方块坐标 `[-16,+31]`（origin 本身落在区块边界，`GRID_STEP=512` 是 16 的整数倍）。
+  绝大多数场景足迹都在此窗口内。
+- **何时需要更大半径**：场景的建造/寻路足迹超出默认窗口时必须显式
+  `.withChunkRadius(r)`，否则场景体可能在部分区块未加载完成时开始建造/寻路，读到
+  假的"空气"方块——这类失败长得像"物理漂移"或"环境问题"，而不是明显的加载竞态，
+  极难与真回归区分。P1.5a 例：`ad.descentYaw` 用 `.withChunkRadius(2)`（窗口
+  `[-32,+47]`）——其足迹本身仍在 `r=1` 窗口内，但作为字节确定性敏感场景显式选择
+  更大余量，不与未来 footprint 微调抢占安全边际。
+- **声明式，非自动推断**：harness 不会替场景猜测足迹；场景作者必须显式选择半径。
+  写错（半径太小）的后果是该场景独有的环境类不稳定（PREP 超 `PREP_BUDGET_TICKS`
+  会记 `ENV_FAIL`），不影响其他场景。
