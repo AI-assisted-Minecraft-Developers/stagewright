@@ -307,7 +307,7 @@ Because production `runServer` now arms the `mc.test.*` verbs (the loader
 forwarding is unconditional — see the adjudication note in `TODO.md`), the trigger
 is reachable on any dedicated server, not only the testkit run configuration; this
 is trust-model-consistent (the RPC surface is already a first-party capability
-面) and recorded as a testkit-wiring reclassification rather than a behavior change.
+face) and recorded as a testkit-wiring reclassification rather than a behavior change.
 
 ### Dual-socket instrument (`instrument_client.py --topology t2`)
 
