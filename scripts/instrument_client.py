@@ -474,10 +474,11 @@ def self_launch(wall):
     return client, xvfb, port
 
 
-def run_checks(faces, checks):
+def run_checks(faces, checks, loader="fabric"):
     """Run the check family against ``faces``, return the JSONL lines (suite header + check
-    records + footer). ``checks`` is the topology-adjusted list from _checks_for()."""
-    lines = [json.dumps({"type": "suite", "loader": "fabric", "face": "instrument-client",
+    records + footer). ``checks`` is the topology-adjusted list from _checks_for();
+    ``loader`` labels the suite header (from the endpoint on attach, default fabric)."""
+    lines = [json.dumps({"type": "suite", "loader": loader, "face": "instrument-client",
                          "registered": [{"name": n, "required": True, "canary": c}
                                         for n, c, _ in checks]})]
     for name, canary, fn in checks:
@@ -628,6 +629,7 @@ class T1Topology:
     re-enter the SAME singleplayer world (the integrated server bounces with the client, so
     server_pid() is meaningless → None). Zero behavioural change from the pre-topology path."""
     name = "t1"
+    loader = "fabric"  # t1 attach/self-launch path is fabric's run-t1 tree
 
     def __init__(self, port):
         self.port = port
@@ -650,11 +652,12 @@ class T2Topology:
     asserted as the process-pool reuse evidence."""
     name = "t2"
 
-    def __init__(self, client_port, server_rpc_port, address, run_dir):
+    def __init__(self, client_port, server_rpc_port, address, run_dir, loader="fabric"):
         self.client_port = client_port
         self.server_rpc_port = server_rpc_port
         self.address = address
         self.run_dir = run_dir
+        self.loader = loader
 
     def make_faces(self):
         client = _connect_checks(self.client_port)
@@ -807,7 +810,7 @@ def _resolve_topology(attach, wall, topology):
             doc = json.load(f)
         client_port, server_rpc_port, loader, address = resolve_t2_endpoint(doc)
         run_dir = t2mod.resolve_t2(loader).run_dir
-        topo = T2Topology(client_port, server_rpc_port, address, run_dir)
+        topo = T2Topology(client_port, server_rpc_port, address, run_dir, loader)
         pid = topo.server_pid()
         print(f"[instrument-client] --topology t2 --attach: client rpc={client_port} "
               f"server rpc={server_rpc_port} loader={loader} connect={address} "
@@ -903,7 +906,7 @@ def run_suite(attach, wall, rounds=1, fresh_process=False, topology="t1"):
                 manifest = _pool_reset(faces.client)  # mc.test.reset lives on the CLIENT face
                 print(f"[instrument-client] round {rnd + 1} pool reset[] = {manifest}")
 
-            lines = run_checks(faces, checks)
+            lines = run_checks(faces, checks, loader=topo.loader)
             any_round_ran = True  # check suite completed at least once — a later reuse-transition
                                    # exception is now reuse-residue-suspect, not first-entry ENV
             secs = time.time() - t_round

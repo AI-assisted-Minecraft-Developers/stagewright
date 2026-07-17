@@ -770,7 +770,9 @@ def _parse(argv):
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args(argv)
     lp = resolve_t2(args.loader)
-    if not args.self_test:
+    # --hold never judges scenes, so don't couple the attach-only path to the
+    # scored-only manifest (final-review Minor 5)
+    if not args.self_test and not args.hold:
         path = args.expect_file or lp.default_expect
         if not os.path.isabs(path):
             path = os.path.join(REPO_ROOT, path)
