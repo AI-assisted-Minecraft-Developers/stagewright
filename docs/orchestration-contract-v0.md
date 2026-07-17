@@ -209,8 +209,12 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
 
 - `version`：schema 版本号，当前恒 `1`；破坏性改键需升版号（同本契约文件自身
   "变更需升 v1" 的纪律）。
-- `topology`：恒 `"integrated_plus_client"`——`--hold` 唯一支持的拓扑形状（客户端
-  内置集成服务器，非独立专用服务器）。
+- `topology`：拓扑形状枚举 `{integrated_plus_client, dedicated_plus_client}`。T1
+  `t1.py --hold` 写 `"integrated_plus_client"`（客户端内置集成服务器）；T2
+  `t2.py --hold` 写 `"dedicated_plus_client"`（客户端 multiplayer 直连到一台独立专用
+  服务器，见 P3a T2 附录）。两者共享同一份 v1 schema——`rpcPort` 恒为**客户端**面
+  RPC 端口（JUnit UI 场景只打客户端），拓扑差异由此键和下面的可选 `serverRpcPort`
+  表达，`Endpoint.wsUri()` 与拓扑无关。
 - `loader`：`t1.py` 写入时硬编码 `"fabric"`（P2c T4 引入 `--loader` 泛化后按实际
   loader 参数写入；schema 本身不变，只是取值从常量变为参数）。
 - `rpcHost`：恒 `"127.0.0.1"`——client 拓扑的 agent-rpc websocket 只监听本机回环，
@@ -226,6 +230,13 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
   变量）。此字段是遥测/人工排障用途，**不是**探活依据（见下）。
 - `writtenAtEpochMs`：`t1.py` 写文件那一刻的墙钟毫秒时间戳（`int(time.time()*1000)`）。
   **仅供参考，不是新鲜度判据**——见下条。
+- `serverRpcPort`（**可选，v1 兼容扩展，P3a T2**）：专用服务器的 agent-rpc 端口。仅
+  `dedicated_plus_client`（`t2.py --hold`）端点写此键；`integrated_plus_client`
+  （`t1.py --hold`）端点**不写**。`Endpoint.java` 以 `Integer` optional 解析——存在则取值、
+  缺失则 `null`——故 T1 端点照常解析、冻结的必需 8 键契约不破。当前的 JUnit UI 场景不消费
+  此键（它们只打 `rpcPort` 客户端面）；它为将来的双 socket 消费者（P3a T4 双端仪表）预留
+  服务器面地址。**未知键一律容忍**（前向兼容）：`Endpoint.parse` 只读它认识的键，将来加键
+  不破旧读者。
 
 ### 生命周期
 - **写入时机**：仅 `--hold` 路径，且仅在客户端**已进世界**（`drive_into_world`
@@ -255,3 +266,51 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
   不是意外行为，多租户需求超出本轮范围。
 - 本节新增一份独立于结果文件线协议的描述性文件（不改 `testkit-results.jsonl`
   格式、不改任何退出码含义），契约仍冻结在 v0，不升版。
+
+## T2 双进程拓扑（dedicated + client，v0 附录，P3a T2/T3）
+T0/T1 都在**单进程**里跑套件（T0 专用服务器自跑；T1 客户端内置集成服务器）。T2
+证明真正的**生产拓扑**：一台朴素专用服务器（`t2Server`，工作目录 `<loader>/run-t2`，
+gradle 任务 `:<loader>:runT2Server`）+ 一个独立真客户端（复用 T1 的
+`:<loader>:runTestkitClient`/`run-t1`，Xvfb 下），客户端经 multiplayer 直连服务器。
+`t2.py`（`--loader {fabric,neoforge}`，默认 fabric）是编排器。
+
+### 双进程启动/停止协议
+- **服务器**：`t2.py` 每次 provision 时**生成并钉死** `run-t2/server.properties`
+  （`online-mode=false` 让离线开发客户端可入；固定 `server-port` 让 `t2.py` 知道直连
+  地址；flat 世界；`server-port` 按 loader 取自 `SERVER_PORTS`，fabric=25597、
+  neoforge=25596，均与 dogfood 的 25599 及彼此互异，故两 loader 可并跑）。首跑先
+  mint 一个 byte-clean 世界模板（autorun OFF，不跑场景），归档到
+  `.t2-world-template-<loader>`；scored/hold 每次从模板拷一份 `run-t2/world`。
+- **客户端**：复用 T1 的 `run-t1`/`launch_client`（byte-identical，不 fork），autorun OFF。
+- **启动次序**：先起服务器并**门控世界就绪**（`mc.observe.player` 首个不报错的回复==
+  `SERVER_STARTED`+overworld 就绪；`mc.wait.worldReady` 只对客户端有效、专用服务器上会抛，
+  故不能用它当门），再起客户端——避免直连撞上未加载的世界。
+- **停止次序**（`finally`，覆盖**每一条**退出路径，含 Ctrl-C；禁 `pkill`）：先客户端
+  （best-effort 断连→按 PID 杀+按命令行 sweep 客户端 JVM），后服务器（SIGTERM gradle
+  进程组→有界等待→按 `/proc/<pid>/cwd==run-t2` sweep 专用服务器 JVM），再删端点描述文件、
+  删 `run-t2/world`、删两个 `agent-rpc.port`、杀 Xvfb。
+
+### 双端口发现
+两条 agent-rpc websocket，各写各的 `agent-rpc.port`：服务器面在
+`run-t2/agent-rpc.port`，客户端面在 `run-t1/agent-rpc.port`。`t2.py` 用同一
+`discover_port`/`connect` 机制分别读回，同一 event loop 里同时握住两条 socket 做
+**双端探针**（客户端 `mc.client.player` 有 pos **且** 服务器 `mc.observe.player`
+`present:true`——即专用服务器 PlayerList 里有一个真玩家）。
+
+### `mc.test.run` 语义（场景执行入口，见 P3a T1 附录 / `TestRunVerb`）
+T2 服务器 autorun OFF，套件不在 boot 自跑。双端探针过后，`t2.py` 经**服务器面** RPC 发一次
+`mc.test.run`（裸信封，隐藏 verb 无参），断言 `{accepted:true, scenes:N}`（N=注册场景数，
+**含金丝雀**）。此 verb 幂等：套件已跑/在跑则大声报错不重跑；JSONL done footer 仍是唯一完成
+信号。harness 把结果写到 `run-t2/testkit-results.jsonl`（相对服务器工作目录），跑完 `halt()`
+服务器。`t2.py` 轮询该文件的 done footer（纯文件轮询，socket 无关），再用 `verdict.py`
++ `expected-scenes-<loader>.txt`（对账服务器 header 的 `registered[]`）裁决，退出码
+0/1/2/3（与 T0/T1 同义：GREEN/RED/DEAD/ENV）。三大 byte 金值（descentYaw、
+selfShaftDigUp worstBackslide、gearScope 属性）在**场景内部**断言，故场景 PASS == byte 命中。
+
+### `--hold` 端点（拓扑枚举 + serverRpcPort）
+`t2.py --hold`：不跑场景，双端探针过后写 `run-t2/testkit-endpoint.json`（schema v1，
+`topology:"dedicated_plus_client"`、`rpcPort`=**客户端** RPC 端口、可选
+`serverRpcPort`=**服务器** RPC 端口），打印 `export TESTKIT_ENDPOINT=<绝对路径>`，保持双进程
+在线直到 Ctrl-C（`finally` 无条件删端点文件）。JUnit UI 场景 attach 到 `rpcPort` 客户端面即可
+（它们只打客户端），与 T1 端点唯一差别是 topology 取值和多出的可选 `serverRpcPort`；schema
+不升版，冻结的必需 8 键不变。
