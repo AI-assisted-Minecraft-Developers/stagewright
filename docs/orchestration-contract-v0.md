@@ -181,3 +181,77 @@ PREP 阶段等 `(2r+1)×(2r+1)` 个区块全部 `hasChunkAt` 为真才放行场�
   会记 `ENV_FAIL`），不影响其他场景。
 - 本节语义只新增一种可选窗口声明（默认 `r=1` 行为不变），不改现有字段/退出码含义，
   契约仍冻结在 v0，不升版。
+
+## TESTKIT_ENDPOINT attach 契约（v0 附录，P2c T1）
+P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客户端）在场景
+之外保持在线，供进程外消费者对它发 RPC。P2c 在此基础上新增一个**端点描述文件**，
+让一个独立 JVM（JUnit 5 attach 模块，非本仓库 gradle daemon 的子进程）能发现这个
+拓扑，而不必硬编码端口/世界名——`instrument_client.py --attach` 走的是同一个
+`--hold` 拓扑，但它是本仓库内的 Python，直接读 `PORT_FILE` 即可；JUnit attach 是
+第三方消费者，需要一份自描述、路径显式的契约文件。
+
+### 端点文件 schema（v1，冻结）
+`<RUN_DIR>/testkit-endpoint.json`（`RUN_DIR` 按 loader 解析，fabric 现为
+`fabric/run-t1/`），UTF-8 JSON 单对象，逐键：
+
+```json
+{
+  "version": 1,
+  "topology": "integrated_plus_client",
+  "loader": "fabric",
+  "rpcHost": "127.0.0.1",
+  "rpcPort": 39843,
+  "worldName": "TestkitT1",
+  "holdPid": 12345,
+  "writtenAtEpochMs": 1752700000000
+}
+```
+
+- `version`：schema 版本号，当前恒 `1`；破坏性改键需升版号（同本契约文件自身
+  "变更需升 v1" 的纪律）。
+- `topology`：恒 `"integrated_plus_client"`——`--hold` 唯一支持的拓扑形状（客户端
+  内置集成服务器，非独立专用服务器）。
+- `loader`：`t1.py` 写入时硬编码 `"fabric"`（P2c T4 引入 `--loader` 泛化后按实际
+  loader 参数写入；schema 本身不变，只是取值从常量变为参数）。
+- `rpcHost`：恒 `"127.0.0.1"`——client 拓扑的 agent-rpc websocket 只监听本机回环，
+  从未对外暴露过。
+- `rpcPort`：`t1.py` 通过既有 `PORT_FILE`/`discover_port` 机制发现的实际端口
+  （ephemeral，每次 `--hold` 不同）。
+- `worldName`：恒 `"TestkitT1"`（`t1.py` 的 `WORLD_NAME` 常量，与场景清单/verdict
+  裁决共享同一个世界名）。
+- `holdPid`：`t1.py` 追踪的 client 进程 pid（`launch_client()` 返回并被
+  `stop_client()`/`kill_pid()` 操作的同一个 `Popen` 句柄的 `.pid`——即 gradle
+  wrapper 子进程，不是 gradle 二次 fork 出的 Knot 客户端 JVM 本体的 pid；
+  `sweep_client_jvms()` 按 ps 命令行匹配另行清扫那个 JVM，不是一个被追踪的独立
+  变量）。此字段是遥测/人工排障用途，**不是**探活依据（见下）。
+- `writtenAtEpochMs`：`t1.py` 写文件那一刻的墙钟毫秒时间戳（`int(time.time()*1000)`）。
+  **仅供参考，不是新鲜度判据**——见下条。
+
+### 生命周期
+- **写入时机**：仅 `--hold` 路径，且仅在客户端**已进世界**（`drive_into_world`
+  完成）且 RPC 端口**已发现**之后——即拓扑真正可用、可以被外部消费者连接的那一刻，
+  不是进程启动的那一刻。写完立即向 stdout 打印一行
+  `export TESTKIT_ENDPOINT=<端点文件绝对路径>`，供人工/CI 把这一行 eval 进环境。
+- **非 `--hold`（scored run）路径不写**：scored run 没有可供外部 attach 的持续在线
+  拓扑（跑完场景即 halt 集成服务器、teardown），写一个指向即将消失的端口的端点文件
+  只会制造陷阱，故这条路径上完全没有调用点。
+- **删除时机**：teardown 的既有 `finally`（与 Xvfb 进程、`saves/TestkitT1` 世界副本
+  清理同一处）无条件尝试删除端点文件，容忍它不存在（scored run 从未写过、或 hold
+  run 在进世界之前就失败退出）。这条 `finally` 覆盖**每一条**退出路径，包括
+  `--hold` 的文档化释放方式 Ctrl-C（`KeyboardInterrupt` 不被内层
+  `except Exception` 吞掉，照样穿过所有 `finally` 层——`stop_client` 已经依赖这个
+  事实，端点删除复用同一保证）。**陈旧端点文件是最危险的残留**——它会让一个后来的
+  JUnit 进程连上一个早已不存在（或更糟，被无关新进程占用同一端口）的拓扑；宁可
+  "探活失败、大声报错"，不可"文件还在、指向死链接"。
+- **探活是唯一真判据**：`writtenAtEpochMs` 不供 JUnit 侧判新鲜度用——文件存在
+  且时间戳看起来"新"完全不保证它指向的进程仍然活着（例如 `--hold` 被外部信号
+  杀死但来不及跑 `finally`）。JUnit attach 侧必须实际发一次 RPC（P2c T2 约定
+  `mc.system.version` 一发 5s 超时）作为"这个端点真的可用"的唯一证明；探活失败
+  必须 fail-fast 大声报错（提示原文含 `python3 scripts/testkit/t1.py --hold`），
+  不得静默 skip。
+- **串行租约**：一次 `--hold` 只支持一个拓扑实例服务一个 attach 客户端——`t1.py`
+  不做多实例端口/世界隔离，`RUN_DIR`/`WORLD_NAME`/`ENDPOINT_FILE` 全是进程级单例
+  路径。并发跑第二个 `--hold` 会互相踩世界目录和端点文件；这是当前明确的形状边界，
+  不是意外行为，多租户需求超出本轮范围。
+- 本节新增一份独立于结果文件线协议的描述性文件（不改 `testkit-results.jsonl`
+  格式、不改任何退出码含义），契约仍冻结在 v0，不升版。
