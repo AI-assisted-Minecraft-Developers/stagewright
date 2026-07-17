@@ -31,7 +31,10 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 `api.level()`（显式「assert attached」门），因此等它成功才是真正的「已 attach」
 门,不只是「传输层已通」门。fabric 复跑后 17/17 PASS，`VERDICT: GREEN`。
 
-## 检查清单（17 + 2 金丝雀）
+## 检查清单（21 + 2 金丝雀）
+
+> 检查 18-21 是 P2a（verb 管线 + #280 收口）追加,见文末「P2a 附录」。语义只收紧
+> （封闭 schema、大声拒键、统一校验),仍是 v0。
 
 | # | 检查名 | 断言什么 | 钉住哪条病历 |
 |---|---|---|---|
@@ -91,3 +94,75 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 
 详细现场记录（含每次运行的完整终端输出）见
 `.superpowers/sdd/task-5-report.md`。
+
+## P2a 附录 — verb 注册管线 + #280 收口（追加检查 18-21）
+
+落地 commits：`14c6541`+`35c98c0`（配对注册 + 命名空间政策 + schema-less 派发洞收口）、
+`39d99e5`（#280 根修：SettingsRegistry 单源 + 封闭 schema + apply 大声拒）、
+`6de3d97`+`ae9982d`（`mc.test.reset` verb + `ad.settingRegistryClosed` 场景）、
+本 Task（instrument.py 追加检查 + 文档）。四腿 headless 可测子集；客户端端到端 A/B
+（真开客户端打未知键 / reset 完整性 3 跑）留 P2b 的 T1 仪表扩展。
+
+### 命名空间政策（配对注册入口 enforcement）
+
+- `mc.*` 保留给驱动层。
+- `mc.test.*` 授予 testkit-runtime;`mc.test.yaml` 为既有驱动层 harness verb,**祖父条款**。
+- 第三方一律 `<modid>.*`。
+- 新配对注册入口 `ToolCatalog.registerVerb(schema, handler)` 对违反者**注册时即抛**;
+  且拒绝劫持驱动层既有 baseline 名（verb-hijack guard,review I-1）。
+
+### 配对注册契约（schema-less 派发不再静默跳过）
+
+`registerVerb` 原子完成 schema 供给 + route 注册。派发时 schema 缺失 = `route()`
+大声抛 `IllegalStateException`（不再 `if (s != null)` 静默跳过——那是 #280 同形洞）。
+开机 `requireSchemasFor` 保证 boot 全集有 schema;post-boot 只有配对入口可加 route,
+故该异常只可能命中「绕过配对入口直接 addRoute 且未声明 ToolSchema」的编程错误。
+
+### #280 收口语义
+
+- **单源**：`SettingsRegistry`（从 `SettingsSnapshot` 的键枚举——手列键 + 反射补全
+  `public static volatile` BotConfig 原始类型字段——派生),229 键。新 BotConfig 旗标
+  自动进注册表（#280 病根=新旗标漏 schema)。
+- **封闭 schema**：`mc.bot.setting` 的 input schema = 全键 prop + `additionalProperties(false)`。
+- **all-or-nothing**：一次调用含**任一**未知键 → 整个调用被拒,**什么都不 apply**
+  （A/B 脚本大声失败而非静默半应用)。已知键正常 apply 不受影响。
+- **inert[] 漂移报告**：apply 键集 ⊆ 注册表键集的自检;差集（若有）以 `inert[]` 报告,不静默。
+- **校验统一（transport/side-uniform)**：校验在 `route()` 派发时跑（`AgentApi.route`:
+  先 `paramsValidator.validate`,后 handler),**先于** client-only 门。故专服上打未知键
+  也得 VALIDATOR 的 unexpected-key 错,不是 client-only 错——见检查 19 的现场定序发现。
+
+### 检查清单（追加）
+
+| # | 检查名 | 断言什么 | 钉住哪条 |
+|---|---|---|---|
+| 18 | `catalog.settingSchemaClosed` | 经 **MCP `tools/list`**（HTTP,`agent-mcp.port`）读回 `mc.bot.setting` 的 `inputSchema`:`type=="object"`、`additionalProperties` 非 `true`（=封闭)、`properties` 数 ≥ 200 | #280 结构半——封闭 schema + 单源全键集（229；<200 抓丢反射补全 pass） |
+| 19 | `route.settingUnknownKey` | 专服裸 RPC 打 `mc.bot.setting{definitelyNotAKnob:true}` → error 含 `unexpected key` + 键名,**非** client-only | #280 行为半 + 校验统一定序（validator 先于 client-only 门) |
+| 20 | `route.testResetClientOnly` | 专服裸 RPC 打 `mc.test.reset`（空参过校验）→ error 含 `client only` + `mc.test.reset`,不静默 no-op | client-only verb 在专服大声失败 |
+| 21 | `route.testResetSchemaPaired` | 专服打 `mc.test.reset{nope:true}` → error 含 `unexpected key` + `nope`,**先于** client-only | 配对注册元证明（schema 存在 AND 封闭 AND 校验统一)+ schema-less 派发洞回归 |
+
+### 现场定序发现（检查 19 的诚实记录）
+
+计划把「validator 先于 client-only」当作统一契约的读法。**现场证实即此序**:
+`AgentApi.route()`（common `AgentApi.java`）先跑 `paramsValidator.validate(method, p)`,
+再 `fn.apply(p)`——而 `mc.bot.setting` 的 handler `requireBot()` 在专服上才抛 client-only。
+故专服上未知键先撞 SchemaValidator 的 `unexpected key`（`invalid params for mc.bot.setting:
+unexpected key 'definitelyNotAKnob'`),client-only 门根本没到。两 loader 全量 GREEN 复现。
+
+### tools/list 封闭对象渲染坑（检查 18 的诚实记录）
+
+`additionalProperties(false)` 把内部字段置 **null**（`Schema.java`:`allow ? Boolean.TRUE : null`),
+Obj codec 以 `optionalFieldOf("additionalProperties")` 渲染,故**封闭对象在 tools/list 里
+省略该键**——绝不渲染成字面 `false`。封闭约定 = `SchemaValidator`（`open ==
+additionalProperties is Boolean.TRUE`):**缺失或 false = 封闭,仅 `true` = 开放**。检查 18
+即断言「`additionalProperties` 非 `true`」而非「== false」。此为 v0 契约的一部分。
+
+### schema 读回路径的诚实说明
+
+裸 RPC `/rpc`（`AgentApi.route`）**不暴露** schema 目录;`mc.script.eval` 也读不到——
+此 Rhino fork 剥了 `Packages` 全局,JS 无法按名解析 `ToolCatalog`（与沙箱 denylist 无关）。
+schema 的结构化读回唯一诚实路径 = MCP `tools/list` HTTP 端点（`ToolSchema.mcpTool` →
+`Schemas.render`,与 route 层 `SchemaValidator` 同一 typed Schema,单源)。专服在
+`onServerStarting`（`AgentDriverCommon.ensureMcpUp`)随 RPC 一起起 MCP,端口写
+`agent-mcp.port`。检查 18 即走此路。
+
+现场记录（五门验收完整输出）见 `.superpowers/sdd/task-4-report.md`。
