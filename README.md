@@ -69,7 +69,8 @@ entity-indexing wait sensitive to server startup tick-debt, both within the
 widened `within(120)` bound, root fix tracked as task#88).
 
 `--expect-file scripts/testkit/expected-scenes-neoforge.txt` is the **canonical
-external-expectation gate**: a checked-in manifest (one scene name per line,
+external-expectation gate** (the fabric manifest `expected-scenes-fabric.txt`
+carries the identical governance): a checked-in manifest (one scene name per line,
 `#` comments and comma-separated names allowed) naming every `ad.*` scene the
 orchestrator expects to see in `registered[]`. Each migrated `ad.*` scene MUST
 be added to this file **in the same commit** that adds the scene — the manifest
@@ -101,10 +102,15 @@ appendix (discovery order, name-uniqueness enforcement, canary ownership):
     }
 
 ...discovered via a `META-INF/services` file whose single line names the
-implementation, e.g.
-`neoforge/src/main/resources/META-INF/services/net.magicterra.testkit.scene.SceneProvider`:
+implementation. Since P1.6 the provider lives in the loader-shared module so
+ONE registration serves every loader, e.g.
+`common/src/main/resources/META-INF/services/net.magicterra.testkit.scene.SceneProvider`:
 
-    net.magicterra.agent.neoforge.testkit.AgentDriverScenes
+    net.magicterra.agent.bot.testkit.AgentDriverScenes
+
+Keep exactly one service file per provider across all source sets — a copy in
+a loader module alongside the common one double-registers the provider on that
+loader's dev classpath and trips the duplicate-scene-name gate (RED by design).
 
 ## Instrument contract (trust chain)
 
