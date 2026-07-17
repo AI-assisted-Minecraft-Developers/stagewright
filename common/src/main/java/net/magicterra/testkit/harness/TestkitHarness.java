@@ -103,6 +103,13 @@ public final class TestkitHarness {
         return out;
     }
 
+    /** True once the suite has drained the registry and written the done footer (server halted).
+     *  Read by {@code TestkitCommon.triggerOnDemandRun} to phrase the idempotency error precisely
+     *  ("already run" vs "already been started"). */
+    public boolean isFinished() {
+        return finished;
+    }
+
     public void tick() {
         if (finished) return;
         if (index >= scenes.size()) { finish(); return; }
