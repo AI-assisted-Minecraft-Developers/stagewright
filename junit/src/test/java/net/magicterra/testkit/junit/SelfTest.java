@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,6 +23,7 @@ class SelfTest {
 
     @Test
     void endpointParseRoundTripAllKeys() {
+        // A T1 (integrated_plus_client) descriptor: the frozen eight keys, NO serverRpcPort.
         String json = "{"
                 + "\"version\":1,"
                 + "\"topology\":\"integrated_plus_client\","
@@ -42,6 +44,52 @@ class SelfTest {
         assertEquals(12345L, e.holdPid());
         assertEquals(1750000000000L, e.writtenAtEpochMs());
         assertEquals("ws://127.0.0.1:39843/rpc", e.wsUri());
+        // Optional serverRpcPort ABSENT on a T1 endpoint -> null (must still parse cleanly).
+        assertNull(e.serverRpcPort(), "T1 endpoint must parse with serverRpcPort == null");
+    }
+
+    @Test
+    void endpointParseT2WithServerRpcPort() {
+        // A T2 (dedicated_plus_client) descriptor: rpcPort=CLIENT face, serverRpcPort=SERVER.
+        String json = "{"
+                + "\"version\":1,"
+                + "\"topology\":\"dedicated_plus_client\","
+                + "\"loader\":\"fabric\","
+                + "\"rpcHost\":\"127.0.0.1\","
+                + "\"rpcPort\":39843,"
+                + "\"worldName\":\"world\","
+                + "\"holdPid\":12345,"
+                + "\"writtenAtEpochMs\":1750000000000,"
+                + "\"serverRpcPort\":39777"
+                + "}";
+        Endpoint e = Endpoint.parse(json);
+        assertEquals("dedicated_plus_client", e.topology());
+        assertEquals(39843, e.rpcPort());
+        assertEquals(Integer.valueOf(39777), e.serverRpcPort());
+        // wsUri() is topology-agnostic — always the CLIENT face (rpcPort).
+        assertEquals("ws://127.0.0.1:39843/rpc", e.wsUri());
+    }
+
+    @Test
+    void endpointToleratesUnknownKeys() {
+        // Forward compat: a future schema addition must not break an older reader. Unknown keys
+        // (here "futureField") are simply not read; the known keys parse identically.
+        String json = "{"
+                + "\"version\":1,"
+                + "\"topology\":\"dedicated_plus_client\","
+                + "\"loader\":\"neoforge\","
+                + "\"rpcHost\":\"127.0.0.1\","
+                + "\"rpcPort\":40001,"
+                + "\"worldName\":\"world\","
+                + "\"holdPid\":999,"
+                + "\"writtenAtEpochMs\":1750000000000,"
+                + "\"serverRpcPort\":40002,"
+                + "\"futureField\":\"ignored\",\"anotherUnknown\":[1,2,3]"
+                + "}";
+        Endpoint e = Endpoint.parse(json);
+        assertEquals("neoforge", e.loader());
+        assertEquals(40001, e.rpcPort());
+        assertEquals(Integer.valueOf(40002), e.serverRpcPort());
     }
 
     @Test

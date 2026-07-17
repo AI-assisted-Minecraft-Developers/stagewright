@@ -12,12 +12,23 @@ import java.nio.file.Path;
 
 /**
  * The TESTKIT_ENDPOINT descriptor (schema v1) written by
- * {@code scripts/testkit/t1.py --hold}. Immutable; carries all eight frozen keys.
+ * {@code scripts/testkit/t1.py --hold} (T1, {@code integrated_plus_client}) and
+ * {@code scripts/testkit/t2.py --hold} (T2, {@code dedicated_plus_client}). Immutable;
+ * carries all eight frozen required keys plus an optional T2-only extension.
  *
- * <p>Schema (see t1.py {@code write_endpoint}): {@code version}, {@code topology},
+ * <p><b>Required (frozen v1, all eight):</b> {@code version}, {@code topology},
  * {@code loader}, {@code rpcHost}, {@code rpcPort}, {@code worldName},
- * {@code holdPid}, {@code writtenAtEpochMs}. Every key is required — a missing key
- * is a corrupt/stale descriptor and fails fast rather than defaulting silently.
+ * {@code holdPid}, {@code writtenAtEpochMs}. A missing REQUIRED key is a corrupt/stale
+ * descriptor and fails fast rather than defaulting silently.
+ *
+ * <p><b>Optional (v1-compatible extension):</b> {@code serverRpcPort} — the dedicated
+ * server's RPC port. Present on T2 ({@code dedicated_plus_client}) endpoints, ABSENT on
+ * T1 ({@code integrated_plus_client}) endpoints; {@link #serverRpcPort()} is {@code null}
+ * when the key is absent. {@code rpcPort} is always the CLIENT-face RPC port (the JUnit UI
+ * scenes only touch the client), so {@link #wsUri()} is topology-agnostic.
+ *
+ * <p><b>Unknown keys are TOLERATED</b> (forward compatibility): the parser reads only the
+ * keys it knows, so a future schema addition never breaks an older reader.
  */
 public record Endpoint(
         int version,
@@ -27,9 +38,14 @@ public record Endpoint(
         int rpcPort,
         String worldName,
         long holdPid,
-        long writtenAtEpochMs) {
+        long writtenAtEpochMs,
+        Integer serverRpcPort) {
 
-    /** Parse a descriptor from its JSON text, requiring all eight keys. */
+    /**
+     * Parse a descriptor from its JSON text. Requires all eight frozen keys; parses the
+     * optional {@code serverRpcPort} when present ({@code null} when absent); tolerates any
+     * unknown keys (they are simply not read).
+     */
     public static Endpoint parse(String json) {
         JsonElement root;
         try {
@@ -49,7 +65,8 @@ public record Endpoint(
                 reqInt(o, "rpcPort"),
                 reqString(o, "worldName"),
                 reqLong(o, "holdPid"),
-                reqLong(o, "writtenAtEpochMs"));
+                reqLong(o, "writtenAtEpochMs"),
+                optInt(o, "serverRpcPort"));
     }
 
     /** Read and parse a descriptor from a file. */
@@ -86,5 +103,14 @@ public record Endpoint(
 
     private static long reqLong(JsonObject o, String key) {
         return req(o, key).getAsLong();
+    }
+
+    /** Optional int: the parsed value when the key is present + non-null, else {@code null}. */
+    private static Integer optInt(JsonObject o, String key) {
+        JsonElement e = o.get(key);
+        if (e == null || e.isJsonNull()) {
+            return null;
+        }
+        return e.getAsInt();
     }
 }
