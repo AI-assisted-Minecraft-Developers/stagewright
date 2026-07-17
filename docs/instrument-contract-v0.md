@@ -329,3 +329,114 @@ autoEat 原值；`reset.behavior` 由 reset 自身清 screen/chat）——检查
 若未来补 held-key 回读 verb，可把 keys 也纳入独立回读的漂移检测。
 
 现场记录（三轮完整输出 + 3×9 矩阵 + fresh-process 证据）见 `.superpowers/sdd/task-3-report.md`。
+
+## P3a 附录 — T2 双 socket 仪表契约（生产拓扑，`--topology t2`）
+
+落地 commit：本 Task（`instrument_client.py` 加 `--topology {t1,t2}` + 双 socket 面分派 +
+T2 复用轮 + 本附录）。
+
+运行器：`TESTKIT_ENDPOINT=<abs> python3 scripts/testkit/instrument_client.py --topology t2 --attach`
+（默认 `--topology t1`，零回归）。
+
+T1（P2b/P2c）验的是 **integrated server**（客户端自托管世界，一个 JVM）。T2 验**真生产
+拓扑**：一个 plain **专用服务器**（run-t2 的 `t2Server`）+ 一个**独立真客户端**（run-t1 的
+`testkitClient`，Xvfb 下）多人直连过去。这正是 P1b「已知缺口」里三条永久断言（#41/#45/#55）
+当年只能在 headless 专服里对 mock、或在 integrated 里对真玩家验的那半——**T2 让它们在生产
+拓扑里对专服 PlayerList 的真 ServerPlayer 收口**。
+
+### attach 面选择（自起不提供，诚实记录）
+
+T2 **只提供 `--attach`**（打 `t2.py --hold` 的 `TESTKIT_ENDPOINT` 端点），不自起。理由：
+`t2.run()` 是一个「起两进程→探针→teardown」的单体，没有像 t1 那样可复用的「起来并返回句柄」
+接缝（t1 有 `launch_client`/`discover_port`/`drive_into_world_selfheal` 可拼），照抄要么调
+`run()`（结尾全拆）要么重写 ~60 行编排——import-reuse 并不便宜。故 T2 的唯一面是 attach 一个
+已 hold 的拓扑。`--topology t2` 缺 `--attach` = argparse 报错（loud）；`--fresh-process` 与
+attach 天然互斥（attach 不拥有客户端进程可杀/重 boot），故 T2 下 `--fresh-process` 亦被拒。
+
+端点解析（`resolve_t2_endpoint`，纯函数，有 self-test）：`rpcPort`=客户端面；`serverRpcPort`
+= 专服面，**T2 模式必需**（T1 端点无此键 → loud `ContractFailure`，因为没有专服 RPC 就没有
+专服 PlayerList 可断言）。多人直连地址由 loader 的固定监听口（`t2.SERVER_PORTS`）派生，端点
+无需携带游戏监听口。
+
+### 双 socket 面分派表（按 verb 落在哪张脸）
+
+`Faces{client, server}`：T1 两脸是同一 socket（一个 JVM 同时有 LocalPlayer 和 integrated
+ServerPlayer）；T2 两脸是**两个不同 socket**——`client`→真客户端 RPC（LocalPlayer，`mc.client.*`
+/ `mc.bot.setting` / `mc.test.reset` 等 client-only 面），`server`→**专服 RPC**（专服 PlayerList
+里的真 ServerPlayer）。检查各读其 verb 所在的脸（跨脸的 `t2.inWorld` 显式各读一次）。
+
+| 检查名（T2） | staging 打哪张脸 | observe 读哪张脸 | 为什么 |
+|---|---|---|---|
+| `t2.inWorld`（T1 为 `t1.inWorld`） | — | client `mc.client.player`（有 pos）**+** server `mc.observe.player`（present） | 双端探针：客户端真进世界 **且** 真玩家在**专服** PlayerList 里——#41/#45/#55 的前置 |
+| `obs.fullInventory`（#41） | **server**（`/clear`、`/item replace container.{9,20,35}`） | **server**（`mc.observe.player.inventory`） | 专服 PlayerList 的真 server 权威背包；主背包三分之四槽可见 |
+| `obs.attackCooldown`（#45） | **server**（`/item replace weapon.mainhand`） | **server**（`mc.observe.player.attack`） | server 拥有真 ServerPlayer 的攻击冷却状态 + 武器 ATTACK_SPEED 属性 |
+| `obs.damageSource`（#55） | **server**（`/damage`、回血 `/effect`） | **client PUSH**（`mc.events.subscribe player.hurt`） | **见下「#55 现场发现」**——伤害在 server 落，但 `player.hurt` 由**客户端**侧 detector 发，专服 observe ring 不载它 |
+| `route.settingUnknownKeyLive`（#280） | client `mc.bot.setting`（裸 RPC） | — | `mc.bot.setting` 是 client-only；专服根本没这个 handler |
+| `route.settingKnownKeyLive`（#280 伴） | client `mc.bot.setting` | client（同调用 snapshot + 二次读回） | 同上，client-only 往返 |
+| `reset.behavior` | client（E 键开 screen、发聊天） | client（`screen.info`/`chat.history` 独立回读 + `reset[]`） | `mc.test.reset` 是 client-entry reset（screen/keys/chat 都在客户端） |
+| 金丝雀 ×2 | — | — | 不触脸，照旧（mustFail→FAIL / mustTimeout→TIMEOUT，否则 DEAD） |
+
+**检查名映射**：T2 下**仅** `t1.inWorld`→`t2.inWorld` 改名（`_checks_for(topology)`，纯函数，
+有 self-test）；其余 6 真检查 + 2 金丝雀名**跨拓扑逐字相同**（同一批永久断言 verb，只是落的
+socket 变）。7 真 + 2 金丝雀的形状两拓扑都保持。
+
+### #55 现场发现：`player.hurt` 是客户端发的 push 事件（brief 的 observe→server 被现场事实取代）
+
+brief 原写「#55 的 observe 也打 server」。**实测否决**：`player.hurt`（带 `source` 归因）由
+**客户端侧** `ClientEventDetector` 发出——它读 `mc.player.getLastDamageSource()`，而客户端是
+从专服的 `ClientboundDamageEventPacket`（40-tick 窗口）镜像出这个 DamageSource 的。落地事实：
+
+- `/damage @p 2 out_of_world` 在 **server** 落，真 ServerPlayer 掉 2 HP（实测 20→18.83）；
+- 但**专服**的 `mc.observe.eventsSince` ring **只载 `command.result`，永不载 `player.hurt`**
+  （那是客户端发的）；
+- **客户端**面的 `mc.observe.cursor`/`eventsSince` 直接抛 `AgentApi not attached to a server`
+  （纯客户端没有 attached server，observe ring 读路径要 server）；
+- 故 `player.hurt` 在生产拓扑里的**唯一**客户端面读法是 **push 订阅**（`mc.events.subscribe`）——
+  `AgentApi.emit` 把事件 append 进 ring **并** fan-out 给 push 订阅者（frame 为
+  `notifications/message`，`params.data` = AgentEvent`{seq,timestamp,type,pos,data}`）。实测客户端
+  订阅收到 `{"lost":2,"prev":20,"health":18,"source":"outOfWorld"}`——**带 source 归因**。
+
+因此 #55 的忠实生产分派是**跨脸拆**：staging（`/damage`）+ 回血打 **server**，hurt 的 observe 走
+**client push 订阅**。这让 **T2 比 T1 更强**：归因必须熬过真 server→client 的
+`ClientboundDamageEventPacket` 边界才能到达 client-attached 的 agent——这正是 P1b headless 缺口
+在生产拓扑的闭环。实现上 `check_damage_source` 按 `Faces.dual` 分支：T1（两脸同 socket）走原
+server-attached poll ring（**逐字节沿用 P2b 行为，零回归**）；T2（两脸异 socket）走 client push
+（`_await_push_event`：订阅→触发→读 frame→收尾 unsubscribe）。
+
+### 复用轮语义（常驻服务器 = 进程池雏形）
+
+`--rounds N` 在 T2：**客户端 quit（disconnect）→ 重连那台还活着的专服 → `mc.test.reset` → 重跑
+全套**。**服务器不重启**——这就是进程池 seed 语义（常驻 server + 重进的 client），与 T1 的
+「integrated server 随客户端 quit 一起 bounce」根本不同：
+
+- Round 2..N：**同一客户端 JVM** → ESCAPE→PauseScreen→`Disconnect`（离开世界）→ `_back_to_title`
+  （从 JoinMultiplayer/Disconnected 屏点 Back 家族回 TitleScreen）→ `drive_multiplayer_connect`
+  **重连同一台专服**（world 在 server 侧持久，server 从不重启）→ `mc.test.reset` 清池 → 重跑。
+- 复用机制全在既有轮循环里：`round_drift`/`combine_round_verdict`/`transition_failure_code`
+  **原样复用不 fork**（一致性门 / BLOCKED / 过渡异常分类语义同 P2b 附录，退出码
+  `0 GREEN / 1 RED / 2 DEAD / 3 ENV / 4 BLOCKED`）。
+- `--fresh-process` 在 T2 = 杀客户端、boot 全新客户端、**重连仍常驻的 server**——但因 T2 只
+  attach（不拥有客户端进程），本 Task 未开放该路（argparse 拒）；常驻-server-复用（reuse 路）
+  才是 T2 的验收面与价值面。
+
+**常驻服务器证据**：`_resident_server_pid(run_dir)` 读 cwd==run-t2 的专服 JVM PID；逐轮记录，
+**跨全部轮必须不变**（客户端重进、server 复用从不重启 = 进程池复用收益）。PID 漂移 = 复用模型
+违约，报告里 loud 标注。
+
+### T2 验收结果（本 Task 实测，attach `t2.py --hold`）
+
+- `--topology t2 --attach` **GREEN ×2**：两跑各 `VERDICT: GREEN`，7 真检查全 PASS（`t2.inWorld`
+  / `obs.fullInventory` / `obs.attackCooldown` / `obs.damageSource`(client-push) /
+  `route.settingUnknownKeyLive` / `route.settingKnownKeyLive` / `reset.behavior`）+ 2 金丝雀落点
+  正确。常驻 server pid=2148437 两跑不变。
+- `--topology t2 --attach --rounds 3`：`REUSE VERDICT: GREEN`，三轮各 `GREEN`，3×9 逐检查矩阵
+  逐字相同；轮间 `mc.test.reset` reset[] = `['keys','chat:0']`；resident-server PIDs
+  `[2148437, 2148437, 2148437]` → **RESIDENT（不变——server 复用从不重启）**。复用轮
+  ~4.2–4.3s（含 disconnect→重连专服→reset→检查）。
+- 零回归：`--topology t1`（默认，自起）`VERDICT: GREEN`，`t1.inWorld` 名保留、#55 走 poll 路，
+  冷 boot 27.7s，收尾删世界副本、无遗留 t1/t2 JVM。
+- self-test：`instrument_client.py --self-test` 42/42 PASS（新增 `_checks_for` / `Faces.dual` /
+  `resolve_t2_endpoint` / topology argparse 门等纯逻辑）；`t1.py`/`t2.py` self-test 亦全绿。
+- teardown：SIGINT `t2.py --hold` → 端点删、两 JVM 下、无 run-t1/run-t2 孤儿 JVM。
+
+现场记录（双跑 + 三轮矩阵 + 常驻 PID 证据 + #55 现场测量）见 `.superpowers/sdd/task-4-report.md`。
