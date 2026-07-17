@@ -34,17 +34,39 @@ runs in a row).
 
 ## Dogfood run: agent-driver scenes over SceneProvider SPI
 
+The dogfood suite runs on **both loaders** — the canonical acceptance commands
+are identical apart from loader name, run task, results path, and manifest
+(P1.6 made fabric a first-class dogfood target alongside neoforge):
+
+**NeoForge:**
+
     python3 scripts/testkit/t0.py --loader neoforge \
         --run-task :neoforge:runDogfoodServer \
         --results neoforge/run-dogfood/testkit-results.jsonl \
         --expect-file scripts/testkit/expected-scenes-neoforge.txt
 
-Boots a full dedicated server with **both** agent_driver and mc-testkit
-loaded (`neoforge/build.gradle` run config `dogfoodServer`, `testkit.autorun`
+**Fabric:**
+
+    python3 scripts/testkit/t0.py --loader fabric \
+        --run-task :fabric:runDogfoodServer \
+        --results fabric/run-dogfood/testkit-results.jsonl \
+        --expect-file scripts/testkit/expected-scenes-fabric.txt
+
+Each boots a full dedicated server with **both** agent_driver and mc-testkit
+loaded (the loader's `build.gradle` run config `dogfoodServer`, `testkit.autorun`
 armed) — this is what proves the T0 orchestrator generalizes beyond its own
-bare-bones testkit-neoforge module to a real, feature-loaded mod. Same exit
+bare-bones testkit-`<loader>` module to a real, feature-loaded mod. Same exit
 codes as plain T0 above; the suite header's `registered[]` carries the
 built-in scenes plus every downstream `ad.*` scene.
+
+The `ad.*` scenes live in `common` behind a loader-injected body-factory seam
+(neoforge injects `FakePlayerFactory`; fabric injects a vanilla-only
+`AgentFakePlayer`), so both loaders register the **same** scenes via the **same**
+common `SceneProvider` service file. P1.6's dual-loader ×3 determinism matrix
+found every `ad.*` scene metric **byte-identical across both loaders** (fabric ==
+neoforge; the sole timing variance is `ad.entityLeash`'s await tick count — an
+entity-indexing wait sensitive to server startup tick-debt, both within the
+widened `within(120)` bound, root fix tracked as task#88).
 
 `--expect-file scripts/testkit/expected-scenes-neoforge.txt` is the **canonical
 external-expectation gate**: a checked-in manifest (one scene name per line,
