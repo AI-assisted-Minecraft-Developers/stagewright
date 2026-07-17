@@ -120,3 +120,36 @@ Bare-RPC contract checks against a plain agent-driver dedicated server —
 the instrument face testkit itself depends on (spec §4). Green here is the
 precondition for trusting any scene's setup/assertions. Contract:
 `../docs/testkit/instrument-contract-v0.md`.
+
+## Verbs & namespace policy (P2a)
+
+The driver exposes a public paired-registration entry so a mod (or the testkit
+runtime) can add its own RPC verb with a schema that is validated identically to
+every built-in verb:
+
+    ToolCatalog.registerVerb(schema, handler);   // schema + route, atomically
+
+`registerVerb` installs the MCP `ToolSchema` and the `route()` handler in one
+step, so a verb can never exist without a schema — a route reached at dispatch
+time with no schema is a loud `IllegalStateException`, not a silent skip (that
+was the #280-shaped hole). It also enforces the namespace policy at registration
+time (throws on violation):
+
+- `mc.*` — reserved for the driver layer.
+- `mc.test.*` — granted to the testkit runtime. `mc.test.yaml` is a
+  grandfathered driver-layer harness verb.
+- `<modid>.*` — everything third-party.
+
+`mc.test.reset` is the first consumer of this SPI: a hidden (RPC-only, absent
+from MCP `tools/list`) client-entry reset for testkit client-pool reuse — it
+releases held movement keys, closes any open screen, clears the chat readback
+log, and cancels a residual smooth-look process. Client-only: a dedicated server
+rejects it loudly.
+
+#280 is closed on the same wave: `mc.bot.setting`'s schema is now CLOSED
+(`additionalProperties(false)`) and built from the single-source
+`SettingsRegistry`, so an unknown key is rejected loudly, all-or-nothing (nothing
+is applied) instead of being silently dropped. The full contract — namespace
+policy, paired-registration semantics, #280 closure, and the four headless
+checks (18-21) that pin them — is in the P2a appendix of
+`../docs/testkit/instrument-contract-v0.md`.
