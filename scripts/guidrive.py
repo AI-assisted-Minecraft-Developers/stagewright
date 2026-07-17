@@ -326,6 +326,113 @@ async def wait_in_world(rpc, timeout=240):
     raise TimeoutError(f"not in-world within {timeout}s (last={info})")
 
 
+async def _dismiss_multiplayer_warning(rpc):
+    """First entry to Multiplayer shows a one-time "Caution: Online play…" notice
+    (its class name contains 'Warning'/'Safety'/'Notice' across versions). We seed
+    ``skipMultiplayerWarning:true`` in the client options so it should NOT appear —
+    but handle it defensively: if the screen after clicking Multiplayer is not the
+    server-list screen, click its proceed/continue button. Label-matched only. Returns
+    True if it acted. Unknown non-Join screens are captured as evidence upstream."""
+    info = await rpc.call("mc.client.screen.info")
+    t = (info.get("type") or "")
+    if "JoinMultiplayer" in t or "ServerSelection" in t:
+        return False
+    if any(k in t for k in ("Warning", "Safety", "Notice", "Confirm")):
+        tree = await rpc.call("mc.client.screen.tree")
+        btn = (find_widget(tree, by_label("Proceed"))
+               or find_widget(tree, by_label("Continue"))
+               or find_widget(tree, by_label("Accept"))
+               or find_widget(tree, by_label("Yes")))
+        if btn is None:
+            raise RuntimeError(f"multiplayer warning screen '{t}' has no proceed/continue button")
+        await click_widget(rpc, btn, why="dismiss multiplayer online-play warning")
+        return True
+    return False
+
+
+async def drive_multiplayer_connect(rpc, address):
+    """Title → Multiplayer → (online-play warning if present) → Direct Connection →
+    type ``address`` into the server-address EditBox → Join Server → wait until in-world
+    on the remote dedicated server. Label-matched throughout (NO coordinate clicks);
+    raises on any missing widget or timeout. ``address`` is ``host:port`` (e.g.
+    ``127.0.0.1:25597``)."""
+    await goto_main_menu(rpc)
+    tree = await rpc.call("mc.client.screen.tree")
+    mp = find_widget(tree, by_label("Multiplayer"))
+    if mp is None:
+        raise RuntimeError("Multiplayer button not found on TitleScreen")
+    await click_widget(rpc, mp, why="enter multiplayer flow")
+    # The next screen is either the online-play warning (dismiss) or the server list.
+    await wait_until(
+        rpc,
+        lambda i: (i.get("type") or "") and (
+            "JoinMultiplayer" in i.get("type") or "ServerSelection" in i.get("type")
+            or any(k in i.get("type") for k in ("Warning", "Safety", "Notice", "Confirm"))),
+        label="warning-or-serverlist")
+    await _dismiss_multiplayer_warning(rpc)
+    await wait_until(
+        rpc,
+        lambda i: "JoinMultiplayer" in (i.get("type") or "")
+        or "ServerSelection" in (i.get("type") or ""),
+        label="JoinMultiplayerScreen")
+    # Direct Connection → DirectJoinServerScreen (an EditBox + Join Server button).
+    tree = await rpc.call("mc.client.screen.tree")
+    dc = (find_widget(tree, by_label("Direct Connection"))
+          or find_widget(tree, by_label("Direct Connect")))
+    if dc is None:
+        raise RuntimeError("Direct Connection button not found on JoinMultiplayerScreen")
+    await click_widget(rpc, dc, why="open direct-connect form")
+    await wait_until(
+        rpc,
+        lambda i: "DirectJoinServer" in (i.get("type") or "")
+        or "DirectConnect" in (i.get("type") or ""),
+        label="DirectJoinServerScreen")
+    # Focus + type the address into the EditBox (clear any placeholder first).
+    tree = await rpc.call("mc.client.screen.tree")
+    box = find_widget(tree, by_type("EditBox"))
+    if box is not None:
+        cx = box["x"] + box["width"] / 2
+        cy = box["y"] + box["height"] / 2
+        print(f"  [act ] click address field @({cx:.1f},{cy:.1f})  // focus server-address box")
+        await rpc.call("mc.client.input.click", {"x": cx, "y": cy, "button": 0})
+        await asyncio.sleep(0.2)
+        try:
+            await rpc.call("mc.client.input.key", {"key": "END"})
+            for _ in range(48):
+                await rpc.call("mc.client.input.key", {"key": "BACKSPACE"})
+        except Exception as e:  # noqa: BLE001
+            print(f"  [warn] could not clear address field via keys ({e}); typing anyway")
+    print(f"  [act ] type server address '{address}'")
+    await rpc.call("mc.client.input.typeText", {"text": address})
+    tree = await rpc.call("mc.client.screen.tree")
+    join = (find_widget(tree, by_label("Join Server"))
+            or find_widget(tree, by_label("Join")))
+    if join is None:
+        raise RuntimeError("Join Server button not found on DirectJoinServerScreen")
+    await click_widget(rpc, join, why=f"direct-connect to {address}")
+    # Connecting… → in-world. A connect failure lands on a DisconnectedScreen; surface it.
+    def _connected_or_failed(i):
+        if i.get("worldOpen") and i.get("hasPlayer") and not i.get("hasScreen"):
+            return True
+        if "Disconnect" in (i.get("type") or ""):
+            return True
+        return False
+    info = await wait_until(rpc, _connected_or_failed, label="in-world-or-disconnected",
+                            timeout=180, poll=1.0)
+    if "Disconnect" in (info.get("type") or ""):
+        tree = await rpc.call("mc.client.screen.tree")
+        reason = None
+        # DisconnectedScreen carries the failure reason as a label widget.
+        node = find_widget(tree, lambda n: isinstance(n, dict)
+                           and isinstance(n.get("message"), str)
+                           and n.get("message")
+                           and "Disconnect" not in (n.get("type") or ""))
+        if node is not None:
+            reason = node.get("message")
+        raise RuntimeError(f"direct-connect to {address} failed: DisconnectedScreen (reason={reason})")
+    return info
+
+
 async def quit_to_title(rpc):
     """Open pause → Save and Quit (or Quit to Title) → wait TitleScreen. Best effort.
 

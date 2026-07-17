@@ -411,12 +411,15 @@ def archive_template():
     return True
 
 
-def launch_client(env, wall, autorun):
+def launch_client(env, wall, autorun, log_name=None):
     """Launch RUN_TASK (:<loader>:runTestkitClient). --no-daemon so the forked game JVM inherits this
     launcher's environment (a reused daemon would carry no DISPLAY → GLFW init fails).
-    autorun=False passes -Pt1Autorun=false to mint a pristine (scene-free) template."""
+    autorun=False passes -Pt1Autorun=false to mint a pristine (scene-free) template.
+    ``log_name`` (additive, for reuse by t2.py) overrides the default log basename so an
+    importing orchestrator can label its own client log; None keeps the T1 default names."""
     os.makedirs(RUN_DIR, exist_ok=True)
-    logf = open(os.path.join(RUN_DIR, "t1-mint.log" if not autorun else "t1-runclient.log"), "w")
+    default_name = "t1-mint.log" if not autorun else "t1-runclient.log"
+    logf = open(os.path.join(RUN_DIR, log_name or default_name), "w")
     cmd = ["./gradlew", "--no-daemon"]
     if not autorun:
         cmd.append("-Pt1Autorun=false")
