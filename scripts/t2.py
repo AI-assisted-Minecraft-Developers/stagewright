@@ -21,23 +21,33 @@ reused verbatim from T1 via importing t1.py — NOT forked). Flow:
     process group, bounded wait, cwd-scoped JVM sweep) → verify run-t2/world/level.dat → archive
     run-t2/world → scripts/testkit/.t2-world-template-<loader> → delete the mint world copy.
 
-  scored:
-    copy template → run-t2/world → boot t2Server → discover server RPC port + wait world ready →
-    boot the T1 client (testkitClient, run-t1, autorun OFF, Xvfb) → discover client RPC port →
-    guidrive: title → Multiplayer → (online-play warning if present) → Direct Connection →
-    127.0.0.1:<server-port> → Join Server → in-world → DUAL-END PROBE: client mc.client.player has
-    a pos AND server mc.observe.player is present (a real player in the DEDICATED PlayerList) →
-    GREEN, exit 0.
+  scored (P3a Task 3):
+    copy template → run-t2/world → boot t2Server (autorun OFF) → discover server RPC port + wait
+    world ready → boot the T1 client (testkitClient, run-t1, autorun OFF, Xvfb) → discover client
+    RPC port → guidrive: title → Multiplayer → (online-play warning if present) → Direct Connection →
+    127.0.0.1:<server-port> → Join Server → in-world → DUAL-END PROBE (client mc.client.player has a
+    pos AND server mc.observe.player is present in the DEDICATED PlayerList) → fire mc.test.run over
+    the SERVER RPC (bare envelope; assert accepted:true) → poll run-t2/testkit-results.jsonl for the
+    done footer → judge via verdict.py + expected-scenes-<loader>.txt (reconciled against the suite
+    header's registered[]) → exit 0/1/2/3. The three byte-metric goldens (descentYaw, selfShaftDigUp
+    worstBackslide, gearScope attributes) are asserted INSIDE the scenes, so a scene PASS == byte-hit.
+
+  --hold (P3a Task 3): stand the dedicated_plus_client topology up, run NO scenes, and stay online
+    for a JUnit attach. After the dual-end probe passes, write run-t2/testkit-endpoint.json (schema
+    v1: topology="dedicated_plus_client", rpcPort=CLIENT RPC port, NEW OPTIONAL serverRpcPort=SERVER
+    RPC port), print `export TESTKIT_ENDPOINT=<abs path>`, and idle until Ctrl-C. The endpoint file is
+    deleted in the finally on EVERY exit path (Ctrl-C included).
 
   teardown (finally, EVERY exit path): client first (quit-to-title best effort → PID kill + client
     JVM sweep), server second (SIGTERM the gradle group → bounded wait → cwd-scoped JVM sweep),
-    delete run-t2/world, remove both agent-rpc.port files, kill Xvfb. Never pkill.
+    delete the endpoint descriptor, delete run-t2/world, remove both agent-rpc.port files, kill
+    Xvfb. Never pkill.
 
-Exit codes (T2 shell semantics):
-  0 GREEN  — dual-end probe passed (client in-world + real server player)
-  1 RED    — reserved for scene-level failures (Tasks 3-4); the shell does not emit it
-  2 DEAD   — reserved for canary/framework-void (Tasks 3-4); the shell does not emit it
-  3 ENV    — a process never came up / GUI drive failed / probe never satisfied (infra failure)
+Exit codes (T2 scored semantics, verdict.py-judged like T0/T1):
+  0 GREEN  — done footer present, verdict GREEN (every scene on its expected outcome; goldens hit)
+  1 RED    — done footer present, a non-canary scene failed / reconciliation failed
+  2 DEAD   — done footer present, a canary landed on the WRONG outcome (framework void)
+  3 ENV    — a process never came up / GUI drive failed / probe never satisfied / no done footer
 
 The server-port (the multiplayer listen socket) is pinned per loader in run-t2/server.properties,
 which this orchestrator GENERATES-AND-PINS on every provision (run-t2 is gitignored, so the file is
@@ -46,6 +56,7 @@ that file for the client connect address.
 """
 import argparse
 import asyncio
+import json
 import os
 import shutil
 import signal
@@ -58,6 +69,8 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import guidrive as gd  # noqa: E402
 import t1  # noqa: E402 — REUSED Xvfb/launch/stop/sweep/kill helpers, not forked
+from verdict import parse, judge  # noqa: E402 — REUSED judging logic, not forked
+from t0 import load_expect_file  # noqa: E402 — REUSED expect-file parser, not forked
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "testkit")
@@ -83,6 +96,9 @@ class T2Paths:
     run_task: str           # :<loader>:runT2Server
     server_properties: str  # run-t2/server.properties
     server_port: int        # multiplayer listen socket
+    results: str            # run-t2/testkit-results.jsonl (harness writes here, cwd-relative)
+    endpoint_file: str      # run-t2/testkit-endpoint.json (--hold attach descriptor)
+    default_expect: str     # scripts/testkit/expected-scenes-<loader>.txt (reconciliation gate)
 
 
 def resolve_t2(name):
@@ -98,6 +114,12 @@ def resolve_t2(name):
         run_task=f":{name}:runT2Server",
         server_properties=os.path.join(run_dir, "server.properties"),
         server_port=SERVER_PORTS[name],
+        # The dedicated harness writes OUT_FILE="testkit-results.jsonl" relative to its own
+        # working directory (loom launches the forked server with cwd == run-t2), so the scored
+        # footer lands here — the exact same cwd-relative contract T0/T1 rely on.
+        results=os.path.join(run_dir, "testkit-results.jsonl"),
+        endpoint_file=os.path.join(run_dir, "testkit-endpoint.json"),
+        default_expect=os.path.join("scripts", "testkit", f"expected-scenes-{name}.txt"),
     )
 
 
@@ -150,6 +172,39 @@ def read_server_port(properties_path):
 def level_dat_present(world_dir):
     """A dedicated server writes world/level.dat once the level is created (pure, for self-test)."""
     return os.path.isfile(os.path.join(world_dir, "level.dat"))
+
+
+def write_endpoint(path, loader, client_port, server_port, pid):
+    """Write the TESTKIT_ENDPOINT descriptor (schema v1) for the T2 ``dedicated_plus_client``
+    topology, atomically (``<path>.tmp`` then os.replace, so a JUnit-side reader never sees a
+    partial file). Same frozen v1 required-8 keys as t1's ``write_endpoint`` — with two T2
+    differences that stay v1-COMPATIBLE (the required-8 set is unchanged):
+      * ``topology`` is ``"dedicated_plus_client"`` (client attaches to a SEPARATE dedicated
+        server, not a client-hosted integrated server);
+      * ``rpcPort`` is the **CLIENT** RPC port — the JUnit UI scenes only touch the client face,
+        so the attach socket (``wsUri()``) must land on the client;
+      * NEW OPTIONAL ``serverRpcPort`` = the dedicated server's RPC port (present only on T2
+        endpoints; T1 descriptors omit it). Endpoint.java parses it optionally and tolerates its
+        absence, so a T1 endpoint still parses and the frozen contract does not break.
+    ``worldName`` is the dedicated server's level name ("world"). Pure aside from the write —
+    every varying value is a parameter — so self-test exercises it without a live topology.
+    Returns the dict that was written."""
+    doc = {
+        "version": 1,
+        "topology": "dedicated_plus_client",
+        "loader": loader,
+        "rpcHost": "127.0.0.1",
+        "rpcPort": client_port,
+        "worldName": WORLD_NAME,
+        "holdPid": pid,
+        "writtenAtEpochMs": int(time.time() * 1000),
+        "serverRpcPort": server_port,
+    }
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(doc, f, indent=2)
+    os.replace(tmp, path)
+    return doc
 
 
 # ------------------------------------------------------------ process mgmt ----
@@ -235,6 +290,11 @@ def provision_server(t2, reuse):
         f.write(render_server_properties(t2.server_port))
     if os.path.exists(t2.port_file):
         os.remove(t2.port_file)
+    # Never let a scored run judge a STALE footer from a previous run: clear the results file
+    # (and any orphan endpoint descriptor) before the server boots and (re)writes it.
+    for stale in (t2.results, t2.endpoint_file):
+        if os.path.exists(stale):
+            os.remove(stale)
     shutil.rmtree(t2.world_dir, ignore_errors=True)  # never reuse a dirty world
     if reuse:
         print(f"[t2] copying template → {t2.world_dir}")
@@ -316,13 +376,15 @@ async def _server_ready(t2):
 
 async def _client_probe(t2, client_port):
     """Open the client socket + a fresh server socket in ONE loop, drive the multiplayer direct-connect,
-    and run the dual-end probe. Returns the evidence dict (ok + both raw player snapshots)."""
+    and run the dual-end probe. Returns the evidence dict (ok + both raw player snapshots + the
+    discovered server RPC port, which the scored trigger / --hold endpoint write both need)."""
     ws = await gd.connect(client_port)
     async with ws:
         client_rpc = gd.Rpc(ws)
         await gd.wait_api_ready(client_rpc)
         print("[t2] client API reachable at title")
-        server_ws = await gd.connect(await gd.discover_port(Path(t2.port_file), timeout=60))
+        server_rpc_port = await gd.discover_port(Path(t2.port_file), timeout=60)
+        server_ws = await gd.connect(server_rpc_port)
         async with server_ws:
             server_rpc = gd.Rpc(server_ws)
             address = f"127.0.0.1:{t2.server_port}"
@@ -340,7 +402,27 @@ async def _client_probe(t2, client_port):
                   f"name={server_player.get('name') if isinstance(server_player, dict) else None} "
                   f"pos={server_player.get('pos') if isinstance(server_player, dict) else None}")
             return {"ok": bool(client_pos) and server_present,
-                    "client_player": client_player, "server_player": server_player}
+                    "client_player": client_player, "server_player": server_player,
+                    "server_rpc_port": server_rpc_port}
+
+
+async def _trigger_scene_run(server_rpc_port):
+    """Scored path only: open a fresh server socket and fire the on-demand suite trigger
+    (``mc.test.run``, bare envelope — the hidden verb takes no params). Assert the accept
+    envelope ({accepted:true, scenes:N}) and return it; the JSONL done footer (harvested off
+    the results file, NOT this socket) remains the sole completion signal. Raises if the run
+    is not accepted (e.g. the server is stopping, or the suite already ran)."""
+    server_ws = await gd.connect(server_rpc_port)
+    async with server_ws:
+        server_rpc = gd.Rpc(server_ws)
+        resp = await server_rpc.call("mc.test.run", timeout=30)
+        accepted = isinstance(resp, dict) and resp.get("accepted") is True
+        scenes = resp.get("scenes") if isinstance(resp, dict) else None
+        print(f"[t2] mc.test.run → {resp}")
+        if not accepted:
+            raise RuntimeError(f"mc.test.run not accepted: {resp}")
+        print(f"[t2] scene suite ACCEPTED (registered scenes={scenes}) — harvesting done footer")
+        return resp
 
 
 def _best_effort_quit_client(client_port):
@@ -401,6 +483,8 @@ def run(args):
     client_port = None
     env_err = None
     probe_ok = False
+    footer = False
+    elapsed = 0.0
     t_start = time.monotonic()
     try:
         provision_server(t2, reuse=True)
@@ -415,7 +499,31 @@ def run(args):
         print(f"[t2] discovered client agent-rpc port={client_port}")
         evidence = asyncio.run(_client_probe(t2, client_port))
         probe_ok = evidence["ok"]
+        server_rpc_port = evidence.get("server_rpc_port")
         print(f"[t2] dual-end probe {'PASS' if probe_ok else 'FAIL'}")
+
+        if probe_ok and args.hold:
+            # --hold: NO scenes run. Both processes stay up with the RPC live; publish the
+            # dedicated_plus_client endpoint (rpcPort=CLIENT face — the JUnit UI scenes only touch
+            # the client; serverRpcPort=SERVER for a future dual-socket consumer) and idle until
+            # Ctrl-C. The KeyboardInterrupt is a BaseException — it slips past `except Exception`
+            # straight into the finally teardown, which deletes the endpoint file on EVERY exit
+            # path (mirrors t1 --hold's documented release + endpoint-residue discipline).
+            write_endpoint(t2.endpoint_file, t2.loader, client_port, server_rpc_port, client.pid)
+            print(f"export TESTKIT_ENDPOINT={t2.endpoint_file}")
+            print(f"[t2] --hold: dedicated_plus_client topology online (client rpc={client_port}, "
+                  f"server rpc={server_rpc_port}), NO scenes; staying up for JUnit attach. "
+                  "Ctrl-C to release.")
+            while True:
+                time.sleep(5)
+
+        if probe_ok:  # scored: fire mc.test.run over the SERVER RPC, then harvest the footer
+            asyncio.run(_trigger_scene_run(server_rpc_port))
+            # The dedicated harness writes its JSONL to run-t2 and halt()s the server on the done
+            # footer (disconnecting the client) — harvest is a pure file poll, socket-independent.
+            footer = t1.harvest_footer(t2.results, t_start + args.wall, server)
+            if not footer:
+                print("[t2] no done footer within wall — scored run incomplete")
     except Exception as e:  # noqa: BLE001 — any drive/connect failure = ENV
         env_err = e
         print(f"[t2] session error (ENV): {e}")
@@ -429,8 +537,14 @@ def run(args):
             t1.stop_client(client)
         # ... SERVER second (SIGTERM group → bounded wait → cwd sweep) ...
         stop_server(server, t2.run_dir)
-        # ... then Xvfb, world copy, both port files.
+        # ... then Xvfb, world copy, the endpoint descriptor, both port files.
         t1.kill_pid(xvfb.pid, "Xvfb")
+        # A stale endpoint descriptor is the most dangerous residue a --hold run can leave — a
+        # JUnit consumer would attach to a port now dead (or worse, reused). Delete on every exit
+        # path (Ctrl-C included), tolerant of it never having been written (scored / early-fail).
+        if os.path.exists(t2.endpoint_file):
+            os.remove(t2.endpoint_file)
+            print(f"[t2] deleted endpoint file {t2.endpoint_file}")
         shutil.rmtree(t2.world_dir, ignore_errors=True)
         print(f"[t2] deleted world copy {t2.world_dir}")
         for pf in (t2.port_file, t1.PORT_FILE):
@@ -438,15 +552,23 @@ def run(args):
                 os.remove(pf)
                 print(f"[t2] removed port file {pf}")
         elapsed = time.monotonic() - t_start
-        print(f"[t2] session elapsed {elapsed:.1f}s (probe_ok={probe_ok})")
+        print(f"[t2] session elapsed {elapsed:.1f}s (probe_ok={probe_ok}, footer={footer})")
 
+    # Verdict (scored path only — --hold never returns here: its Ctrl-C propagates out of the
+    # while-loop through the finally and on out of run()).
     if env_err is not None or not probe_ok:
         reason = env_err if env_err is not None else "dual-end probe not satisfied"
         print(f"[t2] VERDICT: ENV — {reason}")
         return 3, minted_now
-    print(f"[t2] VERDICT: GREEN  (dual-end probe passed"
+    if not footer:
+        print("[t2] VERDICT: ENV — no done footer within wall")
+        return 3, minted_now
+    code, report = judge(parse(t2.results), expected=args.expected)
+    for line in report:
+        print(f"[t2] {line}")
+    print(f"[t2] VERDICT: {['GREEN', 'RED', 'DEAD', 'ENV'][code]}  (elapsed {elapsed:.1f}s"
           f"{', minted template this run' if minted_now else ''})")
-    return 0, minted_now
+    return code, minted_now
 
 
 # -------------------------------------------------------------- self-test -----
@@ -486,10 +608,31 @@ def self_test():
         ("level_dat_present true when file exists", _check_level_dat_present()),
         ("template_reuse (t1 helper) false when absent",
          t1.template_reuse("/nonexistent/xyz") is False),
+        ("resolve_t2 results/endpoint derive from run-dir",
+         resolve_t2("fabric").results == os.path.join(resolve_t2("fabric").run_dir, "testkit-results.jsonl")
+         and resolve_t2("fabric").endpoint_file
+         == os.path.join(resolve_t2("fabric").run_dir, "testkit-endpoint.json")),
+        ("resolve_t2 default-expect per loader",
+         resolve_t2("neoforge").default_expect
+         == os.path.join("scripts", "testkit", "expected-scenes-neoforge.txt")),
+        ("write_endpoint: T2 schema (dedicated_plus_client + serverRpcPort) value/type fidelity",
+         _check_write_endpoint()),
+        ("write_endpoint: atomic overwrite leaves no .tmp, second call wins",
+         _check_write_endpoint_overwrite()),
+        ("verdict reused: green fixture -> 0", judge(_GREEN)[0] == 0),
+        ("verdict reused: canary drift -> 2 DEAD", judge(_DEAD)[0] == 2),
+        ("load_expect_file (t0 helper) parses names", load_expect_file(_expect_fixture()) == ["ad.one", "ad.two"]),
         ("parse_args default loader fabric", _parse(["--self-test"]).loader == "fabric"),
         ("parse_args --loader neoforge", _parse(["--loader", "neoforge"]).loader == "neoforge"),
         ("parse_args rejects unknown loader", _raises_systemexit(lambda: _parse(["--loader", "quilt"]))),
         ("parse_args default wall 900", _parse(["--self-test"]).wall == 900),
+        ("parse_args --hold default false", _parse(["--self-test"]).hold is False),
+        ("parse_args --hold sets true", _parse(["--hold"]).hold is True),
+        ("parse_args default expect resolves fabric manifest", _parse([]).expected == _expected_default("fabric")),
+        ("parse_args --loader neoforge resolves neoforge expect",
+         _parse(["--loader", "neoforge"]).expected == _expected_default("neoforge")),
+        ("parse_args --expect-file overrides", _parse(["--expect-file", _expect_fixture()]).expected
+         == ["ad.one", "ad.two"]),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
@@ -516,6 +659,86 @@ def _check_level_dat_present():
         shutil.rmtree(d)
 
 
+def _check_write_endpoint():
+    """write_endpoint's returned dict and what lands on disk must carry the frozen v1 required-8
+    keys PLUS the new optional serverRpcPort, all rightly-typed (rpcPort/serverRpcPort/holdPid are
+    numbers, not stringly-typed — a gson record parse fails loudly on that; self-test catches it
+    first), with the T2-specific topology + client/server port split."""
+    import tempfile
+    d = tempfile.mkdtemp()
+    try:
+        path = os.path.join(d, "testkit-endpoint.json")
+        doc = write_endpoint(path, "fabric", 39843, 39777, 12345)
+        if not os.path.isfile(path):
+            return False
+        with open(path, encoding="utf-8") as f:
+            on_disk = json.load(f)
+        if on_disk != doc:
+            return False
+        if set(doc.keys()) != {"version", "topology", "loader", "rpcHost", "rpcPort",
+                               "worldName", "holdPid", "writtenAtEpochMs", "serverRpcPort"}:
+            return False
+        return (
+            doc["version"] == 1
+            and doc["topology"] == "dedicated_plus_client"
+            and doc["loader"] == "fabric"
+            and doc["rpcHost"] == "127.0.0.1"
+            and doc["rpcPort"] == 39843 and isinstance(doc["rpcPort"], int)
+            and doc["serverRpcPort"] == 39777 and isinstance(doc["serverRpcPort"], int)
+            and doc["worldName"] == WORLD_NAME
+            and doc["holdPid"] == 12345 and isinstance(doc["holdPid"], int)
+            and isinstance(doc["writtenAtEpochMs"], int) and doc["writtenAtEpochMs"] > 0
+        )
+    finally:
+        shutil.rmtree(d)
+
+
+def _check_write_endpoint_overwrite():
+    import tempfile
+    d = tempfile.mkdtemp()
+    try:
+        path = os.path.join(d, "testkit-endpoint.json")
+        write_endpoint(path, "fabric", 1111, 1001, 111)
+        write_endpoint(path, "fabric", 2222, 2002, 222)
+        if os.path.exists(path + ".tmp"):
+            return False
+        with open(path, encoding="utf-8") as f:
+            on_disk = json.load(f)
+        return (on_disk["rpcPort"] == 2222 and on_disk["serverRpcPort"] == 2002
+                and on_disk["holdPid"] == 222)
+    finally:
+        shutil.rmtree(d)
+
+
+def _expect_fixture():
+    import tempfile
+    f = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False)
+    f.write("# hdr\nad.one\nad.two\n")
+    f.close()
+    return f.name
+
+
+def _expected_default(name):
+    path = os.path.join(REPO_ROOT, resolve_t2(name).default_expect)
+    return sorted(set(load_expect_file(path)))
+
+
+_SUITE = {"type": "suite", "loader": "fabric", "registered": [
+    {"name": "a", "required": True, "canary": "NONE"},
+    {"name": "cf", "required": True, "canary": "MUST_FAIL"},
+    {"name": "ct", "required": True, "canary": "MUST_TIMEOUT"}]}
+
+
+def _sc(name, outcome):
+    return {"type": "scene", "name": name, "outcome": outcome, "ticks": 1, "wallMs": 1, "reason": ""}
+
+
+_GREEN = [_SUITE, _sc("a", "PASS"), _sc("cf", "FAIL"), _sc("ct", "TIMEOUT"),
+          {"type": "done", "scenes": 3}]
+_DEAD = [_SUITE, _sc("a", "PASS"), _sc("cf", "PASS"), _sc("ct", "TIMEOUT"),
+         {"type": "done", "scenes": 3}]
+
+
 def _raises_systemexit(fn):
     import contextlib
     import io
@@ -535,10 +758,28 @@ def _parse(argv):
                     help="target loader (default fabric): selects <loader>/run-t2 + :<loader>:runT2Server "
                          "for the server, and the T1 run-t1/runTestkitClient for the client")
     ap.add_argument("--wall", type=int, default=900, help="wall-clock cap in seconds")
+    ap.add_argument("--expect-file", default=None,
+                    help="expected-scene manifest (default expected-scenes-<loader>.txt); union "
+                         "reconciled against the suite header's registered[] (t0/t1 gate)")
     ap.add_argument("--display", type=int, default=None,
                     help="force an Xvfb display number (default: probe free)")
+    ap.add_argument("--hold", action="store_true",
+                    help="stand the dedicated_plus_client topology up, run NO scenes, write the "
+                         "TESTKIT_ENDPOINT descriptor (rpcPort=client, serverRpcPort=server) and "
+                         "stay online for JUnit attach; Ctrl-C to release")
     ap.add_argument("--self-test", action="store_true")
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    lp = resolve_t2(args.loader)
+    if not args.self_test:
+        path = args.expect_file or lp.default_expect
+        if not os.path.isabs(path):
+            path = os.path.join(REPO_ROOT, path)
+        if not os.path.exists(path):
+            ap.error(f"--expect-file not found: {path}")
+        args.expected = sorted(set(load_expect_file(path)))
+    else:
+        args.expected = None
+    return args
 
 
 def main():
