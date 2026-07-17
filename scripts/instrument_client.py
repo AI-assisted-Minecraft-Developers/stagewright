@@ -390,8 +390,116 @@ def run_checks(ctx):
     return lines
 
 
-def run_suite(attach, wall):
+VERDICT_LABELS = ["GREEN", "RED", "DEAD", "ENV", "BLOCKED"]
+
+
+async def _quit_and_reenter(port):
+    """Between-rounds reuse drive (SAME client JVM): quit-to-title → re-enter the SAME
+    world copy. Quit-to-title on an integrated server shuts the internal server down and
+    re-entering boots it again — that IS the intended reuse surface (client JVM reuse, not
+    server reuse). The world copy is NOT re-provisioned (reuse=True opens the on-disk copy
+    the previous round saved). Opens/closes its own async socket, distinct from the check
+    phase's sync socket."""
+    ws = await gd.connect(port)
+    async with ws:
+        rpc = gd.Rpc(ws)
+        await gd.wait_api_ready(rpc)
+        await gd.quit_to_title(rpc)
+        await t1.drive_into_world_selfheal(rpc, reuse=True)
+
+
+def _pool_reset(ctx):
+    """The client-pool reuse reset applied between rounds, before the check suite reruns:
+    mc.test.reset releases held keys / closes any screen / clears the chat readback. This
+    is the product feature under test — a clean pool entry with no residue. Returns the
+    reset[] manifest (logged, not asserted here; reset.behavior inside the suite is the
+    graded assertion)."""
+    r = ctx.call("mc.test.reset")
+    if not r.get("ok"):
+        raise ContractFailure(f"between-rounds mc.test.reset not ok: {r!r}")
+    return r.get("reset") or []
+
+
+def _outcomes(lines):
+    """{check-name: outcome} from a round's JSONL lines (suite header/footer skipped)."""
+    out = {}
+    for ln in lines:
+        rec = json.loads(ln)
+        if rec.get("type") == "check":
+            out[rec["name"]] = rec["outcome"]
+    return out
+
+
+def round_drift(round_outcomes):
+    """Pure: cross-round per-check outcome drift. round_outcomes is a list (one dict per
+    round) of {check-name: outcome}. Returns {name: [outcome-per-round]} for every check
+    whose outcome is NOT identical across all rounds (insertion order preserved). Empty
+    dict ⇒ perfect reuse (every round judged every check the same)."""
+    names, seen = [], set()
+    for ro in round_outcomes:
+        for n in ro:
+            if n not in seen:
+                seen.add(n)
+                names.append(n)
+    drift = {}
+    for n in names:
+        seq = [ro.get(n) for ro in round_outcomes]
+        if len(set(seq)) > 1:
+            drift[n] = seq
+    return drift
+
+
+def render_drift_table(round_outcomes, drift):
+    """Pure: a per-round difference table for the drifting checks (report + BLOCKED)."""
+    nr = len(round_outcomes)
+    head = "  {:<32}".format("check") + "".join("{:<10}".format(f"r{i + 1}") for i in range(nr))
+    out = ["  per-round difference table (inter-round drift = reset gap):", head]
+    for n, seq in drift.items():
+        out.append("  {:<32}".format(n) + "".join("{:<10}".format(str(o)) for o in seq))
+    return out
+
+
+def combine_round_verdict(round_codes, round_outcomes):
+    """Pure: fold per-round judge codes + cross-round consistency into ONE verdict.
+
+    Precedence: DEAD (any round's canary mis-judged ⇒ whole run void, contract v0 §5) >
+    ENV (a round could not run) > BLOCKED (per-check outcomes drift between rounds — the
+    reset-completeness gap this task exists to surface; the fix is in mc.test.reset, NOT
+    in a check, so do NOT loosen — report BLOCKED) > RED (a check fails CONSISTENTLY every
+    round: a real product gap, characterized ×N) > GREEN (all rounds GREEN AND identical).
+    Returns (exit_code, report_lines)."""
+    n = len(round_codes)
+    if any(c == 2 for c in round_codes):
+        return 2, [f"DEAD: a round's canary mis-judged — {n}-round run void (contract v0 §5)"]
+    if any(c == 3 for c in round_codes):
+        return 3, ["ENV: a round could not run (see per-round report)"]
+    drift = round_drift(round_outcomes)
+    if drift:
+        return 4, ([f"BLOCKED: inter-round outcome drift across {n} rounds — reset "
+                    "completeness gap (residue survived a reset). Fix mc.test.reset, do "
+                    "NOT loosen a check."] + render_drift_table(round_outcomes, drift))
+    if any(c == 1 for c in round_codes):
+        return 1, [f"RED: a check failed CONSISTENTLY across all {n} rounds "
+                   "(characterized ×N — a real gap, not drift)"]
+    return 0, [f"GREEN: {n} rounds, per-check outcomes identical (reuse-complete)"]
+
+
+def _teardown_self_launch(client, xvfb):
+    """Tear down a self-launched client JVM + its Xvfb (never the world copy — that is
+    deleted once, at the very end of the run)."""
+    if client is not None:
+        t1.stop_client(client)
+    if xvfb is not None:
+        t1.kill_pid(xvfb.pid, "Xvfb")
+
+
+def run_suite(attach, wall, rounds=1, fresh_process=False):
     client = xvfb = None
+    round_lines = []   # per-round JSONL line lists
+    round_codes = []   # per-round judge() exit codes
+    round_secs = []    # per-round wall-clock (check phase; reuse rounds add the re-enter drive)
+    boot_secs = 0.0    # cold client boot cost (gradle JVM + Xvfb + drive into world) — the
+                       # expensive part the pool reuse amortizes away; the reuse-vs-cold datum
     try:
         if attach:
             port = gd.read_port(Path(PORT_FILE))
@@ -402,36 +510,103 @@ def run_suite(attach, wall):
             print(f"[instrument-client] --attach: reusing online client at port {port}")
         else:
             try:
+                t_boot = time.time()
                 client, xvfb, port = self_launch(wall)
+                boot_secs = time.time() - t_boot
             except ContractFailure as e:
                 print(f"[instrument-client] {e}")
                 return 3
-            print(f"[instrument-client] self-launch in-world at port {port}")
+            print(f"[instrument-client] self-launch in-world at port {port} "
+                  f"(cold boot {boot_secs:.1f}s)")
 
-        try:
-            ctx = _connect_checks(port)
-        except Exception as e:  # noqa: BLE001
-            print(f"[instrument-client] ENV: could not open RPC socket: {e}")
-            return 3
-        lines = run_checks(ctx)
+        for rnd in range(rounds):
+            t_round = time.time()
+            mode = "boot"
+            if rnd > 0:
+                if fresh_process:
+                    # discard-restart fallback: kill the client, boot a fresh one (slow but
+                    # clean). The path a consumer takes when reuse-completeness is broken.
+                    mode = "fresh-process"
+                    print(f"[instrument-client] round {rnd + 1}: --fresh-process — "
+                          "discarding client JVM, booting a fresh one")
+                    _teardown_self_launch(client, xvfb)
+                    client = xvfb = None
+                    try:
+                        client, xvfb, port = self_launch(wall)
+                    except ContractFailure as e:
+                        print(f"[instrument-client] round {rnd + 1} fresh-process ENV: {e}")
+                        round_lines.append([]); round_codes.append(3); round_secs.append(0.0)
+                        continue
+                else:
+                    # reuse path: SAME client JVM — quit-to-title, re-enter the SAME world
+                    # copy, then reset the pool entry before rerunning ALL checks.
+                    mode = "reuse"
+                    print(f"[instrument-client] round {rnd + 1}: reuse — quit-to-title → "
+                          "re-enter same world → mc.test.reset")
+                    try:
+                        asyncio.run(_quit_and_reenter(port))
+                    except Exception as e:  # noqa: BLE001
+                        print(f"[instrument-client] round {rnd + 1} reuse-drive ENV: {e}")
+                        round_lines.append([]); round_codes.append(3); round_secs.append(0.0)
+                        continue
+
+            try:
+                ctx = _connect_checks(port)
+            except Exception as e:  # noqa: BLE001
+                print(f"[instrument-client] round {rnd + 1} ENV: could not open RPC socket: {e}")
+                round_lines.append([]); round_codes.append(3); round_secs.append(0.0)
+                continue
+
+            if rnd > 0 and not fresh_process:
+                manifest = _pool_reset(ctx)
+                print(f"[instrument-client] round {rnd + 1} pool reset[] = {manifest}")
+
+            lines = run_checks(ctx)
+            secs = time.time() - t_round
+            code, report = judge([json.loads(ln) for ln in lines], record_type="check")
+            for r in report:
+                print(f"[instrument-client] round {rnd + 1} {r}")
+            print(f"[instrument-client] round {rnd + 1} ({mode}) VERDICT: "
+                  f"{VERDICT_LABELS[code]}  ({secs:.1f}s)")
+            round_lines.append(lines)
+            round_codes.append(code)
+            round_secs.append(secs)
+
+            os.makedirs(RUN_DIR, exist_ok=True)
+            with open(os.path.join(RUN_DIR, f"instrument-client-results-r{rnd + 1}.jsonl"), "w") as f:
+                f.write("\n".join(lines) + "\n")
+            if rnd == rounds - 1 and lines:
+                with open(RESULTS, "w") as f:   # keep last round at the legacy path
+                    f.write("\n".join(lines) + "\n")
     finally:
-        # Self-launch owns the client lifecycle; --attach leaves the user's client running.
         if not attach:
-            if client is not None:
-                t1.stop_client(client)
-            if xvfb is not None:
-                t1.kill_pid(xvfb.pid, "Xvfb")
+            _teardown_self_launch(client, xvfb)
             import shutil
             shutil.rmtree(t1.WORLD_DIR, ignore_errors=True)
             print(f"[instrument-client] torn down; deleted world copy {t1.WORLD_DIR}")
 
-    os.makedirs(RUN_DIR, exist_ok=True)
-    with open(RESULTS, "w") as f:
-        f.write("\n".join(lines) + "\n")
-    code, report = judge(parse(RESULTS), record_type="check")
+    round_outcomes = [_outcomes(ls) for ls in round_lines]
+    if rounds == 1:
+        code = round_codes[0] if round_codes else 3
+        print(f"[instrument-client] VERDICT: {VERDICT_LABELS[code]}")
+        return code
+
+    # ---- reuse-completeness acceptance: fold the rounds into one verdict ----
+    print(f"\n[instrument-client] ===== {rounds}-round reuse acceptance "
+          f"({'fresh-process' if fresh_process else 'reuse'}) =====")
+    if boot_secs:
+        print(f"[instrument-client]   cold client boot (amortized before round 1): {boot_secs:.1f}s")
+    for i, (c, s) in enumerate(zip(round_codes, round_secs)):
+        tag = "boot+checks" if (i == 0) else ("fresh-process boot+checks" if fresh_process else "reuse re-enter+checks")
+        print(f"[instrument-client]   round {i + 1}: {VERDICT_LABELS[c]:<7} {s:6.1f}s  ({tag})")
+    if not fresh_process and boot_secs and len(round_secs) > 1:
+        reuse_avg = sum(round_secs[1:]) / len(round_secs[1:])
+        print(f"[instrument-client]   reuse benefit: cold boot {boot_secs:.1f}s vs "
+              f"reuse round ~{reuse_avg:.1f}s (≈{boot_secs / max(reuse_avg, 0.1):.0f}× cheaper per extra round)")
+    code, report = combine_round_verdict(round_codes, round_outcomes)
     for r in report:
         print(f"[instrument-client] {r}")
-    print(f"[instrument-client] VERDICT: {['GREEN', 'RED', 'DEAD', 'ENV'][code]}")
+    print(f"[instrument-client] REUSE VERDICT: {VERDICT_LABELS[code]}")
     return code
 
 
@@ -463,6 +638,36 @@ def self_test():
          all(callable(f) for _, _, f in CHECKS)),
         ("canary names present",
          {"canary.mustFail", "canary.mustTimeout"} <= {n for n, _, _ in CHECKS}),
+        # ---- reuse-completeness (round-consistency) comparison logic ----
+        ("round_drift: identical rounds -> no drift",
+         round_drift([{"a": "PASS", "b": "FAIL"}] * 3) == {}),
+        ("round_drift: r2 flips one check -> that check only",
+         round_drift([{"a": "PASS", "b": "PASS"},
+                      {"a": "FAIL", "b": "PASS"},
+                      {"a": "PASS", "b": "PASS"}]) == {"a": ["PASS", "FAIL", "PASS"]}),
+        ("combine: 3 identical GREEN rounds -> GREEN(0)",
+         combine_round_verdict([0, 0, 0],
+                               [{"a": "PASS"}] * 3)[0] == 0),
+        ("combine: drift on one check -> BLOCKED(4) + diff table",
+         (lambda cr: cr[0] == 4 and any("difference table" in ln for ln in cr[1])
+          and any("b " in ln and "PASS" in ln and "FAIL" in ln for ln in cr[1]))(
+             combine_round_verdict([0, 0, 0],
+                                   [{"a": "PASS", "b": "PASS"},
+                                    {"a": "PASS", "b": "FAIL"},
+                                    {"a": "PASS", "b": "PASS"}]))),
+        ("combine: any DEAD round -> DEAD(2), void (precedes drift)",
+         combine_round_verdict([0, 2, 0],
+                               [{"a": "PASS"}, {"a": "FAIL"}, {"a": "PASS"}])[0] == 2),
+        ("combine: consistent non-GREEN, no drift -> RED(1)",
+         combine_round_verdict([1, 1, 1],
+                               [{"a": "FAIL"}] * 3)[0] == 1),
+        ("combine: any ENV round -> ENV(3)",
+         combine_round_verdict([0, 3, 0],
+                               [{"a": "PASS"}, {}, {"a": "PASS"}])[0] == 3),
+        ("_outcomes: parses check records, skips suite/done",
+         _outcomes([json.dumps({"type": "suite"}),
+                    json.dumps({"type": "check", "name": "x", "outcome": "PASS"}),
+                    json.dumps({"type": "done", "scenes": 1})]) == {"x": "PASS"}),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
@@ -477,9 +682,25 @@ def main():
                     help="reuse an online `t1.py --hold` client (read run-t1/agent-rpc.port); "
                          "default self-launches the T1 shell")
     ap.add_argument("--wall", type=int, default=900, help="wall-clock cap in seconds (self-launch)")
+    ap.add_argument("--rounds", type=int, default=1,
+                    help="reuse-completeness acceptance: rerun the WHOLE check suite N times "
+                         "against the SAME client process (quit-to-title → re-enter same world "
+                         "→ mc.test.reset between rounds). Per-check outcomes must be identical "
+                         "across all rounds or the run is BLOCKED (a reset-completeness gap).")
+    ap.add_argument("--fresh-process", action="store_true",
+                    help="discard-restart degradation: between rounds kill the client JVM and "
+                         "boot a fresh one (slow but clean) instead of the reuse drive. The "
+                         "fallback a consumer uses when reuse-completeness is broken. "
+                         "Self-launch only.")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
-    sys.exit(self_test() if args.self_test else run_suite(args.attach, args.wall))
+    if args.self_test:
+        sys.exit(self_test())
+    if args.rounds < 1:
+        ap.error("--rounds must be >= 1")
+    if args.fresh_process and args.attach:
+        ap.error("--fresh-process needs a self-launched client to kill/reboot; not valid with --attach")
+    sys.exit(run_suite(args.attach, args.wall, rounds=args.rounds, fresh_process=args.fresh_process))
 
 
 if __name__ == "__main__":
