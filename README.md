@@ -20,7 +20,9 @@ never block, never sleep, never touch absolute coordinates. **Migration rule
 Walker in-body for N ticks, as every dogfood `ad.*` scene does) must be
 bounded by a fixed tick cap — a scene body is not a test thread, it runs
 inline on the server tick, so an unbounded loop hangs the dedicated server
-itself, not just the one scene.
+itself, not just the one scene. 每个 `withRequired(false)` 场景必须在 javadoc
+引用一个已立案的 task 编号，且在每个阶段验收时重审 optional 名单（防 carve-out
+蠕变）。
 
 Status: P1a walking skeleton done. P1b instrument-contract subset landed.
 P1c dogfood wave 1 landed (below): downstream mods contribute scenes over
