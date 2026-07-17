@@ -255,11 +255,19 @@ async def run_session(wall, hold):
         await gd.wait_api_ready(rpc)
         print("[t1] client API reachable at title")
         await drive_into_world_selfheal(rpc, reuse=True)
-        print(f"[t1] in-world '{WORLD_NAME}' — integrated server up, scenes running")
         if hold:
-            print("[t1] --hold: staying in-world; scenes auto-run. Ctrl-C to release.")
+            # --hold is launched with autorun OFF (see run()): NO scenes run, so the
+            # harness never halt()s the integrated server — it stays up in-world with
+            # the RPC live, which is exactly what instrument_client.py --attach needs
+            # (a live server to /give /damage against). A --hold with autorun ON would
+            # run the scenes then get disconnected to a DisconnectedScreen, useless for
+            # attach. So hold ⇒ live idle world, not a post-suite world.
+            print(f"[t1] in-world '{WORLD_NAME}' — integrated server up, NO scenes "
+                  "(autorun off for --hold); staying online for instrument_client --attach. "
+                  "Ctrl-C to release.")
             while True:
                 await asyncio.sleep(5)
+        print(f"[t1] in-world '{WORLD_NAME}' — integrated server up, scenes running")
         footer = harvest_footer(RESULTS, deadline, None)
         # After the done footer the harness halt()s the integrated server, which
         # disconnects the client to a DisconnectedScreen and cleanly saves the world.
@@ -377,7 +385,10 @@ def run(args):
         footer = False
         env_err = None
         elapsed = 0.0
-        client, _ = launch_client(env, args.wall, autorun=True)
+        # --hold ⇒ autorun OFF: enter the world but run NO scenes, so the integrated
+        # server stays up in-world (harness only halt()s after a scored scene run).
+        # instrument_client.py --attach then drives its checks against that live world.
+        client, _ = launch_client(env, args.wall, autorun=not args.hold)
         t_launch = time.monotonic()
         try:
             footer = asyncio.run(run_session(args.wall, args.hold))
@@ -505,7 +516,8 @@ def _parse(argv):
     ap.add_argument("--display", type=int, default=None,
                     help="force an Xvfb display number (default: probe free)")
     ap.add_argument("--hold", action="store_true",
-                    help="enter world and stay online (for instrument_client --attach); no harvest")
+                    help="enter world (autorun OFF, NO scenes) and stay online with the "
+                         "integrated server live, for instrument_client --attach; no harvest")
     ap.add_argument("--keep-world", action="store_true",
                     help="do not delete the saves/TestkitT1 copy on exit (debug)")
     ap.add_argument("--self-test", action="store_true")
