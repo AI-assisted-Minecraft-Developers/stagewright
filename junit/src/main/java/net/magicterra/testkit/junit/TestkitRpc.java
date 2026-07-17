@@ -115,6 +115,9 @@ public final class TestkitRpc implements AutoCloseable {
         // fail any still-pending calls so a blocked caller does not hang
         pending.values().forEach(f -> f.completeExceptionally(new IllegalStateException("rpc closed")));
         pending.clear();
+        // release the HttpClient selector thread (Java 21 AutoCloseable); without
+        // this it lives until JVM exit — blocks briefly while in-flight ops drain
+        httpClient.close();
     }
 
     // ---------------------------------------------------------------- codec ----

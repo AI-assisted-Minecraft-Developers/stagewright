@@ -174,6 +174,9 @@ public final class Testkit implements AutoCloseable {
      * Block, polling {@code pred} every 50ms, until it returns {@code true}. Throws
      * {@link TestkitTimeoutException} — NOT an {@link AssertionError} — if the timeout
      * elapses first. Never hangs.
+     *
+     * <p>Deadline is checked BETWEEN polls: a predicate that itself issues a slow RPC
+     * can overshoot the budget by up to one RPC timeout before the deadline is seen.
      */
     public void awaitCondition(Supplier<Boolean> pred, Duration timeout) {
         pollUntil(pred, timeout);
