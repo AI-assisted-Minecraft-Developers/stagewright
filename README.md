@@ -15,7 +15,12 @@ Scenes live in `common/src/main/java/net/magicterra/testkit/scene/Scenes.java`
 (explicit registry = single source for execution AND reconciliation). A scene
 body runs once on its first tick, builds an origin-relative arena, asserts, and
 may register `ctx.await(cond).within(ticks).then(action)` continuations. Bodies
-never block, never sleep, never touch absolute coordinates.
+never block, never sleep, never touch absolute coordinates. **Migration rule
+(P1.5a pre-flight)**: a scene body's own synchronous loop (e.g. driving a
+Walker in-body for N ticks, as every dogfood `ad.*` scene does) must be
+bounded by a fixed tick cap — a scene body is not a test thread, it runs
+inline on the server tick, so an unbounded loop hangs the dedicated server
+itself, not just the one scene.
 
 Status: P1a walking skeleton done. P1b instrument-contract subset landed.
 P1c dogfood wave 1 landed (below): downstream mods contribute scenes over
@@ -29,14 +34,21 @@ runs in a row).
 
     python3 scripts/testkit/t0.py --loader neoforge \
         --run-task :neoforge:runDogfoodServer \
-        --results neoforge/run-dogfood/testkit-results.jsonl
+        --results neoforge/run-dogfood/testkit-results.jsonl \
+        --expect-scene ad.ascendMovementNoop,ad.ascendDeadZoneWatchdog,ad.diagonalAscentSpeed,ad.selfShaftDigUp,ad.descentYaw
 
 Boots a full dedicated server with **both** agent_driver and mc-testkit
 loaded (`neoforge/build.gradle` run config `dogfoodServer`, `testkit.autorun`
 armed) — this is what proves the T0 orchestrator generalizes beyond its own
 bare-bones testkit-neoforge module to a real, feature-loaded mod. Same exit
 codes as plain T0 above; the suite header's `registered[]` carries the
-built-in scenes plus every downstream `ad.*` scene.
+built-in scenes plus every downstream `ad.*` scene. `--expect-scene` names
+every `ad.*` scene the orchestrator externally expects to see registered —
+see `docs/testkit/orchestration-contract-v0.md`'s appendix for why this is
+load-bearing (it is the precondition for deleting the legacy `@GameTest`
+twins: without it, a broken `ServiceLoader` discovery chain would silently
+drop `ad.*` from `registered[]` and the suite would self-consistently go
+GREEN on fewer scenes than intended).
 
 Downstream mods contribute scenes via the `SceneProvider` SPI in three
 lines — see `docs/testkit/orchestration-contract-v0.md` for the full
