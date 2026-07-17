@@ -384,15 +384,19 @@ def run(args):
         except Exception as e:  # noqa: BLE001 — any drive/connect failure = ENV
             env_err = e
             print(f"[t1] session error (ENV): {e}")
-        elapsed = time.monotonic() - t_launch
-        print(f"[t1] session elapsed {elapsed:.1f}s (footer={footer})")
-        stop_client(client)
+        finally:
+            # Mirror mint_template: stop_client MUST run on EVERY exit — including
+            # KeyboardInterrupt, which is the documented release path of --hold.
+            # Leaving it in the normal flow orphaned the forked client JVM on
+            # Ctrl-C (zombie session.lock disease; P2b Task 1 review I1).
+            elapsed = time.monotonic() - t_launch
+            print(f"[t1] session elapsed {elapsed:.1f}s (footer={footer})")
+            stop_client(client)
     finally:
         kill_pid(xvfb.pid, "Xvfb")
-
-    if not args.keep_world:
-        shutil.rmtree(WORLD_DIR, ignore_errors=True)
-        print(f"[t1] deleted world copy {WORLD_DIR}")
+        if not args.keep_world:
+            shutil.rmtree(WORLD_DIR, ignore_errors=True)
+            print(f"[t1] deleted world copy {WORLD_DIR}")
 
     if env_err is not None or not footer:
         reason = env_err if env_err is not None else "no done footer within wall"
