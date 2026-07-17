@@ -35,6 +35,7 @@ import signal
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -44,17 +45,73 @@ from t0 import load_expect_file  # noqa: E402 — REUSED expect-file parser, not
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "testkit")
-
-RUN_DIR = os.path.join(REPO_ROOT, "fabric", "run-t1")
-PORT_FILE = os.path.join(RUN_DIR, "agent-rpc.port")
-RESULTS = os.path.join(RUN_DIR, "testkit-results.jsonl")
-SAVES = os.path.join(RUN_DIR, "saves")
 WORLD_NAME = "TestkitT1"
-WORLD_DIR = os.path.join(SAVES, WORLD_NAME)
-TEMPLATE_DIR = os.path.join(TESTKIT_DIR, ".t1-world-template")
-RUN_TASK = ":fabric:runTestkitClient"
-DEFAULT_EXPECT = os.path.join("scripts", "testkit", "expected-scenes-fabric.txt")
-ENDPOINT_FILE = os.path.join(RUN_DIR, "testkit-endpoint.json")
+LOADERS = ("fabric", "neoforge")
+
+
+@dataclass(frozen=True)
+class LoaderPaths:
+    """Every loader-specific path/task the orchestrator needs, resolved once from the
+    --loader argument. The client topology is identical across loaders; only the run-t1
+    tree (under ``<loader>/``), the gradle task (``:<loader>:runTestkitClient``), the
+    per-loader template cache, and the default expect manifest differ. Pure/derivable,
+    so self-test can assert both loaders' resolution without touching a live client."""
+    loader: str
+    run_dir: str
+    port_file: str
+    results: str
+    saves: str
+    world_dir: str
+    template_dir: str
+    run_task: str
+    endpoint_file: str
+    default_expect: str
+
+
+def resolve_loader(name):
+    """Derive the LoaderPaths for ``name`` (fabric|neoforge). Templates are per-loader
+    (``.t1-world-template-<loader>``) so a fabric-minted world never seeds a neoforge run
+    and vice-versa — each loader mints its own byte-clean template under its own run-t1."""
+    run_dir = os.path.join(REPO_ROOT, name, "run-t1")
+    saves = os.path.join(run_dir, "saves")
+    return LoaderPaths(
+        loader=name,
+        run_dir=run_dir,
+        port_file=os.path.join(run_dir, "agent-rpc.port"),
+        results=os.path.join(run_dir, "testkit-results.jsonl"),
+        saves=saves,
+        world_dir=os.path.join(saves, WORLD_NAME),
+        template_dir=os.path.join(TESTKIT_DIR, f".t1-world-template-{name}"),
+        run_task=f":{name}:runTestkitClient",
+        endpoint_file=os.path.join(run_dir, "testkit-endpoint.json"),
+        default_expect=os.path.join("scripts", "testkit", f"expected-scenes-{name}.txt"),
+    )
+
+
+def _install_loader(name):
+    """Install ``name``'s LoaderPaths as module state so the orchestration functions
+    (which reference these paths/task as module globals) target the right loader's
+    run-t1 tree. Returns the LoaderPaths (its ``.loader`` field is the endpoint loader)."""
+    global LOADER, RUN_DIR, PORT_FILE, RESULTS, SAVES, WORLD_DIR, TEMPLATE_DIR
+    global RUN_TASK, ENDPOINT_FILE, DEFAULT_EXPECT
+    lp = resolve_loader(name)
+    LOADER = lp
+    RUN_DIR = lp.run_dir
+    PORT_FILE = lp.port_file
+    RESULTS = lp.results
+    SAVES = lp.saves
+    WORLD_DIR = lp.world_dir
+    TEMPLATE_DIR = lp.template_dir
+    RUN_TASK = lp.run_task
+    ENDPOINT_FILE = lp.endpoint_file
+    DEFAULT_EXPECT = lp.default_expect
+    return lp
+
+
+# Default module state = fabric, so import-time users (self-test, argparse help) and the
+# default --loader path resolve without an explicit install. main()/run() re-install the
+# actual --loader before any live work.
+_install_loader("fabric")
 
 
 # --------------------------------------------------------- pure decisions ----
@@ -296,8 +353,8 @@ async def run_session(wall, hold, hold_pid=None):
             # TESTKIT_ENDPOINT descriptor (schema v1) for an out-of-process JUnit
             # consumer to discover this topology, and echo the export line the
             # human/CI driving t1.py needs to wire it into the JUnit run's env.
-            # loader is hardcoded "fabric" here — Task 4 generalizes via --loader.
-            write_endpoint(ENDPOINT_FILE, "fabric", port, hold_pid)
+            # loader carries the actual --loader (Task 4 generalization) via module state.
+            write_endpoint(ENDPOINT_FILE, LOADER.loader, port, hold_pid)
             print(f"export TESTKIT_ENDPOINT={ENDPOINT_FILE}")
             print(f"[t1] in-world '{WORLD_NAME}' — integrated server up, NO scenes "
                   "(autorun off for --hold); staying online for instrument_client --attach. "
@@ -354,7 +411,7 @@ def archive_template():
 
 
 def launch_client(env, wall, autorun):
-    """Launch :fabric:runTestkitClient. --no-daemon so the forked game JVM inherits this
+    """Launch RUN_TASK (:<loader>:runTestkitClient). --no-daemon so the forked game JVM inherits this
     launcher's environment (a reused daemon would carry no DISPLAY → GLFW init fails).
     autorun=False passes -Pt1Autorun=false to mint a pristine (scene-free) template."""
     os.makedirs(RUN_DIR, exist_ok=True)
@@ -493,6 +550,32 @@ def self_test():
         ("write_endpoint: full schema key set + value/type fidelity", _check_write_endpoint()),
         ("write_endpoint: atomic overwrite leaves no .tmp, second call wins",
          _check_write_endpoint_overwrite()),
+        ("resolve_loader fabric task", resolve_loader("fabric").run_task
+         == ":fabric:runTestkitClient"),
+        ("resolve_loader neoforge task", resolve_loader("neoforge").run_task
+         == ":neoforge:runTestkitClient"),
+        ("resolve_loader fabric run-dir under fabric/",
+         resolve_loader("fabric").run_dir == os.path.join(REPO_ROOT, "fabric", "run-t1")),
+        ("resolve_loader neoforge run-dir under neoforge/",
+         resolve_loader("neoforge").run_dir == os.path.join(REPO_ROOT, "neoforge", "run-t1")),
+        ("resolve_loader neoforge port/results/saves/world derive from run-dir",
+         _check_loader_paths_derive("neoforge")),
+        ("resolve_loader templates are per-loader (distinct + suffixed)",
+         resolve_loader("fabric").template_dir != resolve_loader("neoforge").template_dir
+         and resolve_loader("neoforge").template_dir.endswith(".t1-world-template-neoforge")),
+        ("resolve_loader default-expect per loader",
+         resolve_loader("neoforge").default_expect
+         == os.path.join("scripts", "testkit", "expected-scenes-neoforge.txt")),
+        ("resolve_loader endpoint file under run-dir",
+         resolve_loader("neoforge").endpoint_file
+         == os.path.join(REPO_ROOT, "neoforge", "run-t1", "testkit-endpoint.json")),
+        ("_install_loader mutates module state to neoforge", _check_install_loader()),
+        ("parse_args default loader fabric", _parse(["--self-test"]).loader == "fabric"),
+        ("parse_args --loader neoforge", _parse(["--loader", "neoforge"]).loader == "neoforge"),
+        ("parse_args --loader neoforge resolves neoforge expect",
+         _parse(["--loader", "neoforge"]).expected == _expected_from_loader("neoforge")),
+        ("parse_args rejects unknown loader (argparse choices)",
+         _raises_systemexit(lambda: _parse(["--loader", "quilt"]))),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
@@ -505,6 +588,20 @@ def _raises(fn):
         fn()
         return False
     except Exception:  # noqa: BLE001
+        return True
+
+
+def _raises_systemexit(fn):
+    """argparse rejects an invalid choice via ap.error → sys.exit → SystemExit, which is a
+    BaseException (NOT caught by _raises' `except Exception`). Suppress argparse's stderr
+    usage dump so the self-test output stays clean."""
+    import contextlib
+    import io
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            fn()
+        return False
+    except SystemExit:
         return True
 
 
@@ -576,6 +673,38 @@ def _check_write_endpoint_overwrite():
         shutil.rmtree(d)
 
 
+def _check_loader_paths_derive(name):
+    lp = resolve_loader(name)
+    return (
+        lp.saves == os.path.join(lp.run_dir, "saves")
+        and lp.world_dir == os.path.join(lp.run_dir, "saves", WORLD_NAME)
+        and lp.port_file == os.path.join(lp.run_dir, "agent-rpc.port")
+        and lp.results == os.path.join(lp.run_dir, "testkit-results.jsonl")
+    )
+
+
+def _check_install_loader():
+    """_install_loader must swap the module globals wholesale, then restore fabric so the
+    rest of self-test (which assumes fabric defaults) stays unaffected."""
+    try:
+        _install_loader("neoforge")
+        ok = (
+            RUN_TASK == ":neoforge:runTestkitClient"
+            and RUN_DIR.endswith(os.path.join("neoforge", "run-t1"))
+            and LOADER.loader == "neoforge"
+            and TEMPLATE_DIR.endswith(".t1-world-template-neoforge")
+            and DEFAULT_EXPECT.endswith("expected-scenes-neoforge.txt")
+        )
+    finally:
+        _install_loader("fabric")
+    return ok
+
+
+def _expected_from_loader(name):
+    path = os.path.join(REPO_ROOT, resolve_loader(name).default_expect)
+    return sorted(set(load_expect_file(path)))
+
+
 def _expect_fixture():
     import tempfile
     f = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False)
@@ -607,10 +736,13 @@ _DEAD = [_SUITE, _sc("a", "PASS"), _sc("cf", "PASS"), _sc("ct", "TIMEOUT"),
 
 # ---------------------------------------------------------------- argparse ----
 def _parse(argv):
-    ap = argparse.ArgumentParser(description="mc-testkit T1 orchestrator (fabric client under Xvfb)")
+    ap = argparse.ArgumentParser(description="mc-testkit T1 orchestrator (client under Xvfb)")
+    ap.add_argument("--loader", choices=LOADERS, default="fabric",
+                    help="target loader (default fabric): selects <loader>/run-t1, the "
+                         ":<loader>:runTestkitClient task, and expected-scenes-<loader>.txt")
     ap.add_argument("--wall", type=int, default=900, help="wall-clock cap in seconds")
-    ap.add_argument("--expect-file", default=DEFAULT_EXPECT,
-                    help="expected-scene manifest (default expected-scenes-fabric.txt)")
+    ap.add_argument("--expect-file", default=None,
+                    help="expected-scene manifest (default expected-scenes-<loader>.txt)")
     ap.add_argument("--display", type=int, default=None,
                     help="force an Xvfb display number (default: probe free)")
     ap.add_argument("--hold", action="store_true",
@@ -620,8 +752,9 @@ def _parse(argv):
                     help="do not delete the saves/TestkitT1 copy on exit (debug)")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args(argv)
+    lp = resolve_loader(args.loader)
     if not args.self_test:
-        path = args.expect_file
+        path = args.expect_file or lp.default_expect
         if not os.path.isabs(path):
             path = os.path.join(REPO_ROOT, path)
         if not os.path.exists(path):
@@ -636,6 +769,8 @@ def main():
     args = _parse(sys.argv[1:])
     if args.self_test:
         sys.exit(self_test())
+    _install_loader(args.loader)
+    print(f"[t1] loader={args.loader}  task={RUN_TASK}  run-dir={RUN_DIR}")
     code, _elapsed, _archived = run(args)
     sys.exit(code)
 
