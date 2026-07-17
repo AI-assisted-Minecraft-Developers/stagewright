@@ -139,6 +139,12 @@ time (throws on violation):
 - `mc.test.*` — granted to the testkit runtime. `mc.test.yaml` is a
   grandfathered driver-layer harness verb.
 - `<modid>.*` — everything third-party.
+- **Hijack guard**: driver-owned names (the built-in curated + hidden catalog,
+  e.g. `mc.test.yaml`) are rejected by `registerVerb` even when the name falls
+  inside a granted namespace — a third party cannot shadow a driver verb through
+  the paired entry. Within the third-party/extra space, last-wins applies
+  (same-classpath trust boundary; two mods colliding on one `<modid>.<verb>` is
+  not arbitrated).
 
 `mc.test.reset` is the first consumer of this SPI: a hidden (RPC-only, absent
 from MCP `tools/list`) client-entry reset for testkit client-pool reuse — it
