@@ -80,6 +80,11 @@ public final class TestkitHarness {
         Set<Integer> taken = new HashSet<>();
         for (Scene s : scenes) {                       // pass 1: explicit pins
             if (s.originSlot() >= 0) {
+                if (s.originSlot() < 1024) {
+                    throw new IllegalStateException("explicit origin slot " + s.originSlot()
+                            + " below floor 1024 (scene " + s.name()
+                            + ") — low pins displace auto slots, defeating pinning");
+                }
                 if (!taken.add(s.originSlot())) {
                     throw new IllegalStateException("origin slot collision: " + s.originSlot()
                             + " (scene " + s.name() + ")");
