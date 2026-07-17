@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """mc-testkit T1 orchestrator (contract v0) — client topology under Xvfb.
 
-Runs the 9 ad.* scenes on an INTEGRATED server (client-hosted world) for the
-first time, proving the mc-testkit harness topology generalizes from the
-dedicated dogfood server (t0.py) to a real Fabric client. Flow:
+Runs the 9 ad.* scenes on an INTEGRATED server (client-hosted world), proving
+the mc-testkit harness topology generalizes from the dedicated dogfood server
+(t0.py) to a real game client on EITHER loader (--loader {fabric,neoforge},
+default fabric; all loader-specific paths/tasks resolve via LoaderPaths). Flow:
 
   1. self-manage an Xvfb on a probed-free DISPLAY (never hardcode :99 — the live
      dev client may own it), tracked by PID, killed by PID on exit
-  2. pre-create fabric/run-t1/saves and, if a cached world template exists, copy
-     it in BEFORE launch so the world list sees it
-  3. launch :fabric:runTestkitClient (a CLIENT JVM, -Dtestkit.autorun=true) with
+  2. pre-create <loader>/run-t1/saves and, if a cached per-loader world template
+     exists, copy it in BEFORE launch so the world list sees it
+  3. launch :<loader>:runTestkitClient (a CLIENT JVM, -Dtestkit.autorun=true) with
      DISPLAY in its environment; foreground bounded polling for the port file
   4. drive title → singleplayer → world (guidrive, RPC widget clicks, no WM) —
      reuse the template world, or GUI-create it once and archive it as the template
