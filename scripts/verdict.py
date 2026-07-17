@@ -89,7 +89,12 @@ def parse(path):
     GREEN: a dropped footer line fails the "no done footer" check, a dropped
     scene/check record surfaces as SWALLOWED, and a dropped header line fails
     the "no suite header" ENV check. There is no escape path to GREEN through
-    a truncated/corrupted results file.
+    a truncated/corrupted results file. Qualifier: for a third-party harness
+    producing a legitimate v0 footer without a `scenes` field, the compound
+    edge case of a dropped-bad-line PLUS a duplicate record could in principle
+    lose both the DUPLICATE and TRUNCATED signals at once — this repo's
+    harness has written `scenes` unconditionally since 936f4f2, so that edge
+    case does not apply here.
     """
     records = []
     with open(path, encoding="utf-8") as f:

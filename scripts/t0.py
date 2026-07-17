@@ -170,6 +170,10 @@ def self_test():
                 _scene("ct", "TIMEOUT"), F_DONE])[0] == 0),
         ("parse drops undecodable line without raising",
          _check_parse_bad_line()),
+        ("load_expect_file parses comments/blank/comma lines",
+         _check_load_expect_file()),
+        ("--expect-file union with --expect-scene dedups overlap",
+         _check_expect_union_dedup()),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
@@ -189,6 +193,45 @@ def _check_parse_bad_line():
         os.remove(path)
 
 
+def load_expect_file(path):
+    names = []
+    with open(path) as f:
+        for line in f:
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            names.extend(s.strip() for s in line.split(",") if s.strip())
+    return names
+
+
+def _check_load_expect_file():
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        f.write("# comment line\n")
+        f.write("\n")
+        f.write("ad.foo\n")
+        f.write("ad.bar, ad.baz  # trailing comment\n")
+        f.write("   \n")
+        path = f.name
+    try:
+        return load_expect_file(path) == ["ad.foo", "ad.bar", "ad.baz"]
+    finally:
+        os.remove(path)
+
+
+def _check_expect_union_dedup():
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        f.write("ad.foo\n")
+        f.write("ad.bar\n")
+        path = f.name
+    try:
+        from_file = load_expect_file(path)
+        from_scene = ["ad.bar", "ad.qux"]
+        union = sorted(set(from_file) | set(from_scene))
+        return union == ["ad.bar", "ad.foo", "ad.qux"]
+    finally:
+        os.remove(path)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loader", choices=["neoforge", "fabric"])
@@ -200,6 +243,8 @@ def main():
                     help="results JSONL path (default mc-testkit/<loader>/run-testkit/testkit-results.jsonl)")
     ap.add_argument("--expect-scene", default=None,
                     help="comma-separated scene names that MUST appear in registered[] (RED if absent)")
+    ap.add_argument("--expect-file", default=None,
+                    help="file of expected scene names (one per line, '#' comments, commas ok); union with --expect-scene")
     args = ap.parse_args()
     if args.self_test:
         sys.exit(self_test())
@@ -210,12 +255,26 @@ def main():
         args.results = os.path.join(REPO_ROOT, args.results)
     results_path = args.results or default_results(args.loader)
     task = args.run_task or f":testkit-{args.loader}:runTestkitServer"
+
+    from_scene = None
     if args.expect_scene is not None:
-        expected = [s.strip() for s in args.expect_scene.split(",") if s.strip()]
-        if not expected:
-            ap.error("--expect-scene given but contains no scene names")
-    else:
+        from_scene = [s.strip() for s in args.expect_scene.split(",") if s.strip()]
+
+    from_file = None
+    if args.expect_file is not None:
+        expect_file_path = args.expect_file
+        if not os.path.isabs(expect_file_path):
+            expect_file_path = os.path.join(REPO_ROOT, expect_file_path)
+        if not os.path.exists(expect_file_path):
+            ap.error(f"--expect-file not found: {expect_file_path}")
+        from_file = load_expect_file(expect_file_path)
+
+    if from_scene is None and from_file is None:
         expected = None
+    else:
+        expected = sorted(set(from_scene or []) | set(from_file or []))
+        if not expected:
+            ap.error("expectation source given but contains no scene names")
 
     sweep()
     results = provision(results_path)
