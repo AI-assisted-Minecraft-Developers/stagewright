@@ -28,6 +28,7 @@ Exit codes (T1 semantics):
 import argparse
 import asyncio
 import glob
+import json
 import os
 import shutil
 import signal
@@ -88,16 +89,6 @@ def template_reuse(template_dir):
 
 
 # ------------------------------------------------------------ process mgmt ----
-def pid_alive(pid):
-    try:
-        os.kill(pid, 0)
-        return True
-    except (ProcessLookupError, PermissionError):
-        return pid is not None  # PermissionError means it exists but not ours
-    except TypeError:
-        return False
-
-
 def kill_pid(pid, name, grace=15):
     """SIGTERM then, after ``grace`` s, SIGKILL a single PID. No-op if pid is None."""
     if pid is None:
@@ -200,15 +191,27 @@ async def drive_into_world_selfheal(rpc, reuse):
 
 # ---------------------------------------------------------------- harvest -----
 def harvest_footer(results, deadline, client_proc):
-    """Poll ``results`` for the done footer until deadline or the client dies.
-    Returns True if the footer was observed (mirrors t0.launch's footer detection)."""
+    """Poll ``results`` for the done footer until deadline or the client dies. Each
+    candidate line is parsed as JSON and checked for {"type": "done"} — mirroring how
+    instrument_client._outcomes parses records — rather than a raw substring match, which
+    was coupled to the Java harness's exact compact-JSON key/value spacing. Unparsable
+    lines are skipped (same fallback as a mid-flush partial line always had). Returns True
+    if the footer was observed."""
     while time.monotonic() < deadline:
         if os.path.exists(results):
             with open(results, encoding="utf-8", errors="replace") as f:
-                if '"type":"done"' in f.read():
-                    print("[t1] done footer observed — reaping the run")
-                    time.sleep(3)  # grace for final flush
-                    return True
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(rec, dict) and rec.get("type") == "done":
+                        print("[t1] done footer observed — reaping the run")
+                        time.sleep(3)  # grace for final flush
+                        return True
         if client_proc is not None and client_proc.poll() is not None:
             print("[t1] gradle client process exited before footer")
             break

@@ -40,7 +40,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from verdict import parse, judge          # noqa: E402 — REUSED judging, not forked
+from verdict import judge                  # noqa: E402 — REUSED judging, not forked
 import instrument as inst                  # noqa: E402 — REUSE Ws / Ctx / ContractFailure
 import guidrive as gd                      # noqa: E402 — REUSE connect / discover_port / Rpc
 import t1                                  # noqa: E402 — REUSE the T1 shell (launch/drive/teardown)
@@ -327,7 +327,6 @@ def _connect_checks(port):
     reused verbatim. Separate from guidrive's async drive socket; same /rpc port."""
     ws = Ws("127.0.0.1", port)
     ctx = Ctx(ws)
-    ctx.run_dir = RUN_DIR
     return ctx
 
 
@@ -459,14 +458,39 @@ def render_drift_table(round_outcomes, drift):
     return out
 
 
-def combine_round_verdict(round_codes, round_outcomes):
+def transition_failure_code(any_round_ran, fresh_process):
+    """Pure: classify an exception raised during a BETWEEN-ROUND transition (reuse
+    quit-to-title/re-enter, or a --fresh-process discard-restart).
+
+    A --fresh-process transition failure is ALWAYS environment — a fresh client boot has
+    no residue to blame. A reuse-path transition failure BEFORE any round has completed
+    the check suite is also environment (first-entry-shaped: nothing has yet proven the
+    client/world combination workable). A reuse-path transition failure AFTER at least one
+    round has cleanly completed the check suite is reuse-residue-suspect: the client
+    finished a round but can no longer re-enter — exactly the shape a broken
+    mc.test.reset / reuse path would produce — so classify BLOCKED (4), not ENV (3). A
+    genuine environment cause reproduces in single-round mode, which still reports ENV."""
+    if fresh_process or not any_round_ran:
+        return 3
+    return 4
+
+
+def combine_round_verdict(round_codes, round_outcomes, transition_failures=None):
     """Pure: fold per-round judge codes + cross-round consistency into ONE verdict.
 
     Precedence: DEAD (any round's canary mis-judged ⇒ whole run void, contract v0 §5) >
     ENV (a round could not run) > BLOCKED (per-check outcomes drift between rounds — the
-    reset-completeness gap this task exists to surface; the fix is in mc.test.reset, NOT
-    in a check, so do NOT loosen — report BLOCKED) > RED (a check fails CONSISTENTLY every
-    round: a real product gap, characterized ×N) > GREEN (all rounds GREEN AND identical).
+    reset-completeness gap this task exists to surface — OR a reuse-transition exception
+    classified BLOCKED per transition_failure_code (round_codes contains a 4); the fix is
+    in mc.test.reset, NOT in a check, so do NOT loosen — report BLOCKED) > RED (a check
+    fails CONSISTENTLY every round: a real product gap, characterized ×N) > GREEN (all
+    rounds GREEN AND identical).
+
+    transition_failures: optional list of human-readable "round N: <exception>" strings —
+    reuse-transition exceptions classified BLOCKED because they occurred AFTER at least one
+    round cleanly completed the check suite (reuse-residue-suspect, not environment; see
+    transition_failure_code). Appended verbatim to the BLOCKED report so the underlying
+    exception is never swallowed behind the generic drift message.
     Returns (exit_code, report_lines)."""
     n = len(round_codes)
     if any(c == 2 for c in round_codes):
@@ -474,10 +498,16 @@ def combine_round_verdict(round_codes, round_outcomes):
     if any(c == 3 for c in round_codes):
         return 3, ["ENV: a round could not run (see per-round report)"]
     drift = round_drift(round_outcomes)
-    if drift:
-        return 4, ([f"BLOCKED: inter-round outcome drift across {n} rounds — reset "
-                    "completeness gap (residue survived a reset). Fix mc.test.reset, do "
-                    "NOT loosen a check."] + render_drift_table(round_outcomes, drift))
+    if drift or any(c == 4 for c in round_codes):
+        report = [f"BLOCKED: inter-round outcome drift across {n} rounds — reset "
+                  "completeness gap (residue survived a reset). Fix mc.test.reset, do "
+                  "NOT loosen a check."]
+        if drift:
+            report += render_drift_table(round_outcomes, drift)
+        if transition_failures:
+            report.append("  reuse-transition exceptions (reuse-residue-suspect):")
+            report += [f"    {m}" for m in transition_failures]
+        return 4, report
     if any(c == 1 for c in round_codes):
         return 1, [f"RED: a check failed CONSISTENTLY across all {n} rounds "
                    "(characterized ×N — a real gap, not drift)"]
@@ -500,6 +530,8 @@ def run_suite(attach, wall, rounds=1, fresh_process=False):
     round_secs = []    # per-round wall-clock (check phase; reuse rounds add the re-enter drive)
     boot_secs = 0.0    # cold client boot cost (gradle JVM + Xvfb + drive into world) — the
                        # expensive part the pool reuse amortizes away; the reuse-vs-cold datum
+    any_round_ran = False       # has the check suite completed at least once? (transition_failure_code gate)
+    transition_failures = []    # human-readable reuse-transition exceptions classified BLOCKED
     try:
         if attach:
             port = gd.read_port(Path(PORT_FILE))
@@ -546,8 +578,18 @@ def run_suite(attach, wall, rounds=1, fresh_process=False):
                     try:
                         asyncio.run(_quit_and_reenter(port))
                     except Exception as e:  # noqa: BLE001
-                        print(f"[instrument-client] round {rnd + 1} reuse-drive ENV: {e}")
-                        round_lines.append([]); round_codes.append(3); round_secs.append(0.0)
+                        tcode = transition_failure_code(any_round_ran, fresh_process=False)
+                        detail = f"round {rnd + 1}: {type(e).__name__}: {e}"
+                        if tcode == 4:
+                            transition_failures.append(detail)
+                            print(f"[instrument-client] round {rnd + 1} reuse-transition "
+                                  f"BLOCKED (client completed a clean round but could not "
+                                  f"re-enter — reuse-residue-suspect, NOT environment; a "
+                                  f"genuine environment cause would reproduce in single-round "
+                                  f"mode, which still reports ENV): {e}")
+                        else:
+                            print(f"[instrument-client] round {rnd + 1} reuse-drive ENV: {e}")
+                        round_lines.append([]); round_codes.append(tcode); round_secs.append(0.0)
                         continue
 
             try:
@@ -562,6 +604,8 @@ def run_suite(attach, wall, rounds=1, fresh_process=False):
                 print(f"[instrument-client] round {rnd + 1} pool reset[] = {manifest}")
 
             lines = run_checks(ctx)
+            any_round_ran = True  # check suite completed at least once — a later reuse-transition
+                                   # exception is now reuse-residue-suspect, not first-entry ENV
             secs = time.time() - t_round
             code, report = judge([json.loads(ln) for ln in lines], record_type="check")
             for r in report:
@@ -603,7 +647,7 @@ def run_suite(attach, wall, rounds=1, fresh_process=False):
         reuse_avg = sum(round_secs[1:]) / len(round_secs[1:])
         print(f"[instrument-client]   reuse benefit: cold boot {boot_secs:.1f}s vs "
               f"reuse round ~{reuse_avg:.1f}s (≈{boot_secs / max(reuse_avg, 0.1):.0f}× cheaper per extra round)")
-    code, report = combine_round_verdict(round_codes, round_outcomes)
+    code, report = combine_round_verdict(round_codes, round_outcomes, transition_failures)
     for r in report:
         print(f"[instrument-client] {r}")
     print(f"[instrument-client] REUSE VERDICT: {VERDICT_LABELS[code]}")
@@ -668,6 +712,19 @@ def self_test():
          _outcomes([json.dumps({"type": "suite"}),
                     json.dumps({"type": "check", "name": "x", "outcome": "PASS"}),
                     json.dumps({"type": "done", "scenes": 1})]) == {"x": "PASS"}),
+        # ---- reuse-transition failure classification (final-review Fix 1) ----
+        ("transition_failure_code: reuse, before any round ran -> ENV(3) (first-entry-shaped)",
+         transition_failure_code(any_round_ran=False, fresh_process=False) == 3),
+        ("transition_failure_code: reuse, after a clean round -> BLOCKED(4) (reuse-residue-suspect)",
+         transition_failure_code(any_round_ran=True, fresh_process=False) == 4),
+        ("transition_failure_code: --fresh-process always ENV(3), even after a clean round",
+         transition_failure_code(any_round_ran=True, fresh_process=True) == 3
+         and transition_failure_code(any_round_ran=False, fresh_process=True) == 3),
+        ("combine: reuse-transition BLOCKED after a clean round carries exception detail",
+         (lambda cr: cr[0] == 4 and any("boom-tcp-reset" in ln for ln in cr[1]))(
+             combine_round_verdict([0, 4],
+                                   [{"a": "PASS"}, {}],
+                                   transition_failures=["round 2: ConnectionError: boom-tcp-reset"]))),
     ]
     failed = [n for n, ok in checks if not ok]
     for n, ok in checks:
@@ -700,6 +757,9 @@ def main():
         ap.error("--rounds must be >= 1")
     if args.fresh_process and args.attach:
         ap.error("--fresh-process needs a self-launched client to kill/reboot; not valid with --attach")
+    if args.fresh_process and args.rounds < 2:
+        ap.error("--fresh-process only applies to the transition BETWEEN rounds (round 2+); "
+                 "it is silently inert at the default --rounds 1. Pass --rounds N with N >= 2.")
     sys.exit(run_suite(args.attach, args.wall, rounds=args.rounds, fresh_process=args.fresh_process))
 
 
