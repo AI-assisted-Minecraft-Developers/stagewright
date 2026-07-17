@@ -210,7 +210,12 @@ def main():
         args.results = os.path.join(REPO_ROOT, args.results)
     results_path = args.results or default_results(args.loader)
     task = args.run_task or f":testkit-{args.loader}:runTestkitServer"
-    expected = [s.strip() for s in args.expect_scene.split(",")] if args.expect_scene else None
+    if args.expect_scene is not None:
+        expected = [s.strip() for s in args.expect_scene.split(",") if s.strip()]
+        if not expected:
+            ap.error("--expect-scene given but contains no scene names")
+    else:
+        expected = None
 
     sweep()
     results = provision(results_path)
