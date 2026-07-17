@@ -210,6 +210,12 @@ throws `TestkitAttachException` carrying the exact operator hint
 so a developer who runs a UI test with no topology up gets the one command that
 brings one up, never a silent hang or a mystery connection refusal.
 
+**Attach latency budget.** With an endpoint present, `attach()` is bounded at
+worst-case **~10s** — a 5s websocket connect window plus a 5s `mc.system.version`
+liveness probe — before it fails loudly. The far larger cost sits BEFORE attach:
+`t1.py --hold` cold-boots the client in ~28-30s prior to the endpoint file
+landing; budget for that in any wrapper that starts the topology itself.
+
 **Serial lease.** One `--hold` topology serves **one** attach client. The
 extension attaches a single shared `Testkit` **singleton** once per JVM (guarded
 by a lock; a failed attach is re-thrown as a LOUD container-level error on every
@@ -255,7 +261,7 @@ loader with no code change.
 `mc.bot.useItem` 是模块纪律禁依赖的行为面 verb。**inventory / chat 屏已被覆盖**
 （键盘可开），缺的只是**世界右键**这一维——真修 = 一个 instrument 级的 world-use
 verb（`task#90` 双 verb 之一，与持键回读 verb 同批），归 controller 择期。完整证据见
-`../../.superpowers/sdd/task-3-report.md`。
+`../.superpowers/sdd/task-3-report.md`。
 
 ## Verbs & namespace policy (P2a)
 
