@@ -427,6 +427,43 @@ def check_test_reset_schema_paired(ctx):
             f"before client-only), got: {error!r}")
 
 
+def check_test_run_paired(ctx):
+    # P3a check ⑤ — mc.test.run pairing metaproof (runs on the DOGFOOD/autorun server, the only
+    # topology where the testkit runtime armed and registered the verb through its own
+    # TestkitVerbHook SPI). Two assertions, mirroring the mc.test.reset precedent (checks ③/④):
+    #   (a) HIDDEN: mc.test.run must NOT appear in the MCP tools/list catalog — it is a dev/test
+    #       harness verb, reachable over RPC only, exactly like mc.test.reset / mc.test.yaml.
+    #   (b) SCHEMA-PAIRED: a bogus param key must be rejected by the VALIDATOR (unexpected-key)
+    #       BEFORE the handler ever triggers a run — proving the schema was registered atomically
+    #       with the route (registerVerb pairing) AND is closed AND validation is uniform. If the
+    #       schema-less-dispatch hole regressed, a schema-less route would skip validation and the
+    #       bogus key would fall through to the handler instead.
+    tools = _tools_list(ctx)
+    if "mc.test.run" in tools:
+        raise ContractFailure("mc.test.run leaked into tools/list — the on-demand trigger must stay hidden")
+    result, error = ctx.call_raw("mc.test.run", {"nope": True})
+    if error is None:
+        raise ContractFailure(f"unknown mc.test.run key accepted: {result!r}")
+    if "nope" not in error or "unexpected key" not in error:
+        raise ContractFailure(
+            f"expected the validator's unexpected-key error (schema present + closed + validated "
+            f"before the handler), got: {error!r}")
+
+
+def check_test_run_idempotent(ctx):
+    # P3a check ⑥ — mc.test.run idempotency闩 (runs on the DOGFOOD/autorun server, where the suite
+    # already armed at SERVER_STARTED). A valid (empty) mc.test.run must NOT silently re-run the
+    # suite: it must fail LOUDLY with an "already ..." error envelope. Assert the error, never a
+    # re-run (a second {accepted:true} here would mean the guard is dead and results could be
+    # clobbered mid-run).
+    result, error = ctx.call_raw("mc.test.run", {})
+    if error is None:
+        raise ContractFailure(
+            f"mc.test.run re-accepted on an already-armed suite (idempotency guard dead): {result!r}")
+    if "already" not in error:
+        raise ContractFailure(f"expected an 'already ran/running' idempotency error, got: {error!r}")
+
+
 def canary_must_fail(ctx):
     raise ContractFailure("canary: this check must be reported as FAIL")
 
@@ -456,6 +493,18 @@ CHECKS = [
     ("route.testResetSchemaPaired", "NONE", check_test_reset_schema_paired),
     ("canary.mustFail", "MUST_FAIL", canary_must_fail),
     ("canary.mustSwallow", "MUST_SWALLOW", None),  # registered, never executed
+]
+
+# P3a mc.test.run verb-contract checks. These run against the DOGFOOD server, NOT the plain
+# contract server: mc.test.run is registered by the testkit runtime's own TestkitVerbHook SPI,
+# which only fires where TestkitCommon.onServerStarted armed the harness (a testkit runtime =
+# an autorun-armed server). The plain contract server never arms the harness, so the verb is
+# (correctly) absent there — pinning its contract requires the armed topology. The dogfood suite
+# runs in the background; these two checks touch only the verb (never a scene outcome), so they
+# stay independent of the testkit assertion stack (spec §4.2) even while sharing its server.
+DOGFOOD_CHECKS = [
+    ("route.testRunPaired", "NONE", check_test_run_paired),
+    ("route.testRunIdempotent", "NONE", check_test_run_idempotent),
 ]
 
 
@@ -549,33 +598,141 @@ def stop(ctx):
     sweep()
 
 
+# ---------- dogfood (autorun) server — for the mc.test.run verb-contract checks ----------
+# mc.test.run is registered only where the testkit runtime armed the harness (TestkitVerbHook SPI
+# fires from TestkitCommon.onServerStarted). The plain contract server never arms it, so the two
+# route.testRun* checks run against the dogfood server (:<loader>:runDogfoodServer, -Dtestkit.autorun
+# hard-true in its run config). We connect early — the harness arms at SERVER_STARTED (so mc.test.run
+# already errors idempotently) and the autorun suite will eventually halt the server; the two checks
+# are instant RPC round-trips done long before the ~minute-long suite finishes.
+DOGFOOD_PORT = 25598
+
+
+def dogfood_dir(loader):
+    return os.path.join(ROOT, MODULE[loader], "run-dogfood")
+
+
+def provision_dogfood(loader):
+    rd = dogfood_dir(loader)
+    os.makedirs(rd, exist_ok=True)
+    with open(os.path.join(rd, "eula.txt"), "w") as f:
+        f.write("eula=true\n")
+    with open(os.path.join(rd, "server.properties"), "w") as f:
+        f.write("\n".join([
+            f"server-port={DOGFOOD_PORT}", "online-mode=false", "level-type=minecraft:flat",
+            "sync-chunk-writes=false", "spawn-protection=0", "motd=instrument-dogfood",
+        ]) + "\n")
+    subprocess.run(["rm", "-rf", os.path.join(rd, "world")], check=True)
+    for leftover in ("agent-rpc.port", "agent-mcp.port", "testkit-results.jsonl"):
+        p = os.path.join(rd, leftover)
+        if os.path.exists(p):
+            os.remove(p)
+
+
+def sweep_dogfood():
+    out = subprocess.run(["ps", "ax", "-o", "pid=,args="], capture_output=True, text=True).stdout
+    for line in out.splitlines():
+        if "testkit.autorun" in line and "java" in line and "grep" not in line:
+            pid = line.strip().split()[0]
+            print(f"[instrument] killing leftover dogfood JVM pid={pid}")
+            subprocess.run(["kill", "-9", pid], check=False)
+
+
+def launch_dogfood(loader, wall):
+    sweep_dogfood()
+    provision_dogfood(loader)
+    task = f":{MODULE[loader]}:runDogfoodServer"
+    print(f"[instrument] launching dogfood (autorun): ./gradlew {task} (wall={wall}s)")
+    proc = subprocess.Popen(["./gradlew", task], cwd=ROOT,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    pf = os.path.join(dogfood_dir(loader), "agent-rpc.port")
+    deadline = time.time() + wall
+    port = None
+    while time.time() < deadline:
+        if os.path.exists(pf):
+            try:
+                port = int(open(pf).read().strip())
+                break
+            except ValueError:
+                pass
+        time.sleep(2)
+    if port is None:
+        proc.kill()
+        sweep_dogfood()
+        return None
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        try:
+            ws = Ws("127.0.0.1", port)
+            ctx = Ctx(ws)
+            ctx.run_dir = dogfood_dir(loader)  # MCP tools/list reader resolves agent-mcp.port here
+            ctx.call("mc.observe.player")      # readiness: api attached (harness armed same tick)
+            return ctx
+        except Exception:
+            time.sleep(2)
+    sweep_dogfood()
+    return None
+
+
+def stop_dogfood(ctx):
+    try:
+        ctx.call_raw("mc.action.runCommand", {"cmd": "stop"})
+    except Exception:
+        pass
+    time.sleep(5)
+    sweep_dogfood()
+
+
 # ---------- run + judge ----------
+def _run_one(ctx, name, fn):
+    t0 = time.time()
+    try:
+        fn(ctx)
+        outcome, reason = "PASS", ""
+    except ContractFailure as e:
+        outcome, reason = "FAIL", str(e)
+    except Exception as e:  # transport/unexpected => ENV-grade, but record honestly
+        outcome, reason = "ENV_FAIL", f"{type(e).__name__}: {e}"
+    return {"type": "check", "name": name, "outcome": outcome,
+            "ticks": 0, "wallMs": int((time.time() - t0) * 1000), "reason": reason}
+
+
 def run_suite(loader, wall):
+    all_checks = CHECKS + DOGFOOD_CHECKS
+    registered = [{"name": n, "required": True, "canary": c} for n, c, _ in all_checks]
+    records = []
+
+    # ---- Phase 1: plain contract server (21 contract-face checks + 2 canaries) ----
     ctx = launch(loader, wall)
     if ctx is None:
-        print("[instrument] ENV: server/RPC never came up")
+        print("[instrument] ENV: contract server/RPC never came up")
         return 3
-    lines = [json.dumps({"type": "suite", "loader": loader, "face": "instrument",
-                         "registered": [{"name": n, "required": True, "canary": c}
-                                        for n, c, _ in CHECKS]})]
     try:
         for name, canary, fn in CHECKS:
             if fn is None:
                 continue  # MUST_SWALLOW: registered, deliberately not executed
-            t0 = time.time()
-            try:
-                fn(ctx)
-                outcome, reason = "PASS", ""
-            except ContractFailure as e:
-                outcome, reason = "FAIL", str(e)
-            except Exception as e:  # transport/unexpected => ENV-grade, but record honestly
-                outcome, reason = "ENV_FAIL", f"{type(e).__name__}: {e}"
-            lines.append(json.dumps({"type": "check", "name": name, "outcome": outcome,
-                                     "ticks": 0, "wallMs": int((time.time() - t0) * 1000),
-                                     "reason": reason}))
+            records.append(_run_one(ctx, name, fn))
     finally:
         stop(ctx)
-    lines.append(json.dumps({"type": "done", "scenes": sum(1 for _, c, f in CHECKS if f is not None)}))
+
+    # ---- Phase 2: dogfood (autorun) server — the mc.test.run verb contract ----
+    dctx = launch_dogfood(loader, wall)
+    if dctx is None:
+        print("[instrument] ENV: dogfood server never came up for mc.test.run checks")
+        for name, canary, fn in DOGFOOD_CHECKS:
+            records.append({"type": "check", "name": name, "outcome": "ENV_FAIL",
+                            "ticks": 0, "wallMs": 0, "reason": "dogfood server never came up"})
+    else:
+        try:
+            for name, canary, fn in DOGFOOD_CHECKS:
+                records.append(_run_one(dctx, name, fn))
+        finally:
+            stop_dogfood(dctx)
+
+    lines = [json.dumps({"type": "suite", "loader": loader, "face": "instrument",
+                         "registered": registered})]
+    lines += [json.dumps(r) for r in records]
+    lines.append(json.dumps({"type": "done", "scenes": len(records)}))
     results = os.path.join(run_dir(loader), "instrument-results.jsonl")
     with open(results, "w") as f:
         f.write("\n".join(lines) + "\n")
