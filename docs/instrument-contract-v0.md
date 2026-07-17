@@ -284,6 +284,14 @@ autoEat 原值；`reset.behavior` 由 reset 自身清 screen/chat）——检查
 - 漂移 → 打**逐轮差异表** + 报 **`BLOCKED`**。**不放宽检查、不标 optional、不重试到过**。
   残留 = reset 缺口 = 本 P2 风险册主险种；修在 `mc.test.reset`，不在检查——该裁决归控制方。
 - 退出码扩展：`0 GREEN / 1 RED / 2 DEAD / 3 ENV / 4 BLOCKED（轮间漂移）`。
+- **轮间过渡异常分类**（`transition_failure_code`，纯函数，有 self-test；final-review Fix 1）：
+  reuse 路径的过渡（quit-to-title → 重进同一份世界副本）若抛异常，且**发生在至少一轮
+  已跑完检查套件之后**，判 **`BLOCKED`（4）而非 `ENV`（3）**——干净跑完一轮后无法重进，
+  是 reuse-residue-suspect（复用残留嫌疑），不是环境问题；真环境因素会在单轮模式下
+  复现，单轮模式仍判 `ENV`。异常原文打进 BLOCKED 报告段，不隐没在通用漂移消息后面。
+  仍判 `ENV` 不变：**首轮之前**（自起/首次进世界失败，尚未证明客户端-世界组合可用）、
+  `--fresh-process`（弃用重启）路径的过渡失败（全新 boot 天然无残留可赖）、以及
+  check-phase 基础设施异常（RPC socket 连接失败，与轮间过渡是不同阶段）。
 
 **`--fresh-process` 降级（弃用重启）**
 
