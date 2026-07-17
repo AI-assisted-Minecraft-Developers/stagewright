@@ -166,3 +166,92 @@ schema 的结构化读回唯一诚实路径 = MCP `tools/list` HTTP 端点（`To
 `agent-mcp.port`。检查 18 即走此路。
 
 现场记录（五门验收完整输出）见 `.superpowers/sdd/task-4-report.md`。
+
+---
+
+## P2b 附录 — 客户端仪表契约（T1 面，`instrument_client.py`）
+
+落地 commit：本 Task（`instrument_client.py` 新增 + t1.py `--hold` 语义扩展 + 本附录）。
+
+运行器：`python3 scripts/testkit/instrument_client.py`（自起 T1 客户端）
+或 `--attach`（复用在线 `t1.py --hold` 客户端）。`--wall N` 自起上限（默认 900）。
+
+这是 `instrument.py`（专服面）的**客户端孪生**：验的是只有在「真客户端 +
+PlayerList 里有真玩家」时才存在的仪表面——即契约 v0「已知缺口」里明确留给 P2 的
+三条永久断言（#41/#45/#55），加上 P2a 附录欠下的 #280 live E2E、setting 已知键
+往返、`mc.test.reset` 行为验收。裸 RPC 直打 `AgentApi.route()`（MCP 层 stale
+schema 会静默丢键——#280 病史，验新键必走裸 RPC）。verdict 复用共享 `verdict.py`
+（`record_type="check"`），退出码同契约 v0：0 GREEN / 1 RED / 2 DEAD（金丝雀
+误判）/ 3 ENV。
+
+### T1 拓扑语义（`--hold` autorun 关键点）
+
+`instrument_client` 需要一个「在世界里、且 integrated server 活着」的客户端来打
+`/give` `/damage`。自起模式复用 t1.py 的壳（Xvfb / gradle `testkitClient` /
+模板世界生命周期 / GUI 进世界），但**以 `-Pt1Autorun=false` 启动**：不跑任何场景
+→ harness 永不 `halt()` integrated server → 世界保持在线可打。`--hold` 亦然：Task 1
+原 `--hold` 走 autorun ON（跑完场景后被 harness 断连到 `DisconnectedScreen`，对
+attach 无用），本 Task 把 `--hold` 语义改为 **autorun OFF**（进世界、零场景、
+server 常驻），`--attach` 才有一个活世界可打。检查阶段用 `instrument.py` 的同一
+`Ws`/`Ctx`（裸同步 socket，与 guidrive 的 async 驱动 socket 分开，同一 /rpc 端口）。
+
+### 创造模式 /damage 解（#55 现场记录）
+
+模板世界是创造模式 → 玩家对普通伤害免疫，`/damage @p 2`（generic）在创造玩家上
+是 no-op（`success:false`、无 hurt 事件）。`minecraft:out_of_world` 在
+`BYPASSES_INVULNERABILITY` 伤害类型 tag 内，故 `/damage @p 2 minecraft:out_of_world`
+能伤到创造玩家，**无需切 gamemode**（比 `/gamemode survival` + 还原更幂等）。
+之后 `/effect give @p instant_health` 回满血保持幂等。命令走 Brigadier 分支，
+断言 `success`（非 setblock 快速路径的 `ok`）。
+
+### 检查清单（7 + 2 金丝雀）
+
+| 检查名 | 断言什么 | 钉住哪条病历 |
+|---|---|---|
+| `t1.inWorld` | `mc.client.player` present + 有 pos，且 `mc.observe.player` present（真玩家在 integrated PlayerList 里）——attach 门 | #41/#45/#55 的前置：需要 PlayerList 里的真玩家 |
+| `obs.fullInventory` | `/item replace entity @p container.{9,20,35}` 填主背包三槽 → `observe.player.inventory` 精确报回三槽（slot/id/count），且有 slot≥9 | **永久断言 #41**——旧 verb 只报 9/36 槽（快捷栏），主背包三分之四不可见；server 权威 |
+| `obs.attackCooldown` | `observe.player.attack` 四字段齐全 + 空闲满值不变式（ready/cooldownTicks==0/strengthScale≥1/**fullCooldownTicks==5** 徒手），且**换 netherite 剑后 fullCooldownTicks 变大**（读的是所持武器属性，非常数） | **永久断言 #45**——近战冷却（CombatProcess 每次挥砍所依赖）对 agent 零暴露 |
+| `obs.damageSource` | `/damage @p 2 out_of_world` 后 `player.hurt` 事件带 `source`（真归因字符串）+ `lost>0`（非纯 HP 差分） | **永久断言 #55**——自挖坑摔落与被咬同 HP 差分，无归因则两者不可分 |
+| `route.settingUnknownKeyLive` | 裸 RPC `mc.bot.setting{definitelyNotAKnob:true}` 在**真客户端**上 → error 含 `unexpected key`+键名（validator 先于 client-only handler） | **#280 病族 live E2E**——P2a 附录欠账；封闭 schema 在真客户端上拒未知键 |
+| `route.settingKnownKeyLive` | `mc.bot.setting{autoEat}` 应用（`applied` 含 autoEat）+ 同调用 snapshot 与二次读回一致，**然后还原原值** | 封闭 schema 不误伤已知键；幂等（还原） |
+| `reset.behavior` | 打开背包 screen（E 键）+ 发聊天 → `mc.test.reset` → `reset[]` 含 `screen`/`keys`/`chat:N`，且**独立回读**验证 screen 关（`screen.info.hasScreen` false）+ chat 清（`chat.history.count==0`） | `mc.test.reset` 客户端池复用完整性——screen/chat 独立回读，keys 依 `reset[]` 清单（无 held-key 回读 verb，见下） |
+| 金丝雀 `canary.mustFail` | 必判 FAIL，否则 DEAD | 金丝雀条款（框架抓失败能力自证） |
+| 金丝雀 `canary.mustTimeout` | 必判 TIMEOUT，否则 DEAD | 金丝雀条款（TIMEOUT 与 PASS/FAIL 可区分自证） |
+
+### keys 回读缺口的诚实说明（`reset.behavior`）
+
+`mc.client.input.*` 全是 setter——没有读回「当前按下了哪些键」的 verb（已查
+`AgentApi.java` client 路由段）。故 `reset.behavior` 的 screen/chat 用**独立回读**
+（`screen.info`/`chat.history`）证实，keys 一项以 `mc.test.reset` 返回的 `reset[]`
+清单里的 `"keys"` token 为权威信号——这正是 `TestResetVerb` 设计暴露的面
+（javadoc：「reset[] 列出恰好改了什么，供 P2b 复用验收 diff」）。这不是静默缩水，
+是「用现有唯一面断言」。补一个 held-key 回读 verb 属独立小改，未来若需再议。
+
+### #45 断言面选择（诚实记录）
+
+`AttackSnap`（`common/.../bot/util/AttackSnap.java`）projects 四字段：
+`strengthScale`(0-1)/`ready`(≥1.0)/`cooldownTicks`/`fullCooldownTicks`。选**静态
+空闲不变式 + 武器依赖性**为断言面：（a）空闲满值 `ready==true, cooldownTicks==0,
+strengthScale≥1, fullCooldownTicks==5`（徒手攻速 4.0 → ceil(20/4)，是活属性读非
+硬编码常数）；（b）换 netherite 剑后 `fullCooldownTicks` 变大（证明读的是所持武器
+的 ATTACK_SPEED 属性——#45 的全部意义）。**故意不断言**「挥砍后 strengthScale
+掉」的动态：它与 RPC 往返延迟对 ~5-tick 徒手回充的竞态是不确定的，会破坏确定性
+门。静态不变式 + 武器依赖性是确定的永久断言。
+
+### 幂等 / 世界纪律
+
+每检查 staging 自清（`obs.fullInventory` 首尾 `/clear @p`；`obs.attackCooldown`
+还原 mainhand 为 air；`obs.damageSource` 回满血；`route.settingKnownKeyLive` 还原
+autoEat 原值；`reset.behavior` 由 reset 自身清 screen/chat）——检查顺序无关。自起
+模式每 run 用一份干净模板 COPY→跑→**删副本**，残留也随副本消失。自起 owns 客户端
+生命周期（PID 追踪 kill + 删世界副本，禁 pkill）；`--attach` 留用户的客户端在线。
+
+### 双跑确定性验收（本 Task）
+
+- 自起 run 1：`VERDICT: GREEN`，7 真检查全 PASS，2 金丝雀落点正确（mustFail→FAIL，
+  mustTimeout→TIMEOUT）。
+- 自起 run 2：`VERDICT: GREEN`，逐检查结果与 run 1 **逐字节相同**（仅 wallMs 抖动）。
+- 收尾核对：无遗留 t1 client JVM / 自起 Xvfb（:101 已 kill），live dev 客户端
+  :99/:97 存活，世界副本已删。
+
+现场记录（两跑完整输出 + 逐检查表）见 `.superpowers/sdd/task-2-report.md`。
