@@ -5,7 +5,7 @@ stack by design (spec §4.2): green here => testkit setup/asserts may trust
 the driver's instrument face. Verdict semantics mirror contract v0 via the
 shared verdict module (registered==executed reconciliation, canary
 mis-judgement => DEAD)."""
-import argparse, base64, json, os, socket, struct, subprocess, sys, time
+import argparse, base64, http.client, json, os, socket, struct, subprocess, sys, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from verdict import parse, judge
@@ -314,6 +314,119 @@ def check_wait_condition_value(ctx):
         raise ContractFailure(f"wait.condition value semantics broken: {r!r}")
 
 
+# ---------- MCP tools/list reader (P2a: schema readback for the closed-schema contract) ----------
+# The bare-RPC /rpc transport (AgentApi.route) does NOT expose the schema catalog — schemas are
+# advertised through the MCP HTTP endpoint's `tools/list` (the SAME typed Schema the route-layer
+# SchemaValidator enforces; ToolSchema.mcpTool -> Schemas.render, single source). The contract
+# server brings the MCP server up in AgentDriverCommon.ensureMcpUp (onServerStarting, alongside
+# RPC), on an ephemeral port written to `agent-mcp.port` in the runDir. mc.script.eval cannot read
+# the catalog either — this Rhino fork strips the Packages global, so JS cannot resolve ToolCatalog
+# by name (independent of the sandbox denylist). So the honest structural readback is a plain HTTP
+# POST tools/list, done here.
+def _mcp_port(ctx):
+    pf = os.path.join(ctx.run_dir, "agent-mcp.port")
+    # RPC + MCP both come up in onServerStarting; the readiness gate (mc.observe.player,
+    # onServerStarted) is strictly later, so the port file already exists by now. Short grace anyway.
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        if os.path.exists(pf):
+            try:
+                return int(open(pf).read().strip())
+            except ValueError:
+                pass
+        time.sleep(1)
+    raise ContractFailure(f"agent-mcp.port never appeared in {ctx.run_dir}")
+
+
+def _tools_list(ctx):
+    port = _mcp_port(ctx)
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode()
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
+    try:
+        conn.request("POST", "/mcp", body, {"Content-Type": "application/json"})
+        resp = conn.getresponse()
+        payload = resp.read().decode()
+    finally:
+        conn.close()
+    if resp.status != 200:
+        raise ContractFailure(f"tools/list HTTP {resp.status}: {payload[:200]}")
+    doc = json.loads(payload)
+    tools = (doc.get("result") or {}).get("tools")
+    if not isinstance(tools, list):
+        raise ContractFailure(f"tools/list shape drifted: {doc!r}")
+    return {t.get("name"): t for t in tools}
+
+
+def check_setting_schema_closed(ctx):
+    # #280 STRUCTURAL half (contract check ①): read the advertised mc.bot.setting schema from
+    # the MCP tools/list catalog and prove it is CLOSED with the full single-source key set.
+    #
+    # ⚠️ RENDERING FINDING (verified in Schema.java): additionalProperties(false) stores the field
+    # as null (Schema.java:134 `allow ? Boolean.TRUE : null`) and the Obj codec emits it via
+    # optionalFieldOf (Schema.java:46), so a CLOSED object renders in tools/list with the
+    # `additionalProperties` key OMITTED entirely — never a literal `false`. The catalog's
+    # closed-object convention is exactly SchemaValidator.java:100 (`open == additionalProperties
+    # is Boolean.TRUE`): absent-or-false == closed, only `true` == open. We assert that reading —
+    # additionalProperties must NOT be true — plus the full key set (single-source SettingsRegistry
+    # is 229 keys; >=200 catches a registry that silently lost its reflective completion pass).
+    tools = _tools_list(ctx)
+    tool = tools.get("mc.bot.setting")
+    if tool is None:
+        raise ContractFailure("mc.bot.setting absent from tools/list")
+    sch = tool.get("inputSchema") or {}
+    if sch.get("type") != "object":
+        raise ContractFailure(f"mc.bot.setting inputSchema not an object: {sch.get('type')!r}")
+    if sch.get("additionalProperties") is True:
+        raise ContractFailure("mc.bot.setting schema is OPEN (additionalProperties:true) — #280 not closed")
+    props = sch.get("properties")
+    if not isinstance(props, dict):
+        raise ContractFailure(f"mc.bot.setting properties missing: {sch!r}")
+    if len(props) < 200:
+        raise ContractFailure(
+            f"mc.bot.setting prop count {len(props)} < 200 — single-source registry undersized")
+
+
+def check_setting_unknown_key_rejected(ctx):
+    # #280 BEHAVIORAL half + validator-first ordering contract (check ②): mc.bot.setting is
+    # client-only, but route() runs the SchemaValidator (AgentApi.java:444) BEFORE the handler
+    # (line 445, where requireBot() throws client-only). So on a DEDICATED server a bogus-key call
+    # must fail with the VALIDATOR's unexpected-key error, NOT the client-only error — validation is
+    # transport/side-uniform. Order confirmed by code + this live gate (see contract appendix).
+    result, error = ctx.call_raw("mc.bot.setting", {"definitelyNotAKnob": True})
+    if error is None:
+        raise ContractFailure(f"unknown setting key accepted: {result!r}")
+    if "definitelyNotAKnob" not in error or "unexpected key" not in error:
+        raise ContractFailure(
+            f"expected the validator's unexpected-key error (validation runs before the "
+            f"client-only gate — see AgentApi.route), got: {error!r}")
+
+
+def check_test_reset_client_only(ctx):
+    # mc.test.reset (paired-registered hidden verb) is client-only (check ③): valid (empty) params
+    # pass the validator, then the handler throws the established client-only error on a dedicated
+    # server. Loud, never a silent no-op.
+    result, error = ctx.call_raw("mc.test.reset")
+    if error is None:
+        raise ContractFailure(f"mc.test.reset answered on dedicated server: {result!r}")
+    if "client only" not in error or "mc.test.reset" not in error:
+        raise ContractFailure(f"error shape drifted: {error!r}")
+
+
+def check_test_reset_schema_paired(ctx):
+    # registerVerb pairing metaproof + schema-less-dispatch-hole regression (check ④): mc.test.reset
+    # was registered via the paired ToolCatalog.registerVerb (schema + route atomically). A bogus
+    # param key must be rejected by the VALIDATOR (unexpected-key) BEFORE the client-only handler —
+    # proving the schema is present AND closed AND validation uniform. If the schema-less dispatch
+    # hole regressed (no schema => validate() skipped), this would fall through to client-only.
+    result, error = ctx.call_raw("mc.test.reset", {"nope": True})
+    if error is None:
+        raise ContractFailure(f"unknown mc.test.reset key accepted: {result!r}")
+    if "nope" not in error or "unexpected key" not in error:
+        raise ContractFailure(
+            f"expected the validator's unexpected-key error (schema present + closed + validated "
+            f"before client-only), got: {error!r}")
+
+
 def canary_must_fail(ctx):
     raise ContractFailure("canary: this check must be reported as FAIL")
 
@@ -336,6 +449,11 @@ CHECKS = [
     ("events.cursorMonotonic", "NONE", check_cursor_monotonic),
     ("wait.ticks", "NONE", check_wait_ticks),
     ("wait.conditionValue", "NONE", check_wait_condition_value),
+    # P2a verb-pipeline + #280 closure checks (contract appendix ①-④)
+    ("catalog.settingSchemaClosed", "NONE", check_setting_schema_closed),
+    ("route.settingUnknownKey", "NONE", check_setting_unknown_key_rejected),
+    ("route.testResetClientOnly", "NONE", check_test_reset_client_only),
+    ("route.testResetSchemaPaired", "NONE", check_test_reset_schema_paired),
     ("canary.mustFail", "MUST_FAIL", canary_must_fail),
     ("canary.mustSwallow", "MUST_SWALLOW", None),  # registered, never executed
 ]
@@ -413,6 +531,7 @@ def launch(loader, wall):
         try:
             ws = Ws("127.0.0.1", port)
             ctx = Ctx(ws)
+            ctx.run_dir = run_dir(loader)  # P2a: MCP tools/list reader resolves agent-mcp.port here
             ctx.call("mc.observe.player")
             return ctx
         except Exception:
