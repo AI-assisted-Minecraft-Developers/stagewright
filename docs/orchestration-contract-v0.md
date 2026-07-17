@@ -105,6 +105,35 @@ not in registered`）。实现 = `verdict.judge(records, expected=[...])` 对 `r
   确认"legacy 删了之后 ad.\* 仍然真的在跑"，而不是套件组装链路悄悄断裂后自洽空转。
 - 语义只新增一条外部检查、不改现有字段/退出码含义，契约仍 v0。
 
+## --expect-file 清单锚定门（v0 附录，P1.5b）
+`t0.py --expect-file <path>`：把 `--expect-scene` 的期望名单从命令行搬进一个**签入版本库
+的清单文件**（`scripts/testkit/expected-scenes-neoforge.txt`），用同一套集合比对逻辑武装
+外部期望门——语义与 `--expect-scene` 完全一致，只是期望来源从「每次手敲命令行」变成
+「随代码一起 review 的文件」，防止期望名单与已迁移场景清单漂移。
+
+- **文件格式**：一行一个场景名；`#` 起注释（行内也算，`#` 之后整段丢弃）；空行忽略；
+  一行内允许逗号分隔多名（与 `--expect-scene` 同解析）。解析后名字**必须**逐个出现在
+  suite header 的 `registered[]` 里，否则整轮判 RED——报告行与 `--expect-scene` **完全
+  相同**（`MISSING-EXPECTED: <name> not in registered`），两个来源在 `verdict.judge()`
+  眼里没有区别。
+- **同 commit 锚定规则**：每个迁移的 `ad.*` 场景**必须在添加该场景的同一个 commit 里**
+  把名字加进此清单——清单与场景代码同 review、同落地。一个名字若同时缺席**清单**与
+  `registered[]`，正是这道门要抓的「套件组装层自洽假绿」（SceneProvider 断链时 `ad.*`
+  整体从注册消失、套件仍自洽判绿）。
+- **大声失败（空期望集=错误退出，非静默降级）**：两种情形下编排器**不进入跑批**，直接
+  `argparse` 报错退出 **exit 2**——①`--expect-file` 指向的文件不存在（`--expect-file
+  not found: <path>`）；②文件存在但剥掉注释/空行后**零个名字**（`expectation source
+  given but contains no scene names`；这条 union 后集合为空的检查对 `--expect-scene` 同样
+  生效）。设计意图：一个「武装了期望门却期望空集」的运行必须是硬错误，绝不能被解读为
+  「什么都不期望」而静默放行——那会把这道门本身悄悄卸掉。（注：这里的 exit 2 是编排器
+  **启动前**的参数错误，语义上不同于游戏内跑批后的 canary-DEAD exit 2；两者都表达
+  「结果不可信、别当真值」，此处是「根本没跑成」。）
+- **与 `--expect-scene` 并集去重**：两者可同时给，期望集 = `sorted(set(from_file) |
+  set(from_scene))`（`t0.py` main），重叠名字只计一次。`--expect-file` 是验收正门形态
+  （期望入库、不会与迁移清单漂移），`--expect-scene` 降为 ad-hoc 一次性覆盖。
+- 本节语义只把既有 `--expect-scene` 外部门的**期望来源**扩展为文件（并明确空期望集=
+  大声错误），不新增线协议字段、不改退出码含义、报告行不变，契约仍冻结在 v0，不升版。
+
 ## originSlot 坐标钉扎（v0 附录，P1.5a）
 `Scene.withOriginSlot(int slot)`（`Scene.java`/`TestkitHarness.assignSlots`）为确定性
 敏感场景固定 grid 分配的坐标格，与其余场景的注册顺序解耦：
