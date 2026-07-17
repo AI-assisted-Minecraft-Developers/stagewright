@@ -327,7 +327,8 @@ production topology itself*, not merely simulated.
 
 `--rounds` on T2 **disconnects the client and re-connects it to the SAME resident
 dedicated server** (the server is **never restarted** — the per-round
-resident-server PID is recorded and asserted unchanged), then `mc.test.reset`s;
+resident-server PID is recorded per round as reuse evidence — a change is printed
+loudly but the verdict itself keys on check outcomes), then `mc.test.reset`s;
 per-check outcomes must be identical across all rounds or the run is **BLOCKED**
 (a reset-completeness gap). T2 is **attach-only** — it **requires** `--attach` and
 has **no `--fresh-process`** mode: the reuse surface T2 exercises is precisely
