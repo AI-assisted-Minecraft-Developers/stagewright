@@ -399,7 +399,52 @@ policy, paired-registration semantics, #280 closure, and the four headless
 checks (18-21) that pin them — is in the P2a appendix of
 `../docs/testkit/instrument-contract-v0.md`.
 
+## Gradle plugin: task entry points (P3b T1)
+
+The `net.magicterra.mc-testkit` gradle plugin turns the frozen python
+orchestration contract into three first-class gradle tasks on the project it is
+applied to. This repo's **root project is the first dogfood consumer** (the
+plugin lives in a standalone included build wired through `settings.gradle`), so
+these tasks run from the repo root:
+
+| task | shells | topology |
+|---|---|---|
+| `testkitServer` | `scripts/testkit/t0.py` | **T0: server-side scene suite** — dedicated-server dogfood |
+| `testkitClient` | `scripts/testkit/t1.py` | **T1: client topology** — real client + integrated server |
+| `testkitE2E`    | `scripts/testkit/t2.py` | **T2: production topology** — dedicated server + real client |
+
+(See the **T0**, **T1**, and **T2** sections above for what each orchestrator
+does.) Each task **shells** its orchestrator, streams its stdout/stderr live to
+the gradle console, and **propagates the exit code verbatim** — the plugin never
+parses JSONL nor re-judges; the orchestrator remains the sole verdict authority
+(exit legend `0 GREEN / 1 RED / 2 DEAD / 3 ENV / 4 BLOCKED-multiround`). A
+non-zero code becomes a `GradleException` carrying the full, copy-paste
+re-runnable command line.
+
+**Loader selection.** The plugin's convention is `fabric`; its only override
+mechanism is the `testkit { loader }` extension (there is no built-in `-P`
+binding). This repo's root `build.gradle` adds a one-line bridge threading the
+`testkit.loader` project property onto that extension, so the loader dimension is
+selectable per invocation while `fabric` stays the default:
+
+    ./gradlew testkitServer -Ptestkit.loader=neoforge   # neoforge T0 dogfood
+    ./gradlew testkitClient                             # fabric T1 (default)
+    ./gradlew testkitE2E -Ptestkit.loader=neoforge      # neoforge T2
+
+The `testkit { }` extension also carries `pythonExecutable`, `scriptsDir`,
+`expectFile`, `extraArgs`, and the `testmodSourceSet` flag documented in the
+next section.
+
+To attach a second tool (`instrument_client.py --attach`, or the JUnit module)
+to a `--hold` topology **without** paying a cold boot per invocation, keep the
+topology alive with the **Client process pool** (below); the pool prints the same
+`export TESTKIT_ENDPOINT=…` line the **JUnit 5 attach** flow consumes.
+
 ## Gradle plugin: testmod source-set convention (P3b T3)
+
+This is a second, opt-in facet of the same `net.magicterra.mc-testkit` plugin
+whose three task entry points are documented above; the flag lives in the same
+`testkit { }` extension block.
 
 **Why**: tests belong out of the production jar. A mod that ships gametest /
 testkit scenes bundled into `main` ships test-only code (and test-only deps)
@@ -457,7 +502,49 @@ it into THEIR OWN loom run config, e.g.:
   set is a **parked, separate task**, not part of P3b T3. This section only
   lands the plugin-side building block.
 
+## Client process pool (`pool.py`) — P3b T2
+
+`t1.py --hold` / `t2.py --hold` stand a topology up and idle so a second tool can
+attach (the **JUnit 5 attach** and **Instrument contract** flows above) — but
+every consumer otherwise pays a fresh cold boot (~30-90s T1, minutes T2). The
+pool amortizes that across invocations: it keeps a `--hold` topology alive and
+lets attachers **reuse** it in ~1s.
+
+    python3 scripts/testkit/pool.py ensure --topology t2   # reuse a live hold, else launch one DETACHED
+    python3 scripts/testkit/pool.py status                 # probe every topology×loader
+    python3 scripts/testkit/pool.py stop   --topology t2   # release the hold this pool started
+
+`ensure` probes the topology's `TESTKIT_ENDPOINT` descriptor (the same file the
+`--hold` shells publish — see the **JUnit 5 attach** section's attach contract)
+plus a `mc.system.version` liveness probe against its `rpcPort` (T2 also probes
+`serverRpcPort`). Live → it prints `export TESTKIT_ENDPOINT=<path>` + `reused` and
+exits 0 in ~1s. Otherwise it cleans stale residue, launches the topology's
+`--hold` **detached** (own session, log in the run dir), records
+`{pid, topology, loader, startedAtEpochMs, log}` in
+`scripts/testkit/.pool-state.json` (flock-guarded), bounded-polls for the
+endpoint file (t1 240s / t2 360s), verifies liveness, and prints `started`. Feed
+the printed line straight into an attacher:
+
+    eval "$(python3 scripts/testkit/pool.py ensure --topology t2 | grep '^export')"
+    python3 scripts/testkit/instrument_client.py --topology t2 --attach   # or: ./gradlew :testkit-junit:test --rerun-tasks
+
+`stop` SIGINTs the recorded hold PID (its `finally` deletes the endpoint file),
+bounded-waits for the descriptor to vanish (SIGKILL after grace), then drops the
+state entry. It **refuses loudly** to stop a live endpoint it did not start (a
+manual `--hold` orphan whose PID is not the pool's to guess) and only deletes a
+probe-dead orphan descriptor — never `pkill`; every process op targets an
+explicit recorded PID. The T2 resident-server reuse the pool builds on is the
+same surface `instrument_client.py --topology t2 --rounds N` exercises across a
+reconnect (see the **Dual-socket instrument** section under T2). This gradle-free
+pool is the process-lifecycle counterpart to the plugin task entry points above:
+the plugin *runs* a topology to a verdict, the pool *keeps one warm* for attach.
+
 ## Maven publishing (P3b T4)
+
+The **Client process pool** and **gradle plugin** sections above cover running
+and reusing topologies; this section covers shipping the framework itself. The
+`mc_testkit-junit` artifact below is what an out-of-process **JUnit 5 attach**
+consumer depends on.
 
 `./gradlew publishToMavenLocal` from the repo root publishes seven artifacts
 to `~/.m2/repository/net/magicterra/`:
