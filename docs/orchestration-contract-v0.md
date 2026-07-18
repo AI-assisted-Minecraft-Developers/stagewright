@@ -314,3 +314,87 @@ selfShaftDigUp worstBackslide、gearScope 属性）在**场景内部**断言，�
 在线直到 Ctrl-C（`finally` 无条件删端点文件）。JUnit UI 场景 attach 到 `rpcPort` 客户端面即可
 （它们只打客户端），与 T1 端点唯一差别是 topology 取值和多出的可选 `serverRpcPort`；schema
 不升版，冻结的必需 8 键不变。
+
+## 客户端进程池 `pool.py`（v0 附录，P3b T2）
+`t1.py --hold` / `t2.py --hold` 每次都从零冷启一套拓扑（T1 ~30-90s，T2 数分钟），再 publish
+一个 `TESTKIT_ENDPOINT` 端点、idle 到 Ctrl-C。`scripts/testkit/pool.py` 是这套 `--hold`+端点
+契约之上的**进程池**：把一套拓扑跨多次调用**保活**，让 `instrument_client.py --attach` / JUnit
+attach 模块以**秒级**连上，而不是每次冷启。
+
+CLI：`pool.py {ensure|status|stop} --topology {t1,t2} --loader {fabric,neoforge}`（默认 t1/fabric）。
+端点路径不硬编码——`t1` 走 `t1.resolve_loader(loader).endpoint_file`（`<loader>/run-t1/testkit-endpoint.json`），
+`t2` 走 `t2.resolve_t2(loader).endpoint_file`（`<loader>/run-t2/testkit-endpoint.json`），单一真源。
+**禁 pkill**，所有进程操作只针对显式记录的 PID。
+
+### 状态文件 `scripts/testkit/.pool-state.json`（gitignored）
+池自己记录它启动过的每一套 hold，供 `stop` 按显式 PID 释放。UTF-8 JSON 单对象，原子写
+（`.tmp`→`os.replace`）：
+
+```json
+{
+  "version": 1,
+  "entries": {
+    "t1/fabric": {
+      "pid": 2250123,
+      "topology": "t1",
+      "loader": "fabric",
+      "startedAtEpochMs": 1752800000000,
+      "log": "/abs/.../fabric/run-t1/pool-hold.log"
+    }
+  }
+}
+```
+
+- key = `"<topology>/<loader>"`；`pid` = 池 detach 出去的 `t1.py/t2.py --hold` **Python 进程** PID
+  （这正是 `stop` SIGINT 的目标——`--hold` 的文档化释放路径 Ctrl-C）。注意它**不是**端点文件里那个
+  `holdPid`（后者是 `t1.py` 内部追踪的 gradle wrapper 子进程 PID，语义不同）——池只管自己启动的进程。
+- `log` = 该 hold 的 stdout/stderr 落盘位置（run 目录下 `pool-hold.log`）。
+- 文件缺失/损坏一律降级为空池（fresh checkout 上 `stop`/`status` 照常工作），从不抛。
+
+### `ensure` 语义（幂等：活→秒回，死→清→新起）
+1. 端点文件**存在** 且 一次裸 RPC `mc.system.version` 探活成功（对 `rpcPort`；T2 另探 `serverRpcPort`，
+   两面都须活）→ 打印端点路径 + `reused` + `export TESTKIT_ENDPOINT=…`，exit 0。
+2. 否则先**清残留**（陈旧端点文件；池状态文件里记录过的旧 hold PID——SIGINT→SIGKILL 按显式 PID），
+   再把 `--hold` 作为 **detached 子进程**启动（`start_new_session=True`，故 Ctrl-C 打在 pool.py 上不会
+   波及 hold；stdin 关闭、stdout/stderr→run 目录 log），把 `{pid,topology,loader,startedAtEpochMs,log}`
+   记进状态文件，**有界轮询**端点文件出现+探活（t1 240s / t2 360s 预算），成功→打印路径 + `started` +
+   export，exit 0。
+3. 预算内没起来（或 hold 进程提前死）→ 按记录 PID 杀掉刚启动的 hold（SIGINT 先、宽限后 SIGKILL），
+   删状态项，**exit 3（ENV）**。
+
+**探活是唯一真判据**（沿 attach 契约）：端点文件存在 ≠ 指向的进程还活着，必须实发一次 `mc.system.version`
+（~5s 超时）证明可用。
+
+### `status` 语义
+遍历全部 topology×loader（状态文件 + 磁盘端点文件两来源），按**探活**打印
+`alive`/`stale`/`absent`（不是只看文件是否存在），并标注 `pool-managed`（有状态项）/`orphan`（有端点无状态项）。
+恒 exit 0。
+
+### `stop` 语义 + orphan 拒绝规则
+- 有状态项 → SIGINT 记录的 hold PID（hold 的 `finally` 会删端点文件）→ 有界等端点文件消失 → 宽限后
+  SIGKILL（并由池自己兜底删端点残留）→ 删状态项。
+- 无状态项但磁盘上有端点：探活——
+  - **活**：**大声拒绝**。这套 hold 不是池启动的（无状态项），它的 PID 不该靠猜——**绝不杀不是自己
+    启动的进程**。提示操作者去源头释放（Ctrl-C 对应的 `t1.py/t2.py --hold`，或等它死后手删端点）。
+  - **死（探活失败）**：这是陈旧残留，直接删端点文件。
+- 无状态项且无端点：no-op。
+
+### 两条工作流
+```bash
+# 工作流 A：pool 保活 T1 → instrument_client attach（秒级复连）
+python3 scripts/testkit/pool.py ensure --topology t1        # started（或 reused）
+eval "$(python3 scripts/testkit/pool.py ensure --topology t1 | grep ^export)"
+TESTKIT_ENDPOINT=$TESTKIT_ENDPOINT python3 scripts/testkit/instrument_client.py --attach
+python3 scripts/testkit/pool.py stop --topology t1          # 释放
+
+# 工作流 B：pool 保活 T2 → gradle JUnit attach（双 socket 生产拓扑）
+python3 scripts/testkit/pool.py ensure --topology t2        # started（或 reused）
+export TESTKIT_ENDPOINT="$(python3 scripts/testkit/pool.py ensure --topology t2 | grep ^export | cut -d= -f2)"
+./gradlew :mc-testkit:junit:test    # JUnit attach 模块读 TESTKIT_ENDPOINT
+python3 scripts/testkit/pool.py stop --topology t2
+```
+
+- **串行租约**（继承 `--hold` 的形状边界）：一套 topology×loader 同一时刻只保活一个实例
+  （`RUN_DIR`/`WORLD_NAME`/端点文件都是进程级单例路径）；池不做多实例隔离。
+- 本节新增一个**独立于结果文件线协议**的编排辅助工具（不改 `testkit-results.jsonl` 格式、端点
+  schema、任何退出码含义），契约仍冻结在 v0，不升版。
