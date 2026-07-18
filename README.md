@@ -163,6 +163,17 @@ requires all *required* scenes PASS and the `(name, outcome)` set be identical
 across runs and loaders, so an optional sensor flipping to green (a silent fix or a
 tuned rig) would itself be caught by the cross-run/cross-loader identity check.
 
+**One REQUIRED scene carries a visible topology guard: `ad.agentRpcSmoke`** (task#92).
+Its 259-check JS RPC/YAML validation suite is authored against the dedicated-server
+RPC surface, so it stays REQUIRED coverage on the dedicated path (T0) — but on an
+integrated (client-hosted) topology (T1/T2) 8 client-face checks diverge, so the
+scene body detects `!getServer().isDedicatedServer()` and returns PASS early with a
+**visible marker** (`SceneContext.passNote` → the results-JSONL `reason` field + the
+harness log line) citing task#92. This is a guard, not a swallow: reconcile still
+counts the scene entered and the reason records exactly why it passed trivially; the
+8-check divergence and its real fix (topology-aware checks / a signature gate pinning
+the known divergences) live in task#92.
+
 ### How to add a scene (single-place how-to)
 
 Adding one dogfood scene touches at most four spots — do all of them **in the same

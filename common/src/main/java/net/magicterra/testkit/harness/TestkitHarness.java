@@ -150,7 +150,7 @@ public final class TestkitHarness {
                     if (phaseTicks == 1) ctx.runBody(scene.body());
                     SceneContext.Progress p = ctx.advance();
                     if (p == SceneContext.Progress.DONE) {
-                        record(scene, SceneOutcome.PASS, ctx.ticks(), null);
+                        record(scene, SceneOutcome.PASS, ctx.ticks(), ctx.passNote());
                         teardown(scene, level, origin, radius);
                     } else if (p == SceneContext.Progress.STEP_TIMEOUT) {
                         record(scene, SceneOutcome.TIMEOUT, ctx.ticks(), ctx.failureReason());

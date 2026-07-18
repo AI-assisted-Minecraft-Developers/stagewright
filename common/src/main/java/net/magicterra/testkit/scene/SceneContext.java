@@ -91,6 +91,21 @@ public final class SceneContext {
         throw new SceneFailure(reason);
     }
 
+    private String passNote;
+
+    /**
+     * Attach a visible note to a PASS outcome — surfaced verbatim in the results
+     * JSONL {@code reason} field (and the harness log line) when the scene resolves
+     * PASS. Null (the default) yields the usual empty reason, so every other scene is
+     * byte-unchanged. Use for a deliberate, auditable PASS marker such as a topology
+     * guard that skips a body off its supported topology — this is NOT a swallow: the
+     * scene is still counted entered and the reason records WHY it passed trivially.
+     */
+    public void passNote(String note) { this.passNote = note; }
+
+    /** Harness-internal: the PASS note set by the body, or null. */
+    public String passNote() { return passNote; }
+
     // ---- continuation steps ----
 
     public AwaitBuilder await(BooleanSupplier cond) {
