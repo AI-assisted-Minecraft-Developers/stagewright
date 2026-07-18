@@ -402,7 +402,7 @@ python3 scripts/testkit/pool.py stop --topology t1          # 释放
 # 工作流 B：pool 保活 T2 → gradle JUnit attach（双 socket 生产拓扑）
 python3 scripts/testkit/pool.py ensure --topology t2        # started（或 reused）
 export TESTKIT_ENDPOINT="$(python3 scripts/testkit/pool.py ensure --topology t2 | grep ^export | cut -d= -f2)"
-./gradlew :mc-testkit:junit:test    # JUnit attach 模块读 TESTKIT_ENDPOINT
+./gradlew :testkit-junit:test    # JUnit attach 模块读 TESTKIT_ENDPOINT
 python3 scripts/testkit/pool.py stop --topology t2
 ```
 
