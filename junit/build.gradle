@@ -10,6 +10,7 @@
 // still flow from the root `allprojects {}` block.
 plugins {
     id 'java-library'
+    id 'maven-publish'
 }
 
 java {
@@ -50,3 +51,37 @@ test {
     // self-tests run live-free and attach()'s fail-fast is exercised honestly.
     environment 'TESTKIT_ENDPOINT', System.getenv('TESTKIT_ENDPOINT') ?: ''
 }
+
+// Maven publishing — DELIBERATELY THE OPPOSITE of the mod-jar POM rule in the
+// root build.gradle's subprojects{} block. Mod jars (agent_driver-*,
+// mc_testkit-common/fabric/neoforge) nest their runtime deps via Jar-in-Jar and
+// therefore strip <dependency> entries from the published POM (a naive consumer
+// resolving the raw POM would double up e.g. Rhino — docs/feedback/2026-06-04,
+// bug #2). This module is a THIN PLAIN-JVM LIBRARY: it does not shade or nest
+// anything, so a consumer's build tool is the one that must resolve gson and
+// junit-jupiter-api transitively. The POM MUST declare them, or `mc_testkit-junit`
+// silently fails to compile for any consumer that doesn't happen to already have
+// those two on their classpath. `from components.java` (java-library plugin)
+// already publishes `api` dependencies as real <dependency> entries — no
+// pom.withXml stripping here, unlike the mod-jar publications.
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = 'mc_testkit-junit'
+            from components.java
+        }
+    }
+
+    repositories {
+        mavenLocal()
+    }
+}
+
+// Module metadata (.module) is left ENABLED here (unlike the mod-jar
+// publications, which disable GenerateModuleMetadata because their variant
+// graph still carries the nested-but-POM-stripped deps and would contradict
+// the cleaned POM). This module has no such split: the `java` component's
+// variants and the POM both derive from the same `api`/`implementation`
+// dependency declarations above, so the .module file and the POM agree —
+// nothing to reconcile, and Gradle consumers get richer variant-aware
+// resolution for free.

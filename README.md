@@ -456,3 +456,77 @@ it into THEIR OWN loom run config, e.g.:
   violate this convention themselves — migrating them onto a `testmod` source
   set is a **parked, separate task**, not part of P3b T3. This section only
   lands the plugin-side building block.
+
+## Maven publishing (P3b T4)
+
+`./gradlew publishToMavenLocal` from the repo root publishes seven artifacts
+to `~/.m2/repository/net/magicterra/`:
+
+| artifactId | module | POM dependencies |
+|---|---|---|
+| `agent_driver-common` | root `common` | none (cleansed) |
+| `agent_driver-fabric` | root `fabric` | none (cleansed) |
+| `agent_driver-neoforge` | root `neoforge` | none (cleansed) |
+| `agent_driver-testkit-common` | `mc-testkit/common` | none (cleansed) |
+| `agent_driver-testkit-fabric` | `mc-testkit/fabric` | none (cleansed) |
+| `agent_driver-testkit-neoforge` | `mc-testkit/neoforge` | none (cleansed) |
+| `mc_testkit-junit` | `mc-testkit/junit` | gson, junit-jupiter-api |
+
+**Two opposite POM rules, and why.** The six mod-jar publications (root
+`subprojects{}` block in the top-level `build.gradle`) nest their runtime
+dependencies (Rhino, netty-codec-http, snakeyaml, and for the testkit
+mod-jars each other) via Jar-in-Jar and are remapped, self-contained
+artifacts — a POM that re-declared those deps would hand a naive consumer a
+second, unremapped copy of the same classes on their classpath
+(`docs/feedback/2026-06-04`, bug #2). So those POMs are stripped of every
+`<dependency>` entry and `GenerateModuleMetadata` is disabled outright.
+`mc-testkit/junit` is the opposite case: a thin plain-JVM library with no
+shading, so its POM **must** declare its real compile-time deps (gson,
+junit-jupiter-api) or a consumer's build tool has no way to resolve them
+transitively. Its `.module` Gradle metadata is left enabled (unlike the mod
+jars) because, with no Jar-in-Jar split to reconcile, the variant graph and
+the POM already agree.
+
+**Naming quirk (pre-existing, not introduced by T4):** the three
+`mc-testkit/{common,fabric,neoforge}` build.gradle files set
+`base.archivesName = 'mc_testkit-*'`, which does govern the jar *file name*
+on disk — but the root `subprojects{}` publishing block reads
+`artifactId = base.archivesName.get()` with an eager `.get()`, which resolves
+before those child scripts override the value, so the *published Maven
+artifactId* is actually `agent_driver-testkit-{common,fabric,neoforge}`, not
+`mc_testkit-*`. Consumers must depend on the artifactId in the table above,
+not the jar filename. This is unrelated to the junit publication work in this
+section and is left as-is; a future task can decide whether to fix the
+eager/lazy mismatch or just rename the child modules' intent to match.
+
+**Consuming `mc_testkit-junit` from an external Gradle project:**
+
+    repositories {
+        mavenLocal()
+    }
+    dependencies {
+        implementation 'net.magicterra:mc_testkit-junit:0.1.0+1.21.1'
+    }
+
+### Support matrix
+
+| | |
+|---|---|
+| Minecraft | 1.21.1 |
+| Fabric Loader | ≥ 0.16.14 |
+| NeoForge | 21.1.230 line (`[21,)`) |
+| Java | 21 |
+
+### Compatibility promise
+
+- The **instrumentation contract v0** frozen surface (see
+  `../docs/testkit/instrument-contract-v0.md` and
+  `../docs/testkit/orchestration-contract-v0.md`) is backward-compatible:
+  code written against it keeps working across patch/minor releases of this
+  module.
+- The **behavioral surface and internal APIs** (scene execution timing,
+  internal classes not part of the frozen contract, `TestkitRpc` wire
+  details) carry **no compatibility promise** and may change without notice.
+- Published artifact versions track `mod_version` in the root
+  `gradle.properties` — there is no independent versioning scheme for
+  `mc-testkit` or `mc_testkit-junit`.
