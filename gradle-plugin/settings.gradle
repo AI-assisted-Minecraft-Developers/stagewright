@@ -1,0 +1,16 @@
+// Standalone INCLUDED build for the mc-testkit gradle plugin.
+//
+// This build is wired into the root project via
+//   pluginManagement { includeBuild('mc-testkit/gradle-plugin') }
+// in the repository-root settings.gradle. Being an *included build* it lives
+// entirely OUTSIDE the root build's `subprojects {}` / loom / architectury
+// pipeline: it has its own settings, its own repositories, and its own
+// (plain java-gradle-plugin) toolchain. It carries no Minecraft classpath.
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'mc-testkit-gradle-plugin'

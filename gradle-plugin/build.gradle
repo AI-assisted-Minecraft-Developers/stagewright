@@ -1,0 +1,74 @@
+// mc-testkit gradle plugin — standalone included build.
+//
+// Publishes plugin id `net.magicterra.mc-testkit`, which registers three tasks
+// (testkitServer / testkitClient / testkitE2E) on the project it is applied to.
+// Each task SHELLS the frozen python orchestration contract (t0.py / t1.py /
+// t2.py) and propagates the orchestrator's exit code verbatim; the plugin never
+// parses JSONL nor re-judges — the orchestrator remains the sole verdict
+// authority. See src/main/java/.../TestkitPlugin.java.
+plugins {
+    id 'java-gradle-plugin'
+}
+
+group = 'net.magicterra'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Standard java-gradle-plugin functional-test layout: a dedicated `functionalTest`
+// source set exercised through Gradle TestKit, separate from plain unit `test`.
+def functionalTestSourceSet = sourceSets.create('functionalTest')
+
+configurations.named('functionalTestImplementation') {
+    extendsFrom(configurations.named('testImplementation').get())
+}
+configurations.named('functionalTestRuntimeOnly') {
+    extendsFrom(configurations.named('testRuntimeOnly').get())
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    // Gradle 8.x no longer bundles the platform launcher on the test runtime.
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Gradle TestKit — spins up a synthetic consumer project in-process.
+    functionalTestImplementation gradleTestKit()
+}
+
+def functionalTest = tasks.register('functionalTest', Test) {
+    description = 'Runs the Gradle TestKit functional tests.'
+    group = 'verification'
+    testClassesDirs = functionalTestSourceSet.output.classesDirs
+    classpath = functionalTestSourceSet.runtimeClasspath
+    useJUnitPlatform()
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}
+
+tasks.named('check') {
+    dependsOn(functionalTest)
+}
+
+gradlePlugin {
+    // Inject the plugin-under-test metadata onto the functionalTest classpath so
+    // GradleRunner.withPluginClasspath() can resolve `id 'net.magicterra.mc-testkit'`.
+    testSourceSets(functionalTestSourceSet)
+    plugins {
+        create('mcTestkit') {
+            id = 'net.magicterra.mc-testkit'
+            implementationClass = 'net.magicterra.testkit.gradle.TestkitPlugin'
+        }
+    }
+}
