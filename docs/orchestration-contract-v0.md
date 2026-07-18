@@ -350,6 +350,11 @@ CLI：`pool.py {ensure|status|stop} --topology {t1,t2} --loader {fabric,neoforge
   `holdPid`（后者是 `t1.py` 内部追踪的 gradle wrapper 子进程 PID，语义不同）——池只管自己启动的进程。
 - `log` = 该 hold 的 stdout/stderr 落盘位置（run 目录下 `pool-hold.log`）。
 - 文件缺失/损坏一律降级为空池（fresh checkout 上 `stop`/`status` 照常工作），从不抛。
+- **并发写用 flock 串行化**：状态文件的每一次 read-modify-write（`put_entry`/`del_entry`）都在
+  `scripts/testkit/.pool-state.lock` 上持有 `fcntl.flock(LOCK_EX)` 的临界区内完成，且**在锁内重新
+  load** 后再改再存。否则两个针对**不同 key** 的 `ensure`（如 t1/fabric + t2/fabric，都是数分钟冷启）
+  会 load-load-save-save 交错，后写者抹掉前写者的 PID——被启动的 hold 仍在跑却丢了 PID，`stop`
+  永远释放不掉它。锁文件同样 gitignored。
 
 ### `ensure` 语义（幂等：活→秒回，死→清→新起）
 1. 端点文件**存在** 且 一次裸 RPC `mc.system.version` 探活成功（对 `rpcPort`；T2 另探 `serverRpcPort`，
@@ -371,13 +376,20 @@ CLI：`pool.py {ensure|status|stop} --topology {t1,t2} --loader {fabric,neoforge
 恒 exit 0。
 
 ### `stop` 语义 + orphan 拒绝规则
-- 有状态项 → SIGINT 记录的 hold PID（hold 的 `finally` 会删端点文件）→ 有界等端点文件消失 → 宽限后
-  SIGKILL（并由池自己兜底删端点残留）→ 删状态项。
+决策取自四元组（有状态项？记录的 PID 还活着？磁盘有端点？端点探活？）：
+- 有状态项 + **PID 活** → SIGINT 记录的 hold PID（hold 的 `finally` 会删端点文件）→ 有界等端点文件
+  消失 → 宽限后 SIGKILL（并由池自己兜底删端点残留，安全：这是我们自己的活 hold）→ 删状态项。
+- 有状态项 + **PID 已死** → 记录已陈旧，只删状态项；再看端点：
+  - 端点**探活成功** → **大声拒绝**：这个端点现在由**另一个**进程（如手动 `--hold`）发布，PID 不是
+    我们的，**绝不删端点/杀进程**——只清掉我们自己那条死记录。
+  - 端点**探死/不存在** → 纯残留，直接删端点（若在）+ 清记录，**不等宽限**（短路）。
 - 无状态项但磁盘上有端点：探活——
-  - **活**：**大声拒绝**。这套 hold 不是池启动的（无状态项），它的 PID 不该靠猜——**绝不杀不是自己
-    启动的进程**。提示操作者去源头释放（Ctrl-C 对应的 `t1.py/t2.py --hold`，或等它死后手删端点）。
-  - **死（探活失败）**：这是陈旧残留，直接删端点文件。
+  - **活**：**大声拒绝**（同上，非池启动，PID 不该靠猜）。
+  - **死**：陈旧残留，直接删端点文件。
 - 无状态项且无端点：no-op。
+
+关键不变式：`stop` **绝不**因为一条陈旧状态项就盲删/盲杀一个端点——记录的 PID 一旦已死，端点必先
+重新探活；探活成功即视为「不是我们的」而拒绝。
 
 ### 两条工作流
 ```bash
