@@ -113,6 +113,89 @@ Keep exactly one service file per provider across all source sets — a copy in
 a loader module alongside the common one double-registers the provider on that
 loader's dev classpath and trips the duplicate-scene-name gate (RED by design).
 
+### Scene library structure (dogfood suite: 71 `ad.*` scenes, by family)
+
+Since P4b every non-Server legacy `@GameTest` family has been migrated to `ad.*`
+dogfood scenes (`migrate-then-delete`; the drift log
+[`../docs/testkit/migration-log.md`](../docs/testkit/migration-log.md) records
+every retirement). The dogfood suite is now **71 `ad.*` scenes** across **eight
+`SceneProvider` classes** — the original seed provider plus one per migrated
+family — all in
+`common/src/testmod/java/net/magicterra/agent/bot/testkit/scene/`, all listed
+(one line each) in the single common service file
+`common/src/testmod/resources/META-INF/services/net.magicterra.testkit.scene.SceneProvider`:
+
+| provider class | family | scenes | migrated from (legacy class) |
+|---|---|---:|---|
+| `AgentDriverScenes` | core seed (the original dogfood wave-1/2a/2b scenes) | 9 | (seeded, P1c–P2a) |
+| `AgentDriverTerrainScenes` | Terrain | 12 | `AgentGameTestTerrain` (deleted) |
+| `AgentDriverBiasScenes` | Bias (planner cost/constraint) | 13 | `AgentGameTestBias` (deleted) |
+| `AgentDriverWaterBankScenes` | WaterBank | 11 | `AgentGameTestWaterBank` (deleted) |
+| `AgentDriverWaterCrossScenes` | WaterCross | 10 | `AgentGameTestWaterCross` (deleted) |
+| `AgentDriverCoreScenes` | Core (main `AgentGameTest`) | 12 | `AgentGameTest` (deleted) |
+| `AgentDriverCombatScenes` | CombatSense | 2 | `AgentGameTestCombatSense` (deleted) |
+| `AgentDriverBuildScenes` | BuildBlock | 2 | `AgentGameTestBuildBlock` (deleted) |
+
+**Total 71** (9 + 62 migrated). The only surviving legacy `@GameTest` class is
+`AgentGameTestServer` (59 tests, the P4c cut); `AgentGameTestSupport` also survives
+because the Server family still uses its shared helpers.
+
+**Three deliberate optional-FAIL sensors.** Three scenes are registered
+`.withRequired(false)` on purpose — they are *visible* live-bug / false-green
+signatures, kept red-on-purpose and **never tuned to green** (per the module rule
+that every `withRequired(false)` scene must cite a filed task in its javadoc and be
+re-audited each acceptance to prevent carve-out creep):
+
+- **`ad.vineClingFidelityProbe`** (WaterBank) — legacy `required=false`; runs
+  optional-**PASS** (wall-backed vine cling fidelity).
+- **`ad.vineOverWaterClimb`** (WaterBank) — the live **−711** bug against the
+  clean `walkerVineFreeHangClimb`-OFF baseline; deterministic optional-**FAIL**
+  (`pocketTicks=29`). Its RED *is* the proof the live bug reproduces (task ref:
+  the −711 live record cited in the scene javadoc).
+- **`ad.riverSheerBank`** (WaterBank, **task#91**) — a gap #48 shared-body
+  FALSE-GREEN surfaced by body isolation (shared→`createUnique`); the config is
+  byte-identical to legacy, so the RED (`step=FAILED`, `wallPressTicks=51`) is a
+  genuine open-river sheer-bank climb-out wedge under the authored default-OFF
+  baseline, not a rig change. Deterministic optional-**FAIL**, filed as task#91.
+
+A dogfood run is GREEN with these two optional-FAILs present — the acceptance gate
+requires all *required* scenes PASS and the `(name, outcome)` set be identical
+across runs and loaders, so an optional sensor flipping to green (a silent fix or a
+tuned rig) would itself be caught by the cross-run/cross-loader identity check.
+
+### How to add a scene (single-place how-to)
+
+Adding one dogfood scene touches at most four spots — do all of them **in the same
+commit**, and two independent gates catch a slip:
+
+1. **Write the scene body** in the family's provider class under
+   `common/src/testmod/.../scene/` (e.g. `AgentDriverTerrainScenes`), and register
+   it in that provider's `scenes()` list:
+   `Scene.of("ad.myScene", … , ctx -> { … })` (append `.withRequired(false)` +
+   a task-citing javadoc **only** if it is a deliberate optional sensor). A scene
+   body runs once on its first server tick, builds an origin-relative arena, and
+   asserts; its own synchronous loops **must** be tick-bounded (a scene body is not
+   a test thread — it runs inline on the server tick), and it never touches absolute
+   coordinates. If it needs a new provider **class**, add one line for it to the
+   common service file
+   `common/src/testmod/resources/META-INF/services/net.magicterra.testkit.scene.SceneProvider`
+   (keep exactly one service file across all source sets — a duplicate trips the
+   duplicate-scene-name gate).
+2. **Add the scene name to BOTH manifests** —
+   `scripts/testkit/expected-scenes-neoforge.txt` **and**
+   `scripts/testkit/expected-scenes-fabric.txt` (they are identical by construction:
+   the scenes live in `common` and register for both loaders through the same
+   service file). This is the same-commit rule the manifest exists to enforce.
+
+**The two gates that catch a mistake:** (a) the **`--expect-file` reconcile gate** —
+a name in a manifest but missing from `registered[]` (bad service wiring / typo), or
+a scene in `registered[]` but absent from the manifest, fails the run loudly instead
+of silently degrading (the #85 silent-composition hole); (b) the **duplicate-name
+gate** — two providers (or a stray second service file) claiming the same scene name
+is RED by design. So a half-done addition — scene added but manifest not updated,
+or manifest updated but service file not wired — cannot slip through as a
+self-consistent false-green.
+
 ## Instrument contract (trust chain)
 
     python3 scripts/testkit/instrument.py --loader neoforge   # or fabric
