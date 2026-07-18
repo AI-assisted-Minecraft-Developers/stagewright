@@ -103,10 +103,11 @@ appendix (discovery order, name-uniqueness enforcement, canary ownership):
 
 ...discovered via a `META-INF/services` file whose single line names the
 implementation. Since P1.6 the provider lives in the loader-shared module so
-ONE registration serves every loader, e.g.
-`common/src/main/resources/META-INF/services/net.magicterra.testkit.scene.SceneProvider`:
+ONE registration serves every loader; since P4a both the provider class and its
+service file live in the `testmod` source set (out of the production jar), e.g.
+`common/src/testmod/resources/META-INF/services/net.magicterra.testkit.scene.SceneProvider`:
 
-    net.magicterra.agent.bot.testkit.AgentDriverScenes
+    net.magicterra.agent.bot.testkit.scene.AgentDriverScenes
 
 Keep exactly one service file per provider across all source sets — a copy in
 a loader module alongside the common one double-registers the provider on that
