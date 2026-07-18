@@ -475,8 +475,8 @@ it into THEIR OWN loom run config, e.g.:
         runs {
             client {
                 // sketch — exact loom API varies by loom/fabric-loom version;
-                // this repo's own testmod migration (parked, see below) is
-                // where a concrete wiring will be proven out.
+                // this repo's own testmod migration (LANDED in P4a) is where a
+                // concrete wiring is now proven out — see "Realized wiring" below.
                 source(testkit.testmodSourceSetRef)
             }
         }
@@ -497,10 +497,103 @@ it into THEIR OWN loom run config, e.g.:
   it reads the flag's FINAL value regardless of whether `testkit { }` is
   configured before or after the `plugins { }` block finishes applying this
   plugin.
-- agent-driver's own 130 legacy `@GameTest` tests currently live in `main` and
-  violate this convention themselves — migrating them onto a `testmod` source
-  set is a **parked, separate task**, not part of P3b T3. This section only
-  lands the plugin-side building block.
+- agent-driver's own legacy `@GameTest` tests used to live in `main` and
+  violated this convention themselves. Migrating them onto `testmod` source sets
+  was a parked, separate task at P3b T3 — **it has since LANDED (P4a)**; the
+  concrete, per-loader wiring it produced is recorded in **Realized wiring**
+  below. P3b T3 landed only the plugin-side building block; P4a proved it out on
+  a real dual-loop (fabric + neoforge) mod.
+
+## Realized wiring: agent-driver's own testmod migration (P4a)
+
+P3b T3 (above) is the plugin-side convention in the abstract; **P4a moved
+agent-driver's own tests out of the production jars and into `testmod` source
+sets**, which turned every "v2 / consumer figures it out" hand-wave above into a
+concrete, byte-gated wiring. This section is the standing record of what that
+took — it is loader-mechanism reality, not the plugin flag.
+
+**Three testmod source sets, hand-wired (not via the plugin flag).** The plugin's
+`testmodSourceSet = true` registers *one* source set and wires its classpath
+only — it deliberately never touches loom run configs (v2 scope). agent-driver
+needs the source set attached to loom runs across **three** modules, so P4a wires
+them directly in each `build.gradle`:
+
+- **`common`** — the dogfood scenes (`AgentDriverScenes`) + probes (`SimProbes`)
+  + the `net.magicterra.testkit.scene.SceneProvider` service file. `testmod`
+  compile/runtime classpaths extend `main`'s output + `main`'s own classpaths.
+- **`neoforge`** — the 8 legacy `@GameTest` arena classes (+ `Support`). Same
+  classpath extension, plus `:common`'s `testmod` **output** on the compile
+  classpath (so `SimProbes` delegates resolve).
+- **`fabric`** — an (otherwise source-empty) `testmod` set that exists purely as
+  the run `source` carrier for `:common`'s testmod output+resources.
+
+**The `.scene` sub-package JPMS lesson.** The scenes could **not** stay in
+`net.magicterra.agent.bot.testkit` when moved to `testmod`: `main` still owns
+that package (the production verbs `TestResetVerb` / `TestRunVerb` live there and
+must ship). A package owned by two source sets that both feed the same mod module
+is a **split package** — the loader's module layer rejects it. The fix was to
+move the scenes into a dedicated sub-package
+`net.magicterra.agent.bot.testkit.scene` (the service file becomes
+`META-INF/services/net.magicterra.testkit.scene.SceneProvider`). Lesson: when
+relocating classes from `main` into a `testmod` set that is folded into the same
+mod, they must occupy a package `main` does not also populate.
+
+**loom `named('main')` vs `maybeCreate('main')` — a real mechanism difference.**
+Both loaders fold `:common`'s testmod output into the agent-driver mod via loom's
+`mods { }` block, but the API call differs by loom platform:
+
+- **neoforge** can write `mods { named('main') { sourceSet …, project(':common') } }`
+  — architectury's neoforge path has already created the default `main`
+  ModSettings entry by the time the script body runs.
+- **fabric** cannot: fabric-loom creates its default `main` entry in an
+  `afterEvaluate` that runs *after* this script body, so `named('main')` throws
+  *"ModSettings with name 'main' not found"*. fabric therefore replicates loom's
+  own default explicitly — `def mainMod = maybeCreate('main'); mainMod.sourceSet
+  sourceSets.main` — and only then adds `:common`'s testmod.
+
+**Per-run scoping: fabric runtimeClasspath vs neoforge global modFolders.** How
+scene discovery is *scoped to only the runs that want it* also differs:
+
+- **neoforge**: `:common`'s testmod is deliberately kept **off**
+  `runtimeClasspath` and delivered only through the `mods { }` `modFolders`
+  group. loom emits modFolders only for source sets on a given run's classpath,
+  so a run that does not say `source sourceSets.testmod` (e.g. `contractServer`,
+  `server`) never receives the scenes. Putting testmod on the global
+  runtimeClasspath instead would leak the scenes into *every* run.
+- **fabric**: the opposite is safe — `:common`'s testmod output goes directly on
+  **this fabric testmod source set's** `runtimeClasspath`, and only runs whose
+  `source` is that testmod set carry it. `contractServer` (whose `main` set never
+  carries `:common`'s testmod) stays scene-free.
+
+In both loaders the instrument-contract run (`contractServer`) is intentionally
+**not** given the scenes — the instrumentation contract is independent of the
+dogfood scenes by design.
+
+**Production-jar byte gate — a standing acceptance convention.** Because "tests
+belong out of the production jar" is now enforced by structure rather than by
+discipline, P4a promoted it to a *gate that every classpath-touching change must
+re-run*. After `./gradlew :fabric:build :neoforge:build`, `unzip -l` each
+remapped production jar and assert:
+
+- **ZERO** entries for `AgentGameTest*`, `AgentDriverScenes`, `SimProbes`, and
+  `META-INF/services/net.magicterra.testkit.scene.SceneProvider`;
+- **still present**: the production verbs `TestResetVerb` / `TestRunVerb` and
+  `META-INF/services/net.magicterra.testkit.TestkitVerbHook` (the byte gate is
+  bidirectional — it also guards against *accidentally deleting* the production
+  verbs that P3a deliberately keeps in `main`).
+
+The same assertion is re-run against the **published** mod jars in `~/.m2`
+(`publishToMavenLocal`) so the maven face and the build face agree. (The mod
+artifacts publish under `agent_driver-*` / `agent_driver-testkit-*` coordinates —
+a pre-existing artifactId naming residual documented in the maven section above,
+unrelated to the byte gate.)
+
+**Migrate-then-delete.** Scenes and their legacy `@GameTest` twins are kept side
+by side until a scene is proven a byte-faithful replacement, then the twin is
+retired in bounded waves. Wave 1 (P4a) retired 8 twins (legacy registered
+130 → 122). The full policy, per-twin provenance, and the reframed legacy
+acceptance formula live in the drift log:
+[`../docs/testkit/migration-log.md`](../docs/testkit/migration-log.md).
 
 ## Client process pool (`pool.py`) — P3b T2
 
