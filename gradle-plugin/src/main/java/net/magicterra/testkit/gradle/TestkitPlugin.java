@@ -2,6 +2,10 @@ package net.magicterra.testkit.gradle;
 
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.plugins.JavaPlugin;
+import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.SourceSetContainer;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,6 +33,23 @@ public class TestkitPlugin implements Plugin<Project> {
         ext.getPythonExecutable().convention("python3");
         ext.getScriptsDir().convention("scripts/testkit");
         ext.getExtraArgs().convention(Collections.emptyList());
+        ext.getTestmodSourceSet().convention(false);
+
+        // testmod source-set convention (v1, P3b T3): opt-in registration only, gated on
+        // the `java` plugin being present. withType(JavaPlugin) is a REACTION, not a
+        // point-in-time check — it fires immediately if `java` is already applied, or
+        // later if it gets applied afterwards, and never fires at all otherwise (so a
+        // plain non-java consumer with the flag on does NOT crash: registration is simply
+        // skipped). The actual create-or-not decision is deferred to afterEvaluate so it
+        // reads the FINAL flag value regardless of whether the consumer's `testkit { }`
+        // config block runs before or after the `plugins { }` block finishes applying
+        // this plugin.
+        project.getPlugins().withType(JavaPlugin.class, javaPlugin ->
+            project.afterEvaluate(p -> {
+                if (Boolean.TRUE.equals(ext.getTestmodSourceSet().getOrElse(false))) {
+                    registerTestmodSourceSet(p, ext);
+                }
+            }));
 
         // testkitServer → t0.py, dedicated-server dogfood triplet (frozen assembly).
         //   t0.py --loader L --run-task :L:runDogfoodServer
@@ -87,6 +108,34 @@ public class TestkitPlugin implements Plugin<Project> {
                 return a;
             }));
         });
+    }
+
+    /**
+     * Registers the {@code testmod} source set on {@code project} (which is guaranteed to
+     * carry the {@code java} plugin — the caller only reaches here via the
+     * {@code withType(JavaPlugin.class, ...)} reaction). v1 boundary: classpath wiring
+     * ONLY — {@code testmod}'s compile+runtime classpaths gain main's output directory
+     * plus main's own compile/runtime classpaths (so testmod code can see main code and
+     * main's dependencies), and nothing else. No loom run-config edits, no dependency
+     * additions beyond that, no jar packaging changes; loom auto-wiring is left to
+     * consumers (documented as v2 scope in {@code mc-testkit/README.md}).
+     */
+    private void registerTestmodSourceSet(Project project, TestkitExtension ext) {
+        SourceSetContainer sourceSets =
+            project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
+        SourceSet main = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+        SourceSet testmod = sourceSets.create("testmod");
+
+        testmod.setCompileClasspath(testmod.getCompileClasspath()
+            .plus(main.getOutput())
+            .plus(project.getConfigurations()
+                .getByName(main.getCompileClasspathConfigurationName())));
+        testmod.setRuntimeClasspath(testmod.getRuntimeClasspath()
+            .plus(main.getOutput())
+            .plus(project.getConfigurations()
+                .getByName(main.getRuntimeClasspathConfigurationName())));
+
+        ext.setTestmodSourceSetRef(testmod);
     }
 
     private void wireCommon(Project project, TestkitExtension ext, TestkitRunTask task) {

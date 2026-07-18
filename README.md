@@ -398,3 +398,61 @@ is applied) instead of being silently dropped. The full contract — namespace
 policy, paired-registration semantics, #280 closure, and the four headless
 checks (18-21) that pin them — is in the P2a appendix of
 `../docs/testkit/instrument-contract-v0.md`.
+
+## Gradle plugin: testmod source-set convention (P3b T3)
+
+**Why**: tests belong out of the production jar. A mod that ships gametest /
+testkit scenes bundled into `main` ships test-only code (and test-only deps)
+to players. The convention is a `testmod` source set — compiled separately,
+never packaged into the mod jar — that the gradle plugin `net.magicterra.mc-testkit`
+can register on request.
+
+**How**: opt in via the extension flag (default off, zero impact):
+
+    plugins {
+        id 'java'
+        id 'net.magicterra.mc-testkit'
+    }
+    testkit {
+        testmodSourceSet = true
+    }
+
+When `java` is applied (checked via a `Plugins.withType(JavaPlugin)` reaction —
+see "boundaries" below) and the flag resolves `true`, the plugin registers a
+`testmod` `SourceSet` whose compile **and** runtime classpaths extend
+`main`'s output directory plus `main`'s own compile/runtime classpaths, so
+`testmod` code can see `main` code and all of `main`'s dependencies. The
+registered `SourceSet` is exposed read-only as `testkit.testmodSourceSetRef`
+(null when the flag is off, or when `java` was never applied) — consumers wire
+it into THEIR OWN loom run config, e.g.:
+
+    loom {
+        runs {
+            client {
+                // sketch — exact loom API varies by loom/fabric-loom version;
+                // this repo's own testmod migration (parked, see below) is
+                // where a concrete wiring will be proven out.
+                source(testkit.testmodSourceSetRef)
+            }
+        }
+    }
+
+**Boundaries (binding for v1)**:
+- The plugin registers the source set and wires its classpath ONLY. It never
+  touches loom run configs, never adds dependencies beyond `main`'s own output
+  + classpaths, and never changes jar packaging (`testmod` output is not added
+  to any jar task). Auto-wiring the source set into a loom run config is
+  **v2** scope — loom's run-config API differs enough across versions that
+  baking it into the plugin now would be premature coupling.
+- No-java-plugin behavior: registration reacts to `Plugins.withType(JavaPlugin.class, ...)`,
+  which fires immediately if `java` is already applied, later if it is applied
+  afterwards, and never if it is never applied — so a plain non-java consumer
+  with the flag left on does not crash; the source set is simply never
+  created. The create-or-not decision itself is deferred to `afterEvaluate` so
+  it reads the flag's FINAL value regardless of whether `testkit { }` is
+  configured before or after the `plugins { }` block finishes applying this
+  plugin.
+- agent-driver's own 130 legacy `@GameTest` tests currently live in `main` and
+  violate this convention themselves — migrating them onto a `testmod` source
+  set is a **parked, separate task**, not part of P3b T3. This section only
+  lands the plugin-side building block.

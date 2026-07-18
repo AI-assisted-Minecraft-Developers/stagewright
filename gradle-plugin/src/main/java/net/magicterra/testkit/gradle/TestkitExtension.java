@@ -3,6 +3,7 @@ package net.magicterra.testkit.gradle;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
+import org.gradle.api.tasks.SourceSet;
 
 /**
  * Configuration surface for the mc-testkit gradle plugin — the {@code testkit { ... }}
@@ -17,6 +18,8 @@ import org.gradle.api.provider.Property;
  *       applied project directory, which is the orchestrator working directory)</li>
  *   <li>{@link #getExpectFile() expectFile} — unset (nullable; orchestrator default used)</li>
  *   <li>{@link #getExtraArgs() extraArgs} — empty list</li>
+ *   <li>{@link #getTestmodSourceSet() testmodSourceSet} — {@code false} (opt-in, zero
+ *       impact when off)</li>
  * </ul>
  */
 public abstract class TestkitExtension {
@@ -43,4 +46,34 @@ public abstract class TestkitExtension {
 
     /** Extra arguments appended verbatim to the tail of every assembled command line. */
     public abstract ListProperty<String> getExtraArgs();
+
+    /**
+     * Opt-in: when {@code true}, the plugin registers a {@code testmod} source set on the
+     * applied project — see {@link TestkitPlugin#apply} for the registration reaction and
+     * the v1 boundary (classpath wiring only; no loom run-config edits, no dependency
+     * additions beyond main's own output+classpaths, no jar packaging changes). Requires
+     * the {@code java} plugin on the applied project; registration is a no-op (does not
+     * fail the build) when {@code java} is never applied. Convention: {@code false} — zero
+     * impact when off, no {@code testmod} source set is created.
+     */
+    public abstract Property<Boolean> getTestmodSourceSet();
+
+    /**
+     * Read-only: the {@code testmod} {@link SourceSet} the plugin registered, or
+     * {@code null} when {@link #getTestmodSourceSet()} resolved {@code false} (the
+     * default) or the applied project never gained the {@code java} plugin. The plugin is
+     * the sole writer (see {@link #setTestmodSourceSetRef}) — consumers read this to wire
+     * their OWN loom run config; v1 never touches loom itself (see
+     * {@code mc-testkit/README.md}'s testmod source-set convention section).
+     */
+    public SourceSet getTestmodSourceSetRef() {
+        return testmodSourceSetRef;
+    }
+
+    private SourceSet testmodSourceSetRef;
+
+    /** Package-private: written once by {@link TestkitPlugin} when it registers the set. */
+    void setTestmodSourceSetRef(SourceSet sourceSet) {
+        this.testmodSourceSetRef = sourceSet;
+    }
 }
