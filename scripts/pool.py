@@ -38,6 +38,8 @@ Semantics:
   Never pkill. Every process op targets an explicit recorded PID.
 """
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import signal
@@ -54,6 +56,7 @@ import instrument as inst       # noqa: E402 — REUSE the stdlib synchronous Ws
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "testkit")
 STATE_FILE = os.path.join(TESTKIT_DIR, ".pool-state.json")
+STATE_LOCK = os.path.join(TESTKIT_DIR, ".pool-state.lock")
 
 TOPOLOGIES = ("t1", "t2")
 LOADERS = ("fabric", "neoforge")
@@ -114,15 +117,30 @@ def ensure_decision(endpoint_exists, alive):
     return "reuse" if (endpoint_exists and alive) else "start"
 
 
-def stop_decision(has_entry, endpoint_exists, alive):
-    """Classify a stop request. A pool-recorded entry → signal its PID (the release
-    path). No entry: a LIVE endpoint on disk is an orphan we must NOT kill (refuse);
-    a stale endpoint is safe to delete; nothing on disk is a no-op. Pure."""
+def stop_decision(has_entry, pid_alive, endpoint_exists, endpoint_alive):
+    """Classify a stop request from (recorded entry?, its PID still alive?, endpoint file
+    on disk?, endpoint probes live?). Pure — the stop control-flow spine, self-test-covered.
+
+      entry + live PID                          -> signal_pid           (SIGINT our hold)
+      entry + dead PID + no endpoint            -> clear_entry          (drop the stale record)
+      entry + dead PID + endpoint LIVE          -> refuse_clear_entry   (a DIFFERENT process now
+                                                                         publishes that endpoint —
+                                                                         NOT ours to kill/delete;
+                                                                         drop only our dead record)
+      entry + dead PID + endpoint stale         -> clear_entry_delete_stale (residue: drop + delete)
+      no entry + no endpoint                    -> noop
+      no entry + endpoint LIVE                  -> refuse_orphan        (manual --hold, not ours)
+      no entry + endpoint stale                 -> delete_stale_endpoint
+    """
     if has_entry:
-        return "signal_pid"
+        if pid_alive:
+            return "signal_pid"
+        if not endpoint_exists:
+            return "clear_entry"
+        return "refuse_clear_entry" if endpoint_alive else "clear_entry_delete_stale"
     if not endpoint_exists:
         return "noop"
-    return "refuse_orphan" if alive else "delete_stale_endpoint"
+    return "refuse_orphan" if endpoint_alive else "delete_stale_endpoint"
 
 
 def status_classify(endpoint_exists, alive):
@@ -156,26 +174,49 @@ def save_state(state, path=STATE_FILE):
     os.replace(tmp, path)
 
 
+@contextlib.contextmanager
+def _state_lock(lock_path=STATE_LOCK):
+    """Hold an exclusive fcntl.flock across a load→mutate→save critical section. Two
+    concurrent `ensure` runs for DIFFERENT keys are both multi-minute cold boots whose
+    put_entry() calls would otherwise interleave (load A, load A, set-t1 save, set-t2
+    save) and the last writer would erase the other's PID — a launched hold left running
+    with no recorded PID, unreleasable by `stop`. The lock serializes every read-modify-
+    write so each mutation observes the prior one's committed state."""
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+
+
+def _mutate_state(mutate, lock_path=STATE_LOCK, path=STATE_FILE):
+    """Serialized read-modify-write: reload INSIDE the lock (so a sibling key another
+    process committed while we waited is preserved), apply ``mutate(state)``, save."""
+    with _state_lock(lock_path):
+        st = load_state(path)
+        mutate(st)
+        save_state(st, path)
+
+
 def get_entry(topology, loader):
     return load_state()["entries"].get(state_key(topology, loader))
 
 
 def put_entry(topology, loader, pid, log):
-    st = load_state()
-    st["entries"][state_key(topology, loader)] = {
+    entry = {
         "pid": pid,
         "topology": topology,
         "loader": loader,
         "startedAtEpochMs": int(time.time() * 1000),
         "log": log,
     }
-    save_state(st)
+    _mutate_state(lambda st: st["entries"].__setitem__(state_key(topology, loader), entry))
 
 
 def del_entry(topology, loader):
-    st = load_state()
-    st["entries"].pop(state_key(topology, loader), None)
-    save_state(st)
+    _mutate_state(lambda st: st["entries"].pop(state_key(topology, loader), None))
 
 
 # ------------------------------------------------------------- liveness probe -
@@ -256,22 +297,26 @@ def _wait_pid_gone(pid, grace):
 
 
 def stop_hold(pid, endpoint_file, grace=STOP_GRACE):
-    """Release a recorded hold by its explicit PID (never pkill, never guess). SIGINT
+    """Release a LIVE recorded hold by its explicit PID (never pkill, never guess). SIGINT
     is the documented --hold release path (t1.py/t2.py turn the KeyboardInterrupt into
     their teardown ``finally``, which deletes the endpoint file). Bounded-wait for that
     file to vanish; if it never does, escalate SIGKILL and delete the endpoint residue
-    ourselves (a stale endpoint is the most dangerous leftover — it lures a consumer
-    onto a dead port). Returns a short outcome tag."""
+    ourselves — safe here because the PID was OUR live hold, so the endpoint is ours.
+
+    A PID that is already dead SHORT-CIRCUITS to ``already-dead`` immediately (no grace
+    wait, no endpoint delete): the endpoint at that path may now belong to a DIFFERENT
+    live process, so this function must NOT touch it — the caller re-probes and decides
+    (see cmd_stop's refuse_clear_entry / clear_entry_delete_stale split). Returns a tag."""
     if pid is None:
         return "no-pid"
-    was_alive = pid_alive(pid)
-    if was_alive:
-        _signal(pid, signal.SIGINT)
+    if not pid_alive(pid):
+        return "already-dead"
+    _signal(pid, signal.SIGINT)
     deadline = time.monotonic() + grace
     while time.monotonic() < deadline:
         if not os.path.exists(endpoint_file):
             _wait_pid_gone(pid, PID_EXIT_GRACE)
-            return "clean" if was_alive else "already-dead"
+            return "clean"
         time.sleep(0.5)
     # Grace exhausted: the hold's finally never completed. Hard-kill by PID and sweep
     # the endpoint residue ourselves.
@@ -366,23 +411,63 @@ def cmd_ensure(topology, loader):
     return 3
 
 
+def _refuse_orphan_msg(key, ep, topology, why):
+    print(f"[pool] REFUSING to stop {key}: {why}")
+    print("[pool] The pool never started (or no longer owns) this hold, so its PID is "
+          "not ours to guess — killing/deleting for a process we did not start is forbidden.")
+    print(f"[pool] Release it at its source: Ctrl-C the `{os.path.basename(hold_script(topology))} "
+          f"--hold`, or once it is dead delete {ep}.")
+
+
+def _delete_endpoint(key, ep):
+    try:
+        os.remove(ep)
+        print(f"[pool] {key}: deleted stale (probe-dead) endpoint {ep}")
+    except OSError as e:
+        print(f"[pool] {key}: could not delete stale endpoint {ep}: {e}")
+
+
 def cmd_stop(topology, loader):
     ep = endpoint_path(topology, loader)
     key = state_key(topology, loader)
     entry = get_entry(topology, loader)
+    pid = entry.get("pid") if entry else None
+    alive_pid = isinstance(pid, int) and pid_alive(pid)
     exists = os.path.exists(ep)
-    alive = endpoint_alive(topology, ep) if exists else False
-    decision = stop_decision(bool(entry), exists, alive)
+    ep_alive = endpoint_alive(topology, ep) if exists else False
+    decision = stop_decision(bool(entry), alive_pid, exists, ep_alive)
 
     if decision == "signal_pid":
-        pid = entry.get("pid")
         print(f"[pool] stopping {key}: SIGINT hold pid={pid} → wait endpoint gone → "
               "SIGKILL after grace")
-        outcome = stop_hold(pid if isinstance(pid, int) else None, ep)
+        outcome = stop_hold(pid, ep)
         del_entry(topology, loader)
         gone = not os.path.exists(ep)
         print(f"[pool] {key} stopped ({outcome}); endpoint "
               f"{'gone' if gone else 'STILL PRESENT — inspect the log'}")
+        return 0
+
+    if decision == "clear_entry":
+        del_entry(topology, loader)
+        print(f"[pool] {key}: recorded hold pid={pid} already dead and no endpoint on "
+              "disk — cleared the stale state entry")
+        return 0
+
+    if decision == "refuse_clear_entry":
+        # Our recorded PID is dead, yet the endpoint at that path PROBES LIVE — a different
+        # process (e.g. a manual --hold) now publishes it. Drop our dead record but NEVER
+        # delete/kill: the endpoint is not ours. (Fix 2: no blind os.remove on dead-pid.)
+        del_entry(topology, loader)
+        _refuse_orphan_msg(key, ep, topology,
+                           f"our recorded pid={pid} is dead but a LIVE endpoint at {ep} is "
+                           "now served by a DIFFERENT process (re-probed).")
+        return 0
+
+    if decision == "clear_entry_delete_stale":
+        # Dead PID + stale (probe-dead) endpoint = pure residue. Short-circuit (fix 3): no
+        # grace wait — just drop the record and sweep the dead endpoint file.
+        del_entry(topology, loader)
+        _delete_endpoint(key, ep)
         return 0
 
     if decision == "noop":
@@ -390,20 +475,12 @@ def cmd_stop(topology, loader):
         return 0
 
     if decision == "refuse_orphan":
-        print(f"[pool] REFUSING to stop {key}: a LIVE endpoint at {ep} is NOT "
-              "pool-managed (no state entry).")
-        print("[pool] The pool never started this hold, so its PID is not ours to "
-              "guess — killing a process we did not start is forbidden.")
-        print(f"[pool] Release it at its source: Ctrl-C the `{os.path.basename(hold_script(topology))} "
-              f"--hold`, or once it is dead delete {ep}.")
+        _refuse_orphan_msg(key, ep, topology,
+                           f"a LIVE endpoint at {ep} is NOT pool-managed (no state entry).")
         return 0
 
     # delete_stale_endpoint
-    try:
-        os.remove(ep)
-        print(f"[pool] {key}: deleted stale (probe-dead) orphan endpoint {ep}")
-    except OSError as e:
-        print(f"[pool] {key}: could not delete stale endpoint {ep}: {e}")
+    _delete_endpoint(key, ep)
     return 0
 
 
@@ -435,15 +512,23 @@ def self_test():
         ("ensure: live (exists, alive) -> reuse", ensure_decision(True, True) == "reuse"),
         ("ensure: absent-but-alive-flag defensive -> start",
          ensure_decision(False, True) == "start"),
-        # ---- stop decision table (has_entry × endpoint_exists × alive) ----
-        ("stop: entry present -> signal_pid", stop_decision(True, True, True) == "signal_pid"),
-        ("stop: entry present, endpoint gone -> signal_pid",
-         stop_decision(True, False, False) == "signal_pid"),
-        ("stop: no entry, no endpoint -> noop", stop_decision(False, False, False) == "noop"),
+        # ---- stop decision table (has_entry × pid_alive × endpoint_exists × endpoint_alive) ----
+        ("stop: entry + live PID -> signal_pid",
+         stop_decision(True, True, True, True) == "signal_pid"),
+        ("stop: entry + live PID, endpoint not yet up -> signal_pid",
+         stop_decision(True, True, False, False) == "signal_pid"),
+        ("stop: entry + dead PID + no endpoint -> clear_entry",
+         stop_decision(True, False, False, False) == "clear_entry"),
+        ("stop: entry + dead PID + LIVE endpoint -> refuse_clear_entry (fix 2)",
+         stop_decision(True, False, True, True) == "refuse_clear_entry"),
+        ("stop: entry + dead PID + stale endpoint -> clear_entry_delete_stale (fix 3)",
+         stop_decision(True, False, True, False) == "clear_entry_delete_stale"),
+        ("stop: no entry, no endpoint -> noop",
+         stop_decision(False, False, False, False) == "noop"),
         ("stop: no entry, live endpoint -> refuse_orphan",
-         stop_decision(False, True, True) == "refuse_orphan"),
+         stop_decision(False, False, True, True) == "refuse_orphan"),
         ("stop: no entry, stale endpoint -> delete_stale_endpoint",
-         stop_decision(False, True, False) == "delete_stale_endpoint"),
+         stop_decision(False, False, True, False) == "delete_stale_endpoint"),
         # ---- status classification ----
         ("status: absent when no endpoint", status_classify(False, False) == "absent"),
         ("status: stale when endpoint but dead", status_classify(True, False) == "stale"),
@@ -455,6 +540,8 @@ def self_test():
         ("state round-trips through disk", _check_state_roundtrip()),
         ("load_state on missing file -> empty pool", _check_load_missing()),
         ("load_state on corrupt file -> empty pool", _check_load_corrupt()),
+        ("_mutate_state under lock preserves sibling keys (lost-update fix 1)",
+         _check_mutate_preserves_sibling()),
         # ---- endpoint port extraction (T1 single vs T2 dual) ----
         ("endpoint_ports t1 = [rpcPort] only",
          endpoint_ports("t1", {"rpcPort": 39843, "serverRpcPort": 39777}) == [39843]),
@@ -516,6 +603,23 @@ def _check_state_roundtrip():
         return load_state(path) == state
     finally:
         import shutil
+        shutil.rmtree(d)
+
+
+def _check_mutate_preserves_sibling():
+    """Two independent-key writes through _mutate_state (each reloads inside the lock)
+    must leave BOTH entries — the lost-update the flock exists to prevent."""
+    import shutil
+    import tempfile
+    d = tempfile.mkdtemp()
+    try:
+        path = os.path.join(d, ".pool-state.json")
+        lock = os.path.join(d, ".pool-state.lock")
+        _mutate_state(lambda st: st["entries"].__setitem__("t1/fabric", {"pid": 1}), lock, path)
+        _mutate_state(lambda st: st["entries"].__setitem__("t2/fabric", {"pid": 2}), lock, path)
+        _mutate_state(lambda st: st["entries"].pop("t1/fabric", None), lock, path)
+        return set(load_state(path)["entries"]) == {"t2/fabric"}
+    finally:
         shutil.rmtree(d)
 
 
