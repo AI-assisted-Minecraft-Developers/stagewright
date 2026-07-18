@@ -62,8 +62,10 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
   业务场景本身（P1c 例：三个 `ad.*` 场景均 `required=true, canary=NONE`）。
 - **发现路径**：`META-INF/services/net.magicterra.testkit.scene.SceneProvider`，
   文件内容一行一个实现类全限定名。现行例（P1.6 起 provider 移入 loader 共享的
-  common 模块，一份注册服务所有 loader）：该文件单行为
-  `net.magicterra.agent.bot.testkit.AgentDriverScenes`（P1c 时曾位于 neoforge 模块，
+  common 模块，一份注册服务所有 loader；P4a 起 provider 类与 service 文件均在
+  `common/src/testmod` 源集=生产 jar 之外，类位于 `.scene` 子包——与 common main
+  同包会触发 JPMS split-package 启动崩溃）：该文件单行为
+  `net.magicterra.agent.bot.testkit.scene.AgentDriverScenes`（P1c 时曾位于 neoforge 模块，
   已随 P1.6 搬迁删除；全源码树内每个 provider 只允许一份 service 文件，重复注册会
   触发重名门 RED）。
 
