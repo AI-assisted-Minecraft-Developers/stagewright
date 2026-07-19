@@ -384,8 +384,8 @@ ServerPlayer）；T2 两脸是**两个不同 socket**——`client`→真客户�
 | 金丝雀 ×2 | — | — | 不触脸，照旧（mustFail→FAIL / mustTimeout→TIMEOUT，否则 DEAD） |
 
 **检查名映射**：T2 下**仅** `t1.inWorld`→`t2.inWorld` 改名（`_checks_for(topology)`，纯函数，
-有 self-test）；其余 6 真检查 + 2 金丝雀名**跨拓扑逐字相同**（同一批永久断言 verb，只是落的
-socket 变）。7 真 + 2 金丝雀的形状两拓扑都保持。
+有 self-test）；其余 7 真检查 + 2 金丝雀名**跨拓扑逐字相同**（同一批永久断言 verb，只是落的
+socket 变）。8 真 + 2 金丝雀的形状两拓扑都保持（D1 task#90 增补第 8 真检查 `reset.heldKeys`）。
 
 ### #55 现场发现：`player.hurt` 是客户端发的 push 事件（brief 的 observe→server 被现场事实取代）
 
