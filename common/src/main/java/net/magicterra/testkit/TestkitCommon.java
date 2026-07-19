@@ -31,6 +31,29 @@ public final class TestkitCommon {
     private static boolean verbHooksInstalled;
     private static boolean onDemandRequested;
 
+    // ---- Startup tick-debt settle barrier (task#88) ----
+    // A freshly-STARTED MinecraftServer carries accumulated tick DEBT and runs unthrottled
+    // catch-up ticks (~3 ms/tick instead of the steady 50 ms cadence) until it is caught up.
+    // Arming the scene harness during that burst makes tick-budgeted awaits fragile: entity
+    // promotion (and similar wall-clock-bound work the scenes await) costs 2-2.3x more ticks
+    // for the same real delay in the burst regime, which is exactly why ad.entityLeash needed
+    // repeated stop-bleeds (within 60→120→180). This barrier gates the harness.tick() FORWARD
+    // until the tick cadence has stabilized to the real ~50 ms rhythm — 10 consecutive server
+    // ticks spaced >=40 ms apart. Only the FORWARDING is gated: harness construction, the
+    // tick-pure await contract (SceneContext.within counts pure observed ticks) and
+    // PREP_BUDGET_TICKS are all untouched. Because harness.tick() is simply never called before
+    // settle, every tick budget naturally counts from the first post-settle tick. Safety valve:
+    // after 1200 observed ticks with no settle, arm anyway (WARN) so a pathological host can
+    // never hang the suite forever. All of this state is touched only from onServerTick (server
+    // thread), so it needs no synchronization.
+    private static final long CADENCE_NANOS = 40_000_000L;   // 40 ms — floor of a real ~50 ms tick
+    private static final int CADENCE_STREAK = 10;            // consecutive on-cadence ticks to settle
+    private static final int SETTLE_SAFETY_TICKS = 1200;     // never hang: force-arm after this many
+    private static boolean settled;
+    private static int settleTickCount;
+    private static int consecutiveCadenceTicks;
+    private static long lastTickNanos;
+
     private TestkitCommon() {}
 
     /**
@@ -153,6 +176,30 @@ public final class TestkitCommon {
     }
 
     public static void onServerTick(MinecraftServer server) {
+        // Settle barrier (task#88): drain startup tick debt before arming scenes. See the field
+        // block above for the full rationale. Until the cadence settles we track tick spacing and
+        // forward NOTHING to the harness — so all tick budgets count from the first post-settle tick.
+        if (!settled) {
+            long now = System.nanoTime();
+            settleTickCount++;
+            if (lastTickNanos != 0L && (now - lastTickNanos) >= CADENCE_NANOS) {
+                if (++consecutiveCadenceTicks >= CADENCE_STREAK) {
+                    settled = true;
+                    LOG.info("[{}] testkit: tick cadence settled after {} server ticks (tick debt drained)",
+                            MOD_ID, settleTickCount);
+                }
+            } else if (lastTickNanos != 0L) {
+                consecutiveCadenceTicks = 0;
+            }
+            lastTickNanos = now;
+            if (!settled && settleTickCount >= SETTLE_SAFETY_TICKS) {
+                settled = true;
+                LOG.warn("[{}] testkit: tick cadence did NOT settle within {} server ticks — arming "
+                        + "anyway (tick debt may still be draining; awaits may run in the burst regime)",
+                        MOD_ID, SETTLE_SAFETY_TICKS);
+            }
+            if (!settled) return;
+        }
         TestkitHarness h = harness;
         if (h != null) h.tick();
     }
