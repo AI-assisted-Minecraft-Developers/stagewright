@@ -66,7 +66,13 @@ common `SceneProvider` service file. P1.6's dual-loader ×3 determinism matrix
 found every `ad.*` scene metric **byte-identical across both loaders** (fabric ==
 neoforge; the sole timing variance is `ad.entityLeash`'s await tick count — an
 entity-indexing wait sensitive to server startup tick-debt, both within the
-widened `within(120)` bound, root fix tracked as task#88).
+widened `within(180)` bound, root fix tracked as task#88).
+
+**Wall-clock (130-scene dogfood suite, P4c acceptance, 2026-07-18).** T0 dedicated-server
+runs land at **~80 s neoforge / ~75 s fabric** per full-suite run (measured 83.6/81.6 s
+neoforge ×2, 73.6/79.6 s fabric ×2), and are byte-identical `(name, outcome)` within each
+loader and cross-loader. The T1 integrated-client run pays a one-time client cold boot
+(~28-30 s) on top of the suite. `instrument.py`'s bare-RPC contract suite is ~43 s per loader.
 
 `--expect-file scripts/testkit/expected-scenes-neoforge.txt` is the **canonical
 external-expectation gate** (the fabric manifest `expected-scenes-fabric.txt`
@@ -113,14 +119,15 @@ Keep exactly one service file per provider across all source sets — a copy in
 a loader module alongside the common one double-registers the provider on that
 loader's dev classpath and trips the duplicate-scene-name gate (RED by design).
 
-### Scene library structure (dogfood suite: 71 `ad.*` scenes, by family)
+### Scene library structure (dogfood suite: 130 `ad.*` scenes, by family)
 
-Since P4b every non-Server legacy `@GameTest` family has been migrated to `ad.*`
-dogfood scenes (`migrate-then-delete`; the drift log
+As of P4c the **entire** legacy `@GameTest` suite has been migrated to `ad.*`
+dogfood scenes and deleted (`migrate-then-delete`; the drift log
 [`../docs/testkit/migration-log.md`](../docs/testkit/migration-log.md) records
-every retirement). The dogfood suite is now **71 `ad.*` scenes** across **eight
-`SceneProvider` classes** — the original seed provider plus one per migrated
-family — all in
+every retirement). `grep -rn "@GameTest(" common/src neoforge/src fabric/src`
+now returns **zero** test-method call sites. The dogfood suite is
+**130 `ad.*` scenes** across **13 `SceneProvider` classes** — the original seed
+provider plus one per migrated family — all in
 `common/src/testmod/java/net/magicterra/agent/bot/testkit/scene/`, all listed
 (one line each) in the single common service file
 `common/src/testmod/resources/META-INF/services/net.magicterra.testkit.scene.SceneProvider`:
@@ -135,10 +142,18 @@ family — all in
 | `AgentDriverCoreScenes` | Core (main `AgentGameTest`) | 12 | `AgentGameTest` (deleted) |
 | `AgentDriverCombatScenes` | CombatSense | 2 | `AgentGameTestCombatSense` (deleted) |
 | `AgentDriverBuildScenes` | BuildBlock | 2 | `AgentGameTestBuildBlock` (deleted) |
+| `AgentDriverStationScenes` | Station (craft / smelt / recipe / observe) | 15 | `AgentGameTestServer` (deleted) |
+| `AgentDriverSchedulerScenes` | Scheduler semantics (matrices) | 11 | `AgentGameTestServer` (deleted) |
+| `AgentDriverSurvivalScenes` | Survival (reflex / autos) | 13 | `AgentGameTestServer` (deleted) |
+| `AgentDriverAvatarScenes` | Avatar (server-body capability) | 5 | `AgentGameTestServer` (deleted) |
+| `AgentDriverProcessScenes` | Process core (driver / process / combat) | 15 | `AgentGameTestServer` (deleted) |
 
-**Total 71** (9 + 62 migrated). The only surviving legacy `@GameTest` class is
-`AgentGameTestServer` (59 tests, the P4c cut); `AgentGameTestSupport` also survives
-because the Server family still uses its shared helpers.
+**Total 130** (9 seed + 121 migrated 1:1). One legacy arena, `descentDriftArena`,
+was retired-without-scene (controller-adjudicated, P4b wave 2 — see migration-log)
+and one scene, `ad.settingRegistryClosed`, is net-new (0 legacy twin); the
+remaining 121 map 1:1. No legacy `@GameTest` class survives —
+`AgentGameTestServer`, `AgentGameTestRegistrar` and `AgentGameTestSupport` were all
+deleted at the P4c finale.
 
 **Three deliberate optional-FAIL sensors.** Three scenes are registered
 `.withRequired(false)` on purpose — they are *visible* live-bug / false-green
