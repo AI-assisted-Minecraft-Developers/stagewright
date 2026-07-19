@@ -622,6 +622,21 @@ sets**, which turned every "v2 / consumer figures it out" hand-wave above into a
 concrete, byte-gated wiring. This section is the standing record of what that
 took — it is loader-mechanism reality, not the plugin flag.
 
+> **⚑ Retired at P4-final.** The migration campaign closed at P4c (legacy
+> `@GameTest` 130 → 0; every arena is now an `ad.*` scene) and **P4-final retired
+> the old dedicated-server run machinery itself** (the manifest, its run config,
+> and the two run/reconcile scripts) — deleted in commit `9f506d1` plus the
+> P4-final docs close. The full deleted-machinery inventory with commit pointers
+> lives in the drift log's P4-final note:
+> [`../docs/testkit/migration-log.md`](../docs/testkit/migration-log.md). The
+> per-loader wiring below is kept as the standing loader-mechanism record, but
+> two present-tense details are now **historical**: the `neoforge` and `fabric`
+> `testmod` sets no longer hold any `.java` sources — both are **empty-source
+> bridges** that carry only `:common`'s scenes into their loom runs (deleting
+> either bridge would silently drop all scene delivery). The dogfood suite is
+> armed by `-Dtestkit.autorun` on the `runDogfoodServer` run; mc-testkit is the
+> sole test gate.
+
 **Three testmod source sets, hand-wired (not via the plugin flag).** The plugin's
 `testmodSourceSet = true` registers *one* source set and wires its classpath
 only — it deliberately never touches loom run configs (v2 scope). agent-driver
@@ -631,11 +646,14 @@ them directly in each `build.gradle`:
 - **`common`** — the dogfood scenes (`AgentDriverScenes`) + probes (`SimProbes`)
   + the `net.magicterra.testkit.scene.SceneProvider` service file. `testmod`
   compile/runtime classpaths extend `main`'s output + `main`'s own classpaths.
-- **`neoforge`** — the 8 legacy `@GameTest` arena classes (+ `Support`). Same
-  classpath extension, plus `:common`'s `testmod` **output** on the compile
-  classpath (so `SimProbes` delegates resolve).
-- **`fabric`** — an (otherwise source-empty) `testmod` set that exists purely as
-  the run `source` carrier for `:common`'s testmod output+resources.
+- **`neoforge`** — at P4a this held the 8 legacy `@GameTest` arena classes (+
+  `Support`); **since P4c all are migrated to `ad.*` scenes and deleted**, so the
+  set is now an **empty-source bridge** (retained: deleting it drops scene
+  delivery). Same classpath extension, plus `:common`'s `testmod` **output** on
+  the compile classpath (so `SimProbes` delegates resolve).
+- **`fabric`** — an (always source-empty) `testmod` set that exists purely as
+  the run `source` carrier for `:common`'s testmod output+resources — the same
+  empty-source-bridge role neoforge's set now also plays.
 
 **The `.scene` sub-package JPMS lesson.** The scenes could **not** stay in
 `net.magicterra.agent.bot.testkit` when moved to `testmod`: `main` still owns
@@ -701,8 +719,11 @@ unrelated to the byte gate.)
 **Migrate-then-delete.** Scenes and their legacy `@GameTest` twins are kept side
 by side until a scene is proven a byte-faithful replacement, then the twin is
 retired in bounded waves. Wave 1 (P4a) retired 8 twins (legacy registered
-130 → 122). The full policy, per-twin provenance, and the reframed legacy
-acceptance formula live in the drift log:
+130 → 122); **the campaign ran to completion — P4b/P4c retired the rest, legacy
+`@GameTest` reached 0 at the P4c finale, and P4-final retired the GameTestServer
+run machinery itself. mc-testkit is now the sole test gate.** The full policy,
+per-twin provenance, the reframed legacy acceptance formula, and the P4-final
+machinery-retirement note live in the drift log:
 [`../docs/testkit/migration-log.md`](../docs/testkit/migration-log.md).
 
 ## Client process pool (`pool.py`) — P3b T2
