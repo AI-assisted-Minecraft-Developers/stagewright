@@ -19,8 +19,8 @@ import net.magicterra.testkit.scene.SceneOutcome;
  * end. Never write during a scene's RUN ticks: synchronous server-thread IO
  * measurably broke a byte-deterministic arena once already. Boundary writes still
  * shift wall-clock for the NEXT scene; before hosting determinism-sensitive
- * dogfood arenas (P1c) this must be revisited (async writer precedent:
- * agent-driver GameTestManifest).
+ * dogfood arenas (P1c) this must be revisited (the precedent fix was an async
+ * off-thread writer that drains a queue instead of doing IO inline).
  *
  * Names/reasons are escaped (quote+backslash+control chars) — scene names are
  * ordinarily Java identifiers, but reasons are free text: the harness's
