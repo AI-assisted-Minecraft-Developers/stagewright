@@ -171,11 +171,16 @@ re-audited each acceptance to prevent carve-out creep):
   clean `walkerVineFreeHangClimb`-OFF baseline; deterministic optional-**FAIL**
   (`pocketTicks=29`). Its RED *is* the proof the live bug reproduces (task ref:
   the −711 live record cited in the scene javadoc).
-- **`ad.riverSheerBank`** (WaterBank, **task#91**) — a gap #48 shared-body
-  FALSE-GREEN surfaced by body isolation (shared→`createUnique`); the config is
-  byte-identical to legacy, so the RED (`step=FAILED`, `wallPressTicks=51`) is a
-  genuine open-river sheer-bank climb-out wedge under the authored default-OFF
-  baseline, not a rig change. Deterministic optional-**FAIL**, filed as task#91.
+- **`ad.riverSheerBank`** (WaterBank) — **task#91 CLOSED, promoted to `required`.**
+  The gap #48 shared-body FALSE-GREEN it surfaced was a real EXECUTOR gap: A* always
+  routed the correct far-lateral exit (low bank +5 EAST across open water), but the
+  climb-out executor misread that laterally-distant, only-+1-higher waypoint as a
+  climb-HERE intent and trenched the +5 sheer wall (`wallPressTicks≈51`). Fixed
+  structurally by `walkerWaterClimbLateralGate` (default ON, baseline-EXEMPT — a
+  correctness invariant): the climb-out engages only when the waypoint is horizontally
+  BESIDE the bot, so the swim-drive carries it to the real walk-out. K≥6 A/B both
+  loaders: gate OFF 6/6 wedge, gate ON 6/6 ashore (byte-identical ARRIVED); 10 sibling
+  water families byte-unchanged.
 
 A dogfood run is GREEN with these two optional-FAILs present — the acceptance gate
 requires all *required* scenes PASS and the `(name, outcome)` set be identical
