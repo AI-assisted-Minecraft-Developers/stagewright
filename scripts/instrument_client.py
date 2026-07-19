@@ -16,8 +16,10 @@ it" permanent assertions that instrument.py explicitly deferred to P2 (contract 
 
 Plus the #280 live end-to-end the P2a appendix owed (a bogus mc.bot.setting key
 rejected by the closed schema on a REAL client, not just a dedicated server), the
-known-key round-trip, and mc.test.reset behaviour (screen closed + keys released +
-chat readback cleared).
+known-key round-trip, mc.test.reset behaviour (screen closed + keys released +
+chat readback cleared), and the task#90 held-key readback (press W → mc.test.input.heldKeys
+reports up==true → mc.test.reset → every held key false — the real releaseKeys() assertion
+the unconditional reset[] "keys" token could never make).
 
 Two run modes:
   * self-launch (default): drive t1.py's shell — Xvfb, gradle testkitClient with
@@ -397,6 +399,41 @@ def check_reset_behavior(faces):
         raise ContractFailure(f"chat readback not cleared after reset: {hist!r}")
 
 
+def check_reset_held_keys(faces):
+    ctx = faces.client  # held keys live on the client; mc.test.input.heldKeys is a client-thread
+                        # KeyMapping.isDown() readback, and mc.test.reset is the client-entry reset.
+    # task#90: the reset[] "keys" token is UNCONDITIONAL (BotApiImpl always appends it) — it proves
+    # releaseKeys() RAN, not that any key was actually DOWN and got cleared, so reset.behavior's
+    # keys sub-assertion was empty. mc.test.input.heldKeys closes that externally: press W so
+    # options.keyUp goes down, prove heldKeys REPORTS it, mc.test.reset, prove EVERY held key is
+    # false. A releaseKeys() no-op regression now fails HERE (keys still down after reset), where
+    # before it was invisible behind an always-present token.
+    ctx.call("mc.client.screen.close")  # no screen → the key verb takes the keybind (KeyMapping) path
+    ctx.call("mc.client.input.key", {"key": "W", "action": "press"})  # hold forward down
+    held = _poll(lambda: ctx.call("mc.test.input.heldKeys"),
+                 lambda r: bool((r.get("keys") or {}).get("up")),
+                 what="mc.test.input.heldKeys reports W (up) held after a press", timeout=6.0)
+    if not held.get("ok"):
+        raise ContractFailure(f"mc.test.input.heldKeys not ok: {held!r}")
+
+    r = ctx.call("mc.test.reset")
+    if not r.get("ok"):
+        raise ContractFailure(f"mc.test.reset not ok: {r!r}")
+    if "keys" not in (r.get("reset") or []):
+        raise ContractFailure(f"reset did not list keys: {r!r}")
+
+    after = ctx.call("mc.test.input.heldKeys")
+    keys = after.get("keys") or {}
+    expected = {"up", "down", "left", "right", "jump", "sprint", "attack", "shift"}
+    if set(keys) != expected:
+        raise ContractFailure(
+            f"heldKeys surface incomplete: {sorted(keys)} != {sorted(expected)} — {after!r}")
+    stuck = [k for k, v in keys.items() if v]
+    if stuck:
+        raise ContractFailure(
+            f"releaseKeys() no-op regression: keys still held after mc.test.reset: {stuck} — {after!r}")
+
+
 def canary_must_fail(faces):
     raise ContractFailure("canary: this check must be reported as FAIL")
 
@@ -413,6 +450,7 @@ CHECKS = [
     ("route.settingUnknownKeyLive", "NONE", check_setting_unknown_key_live),
     ("route.settingKnownKeyLive", "NONE", check_setting_known_key_live),
     ("reset.behavior", "NONE", check_reset_behavior),
+    ("reset.heldKeys", "NONE", check_reset_held_keys),
     ("canary.mustFail", "MUST_FAIL", canary_must_fail),
     ("canary.mustTimeout", "MUST_TIMEOUT", canary_must_timeout),
 ]
@@ -1012,8 +1050,8 @@ def self_test():
                                                  rec("ct", "PASS"), done], record_type="check")[0] == 2),
         ("real check swallowed -> 1", judge([reg, rec("cf", "FAIL"), rec("ct", "TIMEOUT"),
                                              {"type": "done", "scenes": 2}], record_type="check")[0] == 1),
-        ("registry has 7 real + 2 canary",
-         sum(1 for _, c, _ in CHECKS if c == "NONE") == 7
+        ("registry has 8 real + 2 canary",
+         sum(1 for _, c, _ in CHECKS if c == "NONE") == 8
          and sum(1 for _, c, _ in CHECKS if c != "NONE") == 2),
         ("every check fn callable or canary",
          all(callable(f) for _, _, f in CHECKS)),
@@ -1082,8 +1120,8 @@ def self_test():
          _checks_for("t2")[0][0] == "t2.inWorld"),
         ("_checks_for t2: every OTHER check name identical to t1",
          [n for n, _, _ in _checks_for("t2")[1:]] == [n for n, _, _ in _checks_for("t1")[1:]]),
-        ("_checks_for preserves the 7 real + 2 canary shape for both topologies",
-         all(sum(1 for _, c, _ in _checks_for(t) if c == "NONE") == 7
+        ("_checks_for preserves the 8 real + 2 canary shape for both topologies",
+         all(sum(1 for _, c, _ in _checks_for(t) if c == "NONE") == 8
              and sum(1 for _, c, _ in _checks_for(t) if c != "NONE") == 2
              for t in ("t1", "t2"))),
         ("Faces: t1 client and server are the SAME object",
