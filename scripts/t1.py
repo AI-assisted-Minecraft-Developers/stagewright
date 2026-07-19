@@ -31,6 +31,7 @@ import asyncio
 import glob
 import json
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -377,6 +378,15 @@ async def run_session(wall, hold, hold_pid=None):
                 print("[t1] quit-to-title OK")
             except Exception as e:  # noqa: BLE001
                 print(f"[t1] quit-to-title best-effort failed ({e})")
+        # Optional coverage pull (task#95a): the integrated client's exit path skips
+        # JVM shutdown hooks (harness halt / hard kill), so a file-mode jacoco agent
+        # never flushes. Run an external dump command NOW, while the client JVM is
+        # still alive at the DisconnectedScreen (agent in output=tcpserver mode).
+        # No-op unless TESTKIT_COVERAGE_DUMP_CMD is set; never affects the verdict.
+        dump_cmd = os.environ.get("TESTKIT_COVERAGE_DUMP_CMD")
+        if dump_cmd:
+            rc = subprocess.call(shlex.split(dump_cmd))
+            print(f"[t1] coverage dump rc={rc}")
         return footer
 
 
