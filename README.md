@@ -744,9 +744,9 @@ remapped production jar and assert:
 
 The same assertion is re-run against the **published** mod jars in `~/.m2`
 (`publishToMavenLocal`) so the maven face and the build face agree. (The mod
-artifacts publish under `agent_driver-*` / `agent_driver-testkit-*` coordinates —
-a pre-existing artifactId naming residual documented in the maven section above,
-unrelated to the byte gate.)
+artifacts publish under `agent_driver-*` (the driver mod) and `mc_testkit-*`
+(the testkit family) coordinates — the historical `agent_driver-testkit-*`
+naming residual was fixed 2026-07-19, see the maven section above.)
 
 **Migrate-then-delete.** Scenes and their legacy `@GameTest` twins are kept side
 by side until a scene is proven a byte-faithful replacement, then the twin is
@@ -810,9 +810,9 @@ to `~/.m2/repository/net/magicterra/`:
 | `agent_driver-common` | root `common` | none (cleansed) |
 | `agent_driver-fabric` | root `fabric` | none (cleansed) |
 | `agent_driver-neoforge` | root `neoforge` | none (cleansed) |
-| `agent_driver-testkit-common` | `mc-testkit/common` | none (cleansed) |
-| `agent_driver-testkit-fabric` | `mc-testkit/fabric` | none (cleansed) |
-| `agent_driver-testkit-neoforge` | `mc-testkit/neoforge` | none (cleansed) |
+| `mc_testkit-common` | `mc-testkit/common` | none (cleansed) |
+| `mc_testkit-fabric` | `mc-testkit/fabric` | none (cleansed) |
+| `mc_testkit-neoforge` | `mc-testkit/neoforge` | none (cleansed) |
 | `mc_testkit-junit` | `mc-testkit/junit` | gson, junit-jupiter-api |
 
 **Two opposite POM rules, and why.** The six mod-jar publications (root
@@ -830,17 +830,18 @@ transitively. Its `.module` Gradle metadata is left enabled (unlike the mod
 jars) because, with no Jar-in-Jar split to reconcile, the variant graph and
 the POM already agree.
 
-**Naming quirk (pre-existing, not introduced by T4):** the three
+**Naming quirk — FIXED (2026-07-19):** the three
 `mc-testkit/{common,fabric,neoforge}` build.gradle files set
-`base.archivesName = 'mc_testkit-*'`, which does govern the jar *file name*
-on disk — but the root `subprojects{}` publishing block reads
-`artifactId = base.archivesName.get()` with an eager `.get()`, which resolves
-before those child scripts override the value, so the *published Maven
-artifactId* is actually `agent_driver-testkit-{common,fabric,neoforge}`, not
-`mc_testkit-*`. Consumers must depend on the artifactId in the table above,
-not the jar filename. This is unrelated to the junit publication work in this
-section and is left as-is; a future task can decide whether to fix the
-eager/lazy mismatch or just rename the child modules' intent to match.
+`base.archivesName = 'mc_testkit-*'`, but the root `subprojects{}` publishing
+block used to read `artifactId = base.archivesName.get()` with an eager
+`.get()` that resolved *before* those child scripts ran, so the published
+Maven artifactId came out as `agent_driver-testkit-{common,fabric,neoforge}`.
+The root build now defers the read to `afterEvaluate`, so the child override
+wins and the published coordinates match the jar file names:
+`mc_testkit-{common,fabric,neoforge}` (verified via `publishToMavenLocal`;
+POMs remain dependency-cleansed; the stale `agent_driver-testkit-*` mavenLocal
+directories were removed — only mavenLocal ever carried them, no remote
+consumers existed).
 
 **Consuming `mc_testkit-junit` from an external Gradle project:**
 
