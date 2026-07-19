@@ -43,6 +43,21 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 结果写盘只在场景边界（P0 探针事故教训，agent-driver 926396d）；
 确定性敏感场景入驻（P1c）前须复核，必要时改异步 writer。
 
+### 启动 tick 债 settle 屏障（v0 附录，task#88 / D1-T1）
+新起的 `MinecraftServer` 带累积 tick 债，起步会以 ~3ms/tick 不节流地"追帧"直到追平，
+才回落到稳定的 ~50ms 节奏。这段突发窗内，场景里墙钟绑定的等待（实体入索引等）为同一段
+真实延迟要多吃 2-2.3× 的 tick——正是 `ad.entityLeash` 反复止血（`within` 60→120→180）的
+根因。`TestkitCommon.onServerTick` 现在把 `harness.tick()` 的**转发**挡在一道 settle 屏障后：
+连续 10 个服务器 tick 间距 ≥40ms（tick 债已排空）之前一律不转发；达成时打一条 INFO
+`testkit: tick cadence settled after <N> server ticks (tick debt drained)`；安全阀=1200 tick
+仍未稳定则强制开跑并打 WARN（永不无限挂起）。**只挡转发**：harness 构造、tick-pure 的
+`within`/`PREP_BUDGET_TICKS` 语义全不变；因为 settle 前 `harness.tick()` 根本没被调过，所有
+tick 预算天然从首个 settle 后 tick 起算。
+
+对编排契约的影响：**done footer 语义、退出码判据、结果 JSONL 字节一律不变**（settle 只是
+把首场景开跑推后若干 tick，不改任何场景的指标）；唯一可见差异=首场景开跑前 server log
+多出一条上述 settle INFO 行（两个 loader 都出现）。
+
 ## SceneProvider（v0 附录）
 下游 mod（P1c 起：agent-driver 自身）通过 SPI 向 T0 套件贡献场景，语义只澄清、不改
 线协议，版本仍 v0：
