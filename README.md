@@ -66,7 +66,11 @@ common `SceneProvider` service file. P1.6's dual-loader ×3 determinism matrix
 found every `ad.*` scene metric **byte-identical across both loaders** (fabric ==
 neoforge; the sole timing variance is `ad.entityLeash`'s await tick count — an
 entity-indexing wait sensitive to server startup tick-debt, both within the
-widened `within(180)` bound, root fix tracked as task#88).
+`within(180)` liveness bound. The startup tick-debt catch-up burst that made a
+tight wall-clock bound flaky is fixed at the source by the harness **settle
+barrier** (D1: drains startup tick-debt before arming scenes); `within(180)` is
+retained as a pure liveness guard after `within(120)` was falsified by a wild
+`TIMEOUT@121` under external box load — task#88 **closed**).
 
 **Wall-clock (130-scene dogfood suite, P4c acceptance, 2026-07-18).** T0 dedicated-server
 runs land at **~80 s neoforge / ~75 s fabric** per full-suite run (measured 83.6/81.6 s
@@ -178,16 +182,22 @@ requires all *required* scenes PASS and the `(name, outcome)` set be identical
 across runs and loaders, so an optional sensor flipping to green (a silent fix or a
 tuned rig) would itself be caught by the cross-run/cross-loader identity check.
 
-**One REQUIRED scene carries a visible topology guard: `ad.agentRpcSmoke`** (task#92).
-Its 259-check JS RPC/YAML validation suite is authored against the dedicated-server
-RPC surface, so it stays REQUIRED coverage on the dedicated path (T0) — but on an
-integrated (client-hosted) topology (T1/T2) 8 client-face checks diverge, so the
-scene body detects `!getServer().isDedicatedServer()` and returns PASS early with a
-**visible marker** (`SceneContext.passNote` → the results-JSONL `reason` field + the
-harness log line) citing task#92. This is a guard, not a swallow: reconcile still
-counts the scene entered and the reason records exactly why it passed trivially; the
-8-check divergence and its real fix (topology-aware checks / a signature gate pinning
-the known divergences) live in task#92.
+**One REQUIRED scene runs a topology-portable validation suite: `ad.agentRpcSmoke`** (task#92,
+**closed** in D1). Its JS RPC/YAML validation suite (`AgentDriverCommon.runValidation()`) runs **in
+full on both topologies** — the earlier blanket early-PASS guard on any non-dedicated topology was
+**removed**. The ~35 client-face checks each self-skip a single "no client" placeholder on the
+dedicated path but run their full real branch on integrated, so the suite is **147 checks on dedicated
+(T0)** and **259 on integrated (T1/T2)** (integrated ⊃ dedicated — a measured, topology-aware total,
+not an assumption). After the worker completes the scene asserts, on whichever topology it is on:
+`FAIL == 0` ∧ `TOTAL ==` that topology's expected count (`RPC_SMOKE_EXPECTED_TOTAL_DEDICATED=147` /
+`RPC_SMOKE_EXPECTED_TOTAL_INTEGRATED=259`) ∧ every `SKIP(task#92)` result ∈ the named allow-list.
+Exactly **one named topology-skip** is sanctioned: `42_combat: melee engage clears a zombie pack` —
+full area-clear needs a flat, entity-clean arena, so it records a **counted** `SKIP(task#92)` on the
+integrated path (the whole `42_combat` file self-skips on dedicated for want of a client); the offence
+itself is covered deterministically by dogfood `ad.serverCombat*`. Pinned by the scene's
+`RPC_SMOKE_NAMED_SKIPS` allow-list — not deleted, not swallowed. The `passNote` reports the topology,
+the total, and the named-skip list into the results-JSONL `reason`, so a run proves it actually ran
+the suite (e.g. T1 `ad.agentRpcSmoke` runs ~800 ticks / ~35 s wall, not an early-PASS).
 
 ### How to add a scene (single-place how-to)
 
@@ -363,15 +373,14 @@ skips honestly — a test can never fall through both gates and vanish.
 generalizes across both loaders), so the identical JUnit module attaches to either
 loader with no code change.
 
-**⭐containerFurnace 延后（task#90，偏差延续）**：`ui.containerFurnace` 是一个
-**可见、有论证的 `@Disabled` 标记**（绝非静默缩编）——它要**右键世界里的方块**打开
-方块实体容器屏（`FurnaceScreen`），而仪表面上没有任何 verb 能做世界右键：
-`mc.client.input.click` 只在已开屏内点 widget、`mc.client.input.key` 只走键盘绑定
-（原版「使用/放置」绑在右键，`glfwKeyCode` 不映射），唯一能右键世界方块的
-`mc.bot.useItem` 是模块纪律禁依赖的行为面 verb。**inventory / chat 屏已被覆盖**
-（键盘可开），缺的只是**世界右键**这一维——真修 = 一个 instrument 级的 world-use
-verb（`task#90` 双 verb 之一，与持键回读 verb 同批），归 controller 择期。完整证据见
-`../.superpowers/sdd/task-3-report.md`。
+**✅ containerFurnace — task#90 收案（D1）**：`ui.containerFurnace` 要**右键世界里的方块**
+打开方块实体容器屏（`FurnaceScreen`），而仪表面曾缺这一维——`mc.client.input.click` 只在
+已开屏内点 widget、`mc.client.input.key` 只走键盘绑定（原版「使用/放置」绑右键，`glfwKeyCode`
+不映射），唯一能右键世界方块的 `mc.bot.useItem` 是模块纪律禁依赖的行为面 verb。task#90 落了
+instrument 级 **`mc.test.input.useOnBlock`**（世界右键，合成 `BlockHitResult` 直调 `gameMode`）
++ 配套 **`mc.test.input.heldKeys`**（持键回读），补上了缺的世界右键维度。`ContainerFurnaceTest`
+因此从 `@Disabled` **转为启用**（`@EnabledIfEnvironmentVariable(TESTKIT_ENDPOINT)`），经 attach
+在 live 世界真开炉屏。完整证据见 `../.superpowers/sdd/task-2-report.md`（task#90 = D1-T2）。
 
 ## T2: production topology (dedicated + client) — P3a
 
