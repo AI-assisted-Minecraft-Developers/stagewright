@@ -123,14 +123,14 @@ Keep exactly one service file per provider across all source sets — a copy in
 a loader module alongside the common one double-registers the provider on that
 loader's dev classpath and trips the duplicate-scene-name gate (RED by design).
 
-### Scene library structure (dogfood suite: 130 `ad.*` scenes, by family)
+### Scene library structure (dogfood suite: 131 `ad.*` scenes, by family)
 
 As of P4c the **entire** legacy `@GameTest` suite has been migrated to `ad.*`
 dogfood scenes and deleted (`migrate-then-delete`; the drift log
 [`../docs/testkit/migration-log.md`](../docs/testkit/migration-log.md) records
 every retirement). `grep -rn "@GameTest(" common/src neoforge/src fabric/src`
 now returns **zero** test-method call sites. The dogfood suite is
-**130 `ad.*` scenes** across **13 `SceneProvider` classes** — the original seed
+**131 `ad.*` scenes** across **13 `SceneProvider` classes** — the original seed
 provider plus one per migrated family — all in
 `common/src/testmod/java/net/magicterra/agent/bot/testkit/scene/`, all listed
 (one line each) in the single common service file
@@ -138,7 +138,7 @@ provider plus one per migrated family — all in
 
 | provider class | family | scenes | migrated from (legacy class) |
 |---|---|---:|---|
-| `AgentDriverScenes` | core seed (the original dogfood wave-1/2a/2b scenes) | 9 | (seeded, P1c–P2a) |
+| `AgentDriverScenes` | core seed (dogfood wave-1/2a/2b + `ad.entityLeashLowY` task#87 D2) | 10 | (seeded, P1c–P2a; +1 D2) |
 | `AgentDriverTerrainScenes` | Terrain | 12 | `AgentGameTestTerrain` (deleted) |
 | `AgentDriverBiasScenes` | Bias (planner cost/constraint) | 13 | `AgentGameTestBias` (deleted) |
 | `AgentDriverWaterBankScenes` | WaterBank | 11 | `AgentGameTestWaterBank` (deleted) |
@@ -152,14 +152,16 @@ provider plus one per migrated family — all in
 | `AgentDriverAvatarScenes` | Avatar (server-body capability) | 5 | `AgentGameTestServer` (deleted) |
 | `AgentDriverProcessScenes` | Process core (driver / process / combat) | 15 | `AgentGameTestServer` (deleted) |
 
-**Total 130** (9 seed + 121 migrated 1:1). One legacy arena, `descentDriftArena`,
+**Total 131** (10 seed + 121 migrated 1:1). One legacy arena, `descentDriftArena`,
 was retired-without-scene (controller-adjudicated, P4b wave 2 — see migration-log)
-and one scene, `ad.settingRegistryClosed`, is net-new (0 legacy twin); the
-remaining 121 map 1:1. No legacy `@GameTest` class survives —
+and two scenes are net-new (0 legacy twin): `ad.settingRegistryClosed` (P2a) and
+`ad.entityLeashLowY` (the task#87 D2 low-Y leash probe, promoted to `required` after
+void-moat isolation cleared the engine — see migration-log); the remaining 121 map
+1:1. No legacy `@GameTest` class survives —
 `AgentGameTestServer`, `AgentGameTestRegistrar` and `AgentGameTestSupport` were all
 deleted at the P4c finale.
 
-**Three deliberate optional-FAIL sensors.** Three scenes are registered
+**Two deliberate optional-FAIL sensors.** Two scenes are registered
 `.withRequired(false)` on purpose — they are *visible* live-bug / false-green
 signatures, kept red-on-purpose and **never tuned to green** (per the module rule
 that every `withRequired(false)` scene must cite a filed task in its javadoc and be
@@ -171,6 +173,11 @@ re-audited each acceptance to prevent carve-out creep):
   clean `walkerVineFreeHangClimb`-OFF baseline; deterministic optional-**FAIL**
   (`pocketTicks=29`). Its RED *is* the proof the live bug reproduces (task ref:
   the −711 live record cited in the scene javadoc).
+
+**Two D2 sensors closed and promoted to `required`** (both were optional-FAIL
+signatures until D2 fixed/cleared their engine debt — they now assert green as
+first-class gates):
+
 - **`ad.riverSheerBank`** (WaterBank) — **task#91 CLOSED, promoted to `required`.**
   The gap #48 shared-body FALSE-GREEN it surfaced was a real EXECUTOR gap: A* always
   routed the correct far-lateral exit (low bank +5 EAST across open water), but the
@@ -180,9 +187,17 @@ re-audited each acceptance to prevent carve-out creep):
   correctness invariant): the climb-out engages only when the waypoint is horizontally
   BESIDE the bot, so the swim-drive carries it to the real walk-out. K≥6 A/B both
   loaders: gate OFF 6/6 wedge, gate ON 6/6 ashore (byte-identical ARRIVED); 10 sibling
-  water families byte-unchanged.
+  water families byte-unchanged. Acceptance: `ashore=true wallPressTicks=54` both loaders.
+- **`ad.entityLeashLowY`** (core seed) — **task#87 CLOSED, promoted to `required`.**
+  A net-new low-Y (y=-58/-59) twin of `ad.entityLeash` built to reproduce the deleted
+  `entityLeashRepathArena`'s y≈-60 phase-2 stall. Round-1 RED was a terrain confound;
+  void-moat isolation (fill the whole rig footprint to air at low Y) produced GREEN ×6
+  **byte-identical with the y=200 twin**, proving the engine has no low-Y defect — the
+  legacy stall was **rig-disease**, not an engine bug. Closed, probe kept as a `required`
+  low-Y liveness gate. Acceptance: phase2 `reached=true sceneTicks=2` both loaders.
 
-A dogfood run is GREEN with these two optional-FAILs present — the acceptance gate
+A dogfood run is GREEN with these two optional sensors present (one optional-PASS,
+one optional-FAIL) — the acceptance gate
 requires all *required* scenes PASS and the `(name, outcome)` set be identical
 across runs and loaders, so an optional sensor flipping to green (a silent fix or a
 tuned rig) would itself be caught by the cross-run/cross-loader identity check.
