@@ -204,7 +204,9 @@ server 常驻），`--attach` 才有一个活世界可打。检查阶段用 `ins
 之后 `/effect give @p instant_health` 回满血保持幂等。命令走 Brigadier 分支，
 断言 `success`（非 setblock 快速路径的 `ok`）。
 
-### 检查清单（7 + 2 金丝雀）
+### 检查清单（8 + 2 金丝雀）
+
+> task#90 追加 `reset.heldKeys`（第 8 真检查），见文末「D1 附录 — task#90 仪表面双 verb」。
 
 | 检查名 | 断言什么 | 钉住哪条病历 |
 |---|---|---|
@@ -214,18 +216,23 @@ server 常驻），`--attach` 才有一个活世界可打。检查阶段用 `ins
 | `obs.damageSource` | `/damage @p 2 out_of_world` 后 `player.hurt` 事件带 `source`（真归因字符串）+ `lost>0`（非纯 HP 差分） | **永久断言 #55**——自挖坑摔落与被咬同 HP 差分，无归因则两者不可分 |
 | `route.settingUnknownKeyLive` | 裸 RPC `mc.bot.setting{definitelyNotAKnob:true}` 在**真客户端**上 → error 含 `unexpected key`+键名（validator 先于 client-only handler） | **#280 病族 live E2E**——P2a 附录欠账；封闭 schema 在真客户端上拒未知键 |
 | `route.settingKnownKeyLive` | `mc.bot.setting{autoEat}` 应用（`applied` 含 autoEat）+ 同调用 snapshot 与二次读回一致，**然后还原原值** | 封闭 schema 不误伤已知键；幂等（还原） |
-| `reset.behavior` | 打开背包 screen（E 键）+ 发聊天 → `mc.test.reset` → `reset[]` 含 `screen`/`keys`/`chat:N`，且**独立回读**验证 screen 关（`screen.info.hasScreen` false）+ chat 清（`chat.history.count==0`） | `mc.test.reset` 客户端池复用完整性——screen/chat 独立回读，keys 依 `reset[]` 清单（无 held-key 回读 verb，见下） |
+| `reset.behavior` | 打开背包 screen（E 键）+ 发聊天 → `mc.test.reset` → `reset[]` 含 `screen`/`keys`/`chat:N`，且**独立回读**验证 screen 关（`screen.info.hasScreen` false）+ chat 清（`chat.history.count==0`） | `mc.test.reset` 客户端池复用完整性——screen/chat 独立回读；keys 一项由 `reset.heldKeys` 独立坐实（见下） |
+| `reset.heldKeys` | 关 screen → `mc.client.input.key{W, press}`（keybind 路径按下 keyUp）→ `mc.test.input.heldKeys` 断 `up==true` → `mc.test.reset` → heldKeys 八键**全 false** + 全键面齐全 | **task#90**——`reset[]` 的 `"keys"` token 是无条件追加（证 releaseKeys() 跑过，非证有键被清）＝空断言；held-key 回读把它升成真断言，`releaseKeys()` no-op 回归在此暴露 |
 | 金丝雀 `canary.mustFail` | 必判 FAIL，否则 DEAD | 金丝雀条款（框架抓失败能力自证） |
 | 金丝雀 `canary.mustTimeout` | 必判 TIMEOUT，否则 DEAD | 金丝雀条款（TIMEOUT 与 PASS/FAIL 可区分自证） |
 
-### keys 回读缺口的诚实说明（`reset.behavior`）
+### keys 回读缺口——已由 task#90 收口（历史记录）
 
-`mc.client.input.*` 全是 setter——没有读回「当前按下了哪些键」的 verb（已查
-`AgentApi.java` client 路由段）。故 `reset.behavior` 的 screen/chat 用**独立回读**
-（`screen.info`/`chat.history`）证实，keys 一项以 `mc.test.reset` 返回的 `reset[]`
-清单里的 `"keys"` token 为权威信号——这正是 `TestResetVerb` 设计暴露的面
-（javadoc：「reset[] 列出恰好改了什么，供 P2b 复用验收 diff」）。这不是静默缩水，
-是「用现有唯一面断言」。补一个 held-key 回读 verb 属独立小改，未来若需再议。
+P2b 时 `mc.client.input.*` 全是 setter，没有读回「当前按下了哪些键」的 verb，故
+`reset.behavior` 的 keys 一项只能以 `reset[]` 里的 `"keys"` token 为权威信号。但该
+token 是 `BotApiImpl.resetClientEntry()` **无条件追加**的——它证 `releaseKeys()`
+跑过，不证有键真被清（一个 no-op 的 releaseKeys 会同样得到该 token）＝空断言。
+
+task#90 补了 `mc.test.input.heldKeys`（client 线程 `KeyMapping.isDown()` 回读，
+面同 `TestResetVerb`：hidden、配对注册、`mc.test.*` 授权），并新增独立检查
+`reset.heldKeys`：按下 W → 断 heldKeys `up==true` → `mc.test.reset` → 断八键全
+false。该缺口现已从「用现有唯一面断言」升为真断言，`releaseKeys()` no-op 回归外部
+可抓。`reset.behavior` 保留 `"keys"` token 断言（配对语义证据），两者互补。
 
 ### #45 断言面选择（诚实记录）
 
@@ -248,7 +255,7 @@ autoEat 原值；`reset.behavior` 由 reset 自身清 screen/chat）——检查
 
 ### 双跑确定性验收（Task 2）
 
-- 自起 run 1：`VERDICT: GREEN`，7 真检查全 PASS，2 金丝雀落点正确（mustFail→FAIL，
+- 自起 run 1：`VERDICT: GREEN`，8 真检查全 PASS，2 金丝雀落点正确（mustFail→FAIL，
   mustTimeout→TIMEOUT）。
 - 自起 run 2：`VERDICT: GREEN`，逐检查结果与 run 1 **逐字节相同**（仅 wallMs 抖动）。
 - 收尾核对：无遗留 t1 client JVM / 自起 Xvfb（:101 已 kill），live dev 客户端
@@ -441,3 +448,47 @@ server-attached poll ring（**逐字节沿用 P2b 行为，零回归**）；T2�
 - teardown：SIGINT `t2.py --hold` → 端点删、两 JVM 下、无 run-t1/run-t2 孤儿 JVM。
 
 现场记录（双跑 + 三轮矩阵 + 常驻 PID 证据 + #55 现场测量）见 `.superpowers/sdd/task-4-report.md`。
+
+---
+
+## D1 附录 — task#90 仪表面双 verb（held-key 回读 + world-use 输入）
+
+落地：`TestInputVerbs`（common，`net.magicterra.agent.bot.testkit`）+ `BotApi.heldKeys()` /
+`BotApi.useOnBlock()` 实现（`BotApiImpl`）+ `ContainerFurnaceTest` 实装（去 `@Disabled`）+
+`instrument_client.py` 新检查 `reset.heldKeys` + 本附录。两 verb 与 `mc.test.reset` 同惯例：
+**hidden**（不进 `tools/list`）、经 `ToolCatalog.registerVerb` 配对注册于 `mc.test.*` 授权面、
+从 `AgentDriverCommon.ensureRpcUp`（common 引导路径，紧接 `TestResetVerb.register()`）注册一次、
+handler 经 `BotHooks.impl()` client-hop（专服 impl 为 null → 大声抛 client-only，不把
+`BotApiImpl` 拖上专服类路径）。
+
+### `mc.test.input.heldKeys`（无参）
+
+- **返回** `{ok:true, keys:{up,down,left,right,jump,sprint,attack,shift:bool}}`。
+- **语义**：client 线程读 `KeyMapping.isDown()`，键集与顺序恰为 `BotInteract.releaseKeys()`
+  清的八个 keymapping（`keyUp/Down/Left/Right/Jump/Sprint/Attack/Shift`），键名 up/down/…/shift。
+  纯观测，不改任何玩家/世界状态。专服打 → 大声 client-only。
+- **用途**：把 `reset.behavior` 里的空 keys 断言升成真断言（见「keys 回读缺口」节）。
+
+### `mc.test.input.useOnBlock`（`{x:int,y:int,z:int, hand?:"main"|"off"}`）
+
+- **返回** `{ok:bool, result:<InteractionResult 名>, consumed:bool, hand, face}`。
+- **语义（仪表级）**：client 线程对方块坐标合成 `BlockHitResult`（面取**离玩家眼最近的面**
+  `pickFaceTowardsPlayer`，命中点取该面中心——与 `mc.bot.useItem` 块模式同形），调
+  `gameMode.useItemOn(player, hand, hit)`。与行为面 `mc.bot.useItemOn` 的关键区别：**不移动、
+  不瞄准（不写 yaw/pitch）、不切 sneak**，只做这一次右键——故不经任何路径/瞄准管线。空手右键
+  开容器不需要这些。专服打 → 大声 client-only。
+- **面选择记录**：选「离眼最近的面」而非固定 `Direction.UP`，使合成命中形如真实射线，且复用既有
+  `BotInteract.pickFaceTowardsPlayer` 共享 helper。
+- **用途**：`ui.containerFurnace` 场景开 FurnaceScreen 的唯一仪表面路径（此前因缺此 verb 而
+  `@Disabled`）。
+
+### `Testkit.exec()` 首个 live 形状钉（双向）
+
+`ContainerFurnaceTest` 是 `Testkit.exec()` 的 ok/success 解析首个 live 驱动（此前 grep 证零调用）：
+
+- **成功路径**：`exec("setblock <x y z> minecraft:furnace")`（setblock 快速路径 ok:true/success:true）
+  **不抛**。
+- **失败路径**：`exec("execute if entity @e[type=minecraft:ender_dragon]")`——派发成功（ok:true）但
+  Brigadier `success:false`（谓词零匹配）→ `exec()` **必抛 `TestkitRpcException`**。测世界无末影龙，
+  无副作用、确定性。
+
