@@ -365,8 +365,11 @@ skips honestly — a test can never fall through both gates and vanish.
     python3 scripts/testkit/t1.py --hold          # boots the T1 client (autorun OFF), stays online,
                                                   # prints:  export TESTKIT_ENDPOINT=<abs path>
     export TESTKIT_ENDPOINT=<abs path>            # eval the printed line (fabric: fabric/run-t1/testkit-endpoint.json)
-    ./gradlew :testkit-junit:test                 # live UI tests attach and run; SIGINT the t1.py
+    ./gradlew :testkit-junit:test --rerun-tasks   # live UI tests attach and run; SIGINT the t1.py
                                                   # PID when done — it deletes the descriptor on exit.
+                                                  # --rerun-tasks is MANDATORY: TESTKIT_ENDPOINT is an
+                                                  # env var, not a gradle task input, so a plain re-run
+                                                  # is UP-TO-DATE and silently skips every live test.
 
 `t1.py --hold --loader neoforge` writes the same schema-v1 descriptor for a
 **neoforge** client (P2c closed the P2b deviation-1: the client topology now
