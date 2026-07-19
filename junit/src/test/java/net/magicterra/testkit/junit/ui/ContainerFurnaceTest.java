@@ -1,70 +1,93 @@
 package net.magicterra.testkit.junit.ui;
 
+import com.google.gson.JsonObject;
 import net.magicterra.testkit.junit.Testkit;
 import net.magicterra.testkit.junit.TestkitExtension;
-import org.junit.jupiter.api.Disabled;
+import net.magicterra.testkit.junit.TestkitRpcException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.time.Duration;
+
+import static net.magicterra.testkit.junit.ui.UiSupport.hasScreen;
+import static net.magicterra.testkit.junit.ui.UiSupport.screenType;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 /**
- * {@code ui.containerFurnace} — NOT IMPLEMENTABLE on the pure instrument face.
- * Present as a visible, reasoned {@code @Disabled} marker (never silent shrinkage);
- * awaiting controller adjudication. Full evidence in {@code .superpowers/sdd/task-3-report.md}.
+ * {@code ui.containerFurnace} — the first live scene that OPENS a server-backed
+ * block-entity container screen (FurnaceScreen), enabled by task#90's instrument-grade
+ * {@code mc.test.input.useOnBlock} world right-click. Previously {@code @Disabled}: no
+ * instrument-face verb could right-click a world block, and the module discipline forbids
+ * the behaviour-face {@code mc.bot.useItem}. {@code mc.test.input.useOnBlock} closes that
+ * gap on the pure instrument face (synthetic BlockHitResult → {@code gameMode.useItemOn},
+ * no movement/aiming/behaviour-face).
  *
- * <p><b>Why.</b> The scene needs to OPEN a block-entity container screen (FurnaceScreen)
- * by right-clicking a placed furnace. Opening a world container requires a right-click
- * on the crosshair target. The instrument face has no such verb:
- * <ul>
- *   <li>{@code mc.client.input.click} operates on GUI logical coords and returns
- *       {@code {"ok":false,"error":"no screen open"}} when {@code mc.screen == null}
- *       (verified in {@code ClientInput.click}, common) — it cannot right-click a world
- *       block, only widgets inside an already-open screen.</li>
- *   <li>{@code mc.client.input.key} routes keyboard keys/keybinds only; the vanilla
- *       "use item / place" action is bound to the RIGHT MOUSE BUTTON, which
- *       {@code glfwKeyCode} does not map — no keybind path opens a container.</li>
- *   <li>No {@code mc.client.input.*} verb performs a world use/interact; the ONLY verb
- *       that right-clicks a world block is {@code mc.bot.useItem}, which is a
- *       behavior-face ({@code mc.bot.*}) verb the module discipline forbids
- *       ("对 mc.bot.* 行为面仍禁依赖"). The brief is explicit: DO NOT fake it with a
- *       behavior verb.</li>
- * </ul>
- * No alternative instrument route opens a block-entity container: every vanilla
- * container (furnace/chest/crafting-table/enchanting/etc.) opens via right-click, and
- * no vanilla command opens a GUI. The only keyboard-openable {@code AbstractContainerScreen}
- * is the player inventory (E) — already covered by {@code screenTreeSlots}, but that is a
- * client-only screen, not the server-backed block-entity container this scene targets.
+ * <p>This scene doubles as the FIRST live shape-pin of {@link Testkit#exec} (its ok/success
+ * parsing had never been driven by a live test): the {@code setblock} that stages the furnace
+ * pins the SUCCESS path (must not throw), and a Brigadier {@code success:false} command
+ * (a predicate that matches nothing) pins the FAILURE path (must raise
+ * {@link TestkitRpcException} — {@code ok:true, success:false}).
  *
- * <p><b>Adjudication options</b> (controller's call — not taken here): (a) accept a
- * player-inventory container-screen as the slot-bearing container proof and drop the
- * furnace-specific scene; (b) add a genuinely instrument-grade world-use verb to the
- * client surface (e.g. {@code mc.client.input.useOnBlock}) — a common/ Java change that
- * this task's Global Constraint forbids ("零 agent-driver common Java 改动 ... STOP→BLOCKED");
- * (c) relax the instrument-face discipline to admit {@code mc.bot.useItem} as a
- * single-shot primitive. Body kept as a reference sketch for whichever route wins.
+ * <p><b>Live gate.</b> {@code @EnabledIfEnvironmentVariable(TESTKIT_ENDPOINT)} — without the
+ * env the class is skipped; with it, a broken attach is a LOUD container error (never a silent
+ * skip). Coords are player-relative (server-authoritative {@code observePlayer}), never
+ * absolute; teardown closes the screen and self-cleans the furnace back to air.
  */
 @ExtendWith(TestkitExtension.class)
 @EnabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT", matches = ".+")
-@Disabled("ui.containerFurnace: opening a block-entity container needs a world right-click, "
-        + "which no instrument-face verb provides (only behavior-face mc.bot.useItem). "
-        + "NOT IMPLEMENTABLE on the instrument face — awaiting controller adjudication. "
-        + "See .superpowers/sdd/task-3-report.md.")
 class ContainerFurnaceTest {
+
+    private static final Duration UI = Duration.ofSeconds(5);
 
     @Test
     void containerFurnace(Testkit tk) {
-        // Reference sketch (unreachable while @Disabled): place a furnace at a
-        // player-relative block, open its screen, assert the type, then self-clean.
-        //
-        //   var p = tk.observePlayer();               // relative to observed pos, never absolute
-        //   int fx = feetX(p) + 1, fy = feetY(p), fz = feetZ(p);
-        //   tk.exec("setblock " + fx + " " + fy + " " + fz + " minecraft:furnace");
-        //   <right-click the furnace block>            // <-- NO instrument verb exists for this
-        //   tk.awaitCondition(() -> screenType(tk.screenInfo()).contains("Furnace"), UI);
-        //   assertTrue(screenType(tk.screenInfo()).contains("Furnace"));
-        //   tk.reset();
-        //   tk.exec("setblock " + fx + " " + fy + " " + fz + " minecraft:air");  // self-clean
-        throw new UnsupportedOperationException(
-                "ui.containerFurnace is not implementable on the instrument face — see class javadoc");
+        tk.reset();
+        tk.awaitCondition(() -> !hasScreen(tk.screenInfo()), UI);
+
+        // Furnace at a player-relative block: two blocks along +X at feet Y (in reach,
+        // clear of the player's own body). observePlayer is server-authoritative.
+        JsonObject pos = tk.observePlayer().getAsJsonObject("pos");
+        int fx = (int) Math.floor(pos.get("x").getAsDouble()) + 2;
+        int fy = (int) Math.floor(pos.get("y").getAsDouble());
+        int fz = (int) Math.floor(pos.get("z").getAsDouble());
+
+        try {
+            // exec() SUCCESS path pin: setblock dispatches ok:true, success:true → no throw.
+            tk.exec("setblock " + fx + " " + fy + " " + fz + " minecraft:furnace");
+
+            // exec() FAILURE path pin: a predicate matching nothing dispatches (ok:true) but
+            // reports Brigadier success:false → exec() must raise TestkitRpcException. This is
+            // the shape assertion the facade had never had a live witness for.
+            assertThrows(TestkitRpcException.class,
+                    () -> tk.exec("execute if entity @e[type=minecraft:ender_dragon]"),
+                    "a dispatched-but-success:false command must raise TestkitRpcException from exec()");
+
+            // Open the furnace via the instrument-grade world right-click (task#90).
+            useOnBlock(tk, fx, fy, fz);
+            tk.awaitCondition(() -> hasScreen(tk.screenInfo())
+                    && screenType(tk.screenInfo()).contains("Furnace"), UI);
+            assertTrue(screenType(tk.screenInfo()).contains("Furnace"),
+                    "useOnBlock on a furnace should open a FurnaceScreen, got: "
+                            + screenType(tk.screenInfo()));
+
+            tk.reset();
+            tk.awaitCondition(() -> !hasScreen(tk.screenInfo()), UI);
+            assertFalse(hasScreen(tk.screenInfo()), "reset must close the furnace screen");
+        } finally {
+            tk.call("mc.client.screen.close", new JsonObject());
+            tk.exec("setblock " + fx + " " + fy + " " + fz + " minecraft:air");
+        }
+    }
+
+    /** {@code mc.test.input.useOnBlock} — instrument-grade right-click on a world block. */
+    private static void useOnBlock(Testkit tk, int x, int y, int z) {
+        JsonObject params = new JsonObject();
+        params.addProperty("x", x);
+        params.addProperty("y", y);
+        params.addProperty("z", z);
+        tk.call("mc.test.input.useOnBlock", params);
     }
 }
