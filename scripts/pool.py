@@ -49,6 +49,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import platform_compat          # noqa: E402 — REUSE cross-platform signal/kill/launch
 import t1                       # noqa: E402 — REUSE resolve_loader/run-dir/endpoint paths
 import t2 as t2mod              # noqa: E402 — REUSE resolve_t2 paths (NOT forked)
 import instrument as inst       # noqa: E402 — REUSE the stdlib synchronous Ws/Ctx for the probe
@@ -270,21 +271,19 @@ def endpoint_alive(topology, path):
 
 # --------------------------------------------------------------- process mgmt -
 def pid_alive(pid):
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
+    """Liveness WITHOUT killing. Delegated to platform_compat because the POSIX idiom
+    ``os.kill(pid, 0)`` is actively dangerous on Windows: CPython maps a non-CTRL signal
+    onto TerminateProcess, so "just asking" would kill the hold this pool is tracking."""
+    return platform_compat.pid_alive(pid)
 
 
 def _signal(pid, sig):
-    try:
-        os.kill(pid, sig)
-        return True
-    except ProcessLookupError:
-        return False
+    """Deliver the interrupt/kill intent, cross-platform. ``sig`` stays a POSIX signal at
+    the call sites (SIGINT = "release the hold", SIGKILL = "escalate"); platform_compat
+    maps them to CTRL_BREAK_EVENT / taskkill /F on Windows."""
+    if sig == signal.SIGINT:
+        return platform_compat.interrupt_pid(pid)
+    return platform_compat.kill_pid(pid, hard=True)
 
 
 def _wait_pid_gone(pid, grace):
@@ -320,7 +319,9 @@ def stop_hold(pid, endpoint_file, grace=STOP_GRACE):
         time.sleep(0.5)
     # Grace exhausted: the hold's finally never completed. Hard-kill by PID and sweep
     # the endpoint residue ourselves.
-    _signal(pid, signal.SIGKILL)
+    # SIGKILL does not exist on Windows (AttributeError at attribute-access time, before
+    # _signal even runs), so name the escalation through platform_compat instead.
+    platform_compat.kill_pid(pid, hard=True)
     _wait_pid_gone(pid, PID_EXIT_GRACE)
     if os.path.exists(endpoint_file):
         try:
@@ -334,13 +335,13 @@ def _launch_hold(topology, loader, log):
     """Launch ``t1.py/t2.py --hold`` DETACHED: its own session (start_new_session, so a
     Ctrl-C on pool.py never reaches it), stdin closed, stdout+stderr → the run-dir log.
     Returns the Popen (its .pid is what we record + later SIGINT)."""
-    cmd = ["python3", hold_script(topology), "--hold", "--loader", loader]
+    cmd = platform_compat.python_cmd(hold_script(topology), "--hold", "--loader", loader)
     logf = open(log, "w")
     logf.write(f"# pool.py --hold launch: {' '.join(cmd)} @ {time.ctime()}\n")
     logf.flush()
     return subprocess.Popen(
         cmd, cwd=REPO_ROOT, stdout=logf, stderr=subprocess.STDOUT,
-        stdin=subprocess.DEVNULL, start_new_session=True)
+        stdin=subprocess.DEVNULL, **platform_compat.detach_kwargs())
 
 
 def _clean_stale(topology, loader, ep):

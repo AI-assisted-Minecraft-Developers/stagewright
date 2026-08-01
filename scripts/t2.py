@@ -68,6 +68,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import guidrive as gd  # noqa: E402
+import platform_compat  # noqa: E402
 import t1  # noqa: E402 — REUSED Xvfb/launch/stop/sweep/kill helpers, not forked
 from verdict import parse, judge  # noqa: E402 — REUSED judging logic, not forked
 from t0 import load_expect_file  # noqa: E402 — REUSED expect-file parser, not forked
@@ -215,20 +216,25 @@ def sweep_server_jvms(run_dir):
     gradle wrapper — its cwd is the repo root — and never a dogfood/contract/other run in a different
     dir). This is loader-neutral and does not depend on how loom lays out the -D system-property argv."""
     run_abs = os.path.abspath(run_dir)
-    out = subprocess.run(["ps", "-eo", "pid,args"], capture_output=True, text=True).stdout
     killed = []
-    for line in out.splitlines():
-        if "java" not in line:
+    for pid, cmdline in platform_compat.iter_processes():
+        if "java" not in cmdline:
             continue
-        pid = line.strip().split()[0]
-        try:
-            cwd = os.path.realpath(os.readlink(f"/proc/{pid}/cwd"))
-        except OSError:
-            continue
-        if cwd == run_abs:
-            print(f"[t2] killing leftover T2 server JVM pid={pid} (cwd={run_abs})")
-            subprocess.run(["kill", "-9", pid])
-            killed.append(pid)
+        cwd = platform_compat.process_cwd(pid)
+        if cwd is not None:
+            owned = cwd == run_abs
+            why = f"cwd={run_abs}"
+        else:
+            # Windows: no readable cwd (see platform_compat.process_cwd). Fall back to
+            # the run dir appearing in the argv — loom puts the natives/assets paths
+            # under it, so a forked run-t2 JVM names it even though its cwd is the only
+            # airtight proof. Weaker, and deliberately visible in the log line.
+            owned = run_abs in cmdline or os.path.basename(run_abs) in cmdline
+            why = f"argv~{os.path.basename(run_abs)}"
+        if owned:
+            print(f"[t2] killing leftover T2 server JVM pid={pid} ({why})")
+            platform_compat.kill_pid(pid)
+            killed.append(str(pid))
     return killed
 
 
@@ -237,22 +243,20 @@ def launch_server(t2, env, autorun, wall):
     whole gradle→game process tree is one killable group. -Pt2Autorun controls testkit.autorun."""
     os.makedirs(t2.run_dir, exist_ok=True)
     logf = open(os.path.join(t2.run_dir, "t2-server.log"), "w")
-    cmd = ["./gradlew", "--no-daemon", f"-Pt2Autorun={'true' if autorun else 'false'}", t2.run_task]
+    cmd = platform_compat.gradlew_cmd(
+        "--no-daemon", f"-Pt2Autorun={'true' if autorun else 'false'}", t2.run_task)
     print(f"[t2] launching {' '.join(cmd)} (wall={wall}s, autorun={autorun})")
     proc = subprocess.Popen(cmd, cwd=REPO_ROOT, env=env, stdout=logf,
-                            stderr=subprocess.STDOUT, start_new_session=True)
+                            stderr=subprocess.STDOUT, **platform_compat.detach_kwargs())
     return proc, logf
 
 
 def stop_server(proc, run_dir):
-    """Stop the server gradle group (SIGTERM), then sweep the forked game JVM by cwd. Mirrors
-    t1.stop_client's belt-and-suspenders (group signal for the clean path, PID sweep for the strays)."""
+    """Stop the server gradle process tree, then sweep the forked game JVM by cwd. Mirrors
+    t1.stop_client's belt-and-suspenders (tree signal for the clean path, PID sweep for the strays)."""
     if proc is not None:
-        try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-            print(f"[t2] SIGTERM server gradle group pgid={os.getpgid(proc.pid)}")
-        except (ProcessLookupError, PermissionError):
-            pass
+        platform_compat.kill_tree(proc)
+        print(f"[t2] stopped server gradle tree pid={proc.pid}")
         # Bounded wait for the group to drain before the hard sweep.
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline and proc.poll() is None:
@@ -473,9 +477,9 @@ def run(args):
     else:
         print("[t2] template PRESENT — reuse path")
 
-    display = args.display or t1.probe_free_display()
-    xvfb = t1.start_xvfb(display)
-    client_env = dict(os.environ, DISPLAY=f":{display}")
+    # See t1.run(): display acquisition is platform-specific and lives in platform_compat.
+    disp = platform_compat.display_session(t1.probe_free_display, args.display)
+    client_env = disp.env
     server_env = dict(os.environ)  # dedicated server is headless — no DISPLAY needed
 
     server = None
@@ -537,8 +541,8 @@ def run(args):
             t1.stop_client(client)
         # ... SERVER second (SIGTERM group → bounded wait → cwd sweep) ...
         stop_server(server, t2.run_dir)
-        # ... then Xvfb, world copy, the endpoint descriptor, both port files.
-        t1.kill_pid(xvfb.pid, "Xvfb")
+        # ... then the display, world copy, the endpoint descriptor, both port files.
+        disp.close()
         # A stale endpoint descriptor is the most dangerous residue a --hold run can leave — a
         # JUnit consumer would attach to a port now dead (or worse, reused). Delete on every exit
         # path (Ctrl-C included), tolerant of it never having been written (scored / early-fail).

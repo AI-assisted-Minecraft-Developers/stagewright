@@ -15,6 +15,21 @@ def judge(lines, record_type="scene", expected=None):
     Any name absent from registered[] raises code to at least 1 and appends a
     MISSING-EXPECTED report line. expected=None (the default) leaves existing
     behavior byte-for-byte unchanged.
+
+    The check runs in BOTH directions. MISSING-EXPECTED alone (expected minus
+    registered) left the manifest's stated purpose half-closed: a scene added to
+    the Java provider but never added to the manifest was silently accepted as
+    GREEN, which is exactly the "silent-composition hole this gate exists to
+    close" the manifest header claims to close. UNDECLARED covers the reverse.
+
+    Scope: only names sharing a NAMESPACE with the manifest are eligible for
+    UNDECLARED, where a namespace is the "prefix." of any dotted expected name
+    (here: "ad."). That is derived from `expected` rather than hardcoded, and it
+    is what keeps the testkit's own built-ins out of it — canaryMustFail /
+    canaryMustTimeout / canaryMustSwallow / awaitTicks / floorAssert are
+    registered by mc-testkit's Scenes.java for every suite and are deliberately
+    not in any loader manifest. Canary records are skipped outright as well,
+    since the canary block below is their real gate.
     """
     report = []
     suite, done, scenes, dup_counts = None, None, {}, {}
@@ -40,11 +55,25 @@ def judge(lines, record_type="scene", expected=None):
         report.append(f"DUPLICATE: '{name}' has {dup_counts[name]} {record_type} records "
                        f"— last-wins can mask an earlier FAIL as GREEN")
     if expected:
+        expected = list(expected)
         reg_names = {r["name"] for r in suite["registered"]}
         for want in expected:
             if want not in reg_names:
                 code = max(code, 1)
                 report.append(f"MISSING-EXPECTED: {want} not in registered")
+        want_set = set(expected)
+        namespaces = {n.split(".", 1)[0] + "." for n in expected if "." in n}
+        if namespaces:
+            undeclared = sorted(
+                r["name"] for r in suite["registered"]
+                if r["name"] not in want_set
+                and r.get("canary") not in CANARY_EXPECT
+                and r.get("canary") != "MUST_SWALLOW"
+                and any(r["name"].startswith(ns) for ns in namespaces))
+            for name in undeclared:
+                code = max(code, 1)
+                report.append(f"UNDECLARED: {name} registered but not in the expected manifest "
+                              f"— add it to the manifest in the same commit that registers it")
     for reg in suite["registered"]:
         name, canary = reg["name"], reg["canary"]
         rec = scenes.get(name)

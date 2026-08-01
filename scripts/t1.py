@@ -42,6 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import guidrive as gd  # noqa: E402
+import platform_compat  # noqa: E402
 from verdict import parse, judge  # noqa: E402 — REUSED judging logic, not forked
 from t0 import load_expect_file  # noqa: E402 — REUSED expect-file parser, not forked
 
@@ -174,26 +175,23 @@ def write_endpoint(path, loader, port, pid):
 
 # ------------------------------------------------------------ process mgmt ----
 def kill_pid(pid, name, grace=15):
-    """SIGTERM then, after ``grace`` s, SIGKILL a single PID. No-op if pid is None."""
+    """Ask a single PID to stop, then force it after ``grace`` s. No-op if pid is None.
+
+    Cross-platform via platform_compat: SIGTERM→SIGKILL on POSIX, taskkill→taskkill /F
+    on Windows. The liveness poll MUST go through pid_alive() — on Windows
+    ``os.kill(pid, 0)`` terminates instead of asking."""
     if pid is None:
         return
-    try:
-        os.kill(pid, signal.SIGTERM)
-        print(f"[t1] SIGTERM {name} pid={pid}")
-    except ProcessLookupError:
+    if not platform_compat.kill_pid(pid, hard=False):
         return
+    print(f"[t1] stop {name} pid={pid}")
     deadline = time.monotonic() + grace
     while time.monotonic() < deadline:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
+        if not platform_compat.pid_alive(pid):
             return
         time.sleep(0.5)
-    try:
-        os.kill(pid, signal.SIGKILL)
-        print(f"[t1] SIGKILL {name} pid={pid}")
-    except ProcessLookupError:
-        pass
+    if platform_compat.kill_pid(pid, hard=True):
+        print(f"[t1] force-kill {name} pid={pid}")
 
 
 def sweep_client_jvms():
@@ -201,37 +199,24 @@ def sweep_client_jvms():
     forked Knot CLIENT with testkit.autorun armed — never the dedicated dogfood
     KnotServer (which is also testkit.autorun but a server), and never the gradle
     wrapper. run-t1 in the argv is the tie-breaker when present."""
-    out = subprocess.run(["ps", "-eo", "pid,args"], capture_output=True, text=True).stdout
     killed = []
-    for line in out.splitlines():
-        if "java" not in line or "testkit.autorun" not in line:
+    for pid, cmd in platform_compat.iter_processes():
+        if "java" not in cmd or "testkit.autorun" not in cmd:
             continue
-        is_client = "KnotClient" in line or "runTestkitClient" in line or "run-t1" in line
+        is_client = "KnotClient" in cmd or "runTestkitClient" in cmd or "run-t1" in cmd
         if not is_client:
             continue
-        pid = line.strip().split()[0]
         print(f"[t1] killing leftover T1 client JVM pid={pid}")
-        subprocess.run(["kill", "-9", pid])
-        killed.append(pid)
+        platform_compat.kill_pid(pid)
+        killed.append(str(pid))
     return killed
 
 
-def start_xvfb(display, screen="1280x720x24"):
-    """Start an Xvfb on :display, return its Popen. Wait for the socket to appear."""
-    sock = f"/tmp/.X11-unix/X{display}"
-    proc = subprocess.Popen(
-        ["Xvfb", f":{display}", "-screen", "0", screen,
-         "-ac", "+extension", "GLX", "+render", "-noreset"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(50):
-        if os.path.exists(sock):
-            print(f"[t1] Xvfb up on :{display} (pid={proc.pid})")
-            return proc
-        if proc.poll() is not None:
-            raise RuntimeError(f"Xvfb :{display} died on startup (rc={proc.returncode})")
-        time.sleep(0.2)
-    proc.terminate()
-    raise RuntimeError(f"Xvfb :{display} socket never appeared")
+# start_xvfb() lived here and is now platform_compat.display_session(): starting a display
+# server is a platform difference, and keeping a second copy of the spawn logic next to the
+# guarded one is how the two drift. probe_free_display() above stays — picking a free X
+# display number is POSIX-specific but it is pure logic with its own self-tests, and
+# display_session() only calls it on the POSIX branch.
 
 
 # ------------------------------------------------------------- world drive ----
@@ -304,14 +289,15 @@ def harvest_footer(results, deadline, client_proc):
 
 
 # ------------------------------------------------------------- orchestration --
-async def mint_session(wall):
+async def mint_session(wall, build_wall=1800):
     """Mint phase (autorun OFF): connect, GUI-create a pristine TestkitT1, quit-to-title
     to flush a clean save. NO scenes run (autorun off) so the world stays byte-clean —
     reusing an after-scenes world flips the ad.selfShaftDigUp inverted-lottery signature."""
-    deadline = time.monotonic() + wall
+    boot_deadline = time.monotonic() + build_wall
     port = await gd.discover_port(Path(PORT_FILE),
-                                  timeout=max(30, int(deadline - time.monotonic())))
+                                  timeout=max(30, int(boot_deadline - time.monotonic())))
     print(f"[t1] (mint) discovered agent-rpc port={port}")
+    deadline = time.monotonic() + wall   # see run_session: build time is not run time
     ws = await gd.connect(port)
     async with ws:
         rpc = gd.Rpc(ws)
@@ -329,14 +315,23 @@ async def mint_session(wall):
         await gd.quit_to_title(rpc)
 
 
-async def run_session(wall, hold, hold_pid=None):
+async def run_session(wall, hold, hold_pid=None, build_wall=1800):
     """Scored run (autorun ON, template reuse): connect, drive into world, harvest.
     Returns footer_seen. ``hold_pid`` is the CLIENT JVM pid (only meaningful when
     ``hold`` is True — it becomes the endpoint file's holdPid)."""
-    deadline = time.monotonic() + wall
+    # TWO CLOCKS, same reason as t0.launch(): `gradlew runTestkitClient` compiles before
+    # it runs anything, and this deadline used to cover BOTH the build and the scene
+    # harvest below. A cold build therefore ate the budget the scenes needed and the run
+    # was reported as "no footer" — which reads as a scene failure, not as "the build was
+    # slow". The port file appearing means the JVM is alive and serving RPC, so that is
+    # where the run actually begins; restart the clock there.
+    boot_deadline = time.monotonic() + build_wall
     port = await gd.discover_port(Path(PORT_FILE),
-                                  timeout=max(30, int(deadline - time.monotonic())))
-    print(f"[t1] discovered agent-rpc port={port}")
+                                  timeout=max(30, int(boot_deadline - time.monotonic())))
+    print(f"[t1] discovered agent-rpc port={port} "
+          f"(build+boot {int(build_wall - (boot_deadline - time.monotonic()))}s, "
+          f"not charged to the {wall}s run wall)")
+    deadline = time.monotonic() + wall
     ws = await gd.connect(port)
     async with ws:
         rpc = gd.Rpc(ws)
@@ -430,27 +425,22 @@ def launch_client(env, wall, autorun, log_name=None):
     os.makedirs(RUN_DIR, exist_ok=True)
     default_name = "t1-mint.log" if not autorun else "t1-runclient.log"
     logf = open(os.path.join(RUN_DIR, log_name or default_name), "w")
-    cmd = ["./gradlew", "--no-daemon"]
-    if not autorun:
-        cmd.append("-Pt1Autorun=false")
-    cmd.append(RUN_TASK)
-    print(f"[t1] launching {' '.join(cmd)} (DISPLAY={env['DISPLAY']}, wall={wall}s, "
+    extra = ["-Pt1Autorun=false"] if not autorun else []
+    cmd = platform_compat.gradlew_cmd("--no-daemon", *extra, RUN_TASK)
+    print(f"[t1] launching {' '.join(cmd)} (DISPLAY={env.get('DISPLAY')}, wall={wall}s, "
           f"autorun={autorun})")
     proc = subprocess.Popen(cmd, cwd=REPO_ROOT, env=env, stdout=logf,
-                            stderr=subprocess.STDOUT, start_new_session=True)
+                            stderr=subprocess.STDOUT, **platform_compat.detach_kwargs())
     return proc, logf
 
 
 def stop_client(proc):
-    """Stop the gradle wrapper's process group, then sweep the forked client JVM by PID."""
-    try:
-        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-    except (ProcessLookupError, PermissionError):
-        pass
+    """Stop the gradle wrapper AND its children, then sweep the forked client JVM by PID."""
+    platform_compat.kill_tree(proc)
     sweep_client_jvms()
 
 
-def mint_template(env, wall):
+def mint_template(env, wall, build_wall=1800):
     """First-run-ever mint: create a pristine TestkitT1 (autorun OFF, no scenes), flush a
     clean save, kill the JVM, archive it as the template, then delete the mint copy.
     Returns True on success."""
@@ -459,7 +449,7 @@ def mint_template(env, wall):
     client, _ = launch_client(env, wall, autorun=False)
     ok = True
     try:
-        asyncio.run(mint_session(wall))
+        asyncio.run(mint_session(wall, build_wall=build_wall))
     except Exception as e:  # noqa: BLE001
         print(f"[t1] mint error (ENV): {e}")
         ok = False
@@ -473,16 +463,19 @@ def mint_template(env, wall):
 
 def run(args):
     sweep_client_jvms()
-    display = args.display or probe_free_display()
-    xvfb = start_xvfb(display)
-    env = dict(os.environ, DISPLAY=f":{display}")
+    # Display acquisition is a platform difference (Xvfb on POSIX, the real desktop on
+    # Windows) and therefore belongs in platform_compat — probing for a free X display
+    # silently returned a bogus number on Windows and the Xvfb spawn then raised
+    # WinError 2, before any of this function's real work began.
+    disp = platform_compat.display_session(probe_free_display, args.display)
+    env = disp.env
     try:
         # First run ever: mint the pristine template before scoring. The scored run
         # ALWAYS uses a fresh copy of the clean template (create-path and reuse-path
         # converge on identical byte-clean world state → deterministic scenes).
         minted_now = False
         if not template_reuse(TEMPLATE_DIR):
-            if not mint_template(env, args.wall):
+            if not mint_template(env, args.wall, args.build_wall):
                 print("[t1] VERDICT: ENV — template mint failed")
                 return 3, 0.0, False
             minted_now = True
@@ -499,7 +492,8 @@ def run(args):
         client, _ = launch_client(env, args.wall, autorun=not args.hold)
         t_launch = time.monotonic()
         try:
-            footer = asyncio.run(run_session(args.wall, args.hold, client.pid))
+            footer = asyncio.run(run_session(args.wall, args.hold, client.pid,
+                                             build_wall=args.build_wall))
         except Exception as e:  # noqa: BLE001 — any drive/connect failure = ENV
             env_err = e
             print(f"[t1] session error (ENV): {e}")
@@ -512,7 +506,7 @@ def run(args):
             print(f"[t1] session elapsed {elapsed:.1f}s (footer={footer})")
             stop_client(client)
     finally:
-        kill_pid(xvfb.pid, "Xvfb")
+        disp.close()
         # A stale TESTKIT_ENDPOINT descriptor is the most dangerous residue this run can
         # leave behind — a JUnit consumer would happily attach to a port that now belongs
         # to a dead (or worse, unrelated future) process. Delete on every exit path
@@ -754,7 +748,11 @@ def _parse(argv):
     ap.add_argument("--loader", choices=LOADERS, default="fabric",
                     help="target loader (default fabric): selects <loader>/run-t1, the "
                          ":<loader>:runTestkitClient task, and expected-scenes-<loader>.txt")
-    ap.add_argument("--wall", type=int, default=900, help="wall-clock cap in seconds")
+    ap.add_argument("--wall", type=int, default=900,
+                    help="seconds the RUN gets, measured from the port file appearing — "
+                         "gradle's compile is not charged against it (see run_session)")
+    ap.add_argument("--build-wall", type=int, default=1800,
+                    help="seconds gradle gets to compile and boot the client JVM")
     ap.add_argument("--expect-file", default=None,
                     help="expected-scene manifest (default expected-scenes-<loader>.txt)")
     ap.add_argument("--display", type=int, default=None,

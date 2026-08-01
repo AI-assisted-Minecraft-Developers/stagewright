@@ -9,6 +9,7 @@ import argparse, base64, http.client, json, os, socket, struct, subprocess, sys,
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from verdict import parse, judge
+import platform_compat  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MODULE = {"neoforge": "neoforge", "fabric": "fabric"}
@@ -531,12 +532,9 @@ def provision(loader):
 
 
 def sweep():
-    out = subprocess.run(["ps", "ax", "-o", "pid=,args="], capture_output=True, text=True).stdout
-    for line in out.splitlines():
-        if "agent.contractRun" in line and "grep" not in line:
-            pid = line.strip().split()[0]
-            print(f"[instrument] killing leftover contract JVM pid={pid}")
-            subprocess.run(["kill", "-9", pid], check=False)
+    for pid in platform_compat.find_processes("agent.contractRun"):
+        print(f"[instrument] killing leftover contract JVM pid={pid}")
+        platform_compat.kill_pid(pid)
 
 
 def wait_port_file(loader, wall):
@@ -556,8 +554,9 @@ def launch(loader, wall):
     sweep()
     provision(loader)
     task = f":{MODULE[loader]}:runContractServer"
-    print(f"[instrument] launching: ./gradlew {task} (wall={wall}s, waiting on agent-rpc.port)")
-    proc = subprocess.Popen(["./gradlew", task], cwd=ROOT,
+    cmd = platform_compat.gradlew_cmd(task)
+    print(f"[instrument] launching: {' '.join(cmd)} (wall={wall}s, waiting on agent-rpc.port)")
+    proc = subprocess.Popen(cmd, cwd=ROOT,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     port = wait_port_file(loader, wall)
     if port is None:
@@ -630,20 +629,18 @@ def provision_dogfood(loader):
 
 
 def sweep_dogfood():
-    out = subprocess.run(["ps", "ax", "-o", "pid=,args="], capture_output=True, text=True).stdout
-    for line in out.splitlines():
-        if "testkit.autorun" in line and "java" in line and "grep" not in line:
-            pid = line.strip().split()[0]
-            print(f"[instrument] killing leftover dogfood JVM pid={pid}")
-            subprocess.run(["kill", "-9", pid], check=False)
+    for pid in platform_compat.find_processes("testkit.autorun", "java"):
+        print(f"[instrument] killing leftover dogfood JVM pid={pid}")
+        platform_compat.kill_pid(pid)
 
 
 def launch_dogfood(loader, wall):
     sweep_dogfood()
     provision_dogfood(loader)
     task = f":{MODULE[loader]}:runDogfoodServer"
-    print(f"[instrument] launching dogfood (autorun): ./gradlew {task} (wall={wall}s)")
-    proc = subprocess.Popen(["./gradlew", task], cwd=ROOT,
+    cmd = platform_compat.gradlew_cmd(task)
+    print(f"[instrument] launching dogfood (autorun): {' '.join(cmd)} (wall={wall}s)")
+    proc = subprocess.Popen(cmd, cwd=ROOT,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     pf = os.path.join(dogfood_dir(loader), "agent-rpc.port")
     deadline = time.time() + wall

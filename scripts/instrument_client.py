@@ -44,6 +44,7 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from verdict import judge                  # noqa: E402 — REUSED judging, not forked
+import platform_compat                     # noqa: E402 — REUSE cross-platform process listing
 import instrument as inst                  # noqa: E402 — REUSE Ws / Ctx / ContractFailure
 import guidrive as gd                      # noqa: E402 — REUSE connect / discover_port / Rpc
 import t1                                  # noqa: E402 — REUSE the T1 shell (launch/drive/teardown)
@@ -136,7 +137,10 @@ def _await_push_event(ctx, event_type, stage_fn, *, timeout=12.0):
     subscribers via AgentApi.emit. mc.observe.eventsSince needs a server attachment (it throws
     "not attached to a server" on a pure client), so the push subscription is player.hurt's only
     client-face reader. Frame shape: notifications/message → params.data = AgentEvent
-    {seq,timestamp,type,pos,data}, whose inner ``data`` is the JSON payload string. Always
+    {seq,timestamp,type,pos,data}, whose inner ``data`` is the payload ITSELF — an object for
+    structured events, a bare string for scalar ones. (It used to always be a string with JSON
+    escaped inside it; the isinstance check below already handled both, so this reader needed
+    no change.) Always
     unsubscribes on the way out (leave the socket as found for the checks that follow)."""
     ws = ctx.ws
     ctx.call("mc.events.subscribe", {"types": [event_type]})  # ack rides the normal id-matched call
@@ -493,12 +497,12 @@ def self_launch(wall):
     enter the reused template world, and return (client_proc, xvfb_proc, port). Mirrors
     t1.run()'s setup but launches autorun=False and does NOT harvest scenes."""
     t1.sweep_client_jvms()
-    display = t1.probe_free_display()
-    xvfb = t1.start_xvfb(display)
-    env = dict(os.environ, DISPLAY=f":{display}")
+    # See t1.run(): display acquisition is platform-specific and lives in platform_compat.
+    xvfb = platform_compat.display_session(t1.probe_free_display)
+    env = xvfb.env
     if not t1.template_reuse(t1.TEMPLATE_DIR):
         if not t1.mint_template(env, wall):
-            t1.kill_pid(xvfb.pid, "Xvfb")
+            xvfb.close()
             raise ContractFailure("ENV: T1 template mint failed")
     t1.provision(reuse=True)
     client, _ = t1.launch_client(env, wall, autorun=False)  # autorun OFF → server stays up
@@ -507,7 +511,7 @@ def self_launch(wall):
         asyncio.run(_drive_into_world(port))
     except Exception:
         t1.stop_client(client)
-        t1.kill_pid(xvfb.pid, "Xvfb")
+        xvfb.close()
         raise
     return client, xvfb, port
 
@@ -626,16 +630,17 @@ def _resident_server_pid(run_dir):
     reused (never restarted) while the client re-entered — the process-pool reuse benefit this
     task exists to prove. Returns None if no such JVM is found."""
     run_abs = os.path.abspath(run_dir)
-    out = subprocess.run(["ps", "-eo", "pid,args"], capture_output=True, text=True).stdout
-    for line in out.splitlines():
-        if "java" not in line:
+    for pid, cmdline in platform_compat.iter_processes():
+        if "java" not in cmdline:
             continue
-        pid = line.strip().split()[0]
-        try:
-            cwd = os.path.realpath(os.readlink(f"/proc/{pid}/cwd"))
-        except OSError:
-            continue
-        if cwd == run_abs:
+        cwd = platform_compat.process_cwd(pid)
+        if cwd is not None:
+            if cwd == run_abs:
+                return int(pid)
+        # Windows has no readable cwd (platform_compat.process_cwd) — fall back to the
+        # run dir appearing in the argv. Weaker than the cwd proof, but the PID-stability
+        # evidence this function feeds only needs to name the SAME process each round.
+        elif run_abs in cmdline or os.path.basename(run_abs) in cmdline:
             return int(pid)
     return None
 
@@ -818,12 +823,13 @@ def combine_round_verdict(round_codes, round_outcomes, transition_failures=None)
 
 
 def _teardown_self_launch(client, xvfb):
-    """Tear down a self-launched client JVM + its Xvfb (never the world copy — that is
-    deleted once, at the very end of the run)."""
+    """Tear down a self-launched client JVM + its display session (never the world copy —
+    that is deleted once, at the very end of the run). On Windows the display session owns
+    no process, so close() is a no-op and only the client JVM is stopped."""
     if client is not None:
         t1.stop_client(client)
     if xvfb is not None:
-        t1.kill_pid(xvfb.pid, "Xvfb")
+        xvfb.close()
 
 
 def _resolve_topology(attach, wall, topology):
