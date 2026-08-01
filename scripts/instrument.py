@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Instrument contract suite (T0-dependency face) — bare-RPC checks against a
-plain agent-driver dedicated server. Independent of the testkit assertion
+plain worlddriver dedicated server. Independent of the testkit assertion
 stack by design (spec §4.2): green here => testkit setup/asserts may trust
 the driver's instrument face. Verdict semantics mirror contract v0 via the
 shared verdict module (registered==executed reconciliation, canary
@@ -100,8 +100,8 @@ class Ctx:
 # ---------- checks ----------
 def check_version_shape(ctx):
     v = ctx.call("mc.system.version")
-    if v.get("modid") != "agent_driver":
-        raise ContractFailure(f"modid={v.get('modid')!r} != 'agent_driver'")
+    if v.get("modid") != "worlddriver":
+        raise ContractFailure(f"modid={v.get('modid')!r} != 'worlddriver'")
     if not isinstance(v.get("uptimeMs"), int) or v["uptimeMs"] < 0:
         raise ContractFailure(f"uptimeMs not a non-negative int: {v.get('uptimeMs')!r}")
 
@@ -165,7 +165,7 @@ def check_script_eval_parity(ctx):
                  {"source": "Agent.invoke('mc.system.version').modid", "timeoutMs": 5000})
     if r.get("error"):
         raise ContractFailure(f"script error: {r['error']}")
-    if r.get("result") != "agent_driver":
+    if r.get("result") != "worlddriver":
         raise ContractFailure(f"in-JVM route parity broken: {r.get('result')!r}")
 
 
@@ -319,13 +319,13 @@ def check_wait_condition_value(ctx):
 # The bare-RPC /rpc transport (AgentApi.route) does NOT expose the schema catalog — schemas are
 # advertised through the MCP HTTP endpoint's `tools/list` (the SAME typed Schema the route-layer
 # SchemaValidator enforces; ToolSchema.mcpTool -> Schemas.render, single source). The contract
-# server brings the MCP server up in AgentDriverCommon.ensureMcpUp (onServerStarting, alongside
-# RPC), on an ephemeral port written to `agent-mcp.port` in the runDir. mc.script.eval cannot read
+# server brings the MCP server up in WorldDriverCommon.ensureMcpUp (onServerStarting, alongside
+# RPC), on an ephemeral port written to `worlddriver-mcp.port` in the runDir. mc.script.eval cannot read
 # the catalog either — this Rhino fork strips the Packages global, so JS cannot resolve ToolCatalog
 # by name (independent of the sandbox denylist). So the honest structural readback is a plain HTTP
 # POST tools/list, done here.
 def _mcp_port(ctx):
-    pf = os.path.join(ctx.run_dir, "agent-mcp.port")
+    pf = os.path.join(ctx.run_dir, "worlddriver-mcp.port")
     # RPC + MCP both come up in onServerStarting; the readiness gate (mc.observe.player,
     # onServerStarted) is strictly later, so the port file already exists by now. Short grace anyway.
     deadline = time.time() + 30
@@ -336,7 +336,7 @@ def _mcp_port(ctx):
             except ValueError:
                 pass
         time.sleep(1)
-    raise ContractFailure(f"agent-mcp.port never appeared in {ctx.run_dir}")
+    raise ContractFailure(f"worlddriver-mcp.port never appeared in {ctx.run_dir}")
 
 
 def _tools_list(ctx):
@@ -431,7 +431,7 @@ def check_test_reset_schema_paired(ctx):
 def check_test_run_paired(ctx):
     # P3a check ⑤ — mc.test.run pairing metaproof (runs on the DOGFOOD/autorun server, the only
     # topology where the testkit runtime armed and registered the verb through its own
-    # TestkitVerbHook SPI). Two assertions, mirroring the mc.test.reset precedent (checks ③/④):
+    # StageWrightVerbHook SPI). Two assertions, mirroring the mc.test.reset precedent (checks ③/④):
     #   (a) HIDDEN: mc.test.run must NOT appear in the MCP tools/list catalog — it is a dev/test
     #       harness verb, reachable over RPC only, exactly like mc.test.reset / mc.test.yaml.
     #   (b) SCHEMA-PAIRED: a bogus param key must be rejected by the VALIDATOR (unexpected-key)
@@ -497,8 +497,8 @@ CHECKS = [
 ]
 
 # P3a mc.test.run verb-contract checks. These run against the DOGFOOD server, NOT the plain
-# contract server: mc.test.run is registered by the testkit runtime's own TestkitVerbHook SPI,
-# which only fires where TestkitCommon.onServerStarted armed the harness (a testkit runtime =
+# contract server: mc.test.run is registered by the testkit runtime's own StageWrightVerbHook SPI,
+# which only fires where StageWrightCommon.onServerStarted armed the harness (a testkit runtime =
 # an autorun-armed server). The plain contract server never arms the harness, so the verb is
 # (correctly) absent there — pinning its contract requires the armed topology. The dogfood suite
 # runs in the background; these two checks touch only the verb (never a scene outcome), so they
@@ -525,20 +525,20 @@ def provision(loader):
             "sync-chunk-writes=false", "spawn-protection=0", "motd=instrument-contract",
         ]) + "\n")
     subprocess.run(["rm", "-rf", os.path.join(rd, "world")], check=True)
-    for leftover in ("agent-rpc.port", "agent-mcp.port", "instrument-results.jsonl"):
+    for leftover in ("worlddriver-rpc.port", "worlddriver-mcp.port", "instrument-results.jsonl"):
         p = os.path.join(rd, leftover)
         if os.path.exists(p):
             os.remove(p)
 
 
 def sweep():
-    for pid in platform_compat.find_processes("agent.contractRun"):
+    for pid in platform_compat.find_processes("worlddriver.contractRun"):
         print(f"[instrument] killing leftover contract JVM pid={pid}")
         platform_compat.kill_pid(pid)
 
 
 def wait_port_file(loader, wall):
-    pf = os.path.join(run_dir(loader), "agent-rpc.port")
+    pf = os.path.join(run_dir(loader), "worlddriver-rpc.port")
     deadline = time.time() + wall
     while time.time() < deadline:
         if os.path.exists(pf):
@@ -555,7 +555,7 @@ def launch(loader, wall):
     provision(loader)
     task = f":{MODULE[loader]}:runContractServer"
     cmd = platform_compat.gradlew_cmd(task)
-    print(f"[instrument] launching: {' '.join(cmd)} (wall={wall}s, waiting on agent-rpc.port)")
+    print(f"[instrument] launching: {' '.join(cmd)} (wall={wall}s, waiting on worlddriver-rpc.port)")
     proc = subprocess.Popen(cmd, cwd=ROOT,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     port = wait_port_file(loader, wall)
@@ -579,7 +579,7 @@ def launch(loader, wall):
         try:
             ws = Ws("127.0.0.1", port)
             ctx = Ctx(ws)
-            ctx.run_dir = run_dir(loader)  # P2a: MCP tools/list reader resolves agent-mcp.port here
+            ctx.run_dir = run_dir(loader)  # P2a: MCP tools/list reader resolves worlddriver-mcp.port here
             ctx.call("mc.observe.player")
             return ctx
         except Exception:
@@ -598,9 +598,9 @@ def stop(ctx):
 
 
 # ---------- dogfood (autorun) server — for the mc.test.run verb-contract checks ----------
-# mc.test.run is registered only where the testkit runtime armed the harness (TestkitVerbHook SPI
-# fires from TestkitCommon.onServerStarted). The plain contract server never arms it, so the two
-# route.testRun* checks run against the dogfood server (:<loader>:runDogfoodServer, -Dtestkit.autorun
+# mc.test.run is registered only where the testkit runtime armed the harness (StageWrightVerbHook SPI
+# fires from StageWrightCommon.onServerStarted). The plain contract server never arms it, so the two
+# route.testRun* checks run against the dogfood server (:<loader>:runDogfoodServer, -Dstagewright.autorun
 # hard-true in its run config). We connect early — the harness arms at SERVER_STARTED (so mc.test.run
 # already errors idempotently) and the autorun suite will eventually halt the server; the two checks
 # are instant RPC round-trips done long before the ~minute-long suite finishes.
@@ -622,14 +622,14 @@ def provision_dogfood(loader):
             "sync-chunk-writes=false", "spawn-protection=0", "motd=instrument-dogfood",
         ]) + "\n")
     subprocess.run(["rm", "-rf", os.path.join(rd, "world")], check=True)
-    for leftover in ("agent-rpc.port", "agent-mcp.port", "testkit-results.jsonl"):
+    for leftover in ("worlddriver-rpc.port", "worlddriver-mcp.port", "testkit-results.jsonl"):
         p = os.path.join(rd, leftover)
         if os.path.exists(p):
             os.remove(p)
 
 
 def sweep_dogfood():
-    for pid in platform_compat.find_processes("testkit.autorun", "java"):
+    for pid in platform_compat.find_processes("stagewright.autorun", "java"):
         print(f"[instrument] killing leftover dogfood JVM pid={pid}")
         platform_compat.kill_pid(pid)
 
@@ -642,7 +642,7 @@ def launch_dogfood(loader, wall):
     print(f"[instrument] launching dogfood (autorun): {' '.join(cmd)} (wall={wall}s)")
     proc = subprocess.Popen(cmd, cwd=ROOT,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    pf = os.path.join(dogfood_dir(loader), "agent-rpc.port")
+    pf = os.path.join(dogfood_dir(loader), "worlddriver-rpc.port")
     deadline = time.time() + wall
     port = None
     while time.time() < deadline:
@@ -662,7 +662,7 @@ def launch_dogfood(loader, wall):
         try:
             ws = Ws("127.0.0.1", port)
             ctx = Ctx(ws)
-            ctx.run_dir = dogfood_dir(loader)  # MCP tools/list reader resolves agent-mcp.port here
+            ctx.run_dir = dogfood_dir(loader)  # MCP tools/list reader resolves worlddriver-mcp.port here
             ctx.call("mc.observe.player")      # readiness: api attached (harness armed same tick)
             return ctx
         except Exception:

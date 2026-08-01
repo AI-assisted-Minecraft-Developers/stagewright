@@ -92,7 +92,7 @@ def iter_processes():
     """Yield ``(pid:int, cmdline:str)`` for every process we can see.
 
     Used by the orchestrators' ``sweep()`` to find leftover testkit JVMs by matching a
-    marker (e.g. ``testkit.autorun``) in the command line, then killing them by explicit
+    marker (e.g. ``stagewright.autorun``) in the command line, then killing them by explicit
     PID — the repo bans ``pkill``, whose pattern matches the sweeper's own shell.
     """
     if IS_WINDOWS:

@@ -1,4 +1,4 @@
-"""Shared pure-verdict logic for testkit runners (t0 scenes, instrument checks). Semantics frozen by docs/testkit/orchestration-contract-v0.md — do not change judge() behavior without a contract review."""
+"""Shared pure-verdict logic for testkit runners (t0 scenes, instrument checks). Semantics frozen by docs/stagewright/orchestration-contract-v0.md — do not change judge() behavior without a contract review."""
 import json
 import sys
 
@@ -27,7 +27,7 @@ def judge(lines, record_type="scene", expected=None):
     (here: "ad."). That is derived from `expected` rather than hardcoded, and it
     is what keeps the testkit's own built-ins out of it — canaryMustFail /
     canaryMustTimeout / canaryMustSwallow / awaitTicks / floorAssert are
-    registered by mc-testkit's Scenes.java for every suite and are deliberately
+    registered by stagewright's Scenes.java for every suite and are deliberately
     not in any loader manifest. Canary records are skipped outright as well,
     since the canary block below is their real gate.
     """

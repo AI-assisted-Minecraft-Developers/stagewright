@@ -22,11 +22,11 @@ reports up==true → mc.test.reset → every held key false — the real release
 the unconditional reset[] "keys" token could never make).
 
 Two run modes:
-  * self-launch (default): drive t1.py's shell — Xvfb, gradle testkitClient with
+  * self-launch (default): drive t1.py's shell — Xvfb, gradle stagewrightClient with
     autorun OFF (no scenes → the integrated server stays up), template world
     lifecycle, GUI into-world — then reconnect a plain RPC socket and run the checks.
   * --attach: a `t1.py --hold` is already in-world and online; read run-t1's
-    agent-rpc.port, connect, run the checks, leave the client running.
+    worlddriver-rpc.port, connect, run the checks, leave the client running.
 
 Verdict/JSONL/exit-code discipline is instrument.py's, judged through the shared
 verdict module (record_type="check"; canary mis-judgement => DEAD). Every check
@@ -838,7 +838,7 @@ def _resolve_topology(attach, wall, topology):
     T2 leave both None (nothing local to tear down). Raises ContractFailure on an ENV-grade setup
     failure so run_suite maps it to exit 3.
 
-    T1 attach : reuse an online `t1.py --hold` client (run-t1/agent-rpc.port).
+    T1 attach : reuse an online `t1.py --hold` client (run-t1/worlddriver-rpc.port).
     T1 launch : self-launch the T1 client shell (autorun OFF), drive into the reused world.
     T2 attach : read the `t2.py --hold` TESTKIT_ENDPOINT (dual-socket: client rpcPort +
                 REQUIRED serverRpcPort), connect both. Self-launch is NOT offered for T2 —
@@ -865,7 +865,7 @@ def _resolve_topology(attach, wall, topology):
         port = gd.read_port(Path(PORT_FILE))
         if port is None:
             raise ContractFailure(
-                f"ENV: no agent-rpc.port in {RUN_DIR} (is `t1.py --hold` running?)")
+                f"ENV: no worlddriver-rpc.port in {RUN_DIR} (is `t1.py --hold` running?)")
         print(f"[instrument-client] --attach: reusing online client at port {port}")
         return T1Topology(port), None, None, 0.0
     t_boot = time.time()
@@ -1188,7 +1188,7 @@ def _parse_args(argv):
                          "dedicated PlayerList — P1b's headless gap closed in the production topology); "
                          "#280 setting + reset land on the CLIENT face.")
     ap.add_argument("--attach", action="store_true",
-                    help="reuse an online `--hold` topology (t1: run-t1/agent-rpc.port; t2: the "
+                    help="reuse an online `--hold` topology (t1: run-t1/worlddriver-rpc.port; t2: the "
                          "TESTKIT_ENDPOINT descriptor). t1 default self-launches; t2 REQUIRES --attach.")
     ap.add_argument("--wall", type=int, default=900, help="wall-clock cap in seconds (t1 self-launch)")
     ap.add_argument("--rounds", type=int, default=1,

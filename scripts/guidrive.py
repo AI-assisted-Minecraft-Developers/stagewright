@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""guidrive — reusable widget-tree GUI drive library for the mc-testkit T1 shell.
+"""guidrive — reusable widget-tree GUI drive library for the stagewright T1 shell.
 
 Extracted from scripts/react_smoke.py and scripts/into_world.py so orchestrators
 (t1.py, instrument_client.py) can drive a real Fabric client from the title screen
@@ -13,7 +13,7 @@ copy the pure helpers rather than import react_smoke:
     the library is a pure additive increment. A self-contained module with a
     RUN-DIR-PARAMETERIZED port discovery satisfies both constraints cleanly.
 
-All navigation goes through the AgentDriver WebSocket RPC (mc.client.input.click on
+All navigation goes through the WorldDriver WebSocket RPC (mc.client.input.click on
 a widget's centre in MC internal coords). NO xdotool / OS-level input, so NO window
 manager is required under Xvfb (this is the whole advantage over the pixel-coordinate
 approach in smoke-test-client.sh — that script's matchbox/pkill lines are NOT a

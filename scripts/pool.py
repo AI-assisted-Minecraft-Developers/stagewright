@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mc-testkit client PROCESS POOL (contract v0, P3b T2) — keep --hold topologies
+"""stagewright client PROCESS POOL (contract v0, P3b T2) — keep --hold topologies
 alive ACROSS invocations so consumers attach in seconds instead of cold-booting.
 
 t1.py --hold (integrated server + client) and t2.py --hold (dedicated server +
@@ -55,7 +55,7 @@ import t2 as t2mod              # noqa: E402 — REUSE resolve_t2 paths (NOT for
 import instrument as inst       # noqa: E402 — REUSE the stdlib synchronous Ws/Ctx for the probe
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "testkit")
+TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "stagewright")
 STATE_FILE = os.path.join(TESTKIT_DIR, ".pool-state.json")
 STATE_LOCK = os.path.join(TESTKIT_DIR, ".pool-state.lock")
 
@@ -223,7 +223,7 @@ def del_entry(topology, loader):
 # ------------------------------------------------------------- liveness probe -
 def probe_alive(host, port, timeout=PROBE_TIMEOUT):
     """One bare-RPC ``mc.system.version`` against ws://host:port/rpc (the attach
-    contract's liveness proof). True iff the driver answers with modid==agent_driver
+    contract's liveness proof). True iff the driver answers with modid==worlddriver
     within ``timeout``. Runs the blocking stdlib websocket handshake in a daemon
     thread joined with a bound, so a black-hole TCP accept can never stall the probe
     past ~timeout (a refused connection returns instantly regardless)."""
@@ -234,7 +234,7 @@ def probe_alive(host, port, timeout=PROBE_TIMEOUT):
             ws = inst.Ws(host, int(port))
             ws.sock.settimeout(timeout)
             v = inst.Ctx(ws).call("mc.system.version")
-            result["ok"] = isinstance(v, dict) and v.get("modid") == "agent_driver"
+            result["ok"] = isinstance(v, dict) and v.get("modid") == "worlddriver"
             try:
                 ws.sock.close()
             except OSError:
@@ -655,7 +655,7 @@ def _raises_systemexit(fn):
 # ---------------------------------------------------------------- argparse ----
 def _parse(argv):
     ap = argparse.ArgumentParser(
-        description="mc-testkit client process pool (keep --hold topologies alive across "
+        description="stagewright client process pool (keep --hold topologies alive across "
                     "invocations)")
     ap.add_argument("command", nargs="?", choices=["ensure", "status", "stop"],
                     help="ensure (reuse-or-launch) | status (probe all) | stop (release)")

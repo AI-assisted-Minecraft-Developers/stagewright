@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""mc-testkit T0 orchestrator (contract v0).
+"""stagewright T0 orchestrator (contract v0).
 
 Provisions the loader's run-testkit dir, launches the plain dedicated server run
-(:testkit-<loader>:runTestkitServer, armed by -Dtestkit.autorun), wall-caps it,
+(:testkit-<loader>:runStageWrightServer, armed by -Dstagewright.autorun), wall-caps it,
 then judges testkit-results.jsonl:
 
   exit 0  GREEN  — footer present, registered==executed (swallow-canaries excepted),
@@ -34,10 +34,10 @@ from verdict import parse, judge
 # relative --results / --expect-file resolves against it.
 #
 # It defaults to THIS repo (three levels up from the script), which is what every
-# agent-driver invocation has always meant — but an EXTERNAL consumer applies the
-# mc-testkit gradle plugin in its own repo while the frozen orchestrators keep living
+# worlddriver invocation has always meant — but an EXTERNAL consumer applies the
+# stagewright gradle plugin in its own repo while the frozen orchestrators keep living
 # here, and for it the two are different directories. Without an override such a run
-# silently drove agent-driver's build instead of the consumer's: the wrong `gradlew`,
+# silently drove worlddriver's build instead of the consumer's: the wrong `gradlew`,
 # the wrong run task, the wrong results file. `--project-root` (or the
 # TESTKIT_PROJECT_ROOT env var, which the gradle plugin sets) names the consumer.
 SCRIPT_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -45,7 +45,7 @@ REPO_ROOT = os.environ.get("TESTKIT_PROJECT_ROOT") or SCRIPT_REPO_ROOT
 
 
 def run_dir(loader):
-    return os.path.join(REPO_ROOT, "mc-testkit", loader, "run-testkit")
+    return os.path.join(REPO_ROOT, "stagewright", loader, "run-testkit")
 
 
 def default_results(loader):
@@ -60,7 +60,7 @@ def provision(results):
         f.write("eula=true\n")
     with open(os.path.join(d, "server.properties"), "w") as f:
         f.write("server-port=25599\nlevel-type=minecraft\\:flat\nonline-mode=false\n"
-                "spawn-protection=0\nsync-chunk-writes=false\nmotd=mc-testkit T0\n")
+                "spawn-protection=0\nsync-chunk-writes=false\nmotd=stagewright T0\n")
     shutil.rmtree(os.path.join(d, "world"), ignore_errors=True)
     if os.path.exists(results):
         os.remove(results)
@@ -77,7 +77,7 @@ def provision(results):
 
 def sweep():
     """Kill leftover testkit server JVMs by explicit PID (pkill is banned)."""
-    for pid in platform_compat.find_processes("testkit.autorun", "java"):
+    for pid in platform_compat.find_processes("stagewright.autorun", "java"):
         print(f"[t0] killing leftover testkit JVM pid={pid}")
         platform_compat.kill_pid(pid)
 
@@ -318,7 +318,7 @@ def load_expect_file(path):
     return names
 
 
-# The per-loader manifests are identical BY CONSTRUCTION — the ad.* scenes live in
+# The per-loader manifests are identical BY CONSTRUCTION — the wd.* scenes live in
 # :common and both loaders register them through the same common SceneProvider service
 # file. Until this check, that invariant was stated only in a comment at the top of each
 # manifest ("any scene added to common MUST be added to BOTH manifests in the same
@@ -386,13 +386,13 @@ def main():
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--project-root", default=None,
                     help="gradle project to drive (default: this repo, or $TESTKIT_PROJECT_ROOT). "
-                         "External consumers of the mc-testkit gradle plugin point this at "
+                         "External consumers of the stagewright gradle plugin point this at "
                          "their own repo — its gradlew is what gets launched, and relative "
                          "--results / --expect-file resolve against it")
     ap.add_argument("--run-task", default=None,
-                    help="gradle run task (default :testkit-<loader>:runTestkitServer)")
+                    help="gradle run task (default :testkit-<loader>:runStageWrightServer)")
     ap.add_argument("--results", default=None,
-                    help="results JSONL path (default mc-testkit/<loader>/run-testkit/testkit-results.jsonl)")
+                    help="results JSONL path (default stagewright/<loader>/run-testkit/testkit-results.jsonl)")
     ap.add_argument("--expect-scene", default=None,
                     help="comma-separated scene names that MUST appear in registered[] (RED if absent)")
     ap.add_argument("--expect-file", default=None,
@@ -413,7 +413,7 @@ def main():
     if args.results and not os.path.isabs(args.results):
         args.results = os.path.join(REPO_ROOT, args.results)
     results_path = args.results or default_results(args.loader)
-    task = args.run_task or f":testkit-{args.loader}:runTestkitServer"
+    task = args.run_task or f":testkit-{args.loader}:runStageWrightServer"
 
     from_scene = None
     if args.expect_scene is not None:

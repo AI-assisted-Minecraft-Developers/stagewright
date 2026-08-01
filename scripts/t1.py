@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""mc-testkit T1 orchestrator (contract v0) — client topology under Xvfb.
+"""stagewright T1 orchestrator (contract v0) — client topology under Xvfb.
 
-Runs the 9 ad.* scenes on an INTEGRATED server (client-hosted world), proving
-the mc-testkit harness topology generalizes from the dedicated dogfood server
+Runs the 9 wd.* scenes on an INTEGRATED server (client-hosted world), proving
+the stagewright harness topology generalizes from the dedicated dogfood server
 (t0.py) to a real game client on EITHER loader (--loader {fabric,neoforge},
 default fabric; all loader-specific paths/tasks resolve via LoaderPaths). Flow:
 
@@ -10,7 +10,7 @@ default fabric; all loader-specific paths/tasks resolve via LoaderPaths). Flow:
      dev client may own it), tracked by PID, killed by PID on exit
   2. pre-create <loader>/run-t1/saves and, if a cached per-loader world template
      exists, copy it in BEFORE launch so the world list sees it
-  3. launch :<loader>:runTestkitClient (a CLIENT JVM, -Dtestkit.autorun=true) with
+  3. launch :<loader>:runStageWrightClient (a CLIENT JVM, -Dstagewright.autorun=true) with
      DISPLAY in its environment; foreground bounded polling for the port file
   4. drive title → singleplayer → world (guidrive, RPC widget clicks, no WM) —
      reuse the template world, or GUI-create it once and archive it as the template
@@ -18,7 +18,7 @@ default fabric; all loader-specific paths/tasks resolve via LoaderPaths). Flow:
      scenes auto-run → poll run-t1/testkit-results.jsonl for the done footer
   6. judge via verdict.py (REUSED, not forked) with --expect-file
   7. teardown: quit-to-title (best effort) → kill client JVM by PID → kill Xvfb by
-     PID → delete the saves/TestkitT1 copy (leave the template archive)
+     PID → delete the saves/StageWrightT1 copy (leave the template archive)
 
 Exit codes (T1 semantics):
   0 GREEN  — footer present, verdict GREEN (all scenes on their expected outcome)
@@ -47,8 +47,8 @@ from verdict import parse, judge  # noqa: E402 — REUSED judging logic, not for
 from t0 import load_expect_file  # noqa: E402 — REUSED expect-file parser, not forked
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "testkit")
-WORLD_NAME = "TestkitT1"
+TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "stagewright")
+WORLD_NAME = "StageWrightT1"
 LOADERS = ("fabric", "neoforge")
 
 
@@ -56,7 +56,7 @@ LOADERS = ("fabric", "neoforge")
 class LoaderPaths:
     """Every loader-specific path/task the orchestrator needs, resolved once from the
     --loader argument. The client topology is identical across loaders; only the run-t1
-    tree (under ``<loader>/``), the gradle task (``:<loader>:runTestkitClient``), the
+    tree (under ``<loader>/``), the gradle task (``:<loader>:runStageWrightClient``), the
     per-loader template cache, and the default expect manifest differ. Pure/derivable,
     so self-test can assert both loaders' resolution without touching a live client."""
     loader: str
@@ -80,14 +80,14 @@ def resolve_loader(name):
     return LoaderPaths(
         loader=name,
         run_dir=run_dir,
-        port_file=os.path.join(run_dir, "agent-rpc.port"),
+        port_file=os.path.join(run_dir, "worlddriver-rpc.port"),
         results=os.path.join(run_dir, "testkit-results.jsonl"),
         saves=saves,
         world_dir=os.path.join(saves, WORLD_NAME),
         template_dir=os.path.join(TESTKIT_DIR, f".t1-world-template-{name}"),
-        run_task=f":{name}:runTestkitClient",
+        run_task=f":{name}:runStageWrightClient",
         endpoint_file=os.path.join(run_dir, "testkit-endpoint.json"),
-        default_expect=os.path.join("scripts", "testkit", f"expected-scenes-{name}.txt"),
+        default_expect=os.path.join("scripts", "stagewright", f"expected-scenes-{name}.txt"),
     )
 
 
@@ -196,14 +196,14 @@ def kill_pid(pid, name, grace=15):
 
 def sweep_client_jvms():
     """Kill leftover T1 CLIENT JVMs by explicit PID (pkill is banned). Matches the
-    forked Knot CLIENT with testkit.autorun armed — never the dedicated dogfood
-    KnotServer (which is also testkit.autorun but a server), and never the gradle
+    forked Knot CLIENT with stagewright.autorun armed — never the dedicated dogfood
+    KnotServer (which is also stagewright.autorun but a server), and never the gradle
     wrapper. run-t1 in the argv is the tie-breaker when present."""
     killed = []
     for pid, cmd in platform_compat.iter_processes():
-        if "java" not in cmd or "testkit.autorun" not in cmd:
+        if "java" not in cmd or "stagewright.autorun" not in cmd:
             continue
-        is_client = "KnotClient" in cmd or "runTestkitClient" in cmd or "run-t1" in cmd
+        is_client = "KnotClient" in cmd or "runStageWrightClient" in cmd or "run-t1" in cmd
         if not is_client:
             continue
         print(f"[t1] killing leftover T1 client JVM pid={pid}")
@@ -221,7 +221,7 @@ def sweep_client_jvms():
 
 # ------------------------------------------------------------- world drive ----
 async def drive_into_world(rpc, reuse):
-    """Title → singleplayer → (reuse|create) TestkitT1 → in-world. Raises on failure."""
+    """Title → singleplayer → (reuse|create) StageWrightT1 → in-world. Raises on failure."""
     await gd.goto_main_menu(rpc)
     info = await gd.goto_singleplayer(rpc)
     if reuse:
@@ -290,9 +290,9 @@ def harvest_footer(results, deadline, client_proc):
 
 # ------------------------------------------------------------- orchestration --
 async def mint_session(wall, build_wall=1800):
-    """Mint phase (autorun OFF): connect, GUI-create a pristine TestkitT1, quit-to-title
+    """Mint phase (autorun OFF): connect, GUI-create a pristine StageWrightT1, quit-to-title
     to flush a clean save. NO scenes run (autorun off) so the world stays byte-clean —
-    reusing an after-scenes world flips the ad.selfShaftDigUp inverted-lottery signature."""
+    reusing an after-scenes world flips the wd.selfShaftDigUp inverted-lottery signature."""
     boot_deadline = time.monotonic() + build_wall
     port = await gd.discover_port(Path(PORT_FILE),
                                   timeout=max(30, int(boot_deadline - time.monotonic())))
@@ -319,7 +319,7 @@ async def run_session(wall, hold, hold_pid=None, build_wall=1800):
     """Scored run (autorun ON, template reuse): connect, drive into world, harvest.
     Returns footer_seen. ``hold_pid`` is the CLIENT JVM pid (only meaningful when
     ``hold`` is True — it becomes the endpoint file's holdPid)."""
-    # TWO CLOCKS, same reason as t0.launch(): `gradlew runTestkitClient` compiles before
+    # TWO CLOCKS, same reason as t0.launch(): `gradlew runStageWrightClient` compiles before
     # it runs anything, and this deadline used to cover BOTH the build and the scene
     # harvest below. A cold build therefore ate the budget the scenes needed and the run
     # was reported as "no footer" — which reads as a scene failure, not as "the build was
@@ -417,7 +417,7 @@ def archive_template():
 
 
 def launch_client(env, wall, autorun, log_name=None):
-    """Launch RUN_TASK (:<loader>:runTestkitClient). --no-daemon so the forked game JVM inherits this
+    """Launch RUN_TASK (:<loader>:runStageWrightClient). --no-daemon so the forked game JVM inherits this
     launcher's environment (a reused daemon would carry no DISPLAY → GLFW init fails).
     autorun=False passes -Pt1Autorun=false to mint a pristine (scene-free) template.
     ``log_name`` (additive, for reuse by t2.py) overrides the default log basename so an
@@ -441,7 +441,7 @@ def stop_client(proc):
 
 
 def mint_template(env, wall, build_wall=1800):
-    """First-run-ever mint: create a pristine TestkitT1 (autorun OFF, no scenes), flush a
+    """First-run-ever mint: create a pristine StageWrightT1 (autorun OFF, no scenes), flush a
     clean save, kill the JVM, archive it as the template, then delete the mint copy.
     Returns True on success."""
     print("[t1] template ABSENT — minting a pristine template (autorun OFF, no scenes)")
@@ -559,9 +559,9 @@ def self_test():
         ("write_endpoint: atomic overwrite leaves no .tmp, second call wins",
          _check_write_endpoint_overwrite()),
         ("resolve_loader fabric task", resolve_loader("fabric").run_task
-         == ":fabric:runTestkitClient"),
+         == ":fabric:runStageWrightClient"),
         ("resolve_loader neoforge task", resolve_loader("neoforge").run_task
-         == ":neoforge:runTestkitClient"),
+         == ":neoforge:runStageWrightClient"),
         ("resolve_loader fabric run-dir under fabric/",
          resolve_loader("fabric").run_dir == os.path.join(REPO_ROOT, "fabric", "run-t1")),
         ("resolve_loader neoforge run-dir under neoforge/",
@@ -573,7 +573,7 @@ def self_test():
          and resolve_loader("neoforge").template_dir.endswith(".t1-world-template-neoforge")),
         ("resolve_loader default-expect per loader",
          resolve_loader("neoforge").default_expect
-         == os.path.join("scripts", "testkit", "expected-scenes-neoforge.txt")),
+         == os.path.join("scripts", "stagewright", "expected-scenes-neoforge.txt")),
         ("resolve_loader endpoint file under run-dir",
          resolve_loader("neoforge").endpoint_file
          == os.path.join(REPO_ROOT, "neoforge", "run-t1", "testkit-endpoint.json")),
@@ -686,7 +686,7 @@ def _check_loader_paths_derive(name):
     return (
         lp.saves == os.path.join(lp.run_dir, "saves")
         and lp.world_dir == os.path.join(lp.run_dir, "saves", WORLD_NAME)
-        and lp.port_file == os.path.join(lp.run_dir, "agent-rpc.port")
+        and lp.port_file == os.path.join(lp.run_dir, "worlddriver-rpc.port")
         and lp.results == os.path.join(lp.run_dir, "testkit-results.jsonl")
     )
 
@@ -697,7 +697,7 @@ def _check_install_loader():
     try:
         _install_loader("neoforge")
         ok = (
-            RUN_TASK == ":neoforge:runTestkitClient"
+            RUN_TASK == ":neoforge:runStageWrightClient"
             and RUN_DIR.endswith(os.path.join("neoforge", "run-t1"))
             and LOADER.loader == "neoforge"
             and TEMPLATE_DIR.endswith(".t1-world-template-neoforge")
@@ -744,10 +744,10 @@ _DEAD = [_SUITE, _sc("a", "PASS"), _sc("cf", "PASS"), _sc("ct", "TIMEOUT"),
 
 # ---------------------------------------------------------------- argparse ----
 def _parse(argv):
-    ap = argparse.ArgumentParser(description="mc-testkit T1 orchestrator (client under Xvfb)")
+    ap = argparse.ArgumentParser(description="stagewright T1 orchestrator (client under Xvfb)")
     ap.add_argument("--loader", choices=LOADERS, default="fabric",
                     help="target loader (default fabric): selects <loader>/run-t1, the "
-                         ":<loader>:runTestkitClient task, and expected-scenes-<loader>.txt")
+                         ":<loader>:runStageWrightClient task, and expected-scenes-<loader>.txt")
     ap.add_argument("--wall", type=int, default=900,
                     help="seconds the RUN gets, measured from the port file appearing — "
                          "gradle's compile is not charged against it (see run_session)")
@@ -761,7 +761,7 @@ def _parse(argv):
                     help="enter world (autorun OFF, NO scenes) and stay online with the "
                          "integrated server live, for instrument_client --attach; no harvest")
     ap.add_argument("--keep-world", action="store_true",
-                    help="do not delete the saves/TestkitT1 copy on exit (debug)")
+                    help="do not delete the saves/StageWrightT1 copy on exit (debug)")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args(argv)
     lp = resolve_loader(args.loader)

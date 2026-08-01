@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
-"""mc-testkit T2 orchestrator (contract v0) — PRODUCTION topology (dedicated server + real client).
+"""stagewright T2 orchestrator (contract v0) — PRODUCTION topology (dedicated server + real client).
 
 Where T1 proved the harness on an INTEGRATED server (a client hosting its own world),
 T2 proves the true production topology: a plain DEDICATED server (t2Server, run-t2) and a
-SEPARATE real game client (testkitClient, run-t1, under Xvfb) that DIRECT-CONNECTS to it over
+SEPARATE real game client (stagewrightClient, run-t1, under Xvfb) that DIRECT-CONNECTS to it over
 multiplayer. This task (P3a Task 2) builds the topology SHELL: it stands both processes up,
 drives the client from the title screen through the multiplayer direct-connect flow, and proves
 the dual end is live — the client is in-world AND the dedicated server's PlayerList holds a real
 ServerPlayer. Scene execution over this topology and the JUnit attach endpoint come in Tasks 3-4.
 
 Two loaders, one shell (--loader {fabric,neoforge}, default fabric): the server is the loader's
-:<loader>:runT2Server (run-t2); the client is the loader's :<loader>:runTestkitClient (run-t1,
+:<loader>:runT2Server (run-t2); the client is the loader's :<loader>:runStageWrightClient (run-t1,
 reused verbatim from T1 via importing t1.py — NOT forked). Flow:
 
   mint (no per-loader template yet):
-    boot t2Server clean (autorun OFF) → wait run-t2/agent-rpc.port → connect server RPC → poll
+    boot t2Server clean (autorun OFF) → wait run-t2/worlddriver-rpc.port → connect server RPC → poll
     until the world is loaded (mc.observe.player answers; it asserts an attached server, so a
     successful reply == SERVER_STARTED + overworld loaded — worldReady itself is client-only and
     throws on a dedicated server, so it can't be the gate here) → clean stop (SIGTERM the gradle
     process group, bounded wait, cwd-scoped JVM sweep) → verify run-t2/world/level.dat → archive
-    run-t2/world → scripts/testkit/.t2-world-template-<loader> → delete the mint world copy.
+    run-t2/world → scripts/stagewright/.t2-world-template-<loader> → delete the mint world copy.
 
   scored (P3a Task 3):
     copy template → run-t2/world → boot t2Server (autorun OFF) → discover server RPC port + wait
-    world ready → boot the T1 client (testkitClient, run-t1, autorun OFF, Xvfb) → discover client
+    world ready → boot the T1 client (stagewrightClient, run-t1, autorun OFF, Xvfb) → discover client
     RPC port → guidrive: title → Multiplayer → (online-play warning if present) → Direct Connection →
     127.0.0.1:<server-port> → Join Server → in-world → DUAL-END PROBE (client mc.client.player has a
     pos AND server mc.observe.player is present in the DEDICATED PlayerList) → fire mc.test.run over
@@ -40,7 +40,7 @@ reused verbatim from T1 via importing t1.py — NOT forked). Flow:
 
   teardown (finally, EVERY exit path): client first (quit-to-title best effort → PID kill + client
     JVM sweep), server second (SIGTERM the gradle group → bounded wait → cwd-scoped JVM sweep),
-    delete the endpoint descriptor, delete run-t2/world, remove both agent-rpc.port files, kill
+    delete the endpoint descriptor, delete run-t2/world, remove both worlddriver-rpc.port files, kill
     Xvfb. Never pkill.
 
 Exit codes (T2 scored semantics, verdict.py-judged like T0/T1):
@@ -74,7 +74,7 @@ from verdict import parse, judge  # noqa: E402 — REUSED judging logic, not for
 from t0 import load_expect_file  # noqa: E402 — REUSED expect-file parser, not forked
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "testkit")
+TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "stagewright")
 LOADERS = ("fabric", "neoforge")
 WORLD_NAME = "world"  # a dedicated server always names its level "world" (server.properties level-name)
 
@@ -91,15 +91,15 @@ class T2Paths:
     can assert both loaders' resolution without a live process."""
     loader: str
     run_dir: str            # run-t2 (dedicated server working dir)
-    port_file: str          # run-t2/agent-rpc.port (server RPC)
+    port_file: str          # run-t2/worlddriver-rpc.port (server RPC)
     world_dir: str          # run-t2/world
-    template_dir: str       # scripts/testkit/.t2-world-template-<loader>
+    template_dir: str       # scripts/stagewright/.t2-world-template-<loader>
     run_task: str           # :<loader>:runT2Server
     server_properties: str  # run-t2/server.properties
     server_port: int        # multiplayer listen socket
     results: str            # run-t2/testkit-results.jsonl (harness writes here, cwd-relative)
     endpoint_file: str      # run-t2/testkit-endpoint.json (--hold attach descriptor)
-    default_expect: str     # scripts/testkit/expected-scenes-<loader>.txt (reconciliation gate)
+    default_expect: str     # scripts/stagewright/expected-scenes-<loader>.txt (reconciliation gate)
 
 
 def resolve_t2(name):
@@ -109,7 +109,7 @@ def resolve_t2(name):
     return T2Paths(
         loader=name,
         run_dir=run_dir,
-        port_file=os.path.join(run_dir, "agent-rpc.port"),
+        port_file=os.path.join(run_dir, "worlddriver-rpc.port"),
         world_dir=os.path.join(run_dir, "world"),
         template_dir=os.path.join(TESTKIT_DIR, f".t2-world-template-{name}"),
         run_task=f":{name}:runT2Server",
@@ -120,7 +120,7 @@ def resolve_t2(name):
         # footer lands here — the exact same cwd-relative contract T0/T1 rely on.
         results=os.path.join(run_dir, "testkit-results.jsonl"),
         endpoint_file=os.path.join(run_dir, "testkit-endpoint.json"),
-        default_expect=os.path.join("scripts", "testkit", f"expected-scenes-{name}.txt"),
+        default_expect=os.path.join("scripts", "stagewright", f"expected-scenes-{name}.txt"),
     )
 
 
@@ -130,7 +130,7 @@ def render_server_properties(port):
     the offline dev client can join; a fixed server-port so t2.py knows the connect address; a flat
     level for fast, deterministic generation; spawn-protection=0 so the joining player isn't shoved."""
     return (
-        "#mc-testkit T2 dedicated server (generated by t2.py)\n"
+        "#stagewright T2 dedicated server (generated by t2.py)\n"
         f"server-port={port}\n"
         "online-mode=false\n"
         "level-type=minecraft\\:flat\n"
@@ -138,7 +138,7 @@ def render_server_properties(port):
         "spawn-protection=0\n"
         "sync-chunk-writes=false\n"
         "max-players=8\n"
-        "motd=mc-testkit T2\n"
+        "motd=stagewright T2\n"
     )
 
 
@@ -240,7 +240,7 @@ def sweep_server_jvms(run_dir):
 
 def launch_server(t2, env, autorun, wall):
     """Launch the dedicated t2Server (:<loader>:runT2Server). --no-daemon + start_new_session so the
-    whole gradle→game process tree is one killable group. -Pt2Autorun controls testkit.autorun."""
+    whole gradle→game process tree is one killable group. -Pt2Autorun controls stagewright.autorun."""
     os.makedirs(t2.run_dir, exist_ok=True)
     logf = open(os.path.join(t2.run_dir, "t2-server.log"), "w")
     cmd = platform_compat.gradlew_cmd(
@@ -618,7 +618,7 @@ def self_test():
          == os.path.join(resolve_t2("fabric").run_dir, "testkit-endpoint.json")),
         ("resolve_t2 default-expect per loader",
          resolve_t2("neoforge").default_expect
-         == os.path.join("scripts", "testkit", "expected-scenes-neoforge.txt")),
+         == os.path.join("scripts", "stagewright", "expected-scenes-neoforge.txt")),
         ("write_endpoint: T2 schema (dedicated_plus_client + serverRpcPort) value/type fidelity",
          _check_write_endpoint()),
         ("write_endpoint: atomic overwrite leaves no .tmp, second call wins",
@@ -647,7 +647,7 @@ def self_test():
 def _check_paths_derive(name):
     t2 = resolve_t2(name)
     return (
-        t2.port_file == os.path.join(t2.run_dir, "agent-rpc.port")
+        t2.port_file == os.path.join(t2.run_dir, "worlddriver-rpc.port")
         and t2.world_dir == os.path.join(t2.run_dir, "world")
         and t2.server_properties == os.path.join(t2.run_dir, "server.properties")
     )
@@ -757,10 +757,10 @@ def _raises_systemexit(fn):
 # ---------------------------------------------------------------- argparse ----
 def _parse(argv):
     ap = argparse.ArgumentParser(
-        description="mc-testkit T2 orchestrator (dedicated server + real client, multiplayer)")
+        description="stagewright T2 orchestrator (dedicated server + real client, multiplayer)")
     ap.add_argument("--loader", choices=LOADERS, default="fabric",
                     help="target loader (default fabric): selects <loader>/run-t2 + :<loader>:runT2Server "
-                         "for the server, and the T1 run-t1/runTestkitClient for the client")
+                         "for the server, and the T1 run-t1/runStageWrightClient for the client")
     ap.add_argument("--wall", type=int, default=900, help="wall-clock cap in seconds")
     ap.add_argument("--expect-file", default=None,
                     help="expected-scene manifest (default expected-scenes-<loader>.txt); union "
