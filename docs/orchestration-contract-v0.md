@@ -1,15 +1,15 @@
-# mc-testkit 编排契约 v0（冻结 2026-07-16）
+# stagewright 编排契约 v0（冻结 2026-07-16）
 
-本契约是编排器（现 Python `scripts/testkit/t0.py`，将来 gradle-plugin）与游戏内
+本契约是编排器（现 Python `scripts/stagewright/t0.py`，将来 gradle-plugin）与游戏内
 harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 
 ## 启动协议
-- T0 壳 = 普通专用服务器 loom run `:testkit-<loader>:runTestkitServer`
-  （runDir `mc-testkit/<loader>/run-testkit`，JVM sysprop `testkit.autorun=true` 触发）。
+- T0 壳 = 普通专用服务器 loom run `:testkit-<loader>:runStageWrightServer`
+  （runDir `stagewright/<loader>/run-testkit`，JVM sysprop `stagewright.autorun=true` 触发）。
 - 编排器负责预备 runDir：`eula.txt`、`server.properties`（server-port=25599、
   level-type=minecraft\:flat、online-mode=false、spawn-protection=0）、删 `world/`
-  与旧结果文件；跑前按显式 PID 清扫命令行含 `testkit.autorun` 的残留 JVM（禁 pkill）。
-  以上为契约相关键，编排器实际写入的完整集以 `scripts/testkit/t0.py` 的
+  与旧结果文件；跑前按显式 PID 清扫命令行含 `stagewright.autorun` 的残留 JVM（禁 pkill）。
+  以上为契约相关键，编排器实际写入的完整集以 `scripts/stagewright/t0.py` 的
   `provision()` 为准（非穷举列表）。
 - harness 跑完注册表后自行 `MinecraftServer.halt(false)` 正常停机；
   **服务器进程退出码不是裁决依据**，裁决唯一来源是结果文件。
@@ -40,14 +40,14 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 框架完整性违规（#85 病），不是测试结果。
 
 ## 游戏内时序契约
-结果写盘只在场景边界（P0 探针事故教训，agent-driver 926396d）；
+结果写盘只在场景边界（P0 探针事故教训，worlddriver 926396d）；
 确定性敏感场景入驻（P1c）前须复核，必要时改异步 writer。
 
 ### 启动 tick 债 settle 屏障（v0 附录，task#88 / D1-T1）
 新起的 `MinecraftServer` 带累积 tick 债，起步会以 ~3ms/tick 不节流地"追帧"直到追平，
 才回落到稳定的 ~50ms 节奏。这段突发窗内，场景里墙钟绑定的等待（实体入索引等）为同一段
-真实延迟要多吃 2-2.3× 的 tick——正是 `ad.entityLeash` 反复止血（`within` 60→120→180）的
-根因。`TestkitCommon.onServerTick` 现在把 `harness.tick()` 的**转发**挡在一道 settle 屏障后：
+真实延迟要多吃 2-2.3× 的 tick——正是 `wd.entityLeash` 反复止血（`within` 60→120→180）的
+根因。`StageWrightCommon.onServerTick` 现在把 `harness.tick()` 的**转发**挡在一道 settle 屏障后：
 连续 10 个服务器 tick 间距 ≥40ms（tick 债已排空）之前一律不转发；达成时打一条 INFO
 `testkit: tick cadence settled after <N> server ticks (tick debt drained)`；安全阀=1200 tick
 仍未稳定则强制开跑并打 WARN（永不无限挂起）。**只挡转发**：harness 构造、tick-pure 的
@@ -59,7 +59,7 @@ tick 预算天然从首个 settle 后 tick 起算。
 多出一条上述 settle INFO 行（两个 loader 都出现）。
 
 ## SceneProvider（v0 附录）
-下游 mod（P1c 起：agent-driver 自身）通过 SPI 向 T0 套件贡献场景，语义只澄清、不改
+下游 mod（P1c 起：worlddriver 自身）通过 SPI 向 T0 套件贡献场景，语义只澄清、不改
 线协议，版本仍 v0：
 
 - **发现机制**：`Scenes.all()` = 内建 `builtin()` 列表 ++ `ServiceLoader.load(SceneProvider.class)`
@@ -67,20 +67,20 @@ tick 预算天然从首个 settle 后 tick 起算。
   suite header 的 `registered[]` 与实际执行顺序一致。
 - **内建在前，下游 provider 在后**：`Scenes.builtin()` 先入表，SPI 发现到的场景全部
   追加在后面——内建场景（含全部金丝雀）永远排在业务场景之前。
-- **名字全局唯一**：`TestkitHarness` 构造期对「内建 + 全部 provider」合并后的完整
+- **名字全局唯一**：`StageWrightHarness` 构造期对「内建 + 全部 provider」合并后的完整
   列表跑 `rejectDuplicateNames()`，早于 `writeSuiteHeader()`。撞名 →
   `IllegalStateException`，服务器崩在写头之前，编排器读不到 `type:suite` 记录 →
   按 exit 3 ENV 裁决（不是 RED——连头都没有，不是"头对不上执行"）。
 - **金丝雀仍由内建场景承担**：三枚金丝雀（`canaryMustFail`/`canaryMustTimeout`/
   `canaryMustSwallow`）只定义在 `Scenes.builtin()`。下游 SceneProvider 不贡献、也不需要
   贡献自己的金丝雀——框架"抓失败"的能力由内建金丝雀单点验证一次即可，下游只贡献
-  业务场景本身（P1c 例：三个 `ad.*` 场景均 `required=true, canary=NONE`）。
-- **发现路径**：`META-INF/services/net.magicterra.testkit.scene.SceneProvider`，
+  业务场景本身（P1c 例：三个 `wd.*` 场景均 `required=true, canary=NONE`）。
+- **发现路径**：`META-INF/services/net.magicterra.stagewright.scene.SceneProvider`，
   文件内容一行一个实现类全限定名。现行例（P1.6 起 provider 移入 loader 共享的
   common 模块，一份注册服务所有 loader；P4a 起 provider 类与 service 文件均在
   `common/src/testmod` 源集=生产 jar 之外，类位于 `.scene` 子包——与 common main
   同包会触发 JPMS split-package 启动崩溃）：该文件单行为
-  `net.magicterra.agent.bot.testkit.scene.AgentDriverScenes`（P1c 时曾位于 neoforge 模块，
+  `net.magicterra.worlddriver.bot.testkit.scene.WorldDriverScenes`（P1c 时曾位于 neoforge 模块，
   已随 P1.6 搬迁删除；全源码树内每个 provider 只允许一份 service 文件，重复注册会
   触发重名门 RED）。
 
@@ -113,21 +113,21 @@ not in registered`）。实现 = `verdict.judge(records, expected=[...])` 对 `r
   场景"已注册"（在 `registered[]` 里）为前提，只检查"注册了但没执行"或"文件被截断"。
   `--expect-scene` 抓的是**注册这一层本身**：SceneProvider 走 `ServiceLoader` 发现
   （`META-INF/services` 一行一个 FQCN），如果这根线断了（打包遗漏该文件、jar 未上
-  classpath、typo、编译顺序问题），下游 `ad.*` 场景会从 `registered[]` 里**整体消失**
+  classpath、typo、编译顺序问题），下游 `wd.*` 场景会从 `registered[]` 里**整体消失**
   ——而套件本身仍然自洽地跑完注册到的那些场景、判 GREEN。这是套件组装层的自洽假绿，
   SWALLOWED/TRUNCATED 两门结构性地管不到它。
 - **为何是外部而非内部**：由编排器（而非游戏内 harness 自己）断言"这些名字必须出现"，
   不依赖套件自证——组装链路断裂时，游戏内 harness 本身没有任何信号可以感知"本该有
   一个 provider 没被发现"。
 - **legacy 删除前置**（终审 Important，记录见本文件 SceneProvider 附录 + TODO.md）：
-  legacy `@GameTest` 三胞胎（及 P1.5a 新增的 `ad.selfShaftDigUp`/`ad.descentYaw` 对应
+  legacy `@GameTest` 三胞胎（及 P1.5a 新增的 `wd.selfShaftDigUp`/`wd.descentYaw` 对应
   legacy 双胞胎）的删除条件之一就是这道门已武装并稳定通过——只有外部期望门在场，才能
   确认"legacy 删了之后 ad.\* 仍然真的在跑"，而不是套件组装链路悄悄断裂后自洽空转。
 - 语义只新增一条外部检查、不改现有字段/退出码含义，契约仍 v0。
 
 ## --expect-file 清单锚定门（v0 附录，P1.5b）
 `t0.py --expect-file <path>`：把 `--expect-scene` 的期望名单从命令行搬进一个**签入版本库
-的清单文件**（`scripts/testkit/expected-scenes-neoforge.txt`），用同一套集合比对逻辑武装
+的清单文件**（`scripts/stagewright/expected-scenes-neoforge.txt`），用同一套集合比对逻辑武装
 外部期望门——语义与 `--expect-scene` 完全一致，只是期望来源从「每次手敲命令行」变成
 「随代码一起 review 的文件」，防止期望名单与已迁移场景清单漂移。
 
@@ -136,9 +136,9 @@ not in registered`）。实现 = `verdict.judge(records, expected=[...])` 对 `r
   suite header 的 `registered[]` 里，否则整轮判 RED——报告行与 `--expect-scene` **完全
   相同**（`MISSING-EXPECTED: <name> not in registered`），两个来源在 `verdict.judge()`
   眼里没有区别。
-- **同 commit 锚定规则**：每个迁移的 `ad.*` 场景**必须在添加该场景的同一个 commit 里**
+- **同 commit 锚定规则**：每个迁移的 `wd.*` 场景**必须在添加该场景的同一个 commit 里**
   把名字加进此清单——清单与场景代码同 review、同落地。一个名字若同时缺席**清单**与
-  `registered[]`，正是这道门要抓的「套件组装层自洽假绿」（SceneProvider 断链时 `ad.*`
+  `registered[]`，正是这道门要抓的「套件组装层自洽假绿」（SceneProvider 断链时 `wd.*`
   整体从注册消失、套件仍自洽判绿）。
 - **大声失败（空期望集=错误退出，非静默降级）**：两种情形下编排器**不进入跑批**，直接
   `argparse` 报错退出 **exit 2**——①`--expect-file` 指向的文件不存在（`--expect-file
@@ -155,22 +155,22 @@ not in registered`）。实现 = `verdict.judge(records, expected=[...])` 对 `r
   大声错误），不新增线协议字段、不改退出码含义、报告行不变，契约仍冻结在 v0，不升版。
 
 ## originSlot 坐标钉扎（v0 附录，P1.5a）
-`Scene.withOriginSlot(int slot)`（`Scene.java`/`TestkitHarness.assignSlots`）为确定性
+`Scene.withOriginSlot(int slot)`（`Scene.java`/`StageWrightHarness.assignSlots`）为确定性
 敏感场景固定 grid 分配的坐标格，与其余场景的注册顺序解耦：
 
 - **默认（自动）分配**：无 `withOriginSlot` 的场景按注册顺序分配自增 slot（0,1,2,...，
   跳过任何显式 pin 占用的号），`origin = (100000 + slot*512, 200, 100000)`
-  （`TestkitHarness` 的 `GRID_X0`/`GRID_Z0`/`GRID_Y`/`GRID_STEP`）。**新增/删除任何一个
+  （`StageWrightHarness` 的 `GRID_X0`/`GRID_Z0`/`GRID_Y`/`GRID_STEP`）。**新增/删除任何一个
   场景都会让后续所有自动分配场景的坐标整体平移**——对绝大多数场景无所谓（arena 自
   包含，搬到哪个网格格子物理行为不变），但对双精度物理敏感的确定性场景不该把"坐标
   平移带来的浮点误差"和"真回归"混为一谈。
 - **`withOriginSlot(int slot)`**：显式指定一个远高于自动分配范围的固定 slot，该场景
-  的坐标从此与注册表增长完全解耦。P1.5a 例：`ad.descentYaw` 用 `slot=4000`
+  的坐标从此与注册表增长完全解耦。P1.5a 例：`wd.descentYaw` 用 `slot=4000`
   （origin x = 100000 + 4000×512 = 2,148,000，在世界边界 ±30,000,000 内，永不与自动
   增长的注册表相撞）——这是 P0 探针事故（server 线程同步 IO 打破了这个场景的字节级
   确定性，A/B 定罪后修为异步 writer）之后对同一类"任何微小扰动都可能翻转轨迹"敏感度
   的延伸防护：坐标漂移本身不该成为另一个扰动源。
-- **发布后不得变更**：一旦某个 pinned slot 的基线值（本任务记录 `ad.descentYaw` 的
+- **发布后不得变更**：一旦某个 pinned slot 的基线值（本任务记录 `wd.descentYaw` 的
   `sumAbsDyaw=871°`/`backSteps=53`，2026-07-16 测得，见两个 twin 文件的 javadoc）被
   写入文档或用作回归门槛，挪动 slot 号即视为破坏性变更——必须连带重新测量并更新
   黄金基线，不能静默挪动。
@@ -182,7 +182,7 @@ not in registered`）。实现 = `verdict.judge(records, expected=[...])` 对 `r
 ## chunkRadius 声明武器（v0 附录，P1.5a）
 `Scene.withChunkRadius(int r)`（默认 `r=1`）声明该场景需要多大的强制加载窗口，
 PREP 阶段等 `(2r+1)×(2r+1)` 个区块全部 `hasChunkAt` 为真才放行场景体开始 tick
-（`TestkitHarness.allChunksLoaded`/`forceChunks`）。
+（`StageWrightHarness.allChunksLoaded`/`forceChunks`）。
 
 - **默认窗口**：`r=1` 覆盖以 origin 所在区块为中心的 3×3 区块，即 origin 相对
   方块坐标 `[-16,+31]`（origin 本身落在区块边界，`GRID_STEP=512` 是 16 的整数倍）。
@@ -190,7 +190,7 @@ PREP 阶段等 `(2r+1)×(2r+1)` 个区块全部 `hasChunkAt` 为真才放行场�
 - **何时需要更大半径**：场景的建造/寻路足迹超出默认窗口时必须显式
   `.withChunkRadius(r)`，否则场景体可能在部分区块未加载完成时开始建造/寻路，读到
   假的"空气"方块——这类失败长得像"物理漂移"或"环境问题"，而不是明显的加载竞态，
-  极难与真回归区分。P1.5a 例：`ad.descentYaw` 用 `.withChunkRadius(2)`（窗口
+  极难与真回归区分。P1.5a 例：`wd.descentYaw` 用 `.withChunkRadius(2)`（窗口
   `[-32,+47]`）——其足迹本身仍在 `r=1` 窗口内，但作为字节确定性敏感场景显式选择
   更大余量，不与未来 footprint 微调抢占安全边际。
 - **声明式，非自动推断**：harness 不会替场景猜测足迹；场景作者必须显式选择半径。
@@ -218,7 +218,7 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
   "loader": "fabric",
   "rpcHost": "127.0.0.1",
   "rpcPort": 39843,
-  "worldName": "TestkitT1",
+  "worldName": "StageWrightT1",
   "holdPid": 12345,
   "writtenAtEpochMs": 1752700000000
 }
@@ -238,7 +238,7 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
   从未对外暴露过。
 - `rpcPort`：`t1.py` 通过既有 `PORT_FILE`/`discover_port` 机制发现的实际端口
   （ephemeral，每次 `--hold` 不同）。
-- `worldName`：恒 `"TestkitT1"`（`t1.py` 的 `WORLD_NAME` 常量，与场景清单/verdict
+- `worldName`：恒 `"StageWrightT1"`（`t1.py` 的 `WORLD_NAME` 常量，与场景清单/verdict
   裁决共享同一个世界名）。
 - `holdPid`：`t1.py` 追踪的 client 进程 pid（`launch_client()` 返回并被
   `stop_client()`/`kill_pid()` 操作的同一个 `Popen` 句柄的 `.pid`——即 gradle
@@ -263,7 +263,7 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
 - **非 `--hold`（scored run）路径不写**：scored run 没有可供外部 attach 的持续在线
   拓扑（跑完场景即 halt 集成服务器、teardown），写一个指向即将消失的端口的端点文件
   只会制造陷阱，故这条路径上完全没有调用点。
-- **删除时机**：teardown 的既有 `finally`（与 Xvfb 进程、`saves/TestkitT1` 世界副本
+- **删除时机**：teardown 的既有 `finally`（与 Xvfb 进程、`saves/StageWrightT1` 世界副本
   清理同一处）无条件尝试删除端点文件，容忍它不存在（scored run 从未写过、或 hold
   run 在进世界之前就失败退出）。这条 `finally` 覆盖**每一条**退出路径，包括
   `--hold` 的文档化释放方式 Ctrl-C（`KeyboardInterrupt` 不被内层
@@ -275,7 +275,7 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
   且时间戳看起来"新"完全不保证它指向的进程仍然活着（例如 `--hold` 被外部信号
   杀死但来不及跑 `finally`）。JUnit attach 侧必须实际发一次 RPC（P2c T2 约定
   `mc.system.version` 一发 5s 超时）作为"这个端点真的可用"的唯一证明；探活失败
-  必须 fail-fast 大声报错（提示原文含 `python3 scripts/testkit/t1.py --hold`），
+  必须 fail-fast 大声报错（提示原文含 `python3 scripts/stagewright/t1.py --hold`），
   不得静默 skip。
 - **串行租约**：一次 `--hold` 只支持一个拓扑实例服务一个 attach 客户端——`t1.py`
   不做多实例端口/世界隔离，`RUN_DIR`/`WORLD_NAME`/`ENDPOINT_FILE` 全是进程级单例
@@ -288,7 +288,7 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
 T0/T1 都在**单进程**里跑套件（T0 专用服务器自跑；T1 客户端内置集成服务器）。T2
 证明真正的**生产拓扑**：一台朴素专用服务器（`t2Server`，工作目录 `<loader>/run-t2`，
 gradle 任务 `:<loader>:runT2Server`）+ 一个独立真客户端（复用 T1 的
-`:<loader>:runTestkitClient`/`run-t1`，Xvfb 下），客户端经 multiplayer 直连服务器。
+`:<loader>:runStageWrightClient`/`run-t1`，Xvfb 下），客户端经 multiplayer 直连服务器。
 `t2.py`（`--loader {fabric,neoforge}`，默认 fabric）是编排器。
 
 ### 双进程启动/停止协议
@@ -305,11 +305,11 @@ gradle 任务 `:<loader>:runT2Server`）+ 一个独立真客户端（复用 T1 �
 - **停止次序**（`finally`，覆盖**每一条**退出路径，含 Ctrl-C；禁 `pkill`）：先客户端
   （best-effort 断连→按 PID 杀+按命令行 sweep 客户端 JVM），后服务器（SIGTERM gradle
   进程组→有界等待→按 `/proc/<pid>/cwd==run-t2` sweep 专用服务器 JVM），再删端点描述文件、
-  删 `run-t2/world`、删两个 `agent-rpc.port`、杀 Xvfb。
+  删 `run-t2/world`、删两个 `worlddriver-rpc.port`、杀 Xvfb。
 
 ### 双端口发现
-两条 agent-rpc websocket，各写各的 `agent-rpc.port`：服务器面在
-`run-t2/agent-rpc.port`，客户端面在 `run-t1/agent-rpc.port`。`t2.py` 用同一
+两条 agent-rpc websocket，各写各的 `worlddriver-rpc.port`：服务器面在
+`run-t2/worlddriver-rpc.port`，客户端面在 `run-t1/worlddriver-rpc.port`。`t2.py` 用同一
 `discover_port`/`connect` 机制分别读回，同一 event loop 里同时握住两条 socket 做
 **双端探针**（客户端 `mc.client.player` 有 pos **且** 服务器 `mc.observe.player`
 `present:true`——即专用服务器 PlayerList 里有一个真玩家）。
@@ -334,7 +334,7 @@ selfShaftDigUp worstBackslide、gearScope 属性）在**场景内部**断言，�
 
 ## 客户端进程池 `pool.py`（v0 附录，P3b T2）
 `t1.py --hold` / `t2.py --hold` 每次都从零冷启一套拓扑（T1 ~30-90s，T2 数分钟），再 publish
-一个 `TESTKIT_ENDPOINT` 端点、idle 到 Ctrl-C。`scripts/testkit/pool.py` 是这套 `--hold`+端点
+一个 `TESTKIT_ENDPOINT` 端点、idle 到 Ctrl-C。`scripts/stagewright/pool.py` 是这套 `--hold`+端点
 契约之上的**进程池**：把一套拓扑跨多次调用**保活**，让 `instrument_client.py --attach` / JUnit
 attach 模块以**秒级**连上，而不是每次冷启。
 
@@ -343,7 +343,7 @@ CLI：`pool.py {ensure|status|stop} --topology {t1,t2} --loader {fabric,neoforge
 `t2` 走 `t2.resolve_t2(loader).endpoint_file`（`<loader>/run-t2/testkit-endpoint.json`），单一真源。
 **禁 pkill**，所有进程操作只针对显式记录的 PID。
 
-### 状态文件 `scripts/testkit/.pool-state.json`（gitignored）
+### 状态文件 `scripts/stagewright/.pool-state.json`（gitignored）
 池自己记录它启动过的每一套 hold，供 `stop` 按显式 PID 释放。UTF-8 JSON 单对象，原子写
 （`.tmp`→`os.replace`）：
 
@@ -368,7 +368,7 @@ CLI：`pool.py {ensure|status|stop} --topology {t1,t2} --loader {fabric,neoforge
 - `log` = 该 hold 的 stdout/stderr 落盘位置（run 目录下 `pool-hold.log`）。
 - 文件缺失/损坏一律降级为空池（fresh checkout 上 `stop`/`status` 照常工作），从不抛。
 - **并发写用 flock 串行化**：状态文件的每一次 read-modify-write（`put_entry`/`del_entry`）都在
-  `scripts/testkit/.pool-state.lock` 上持有 `fcntl.flock(LOCK_EX)` 的临界区内完成，且**在锁内重新
+  `scripts/stagewright/.pool-state.lock` 上持有 `fcntl.flock(LOCK_EX)` 的临界区内完成，且**在锁内重新
   load** 后再改再存。否则两个针对**不同 key** 的 `ensure`（如 t1/fabric + t2/fabric，都是数分钟冷启）
   会 load-load-save-save 交错，后写者抹掉前写者的 PID——被启动的 hold 仍在跑却丢了 PID，`stop`
   永远释放不掉它。锁文件同样 gitignored。
@@ -411,16 +411,16 @@ CLI：`pool.py {ensure|status|stop} --topology {t1,t2} --loader {fabric,neoforge
 ### 两条工作流
 ```bash
 # 工作流 A：pool 保活 T1 → instrument_client attach（秒级复连）
-python3 scripts/testkit/pool.py ensure --topology t1        # started（或 reused）
-eval "$(python3 scripts/testkit/pool.py ensure --topology t1 | grep ^export)"
-TESTKIT_ENDPOINT=$TESTKIT_ENDPOINT python3 scripts/testkit/instrument_client.py --attach
-python3 scripts/testkit/pool.py stop --topology t1          # 释放
+python3 scripts/stagewright/pool.py ensure --topology t1        # started（或 reused）
+eval "$(python3 scripts/stagewright/pool.py ensure --topology t1 | grep ^export)"
+TESTKIT_ENDPOINT=$TESTKIT_ENDPOINT python3 scripts/stagewright/instrument_client.py --attach
+python3 scripts/stagewright/pool.py stop --topology t1          # 释放
 
 # 工作流 B：pool 保活 T2 → gradle JUnit attach（双 socket 生产拓扑）
-python3 scripts/testkit/pool.py ensure --topology t2        # started（或 reused）
-export TESTKIT_ENDPOINT="$(python3 scripts/testkit/pool.py ensure --topology t2 | grep ^export | cut -d= -f2)"
-./gradlew :testkit-junit:test    # JUnit attach 模块读 TESTKIT_ENDPOINT
-python3 scripts/testkit/pool.py stop --topology t2
+python3 scripts/stagewright/pool.py ensure --topology t2        # started（或 reused）
+export TESTKIT_ENDPOINT="$(python3 scripts/stagewright/pool.py ensure --topology t2 | grep ^export | cut -d= -f2)"
+./gradlew :stagewright-junit:test    # JUnit attach 模块读 TESTKIT_ENDPOINT
+python3 scripts/stagewright/pool.py stop --topology t2
 ```
 
 - **串行租约**（继承 `--hold` 的形状边界）：一套 topology×loader 同一时刻只保活一个实例

@@ -5,16 +5,16 @@
 `11088a5`（batch B：world/obs/events/wait）、`a436c61`（fabric 就绪探针竞态修复，
 Task 5 Step 1 现场发现，见下方「运行器时序」）。
 
-运行器：`python3 scripts/testkit/instrument.py --loader {neoforge|fabric}`。
+运行器：`python3 scripts/stagewright/instrument.py --loader {neoforge|fabric}`。
 
-裸 RPC 直打 `AgentApi.route()`，跑在 agent-driver 裸专服（
+裸 RPC 直打 `AgentApi.route()`，跑在 worlddriver 裸专服（
 `:<loader>:runContractServer`，runDir `<loader>/run-contract/`，RPC 端口
-ephemeral 经 `agent-rpc.port` 发现）。退出码同编排契约 v0：
+ephemeral 经 `worlddriver-rpc.port` 发现）。退出码同编排契约 v0：
 0 GREEN / 1 RED / 2 DEAD（金丝雀误判）/ 3 ENV。
 
 信任链（spec §4）：本套件绿 → testkit setup/断言可信 → 行为面测试可信。本套件
-故意独立于 testkit 自身的断言栈（`common/src/main/java/net/magicterra/testkit`）
-之外——它验的是 testkit 所依赖的 agent-driver 仪表面本身，不能用被验对象的代码
+故意独立于 testkit 自身的断言栈（`common/src/main/java/net/magicterra/stagewright`）
+之外——它验的是 testkit 所依赖的 worlddriver 仪表面本身，不能用被验对象的代码
 去验证被验对象。
 
 ## 运行器时序（Task 5 现场发现，已修复）
@@ -38,7 +38,7 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 
 | # | 检查名 | 断言什么 | 钉住哪条病历 |
 |---|---|---|---|
-| 1 | `system.versionShape` | `mc.system.version` 返回 `modid=="agent_driver"` 且 `uptimeMs` 是非负整数 | 身份/契约基线——信任链起点,后续所有检查隐式依赖 route 本身能回应 |
+| 1 | `system.versionShape` | `mc.system.version` 返回 `modid=="worlddriver"` 且 `uptimeMs` 是非负整数 | 身份/契约基线——信任链起点,后续所有检查隐式依赖 route 本身能回应 |
 | 2 | `route.unknownMethod` | 未知 method → `error` 非空且含 `"unknown method"`,不静默回 `result` | 大声失败基线（`AgentApi.route()` 未知分派必须显式报错,不能被吞成空结果） |
 | 3 | `route.invalidParams.missingKey` | `mc.system.waitTicks{}`（缺必填 `ticks`）→ error 含 `invalid params`/`ticks`（Task 3 从 `mc.observe.eventsSince` 换过来,见下方永久断言台账） | 封闭 schema 必填键校验不能被绕过 |
 | 4 | `route.invalidParams.wrongType` | `waitTicks{ticks:"not-a-number"}` → error 存在（同上换过来） | schema 类型校验存在 |
@@ -76,17 +76,17 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 
 - fabric 首跑（17 项真跑）：`VERDICT: RED`,8/17 FAIL,全部 `AgentApi not
   attached to a server`——就绪探针竞态（见上方「运行器时序」）,非产品缺陷。
-  `agent-rpc.port` 与 neoforge 侧不撞车（fabric 40703 / neoforge 各自独立
+  `worlddriver-rpc.port` 与 neoforge 侧不撞车（fabric 40703 / neoforge 各自独立
   ephemeral 端口）,Task 2 Step 2 的 `configureEach` 端口覆盖风险未兑现。
 - 就绪探针修复（`a436c61`）后 fabric 复跑：`VERDICT: GREEN`,17/17 PASS,
   exit=0。
 - 门自证（临时改错,均已 `git checkout --` 还原,零 commit 残留）：
-  - 改 `check_version_shape` 断言（`!= 'agent_driver'` → `!= 'nonsense'`）→
+  - 改 `check_version_shape` 断言（`!= 'worlddriver'` → `!= 'nonsense'`）→
     neoforge → `VERDICT: RED`,`FAIL: 'system.versionShape' -> FAIL —
-    modid='agent_driver' != 'agent_driver'`,exit=1。
+    modid='worlddriver' != 'worlddriver'`,exit=1。
   - 改 `canary_must_fail` 为 `return None` → neoforge → `VERDICT: DEAD`,
     `DEAD: canary 'canary.mustFail' -> PASS, expected FAIL`,exit=2。
-  - 两次均 `git checkout -- scripts/testkit/instrument.py` 还原,`git status`
+  - 两次均 `git checkout -- scripts/stagewright/instrument.py` 还原,`git status`
     确认干净后重跑 → `VERDICT: GREEN`,17/17 PASS,exit=0。
 - 双 loader 确定性重跑（`neoforge && fabric`）：两轮均 `VERDICT: GREEN`,
   combined exit=0。逐项 17 检查 + 2 金丝雀在两个 loader 上行为一致（仅
@@ -99,7 +99,7 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 
 落地 commits：`14c6541`+`35c98c0`（配对注册 + 命名空间政策 + schema-less 派发洞收口）、
 `39d99e5`（#280 根修：SettingsRegistry 单源 + 封闭 schema + apply 大声拒）、
-`6de3d97`+`ae9982d`（`mc.test.reset` verb + `ad.settingRegistryClosed` 场景）、
+`6de3d97`+`ae9982d`（`mc.test.reset` verb + `wd.settingRegistryClosed` 场景）、
 本 Task（instrument.py 追加检查 + 文档）。四腿 headless 可测子集；客户端端到端 A/B
 （真开客户端打未知键 / reset 完整性 3 跑）留 P2b 的 T1 仪表扩展。
 
@@ -135,7 +135,7 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 
 | # | 检查名 | 断言什么 | 钉住哪条 |
 |---|---|---|---|
-| 18 | `catalog.settingSchemaClosed` | 经 **MCP `tools/list`**（HTTP,`agent-mcp.port`）读回 `mc.bot.setting` 的 `inputSchema`:`type=="object"`、`additionalProperties` 非 `true`（=封闭)、`properties` 数 ≥ 200 | #280 结构半——封闭 schema + 单源全键集（229；<200 抓丢反射补全 pass） |
+| 18 | `catalog.settingSchemaClosed` | 经 **MCP `tools/list`**（HTTP,`worlddriver-mcp.port`）读回 `mc.bot.setting` 的 `inputSchema`:`type=="object"`、`additionalProperties` 非 `true`（=封闭)、`properties` 数 ≥ 200 | #280 结构半——封闭 schema + 单源全键集（229；<200 抓丢反射补全 pass） |
 | 19 | `route.settingUnknownKey` | 专服裸 RPC 打 `mc.bot.setting{definitelyNotAKnob:true}` → error 含 `unexpected key` + 键名,**非** client-only | #280 行为半 + 校验统一定序（validator 先于 client-only 门) |
 | 20 | `route.testResetClientOnly` | 专服裸 RPC 打 `mc.test.reset`（空参过校验）→ error 含 `client only` + `mc.test.reset`,不静默 no-op | client-only verb 在专服大声失败 |
 | 21 | `route.testResetSchemaPaired` | 专服打 `mc.test.reset{nope:true}` → error 含 `unexpected key` + `nope`,**先于** client-only | 配对注册元证明（schema 存在 AND 封闭 AND 校验统一)+ schema-less 派发洞回归 |
@@ -162,8 +162,8 @@ additionalProperties is Boolean.TRUE`):**缺失或 false = 封闭,仅 `true` = �
 此 Rhino fork 剥了 `Packages` 全局,JS 无法按名解析 `ToolCatalog`（与沙箱 denylist 无关）。
 schema 的结构化读回唯一诚实路径 = MCP `tools/list` HTTP 端点（`ToolSchema.mcpTool` →
 `Schemas.render`,与 route 层 `SchemaValidator` 同一 typed Schema,单源)。专服在
-`onServerStarting`（`AgentDriverCommon.ensureMcpUp`)随 RPC 一起起 MCP,端口写
-`agent-mcp.port`。检查 18 即走此路。
+`onServerStarting`（`WorldDriverCommon.ensureMcpUp`)随 RPC 一起起 MCP,端口写
+`worlddriver-mcp.port`。检查 18 即走此路。
 
 现场记录（五门验收完整输出）见 `.superpowers/sdd/task-4-report.md`。
 
@@ -173,7 +173,7 @@ schema 的结构化读回唯一诚实路径 = MCP `tools/list` HTTP 端点（`To
 
 落地 commit：本 Task（`instrument_client.py` 新增 + t1.py `--hold` 语义扩展 + 本附录）。
 
-运行器：`python3 scripts/testkit/instrument_client.py`（自起 T1 客户端）
+运行器：`python3 scripts/stagewright/instrument_client.py`（自起 T1 客户端）
 或 `--attach`（复用在线 `t1.py --hold` 客户端）。`--wall N` 自起上限（默认 900）。
 
 这是 `instrument.py`（专服面）的**客户端孪生**：验的是只有在「真客户端 +
@@ -187,7 +187,7 @@ schema 会静默丢键——#280 病史，验新键必走裸 RPC）。verdict �
 ### T1 拓扑语义（`--hold` autorun 关键点）
 
 `instrument_client` 需要一个「在世界里、且 integrated server 活着」的客户端来打
-`/give` `/damage`。自起模式复用 t1.py 的壳（Xvfb / gradle `testkitClient` /
+`/give` `/damage`。自起模式复用 t1.py 的壳（Xvfb / gradle `stagewrightClient` /
 模板世界生命周期 / GUI 进世界），但**以 `-Pt1Autorun=false` 启动**：不跑任何场景
 → harness 永不 `halt()` integrated server → 世界保持在线可打。`--hold` 亦然：Task 1
 原 `--hold` 走 autorun ON（跑完场景后被 harness 断连到 `DisconnectedScreen`，对
@@ -342,12 +342,12 @@ autoEat 原值；`reset.behavior` 由 reset 自身清 screen/chat）——检查
 落地 commit：本 Task（`instrument_client.py` 加 `--topology {t1,t2}` + 双 socket 面分派 +
 T2 复用轮 + 本附录）。
 
-运行器：`TESTKIT_ENDPOINT=<abs> python3 scripts/testkit/instrument_client.py --topology t2 --attach`
+运行器：`TESTKIT_ENDPOINT=<abs> python3 scripts/stagewright/instrument_client.py --topology t2 --attach`
 （默认 `--topology t1`，零回归）。
 
 T1（P2b/P2c）验的是 **integrated server**（客户端自托管世界，一个 JVM）。T2 验**真生产
 拓扑**：一个 plain **专用服务器**（run-t2 的 `t2Server`）+ 一个**独立真客户端**（run-t1 的
-`testkitClient`，Xvfb 下）多人直连过去。这正是 P1b「已知缺口」里三条永久断言（#41/#45/#55）
+`stagewrightClient`，Xvfb 下）多人直连过去。这正是 P1b「已知缺口」里三条永久断言（#41/#45/#55）
 当年只能在 headless 专服里对 mock、或在 integrated 里对真玩家验的那半——**T2 让它们在生产
 拓扑里对专服 PlayerList 的真 ServerPlayer 收口**。
 
@@ -453,11 +453,11 @@ server-attached poll ring（**逐字节沿用 P2b 行为，零回归**）；T2�
 
 ## D1 附录 — task#90 仪表面双 verb（held-key 回读 + world-use 输入）
 
-落地：`TestInputVerbs`（common，`net.magicterra.agent.bot.testkit`）+ `BotApi.heldKeys()` /
+落地：`TestInputVerbs`（common，`net.magicterra.worlddriver.bot.testkit`）+ `BotApi.heldKeys()` /
 `BotApi.useOnBlock()` 实现（`BotApiImpl`）+ `ContainerFurnaceTest` 实装（去 `@Disabled`）+
 `instrument_client.py` 新检查 `reset.heldKeys` + 本附录。两 verb 与 `mc.test.reset` 同惯例：
 **hidden**（不进 `tools/list`）、经 `ToolCatalog.registerVerb` 配对注册于 `mc.test.*` 授权面、
-从 `AgentDriverCommon.ensureRpcUp`（common 引导路径，紧接 `TestResetVerb.register()`）注册一次、
+从 `WorldDriverCommon.ensureRpcUp`（common 引导路径，紧接 `TestResetVerb.register()`）注册一次、
 handler 经 `BotHooks.impl()` client-hop（专服 impl 为 null → 大声抛 client-only，不把
 `BotApiImpl` 拖上专服类路径）。
 
@@ -482,13 +482,13 @@ handler 经 `BotHooks.impl()` client-hop（专服 impl 为 null → 大声抛 cl
 - **用途**：`ui.containerFurnace` 场景开 FurnaceScreen 的唯一仪表面路径（此前因缺此 verb 而
   `@Disabled`）。
 
-### `Testkit.exec()` 首个 live 形状钉（双向）
+### `StageWright.exec()` 首个 live 形状钉（双向）
 
-`ContainerFurnaceTest` 是 `Testkit.exec()` 的 ok/success 解析首个 live 驱动（此前 grep 证零调用）：
+`ContainerFurnaceTest` 是 `StageWright.exec()` 的 ok/success 解析首个 live 驱动（此前 grep 证零调用）：
 
 - **成功路径**：`exec("setblock <x y z> minecraft:furnace")`（setblock 快速路径 ok:true/success:true）
   **不抛**。
 - **失败路径**：`exec("execute if entity @e[type=minecraft:ender_dragon]")`——派发成功（ok:true）但
-  Brigadier `success:false`（谓词零匹配）→ `exec()` **必抛 `TestkitRpcException`**。测世界无末影龙，
+  Brigadier `success:false`（谓词零匹配）→ `exec()` **必抛 `StageWrightRpcException`**。测世界无末影龙，
   无副作用、确定性。
 
