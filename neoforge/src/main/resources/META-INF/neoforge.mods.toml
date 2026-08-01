@@ -5,7 +5,7 @@ license="MIT"
 [[mods]]
 modId="mc_testkit"
 version="${version}"
-displayName="mc-testkit"
+displayName="stagewright"
 authors="AI-assisted-Minecraft-Developers"
 description='''Cross-loader Minecraft mod test framework: scene harness, assertions, orchestrated topologies.'''
 

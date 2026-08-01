@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "mc_testkit",
   "version": "${version}",
-  "name": "mc-testkit",
+  "name": "stagewright",
   "description": "Cross-loader Minecraft mod test framework: scene harness, assertions, orchestrated topologies.",
   "authors": [
     "AI-assisted-Minecraft-Developers"
@@ -11,7 +11,7 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.magicterra.testkit.fabric.TestkitFabric"
+      "net.magicterra.stagewright.fabric.StageWrightFabric"
     ]
   },
   "depends": {

@@ -3,7 +3,7 @@ architectury {
 }
 
 base {
-    archivesName = 'mc_testkit-common'
+    archivesName = 'mc_stagewright-common'
 }
 
 dependencies {

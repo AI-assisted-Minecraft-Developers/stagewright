@@ -8,7 +8,7 @@ architectury {
 }
 
 base {
-    archivesName = 'mc_testkit-neoforge'
+    archivesName = 'mc_stagewright-neoforge'
 }
 
 configurations {
@@ -36,8 +36,8 @@ repositories {
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
 
-    common(project(path: ':testkit-common', configuration: 'namedElements')) { transitive false }
-    shadowBundle project(path: ':testkit-common', configuration: 'transformProductionNeoForge')
+    common(project(path: ':stagewright-common', configuration: 'namedElements')) { transitive false }
+    shadowBundle project(path: ':stagewright-common', configuration: 'transformProductionNeoForge')
 }
 
 processResources {
@@ -59,9 +59,9 @@ remapJar {
 
 loom {
     runs {
-        testkitServer {
+        stagewrightServer {
             server()
-            property 'testkit.autorun', 'true'
+            property 'stagewright.autorun', 'true'
             runDir 'run-testkit'
         }
     }
