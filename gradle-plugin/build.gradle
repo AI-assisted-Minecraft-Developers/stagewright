@@ -8,6 +8,12 @@
 // authority. See src/main/java/.../TestkitPlugin.java.
 plugins {
     id 'java-gradle-plugin'
+    // java-gradle-plugin only CREATES the plugin-marker publication once maven-publish is
+    // present; without this the plugin was reachable exclusively through includeBuild, i.e.
+    // only from inside this repo. An external consumer resolves it from mavenLocal:
+    //   pluginManagement { repositories { mavenLocal(); gradlePluginPortal() } }
+    //   plugins { id 'net.magicterra.mc-testkit' version '0.1.0' }
+    id 'maven-publish'
 }
 
 group = 'net.magicterra'

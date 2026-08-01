@@ -37,20 +37,27 @@ public final class ResultsJsonl {
 
     public void writeSuiteHeader(String loader, List<Scene> scenes) {
         StringBuilder sb = new StringBuilder();
-        sb.append("{\"type\":\"suite\",\"loader\":\"").append(loader).append("\",\"registered\":[");
+        // Every string field goes through escape(), including the ones that happen to hold a
+        // constrained vocabulary today (loader is "fabric"|"neoforge", canary is an enum-ish
+        // tag). Leaving them raw made the contract depend on a caller's value never containing
+        // a quote — and a corrupt HEADER line is the worst one to produce: verdict.parse()
+        // drops lines it cannot decode, so the run reports exit 3 ENV "server never armed"
+        // instead of naming the real problem.
+        sb.append("{\"type\":\"suite\",\"loader\":\"").append(escape(loader)).append("\",\"registered\":[");
         for (int i = 0; i < scenes.size(); i++) {
             Scene s = scenes.get(i);
             if (i > 0) sb.append(',');
             sb.append("{\"name\":\"").append(escape(s.name()))
               .append("\",\"required\":").append(s.required())
-              .append(",\"canary\":\"").append(s.canary()).append("\"}");
+              .append(",\"canary\":\"").append(escape(String.valueOf(s.canary()))).append("\"}");
         }
         sb.append("]}\n");
         write(sb.toString(), true);
     }
 
     public void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs, String reason) {
-        write("{\"type\":\"scene\",\"name\":\"" + escape(name) + "\",\"outcome\":\"" + outcome
+        write("{\"type\":\"scene\",\"name\":\"" + escape(name)
+                + "\",\"outcome\":\"" + escape(String.valueOf(outcome))
                 + "\",\"ticks\":" + ticks + ",\"wallMs\":" + wallMs
                 + ",\"reason\":\"" + escape(reason == null ? "" : reason) + "\"}\n", false);
     }
@@ -77,6 +84,7 @@ public final class ResultsJsonl {
     }
 
     private static String escape(String s) {
+        if (s == null) return "";
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);

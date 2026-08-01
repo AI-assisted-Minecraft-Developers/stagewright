@@ -48,6 +48,35 @@ public abstract class TestkitExtension {
     public abstract ListProperty<String> getExtraArgs();
 
     /**
+     * {@code testkitServer} only — the gradle run task t0.py launches. Unset (the convention)
+     * keeps the frozen dogfood value {@code :<loader>:runDogfoodServer}.
+     *
+     * <p>An EXTERNAL consumer is not architectury: a single-loader ModDevGradle mod has one
+     * gradle project and names its run task {@code :runTestkitServer}. Without this override
+     * the plugin could only ever drive this repo's own dogfood layout.
+     */
+    public abstract Property<String> getServerRunTask();
+
+    /**
+     * {@code testkitServer} only — the results JSONL path, relative to the applied project
+     * (= the orchestrator working directory) or absolute. Unset keeps the frozen dogfood value
+     * {@code <loader>/run-dogfood/testkit-results.jsonl}. It must name the file the game
+     * actually writes, i.e. {@code <run directory>/testkit-results.jsonl}.
+     */
+    public abstract Property<String> getServerResults();
+
+    /**
+     * {@code testkitServer} only — the expected-scenes manifest. Unset keeps the frozen dogfood
+     * value {@code <scriptsDir>/expected-scenes-<loader>.txt}, which lives beside the shared
+     * scripts; a consumer's manifest lives in the consumer's own repo instead, because it names
+     * the consumer's scenes.
+     *
+     * <p>Deliberately distinct from {@link #getExpectFile()}, which the CLIENT topologies use —
+     * the two were never the same file, and collapsing them would silently hand T0 a T1 manifest.
+     */
+    public abstract RegularFileProperty getServerExpectFile();
+
+    /**
      * Opt-in: when {@code true}, the plugin registers a {@code testmod} source set on the
      * applied project — see {@link TestkitPlugin#apply} for the registration reaction and
      * the v1 boundary (classpath wiring only; no loom run-config edits, no dependency

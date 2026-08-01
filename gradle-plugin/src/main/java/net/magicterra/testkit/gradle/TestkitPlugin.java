@@ -67,12 +67,21 @@ public class TestkitPlugin implements Plugin<Project> {
                 a.add(scripts + "/t0.py");
                 a.add("--loader");
                 a.add(loader);
+                // The orchestrators live in mc-testkit's own repo but must drive the APPLIED
+                // project's gradle build. Without this they derive the project from their own
+                // __file__ and an external consumer silently runs mc-testkit's build instead
+                // of its own.
+                a.add("--project-root");
+                a.add(project.getProjectDir().getAbsolutePath());
                 a.add("--run-task");
-                a.add(":" + loader + ":runDogfoodServer");
+                a.add(ext.getServerRunTask().getOrElse(":" + loader + ":runDogfoodServer"));
                 a.add("--results");
-                a.add(loader + "/run-dogfood/testkit-results.jsonl");
+                a.add(ext.getServerResults()
+                    .getOrElse(loader + "/run-dogfood/testkit-results.jsonl"));
                 a.add("--expect-file");
-                a.add(scripts + "/expected-scenes-" + loader + ".txt");
+                a.add(ext.getServerExpectFile().isPresent()
+                    ? ext.getServerExpectFile().get().getAsFile().getAbsolutePath()
+                    : scripts + "/expected-scenes-" + loader + ".txt");
                 a.addAll(ext.getExtraArgs().get());
                 return a;
             }));
