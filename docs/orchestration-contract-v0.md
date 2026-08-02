@@ -1,6 +1,6 @@
 # stagewright 编排契约 v0（冻结 2026-07-16）
 
-本契约是编排器（现 Python `scripts/stagewright/t0.py`，将来 gradle-plugin）与游戏内
+本契约是编排器（现 Python `scripts/t0.py`，将来 gradle-plugin）与游戏内
 harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 
 ## 启动协议
@@ -9,7 +9,7 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 - 编排器负责预备 runDir：`eula.txt`、`server.properties`（server-port=25599、
   level-type=minecraft\:flat、online-mode=false、spawn-protection=0）、删 `world/`
   与旧结果文件；跑前按显式 PID 清扫命令行含 `stagewright.autorun` 的残留 JVM（禁 pkill）。
-  以上为契约相关键，编排器实际写入的完整集以 `scripts/stagewright/t0.py` 的
+  以上为契约相关键，编排器实际写入的完整集以 `scripts/t0.py` 的
   `provision()` 为准（非穷举列表）。
 - harness 跑完注册表后自行 `MinecraftServer.halt(false)` 正常停机；
   **服务器进程退出码不是裁决依据**，裁决唯一来源是结果文件。
@@ -275,7 +275,7 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
   且时间戳看起来"新"完全不保证它指向的进程仍然活着（例如 `--hold` 被外部信号
   杀死但来不及跑 `finally`）。JUnit attach 侧必须实际发一次 RPC（P2c T2 约定
   `mc.system.version` 一发 5s 超时）作为"这个端点真的可用"的唯一证明；探活失败
-  必须 fail-fast 大声报错（提示原文含 `python3 scripts/stagewright/t1.py --hold`），
+  必须 fail-fast 大声报错（提示原文含 `python3 scripts/t1.py --hold`），
   不得静默 skip。
 - **串行租约**：一次 `--hold` 只支持一个拓扑实例服务一个 attach 客户端——`t1.py`
   不做多实例端口/世界隔离，`RUN_DIR`/`WORLD_NAME`/`ENDPOINT_FILE` 全是进程级单例
@@ -334,7 +334,7 @@ selfShaftDigUp worstBackslide、gearScope 属性）在**场景内部**断言，�
 
 ## 客户端进程池 `pool.py`（v0 附录，P3b T2）
 `t1.py --hold` / `t2.py --hold` 每次都从零冷启一套拓扑（T1 ~30-90s，T2 数分钟），再 publish
-一个 `TESTKIT_ENDPOINT` 端点、idle 到 Ctrl-C。`scripts/stagewright/pool.py` 是这套 `--hold`+端点
+一个 `TESTKIT_ENDPOINT` 端点、idle 到 Ctrl-C。`scripts/pool.py` 是这套 `--hold`+端点
 契约之上的**进程池**：把一套拓扑跨多次调用**保活**，让 `instrument_client.py --attach` / JUnit
 attach 模块以**秒级**连上，而不是每次冷启。
 
@@ -343,7 +343,7 @@ CLI：`pool.py {ensure|status|stop} --topology {t1,t2} --loader {fabric,neoforge
 `t2` 走 `t2.resolve_t2(loader).endpoint_file`（`<loader>/run-t2/testkit-endpoint.json`），单一真源。
 **禁 pkill**，所有进程操作只针对显式记录的 PID。
 
-### 状态文件 `scripts/stagewright/.pool-state.json`（gitignored）
+### 状态文件 `scripts/.pool-state.json`（gitignored）
 池自己记录它启动过的每一套 hold，供 `stop` 按显式 PID 释放。UTF-8 JSON 单对象，原子写
 （`.tmp`→`os.replace`）：
 
@@ -368,7 +368,7 @@ CLI：`pool.py {ensure|status|stop} --topology {t1,t2} --loader {fabric,neoforge
 - `log` = 该 hold 的 stdout/stderr 落盘位置（run 目录下 `pool-hold.log`）。
 - 文件缺失/损坏一律降级为空池（fresh checkout 上 `stop`/`status` 照常工作），从不抛。
 - **并发写用 flock 串行化**：状态文件的每一次 read-modify-write（`put_entry`/`del_entry`）都在
-  `scripts/stagewright/.pool-state.lock` 上持有 `fcntl.flock(LOCK_EX)` 的临界区内完成，且**在锁内重新
+  `scripts/.pool-state.lock` 上持有 `fcntl.flock(LOCK_EX)` 的临界区内完成，且**在锁内重新
   load** 后再改再存。否则两个针对**不同 key** 的 `ensure`（如 t1/fabric + t2/fabric，都是数分钟冷启）
   会 load-load-save-save 交错，后写者抹掉前写者的 PID——被启动的 hold 仍在跑却丢了 PID，`stop`
   永远释放不掉它。锁文件同样 gitignored。
@@ -411,16 +411,16 @@ CLI：`pool.py {ensure|status|stop} --topology {t1,t2} --loader {fabric,neoforge
 ### 两条工作流
 ```bash
 # 工作流 A：pool 保活 T1 → instrument_client attach（秒级复连）
-python3 scripts/stagewright/pool.py ensure --topology t1        # started（或 reused）
-eval "$(python3 scripts/stagewright/pool.py ensure --topology t1 | grep ^export)"
-TESTKIT_ENDPOINT=$TESTKIT_ENDPOINT python3 scripts/stagewright/instrument_client.py --attach
-python3 scripts/stagewright/pool.py stop --topology t1          # 释放
+python3 scripts/pool.py ensure --topology t1        # started（或 reused）
+eval "$(python3 scripts/pool.py ensure --topology t1 | grep ^export)"
+TESTKIT_ENDPOINT=$TESTKIT_ENDPOINT python3 scripts/instrument_client.py --attach
+python3 scripts/pool.py stop --topology t1          # 释放
 
 # 工作流 B：pool 保活 T2 → gradle JUnit attach（双 socket 生产拓扑）
-python3 scripts/stagewright/pool.py ensure --topology t2        # started（或 reused）
-export TESTKIT_ENDPOINT="$(python3 scripts/stagewright/pool.py ensure --topology t2 | grep ^export | cut -d= -f2)"
+python3 scripts/pool.py ensure --topology t2        # started（或 reused）
+export TESTKIT_ENDPOINT="$(python3 scripts/pool.py ensure --topology t2 | grep ^export | cut -d= -f2)"
 ./gradlew :stagewright-junit:test    # JUnit attach 模块读 TESTKIT_ENDPOINT
-python3 scripts/stagewright/pool.py stop --topology t2
+python3 scripts/pool.py stop --topology t2
 ```
 
 - **串行租约**（继承 `--hold` 的形状边界）：一套 topology×loader 同一时刻只保活一个实例

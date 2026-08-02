@@ -5,7 +5,7 @@
 `11088a5`（batch B：world/obs/events/wait）、`a436c61`（fabric 就绪探针竞态修复，
 Task 5 Step 1 现场发现，见下方「运行器时序」）。
 
-运行器：`python3 scripts/stagewright/instrument.py --loader {neoforge|fabric}`。
+运行器：`python3 scripts/instrument.py --loader {neoforge|fabric}`。
 
 裸 RPC 直打 `DriverApi.route()`，跑在 worlddriver 裸专服（
 `:<loader>:runContractServer`，runDir `<loader>/run-contract/`，RPC 端口
@@ -86,7 +86,7 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
     modid='worlddriver' != 'worlddriver'`,exit=1。
   - 改 `canary_must_fail` 为 `return None` → neoforge → `VERDICT: DEAD`,
     `DEAD: canary 'canary.mustFail' -> PASS, expected FAIL`,exit=2。
-  - 两次均 `git checkout -- scripts/stagewright/instrument.py` 还原,`git status`
+  - 两次均 `git checkout -- scripts/instrument.py` 还原,`git status`
     确认干净后重跑 → `VERDICT: GREEN`,17/17 PASS,exit=0。
 - 双 loader 确定性重跑（`neoforge && fabric`）：两轮均 `VERDICT: GREEN`,
   combined exit=0。逐项 17 检查 + 2 金丝雀在两个 loader 上行为一致（仅
@@ -174,7 +174,7 @@ schema 的结构化读回唯一诚实路径 = MCP `tools/list` HTTP 端点（`To
 
 落地 commit：本 Task（`instrument_client.py` 新增 + t1.py `--hold` 语义扩展 + 本附录）。
 
-运行器：`python3 scripts/stagewright/instrument_client.py`（自起 T1 客户端）
+运行器：`python3 scripts/instrument_client.py`（自起 T1 客户端）
 或 `--attach`（复用在线 `t1.py --hold` 客户端）。`--wall N` 自起上限（默认 900）。
 
 这是 `instrument.py`（专服面）的**客户端孪生**：验的是只有在「真客户端 +
@@ -343,7 +343,7 @@ autoEat 原值；`reset.behavior` 由 reset 自身清 screen/chat）——检查
 落地 commit：本 Task（`instrument_client.py` 加 `--topology {t1,t2}` + 双 socket 面分派 +
 T2 复用轮 + 本附录）。
 
-运行器：`TESTKIT_ENDPOINT=<abs> python3 scripts/stagewright/instrument_client.py --topology t2 --attach`
+运行器：`TESTKIT_ENDPOINT=<abs> python3 scripts/instrument_client.py --topology t2 --attach`
 （默认 `--topology t1`，零回归）。
 
 T1（P2b/P2c）验的是 **integrated server**（客户端自托管世界，一个 JVM）。T2 验**真生产

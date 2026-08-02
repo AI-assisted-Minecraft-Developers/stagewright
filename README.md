@@ -2,7 +2,7 @@
 
 Cross-loader (Fabric + NeoForge) Minecraft mod test framework. Spec:
 `../worlddriver/docs/superpowers/specs/2026-07-16-stagewright-design.md`. Orchestration
-contract: `../worlddriver/docs/stagewright/orchestration-contract-v0.md`.
+contract: `docs/orchestration-contract-v0.md`.
 
 ## Which repo the orchestrators drive
 
@@ -103,7 +103,7 @@ to close. If the resolved expectation set is empty (file missing, or present but
 containing no names after stripping comments/blanks) the orchestrator **fails
 loudly** — `--expect-file not found` / `expectation source given but contains no
 scene names`, argparse exit 2 — rather than silently degrading to "expect
-nothing". See `docs/stagewright/orchestration-contract-v0.md`'s appendix for why
+nothing". See `docs/orchestration-contract-v0.md`'s appendix for why
 this is load-bearing (it is the precondition for deleting the legacy
 `@GameTest` twins: without it, a broken `ServiceLoader` discovery chain would
 silently drop `wd.*` from `registered[]` and the suite would self-consistently
@@ -117,7 +117,7 @@ expectation set is version-controlled and can never drift from the migrated
 scene list.
 
 Downstream mods contribute scenes via the `SceneProvider` SPI in three
-lines — see `docs/stagewright/orchestration-contract-v0.md` for the full
+lines — see `docs/orchestration-contract-v0.md` for the full
 appendix (discovery order, name-uniqueness enforcement, canary ownership):
 
     public final class WorldDriverScenes implements SceneProvider {
@@ -272,7 +272,7 @@ self-consistent false-green.
 Bare-RPC contract checks against a plain worlddriver dedicated server —
 the instrument face testkit itself depends on (spec §4). Green here is the
 precondition for trusting any scene's setup/assertions. Contract:
-`../worlddriver/docs/stagewright/instrument-contract-v0.md`.
+`docs/instrument-contract-v0.md`.
 
 ## T1: client topology (fabric, under Xvfb) — P2b
 
@@ -324,7 +324,7 @@ cause would reproduce in single-round mode, which still reports ENV.
 First-entry failures (before any round completes) and `--fresh-process`
 transitions remain ENV. The full contract (checks, canaries, `--hold`
 autorun-OFF topology, reuse semantics) is the **client appendix** of
-`../worlddriver/docs/stagewright/instrument-contract-v0.md`
+`docs/instrument-contract-v0.md`
 （"P2b 附录 — 客户端仪表契约（T1 面）"）.
 
 **偏差声明（P2b）**：T1 目前 **仅 fabric**（唯一有成熟客户端工装的 loader —
@@ -349,7 +349,7 @@ JSON record — `{version, topology, loader, rpcHost, rpcPort, worldName, holdPi
 writtenAtEpochMs}`, written atomically (`.tmp` → `os.replace`) so an attaching
 reader never sees a partial file. The authoritative schema and key-by-key
 semantics live in the **attach appendix** of
-`../worlddriver/docs/stagewright/orchestration-contract-v0.md`
+`docs/orchestration-contract-v0.md`
 （`## TESTKIT_ENDPOINT attach 契约（v0 附录，P2c T1）`）. `Endpoint.parse` rejects
 a missing key **loudly** (`IllegalArgumentException`) rather than defaulting it —
 a truncated descriptor never attaches to a wrong port.
@@ -553,7 +553,7 @@ rejects it loudly.
 is applied) instead of being silently dropped. The full contract — namespace
 policy, paired-registration semantics, #280 closure, and the four headless
 checks (18-21) that pin them — is in the P2a appendix of
-`../worlddriver/docs/stagewright/instrument-contract-v0.md`.
+`docs/instrument-contract-v0.md`.
 
 ## Gradle plugin: task entry points (P3b T1)
 
@@ -878,8 +878,8 @@ consumers existed).
 ### Compatibility promise
 
 - The **instrumentation contract v0** frozen surface (see
-  `../worlddriver/docs/stagewright/instrument-contract-v0.md` and
-  `../worlddriver/docs/stagewright/orchestration-contract-v0.md`) is backward-compatible:
+  `docs/instrument-contract-v0.md` and
+  `docs/orchestration-contract-v0.md`) is backward-compatible:
   code written against it keeps working across patch/minor releases of this
   module.
 - The **behavioral surface and internal APIs** (scene execution timing,
