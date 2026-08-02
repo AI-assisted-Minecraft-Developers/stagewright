@@ -20,8 +20,22 @@ dependencies {
     // the mc.test.* verbs the ability to call ToolCatalog.registerVerb directly, which is why
     // StageWrightVerbHook (an SPI whose only job was breaking the resulting cycle) is deleted.
     //
-    // Not a cycle: worlddriver's :common depends on :stagewright-common from its `testmod`
-    // source set only, so the task graph stays acyclic
-    // (:common:compileJava -> :stagewright-common:compileJava -> :common:compileTestmodJava).
-    implementation project(path: ':common', configuration: 'namedElements')
+    // Resolved two ways because BOTH builds must work while the repos are being split:
+    //
+    //   in worlddriver's build   -> the project, via namedElements. Not a cycle: worlddriver's
+    //                               :common depends back only from its `testmod` source set, so
+    //                               the task graph stays acyclic (:common:compileJava ->
+    //                               :stagewright-common:compileJava -> :common:compileTestmodJava).
+    //   standalone (this build)  -> the published `dev` classifier, which is the SAME
+    //                               named-mappings artifact namedElements points at. The plain
+    //                               published jar is remapped to intermediary and will not link
+    //                               against a dev-mapped compile classpath.
+    //
+    // The branch collapses to the `else` once this tree is its own repo, where :common never
+    // exists. Keeping it means no commit in the split leaves either build broken.
+    if (rootProject.findProject(':common') != null) {
+        implementation project(path: ':common', configuration: 'namedElements')
+    } else {
+        implementation "net.magicterra:worlddriver-common:${rootProject.worlddriver_version}:dev"
+    }
 }

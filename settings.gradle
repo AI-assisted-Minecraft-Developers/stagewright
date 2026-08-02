@@ -1,0 +1,33 @@
+// StageWright — standalone build settings.
+//
+// Only read when Gradle is invoked from this directory. worlddriver's build declares the same
+// four modules itself (`project(':stagewright-common').projectDir = file('stagewright/common')`)
+// and never consults this file, so both builds coexist during the repo split.
+//
+// Module names are IDENTICAL to the ones worlddriver's settings.gradle uses
+// (:stagewright-api, :stagewright-common, ...) so that every build script under this tree
+// resolves the same way in either build and needs no conditional project paths.
+pluginManagement {
+    // The gradle plugin is its own build, exactly as in worlddriver's settings.gradle.
+    includeBuild('gradle-plugin')
+
+    repositories {
+        maven { url "https://maven.fabricmc.net/" }
+        maven { url "https://maven.architectury.dev/" }
+        maven { url "https://files.minecraftforge.net/maven/" }
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'stagewright'
+
+include 'stagewright-api'
+include 'stagewright-common'
+include 'stagewright-fabric'
+include 'stagewright-neoforge'
+include 'stagewright-junit'
+project(':stagewright-api').projectDir = file('api')
+project(':stagewright-common').projectDir = file('common')
+project(':stagewright-fabric').projectDir = file('fabric')
+project(':stagewright-neoforge').projectDir = file('neoforge')
+project(':stagewright-junit').projectDir = file('junit')

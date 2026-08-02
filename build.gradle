@@ -1,0 +1,121 @@
+// StageWright — standalone root build.
+//
+// A deliberately trimmed sibling of worlddriver's root build.gradle. Only read when Gradle is
+// invoked from this directory; worlddriver's build configures these same modules through its
+// own subprojects{} block and never evaluates this file.
+//
+// Differences from worlddriver's root, and why:
+//   - no `id 'net.magicterra.stagewright'` applied here. That plugin is StageWright's own
+//     product; applying it to its own build would be circular. worlddriver applies it as the
+//     first dogfood consumer, which is the point.
+//   - no rhino/netty wiring. Those are worlddriver's embedded runtime libraries.
+//   - the `dev` classifier publication is kept VERBATIM, because the dependency runs both
+//     ways: worlddriver's testmod compiles against mc_stagewright-api:dev.
+plugins {
+    id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false
+    id 'architectury-plugin' version '3.4-SNAPSHOT'
+    id 'com.gradleup.shadow' version '8.3.6' apply false
+}
+
+architectury {
+    minecraft = project.minecraft_version
+}
+
+allprojects {
+    group = rootProject.maven_group
+    version = rootProject.mod_version
+}
+
+subprojects {
+    // stagewright-junit is a pure-JVM JUnit 5 attach module (out-of-process RPC consumer):
+    // no Minecraft, no loader, no loom. It provides its own java-library setup in
+    // junit/build.gradle. Scope it out of the loom/architectury/MC pipeline that every other
+    // subproject shares. (group/version still come from allprojects.)
+    if (project.name == 'stagewright-junit') return
+
+    apply plugin: 'dev.architectury.loom'
+    apply plugin: 'architectury-plugin'
+    apply plugin: 'maven-publish'
+
+    base {
+        archivesName = "$rootProject.archives_name-$project.name"
+    }
+
+    repositories {
+        // mavenLocal is REQUIRED, not a convenience: stagewright-common compiles against
+        // net.magicterra:worlddriver-common:<v>:dev, and worlddriver publishes nowhere else
+        // yet. This is the bootstrap cost of separate repos — see the release-order note below.
+        mavenLocal()
+        mavenCentral()
+    }
+
+    loom {
+        silentMojangMappingsLicense()
+    }
+
+    dependencies {
+        minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
+        mappings loom.officialMojangMappings()
+    }
+
+    java {
+        withSourcesJar()
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        it.options.release = 21
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                from components.java
+
+                // The NAMED-mappings jar — see worlddriver's root build.gradle for the full
+                // reasoning. Short version: components.java publishes loom's REMAPPED artifact
+                // (intermediary, net/minecraft/class_1291), which cannot be compiled against
+                // from a dev environment. Loom already builds build/devlibs/<name>-dev.jar;
+                // this stops it being discarded. worlddriver's testmod consumes
+                // mc_stagewright-api:dev through exactly this.
+                artifact(tasks.named('jar')) { classifier = 'dev' }
+
+                pom.withXml {
+                    def deps = asNode().dependencies
+                    if (!deps.isEmpty()) asNode().remove(deps.first())
+                }
+            }
+        }
+
+        // artifactId must be resolved AFTER the subproject's own build script has run: this
+        // subprojects{} block executes BEFORE child scripts, so an eager archivesName.get()
+        // here would capture the root default instead of each module's override.
+        afterEvaluate {
+            publishing.publications.named('mavenJava') {
+                artifactId = base.archivesName.get()
+            }
+        }
+
+        // Gradle consumers prefer .module metadata over the POM, and the runtimeElements
+        // variant would leak the dependencies the POM deliberately strips.
+        tasks.withType(GenerateModuleMetadata).configureEach {
+            enabled = false
+        }
+
+        repositories {
+            mavenLocal()
+        }
+    }
+}
+
+// ---- Release order (the cost of separate repos) ----
+// stagewright-api depends on nobody. worlddriver's testmod depends on stagewright-api.
+// stagewright's RUNTIME modules depend on worlddriver. So a full cold bootstrap is:
+//
+//     stagewright> ./gradlew :stagewright-api:publishToMavenLocal
+//     worlddriver> ./gradlew publishToMavenLocal
+//     stagewright> ./gradlew publishToMavenLocal
+//
+// Only an api change forces the whole dance; api is interfaces + value types and changes
+// rarely, which is what keeps this from being a daily tax.
