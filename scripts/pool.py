@@ -39,7 +39,6 @@ Semantics:
 """
 import argparse
 import contextlib
-import fcntl
 import json
 import os
 import signal
@@ -215,20 +214,18 @@ def save_state(state, path=None):
 
 @contextlib.contextmanager
 def _state_lock(lock_path=None):
-    """Hold an exclusive fcntl.flock across a load→mutate→save critical section. Two
+    """Hold an exclusive file lock across a load→mutate→save critical section. Two
     concurrent `ensure` runs for DIFFERENT keys are both multi-minute cold boots whose
     put_entry() calls would otherwise interleave (load A, load A, set-t1 save, set-t2
     save) and the last writer would erase the other's PID — a launched hold left running
     with no recorded PID, unreleasable by `stop`. The lock serializes every read-modify-
-    write so each mutation observes the prior one's committed state."""
+    write so each mutation observes the prior one's committed state.
+
+    Goes through platform_compat because `fcntl` does not exist on Windows and this was a
+    bare module-level import: pool.py raised ImportError before running a single line."""
     lock_path = lock_path or state_lock()
-    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
+    with platform_compat.file_lock(lock_path):
         yield
-    finally:
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        os.close(fd)
 
 
 def _mutate_state(mutate, lock_path=None, path=None):

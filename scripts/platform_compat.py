@@ -34,6 +34,7 @@ Nothing in this module requires a third-party package; the Windows paths use
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import subprocess
@@ -329,3 +330,59 @@ def kill_tree(proc, sig=None):
             proc.terminate()
         except OSError:
             pass
+
+
+# ------------------------------------------------------------------------- file lock
+@contextlib.contextmanager
+def file_lock(path, timeout=120.0, poll=0.05):
+    """Hold an exclusive advisory lock on ``path`` for the duration of the block.
+
+    POSIX keeps the original blocking ``fcntl.flock(fd, LOCK_EX)``. Windows has no
+    ``fcntl`` at all — importing it is an ImportError at module load, which is why
+    ``pool.py`` could not even start here — so it uses ``msvcrt.locking`` on a one-byte
+    region. That call has only two useful modes: ``LK_LOCK``, which retries for a fixed
+    ten seconds and then raises, and ``LK_NBLCK``, which fails immediately. Neither maps
+    onto "block until it is mine", so the wait loop is ours: poll ``LK_NBLCK`` until
+    ``timeout``. A pool ``ensure`` behind a cold boot can legitimately wait minutes, and
+    ten seconds of built-in retry would turn that into a spurious failure.
+
+    Raises TimeoutError if the lock is not acquired within ``timeout`` seconds. On POSIX
+    the wait is unbounded, exactly as before — this argument only bounds the Windows poll.
+    """
+    fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o644)
+    locked = False
+    try:
+        if IS_WINDOWS:
+            import msvcrt
+            import time as _time
+            deadline = _time.monotonic() + timeout
+            while True:
+                try:
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+                    locked = True
+                    break
+                except OSError:
+                    if _time.monotonic() >= deadline:
+                        raise TimeoutError(
+                            f"could not acquire {path} within {timeout}s — another "
+                            f"orchestrator is holding it")
+                    _time.sleep(poll)
+        else:
+            import fcntl
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            locked = True
+        yield
+    finally:
+        if locked:
+            try:
+                if IS_WINDOWS:
+                    import msvcrt
+                    os.lseek(fd, 0, os.SEEK_SET)
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+        os.close(fd)
