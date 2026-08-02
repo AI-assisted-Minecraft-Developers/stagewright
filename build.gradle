@@ -1,8 +1,25 @@
-// StageWright — standalone root build.
+// StageWright — root build.
 //
-// A deliberately trimmed sibling of worlddriver's root build.gradle. Only read when Gradle is
-// invoked from this directory; worlddriver's build configures these same modules through its
-// own subprojects{} block and never evaluates this file.
+// A deliberately trimmed sibling of worlddriver's root build.gradle: this repo builds only the
+// framework, and consumes the driver it drives as a published artifact.
+//
+// RELEASE ORDER. The two repos depend on each other, in opposite directions and at different
+// points, so a from-scratch bootstrap has exactly one working sequence:
+//
+//   1. worlddriver:  ./gradlew :common:publishToMavenLocal
+//        -> net.magicterra:worlddriver-common:<ver>:dev, which stagewright-common compiles
+//           against. Runs before StageWright exists as an artifact, because worlddriver's
+//           MAIN source set has never needed StageWright.
+//   2. here:         ./gradlew publishToMavenLocal
+//                    ./gradlew -p gradle-plugin publishToMavenLocal
+//        -> mc_stagewright-{api,common,fabric,neoforge,junit} and the plugin marker.
+//   3. worlddriver:  ./gradlew build
+//        -> its TESTMOD compiles against mc_stagewright-api:dev, and its dev runs put
+//           mc_stagewright-<loader> on the classpath.
+//
+// The cycle is only apparent: it is broken by source set (worlddriver's main never depends on
+// StageWright) and by module (the api module depends on nothing at all). Bumping either side's
+// version means walking the three steps again in order.
 //
 // Differences from worlddriver's root, and why:
 //   - no `id 'net.magicterra.stagewright'` applied here. That plugin is StageWright's own
