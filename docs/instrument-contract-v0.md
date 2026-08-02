@@ -453,7 +453,7 @@ server-attached poll ring（**逐字节沿用 P2b 行为，零回归**）；T2�
 
 ## D1 附录 — task#90 仪表面双 verb（held-key 回读 + world-use 输入）
 
-落地：`TestInputVerbs`（common，`net.magicterra.worlddriver.bot.testkit`）+ `BotApi.heldKeys()` /
+落地：`TestInputVerbs`（common，`net.magicterra.worlddriver.bot.stagewright`）+ `BotApi.heldKeys()` /
 `BotApi.useOnBlock()` 实现（`BotApiImpl`）+ `ContainerFurnaceTest` 实装（去 `@Disabled`）+
 `instrument_client.py` 新检查 `reset.heldKeys` + 本附录。两 verb 与 `mc.test.reset` 同惯例：
 **hidden**（不进 `tools/list`）、经 `ToolCatalog.registerVerb` 配对注册于 `mc.test.*` 授权面、

@@ -5,7 +5,7 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 
 ## 启动协议
 - T0 壳 = 普通专用服务器 loom run `:testkit-<loader>:runStageWrightServer`
-  （runDir `stagewright/<loader>/run-testkit`，JVM sysprop `stagewright.autorun=true` 触发）。
+  （runDir `stagewright/<loader>/run-stagewright`，JVM sysprop `stagewright.autorun=true` 触发）。
 - 编排器负责预备 runDir：`eula.txt`、`server.properties`（server-port=25599、
   level-type=minecraft\:flat、online-mode=false、spawn-protection=0）、删 `world/`
   与旧结果文件；跑前按显式 PID 清扫命令行含 `stagewright.autorun` 的残留 JVM（禁 pkill）。
@@ -18,7 +18,7 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
   数秒 → 终止 gradle + 显式 PID 清扫 → 裁决。
 
 ## 结果文件
-`<runDir>/testkit-results.jsonl`，UTF-8，一行一个 JSON 对象：
+`<runDir>/stagewright-results.jsonl`，UTF-8，一行一个 JSON 对象：
 - 头 `{"type":"suite","loader":"neoforge|fabric","registered":[{"name","required","canary"}...]}`
 - 场景 `{"type":"scene","name","outcome":"PASS|FAIL|TIMEOUT|ENV_FAIL","ticks","wallMs","reason"}`
 - 尾 `{"type":"done","scenes":N}`（缺尾 = harness 中途死亡 = RED）
@@ -80,7 +80,7 @@ tick 预算天然从首个 settle 后 tick 起算。
   common 模块，一份注册服务所有 loader；P4a 起 provider 类与 service 文件均在
   `common/src/testmod` 源集=生产 jar 之外，类位于 `.scene` 子包——与 common main
   同包会触发 JPMS split-package 启动崩溃）：该文件单行为
-  `net.magicterra.worlddriver.bot.testkit.scene.WorldDriverScenes`（P1c 时曾位于 neoforge 模块，
+  `net.magicterra.worlddriver.bot.stagewright.scene.WorldDriverScenes`（P1c 时曾位于 neoforge 模块，
   已随 P1.6 搬迁删除；全源码树内每个 provider 只允许一份 service 文件，重复注册会
   触发重名门 RED）。
 
@@ -281,7 +281,7 @@ P2b `t1.py --hold` 让一个 fabric CLIENT 拓扑（integrated server + 真客�
   不做多实例端口/世界隔离，`RUN_DIR`/`WORLD_NAME`/`ENDPOINT_FILE` 全是进程级单例
   路径。并发跑第二个 `--hold` 会互相踩世界目录和端点文件；这是当前明确的形状边界，
   不是意外行为，多租户需求超出本轮范围。
-- 本节新增一份独立于结果文件线协议的描述性文件（不改 `testkit-results.jsonl`
+- 本节新增一份独立于结果文件线协议的描述性文件（不改 `stagewright-results.jsonl`
   格式、不改任何退出码含义），契约仍冻结在 v0，不升版。
 
 ## T2 双进程拓扑（dedicated + client，v0 附录，P3a T2/T3）
@@ -318,7 +318,7 @@ gradle 任务 `:<loader>:runT2Server`）+ 一个独立真客户端（复用 T1 �
 T2 服务器 autorun OFF，套件不在 boot 自跑。双端探针过后，`t2.py` 经**服务器面** RPC 发一次
 `mc.test.run`（裸信封，隐藏 verb 无参），断言 `{accepted:true, scenes:N}`（N=注册场景数，
 **含金丝雀**）。此 verb 幂等：套件已跑/在跑则大声报错不重跑；JSONL done footer 仍是唯一完成
-信号。harness 把结果写到 `run-t2/testkit-results.jsonl`（相对服务器工作目录），跑完 `halt()`
+信号。harness 把结果写到 `run-t2/stagewright-results.jsonl`（相对服务器工作目录），跑完 `halt()`
 服务器。`t2.py` 轮询该文件的 done footer（纯文件轮询，socket 无关），再用 `verdict.py`
 + `expected-scenes-<loader>.txt`（对账服务器 header 的 `registered[]`）裁决，退出码
 0/1/2/3（与 T0/T1 同义：GREEN/RED/DEAD/ENV）。三大 byte 金值（descentYaw、
@@ -425,5 +425,5 @@ python3 scripts/stagewright/pool.py stop --topology t2
 
 - **串行租约**（继承 `--hold` 的形状边界）：一套 topology×loader 同一时刻只保活一个实例
   （`RUN_DIR`/`WORLD_NAME`/端点文件都是进程级单例路径）；池不做多实例隔离。
-- 本节新增一个**独立于结果文件线协议**的编排辅助工具（不改 `testkit-results.jsonl` 格式、端点
+- 本节新增一个**独立于结果文件线协议**的编排辅助工具（不改 `stagewright-results.jsonl` 格式、端点
   schema、任何退出码含义），契约仍冻结在 v0，不升版。
