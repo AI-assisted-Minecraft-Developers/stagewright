@@ -19,7 +19,7 @@ public final class StageWrightCommon {
     public static final Logger LOG = LogUtils.getLogger();
 
     /** Results file, relative to the server's working directory (the loom runDir). */
-    private static final String OUT_FILE = "testkit-results.jsonl";
+    private static final String OUT_FILE = "stagewright-results.jsonl";
 
     // Suite lifecycle state. All mutation is under this class's monitor (the static-synchronized
     // methods); `harness` is volatile so onServerTick reads it lock-free every tick.

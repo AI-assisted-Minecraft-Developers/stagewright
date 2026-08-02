@@ -60,8 +60,8 @@ public abstract class StageWrightExtension {
     /**
      * {@code stagewrightServer} only — the results JSONL path, relative to the applied project
      * (= the orchestrator working directory) or absolute. Unset keeps the frozen dogfood value
-     * {@code <loader>/run-dogfood/testkit-results.jsonl}. It must name the file the game
-     * actually writes, i.e. {@code <run directory>/testkit-results.jsonl}.
+     * {@code <loader>/run-dogfood/stagewright-results.jsonl}. It must name the file the game
+     * actually writes, i.e. {@code <run directory>/stagewright-results.jsonl}.
      */
     public abstract Property<String> getServerResults();
 

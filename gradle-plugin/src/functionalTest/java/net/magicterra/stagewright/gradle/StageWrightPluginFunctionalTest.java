@@ -97,7 +97,7 @@ class StageWrightPluginFunctionalTest {
             "scripts/stagewright/t0.py",
             "--loader", "fabric",
             "--run-task", ":fabric:runDogfoodServer",
-            "--results", "fabric/run-dogfood/testkit-results.jsonl",
+            "--results", "fabric/run-dogfood/stagewright-results.jsonl",
             "--expect-file", "scripts/stagewright/expected-scenes-fabric.txt"
         ), recordedArgv());
     }
@@ -112,7 +112,7 @@ class StageWrightPluginFunctionalTest {
             "scripts/stagewright/t0.py",
             "--loader", "neoforge",
             "--run-task", ":neoforge:runDogfoodServer",
-            "--results", "neoforge/run-dogfood/testkit-results.jsonl",
+            "--results", "neoforge/run-dogfood/stagewright-results.jsonl",
             "--expect-file", "scripts/stagewright/expected-scenes-neoforge.txt"
         ), recordedArgv());
     }

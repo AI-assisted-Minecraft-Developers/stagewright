@@ -59,7 +59,7 @@ loom {
         stagewrightServer {
             server()
             property 'stagewright.autorun', 'true'
-            runDir 'run-testkit'
+            runDir 'run-stagewright'
         }
     }
     runConfigs.configureEach {

@@ -7,7 +7,7 @@ package net.magicterra.stagewright;
  * depends on {@code :stagewright-common} (for the {@link net.magicterra.stagewright.scene.SceneProvider}
  * scene SPI), so a back-edge from stagewright-common to {@code ToolCatalog} would be a circular
  * module dependency. This interface inverts it: stagewright-common declares the seam, the
- * worlddriver dogfood glue ({@code net.magicterra.worlddriver.bot.testkit}) implements it and calls
+ * worlddriver dogfood glue ({@code net.magicterra.worlddriver.bot.stagewright}) implements it and calls
  * {@code ToolCatalog.registerVerb} from the worlddriver side of the edge.
  *
  * <p>Implementations are discovered via {@link java.util.ServiceLoader}

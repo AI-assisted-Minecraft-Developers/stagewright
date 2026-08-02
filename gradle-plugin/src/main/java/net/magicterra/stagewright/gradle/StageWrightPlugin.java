@@ -53,7 +53,7 @@ public class StageWrightPlugin implements Plugin<Project> {
 
         // stagewrightServer → t0.py, dedicated-server dogfood triplet (frozen assembly).
         //   t0.py --loader L --run-task :L:runDogfoodServer
-        //         --results L/run-dogfood/testkit-results.jsonl
+        //         --results L/run-dogfood/stagewright-results.jsonl
         //         --expect-file <scriptsDir>/expected-scenes-L.txt   [+ extraArgs]
         project.getTasks().register("stagewrightServer", StageWrightRunTask.class, task -> {
             task.setGroup(TASK_GROUP);
@@ -77,7 +77,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                 a.add(ext.getServerRunTask().getOrElse(":" + loader + ":runDogfoodServer"));
                 a.add("--results");
                 a.add(ext.getServerResults()
-                    .getOrElse(loader + "/run-dogfood/testkit-results.jsonl"));
+                    .getOrElse(loader + "/run-dogfood/stagewright-results.jsonl"));
                 a.add("--expect-file");
                 a.add(ext.getServerExpectFile().isPresent()
                     ? ext.getServerExpectFile().get().getAsFile().getAbsolutePath()

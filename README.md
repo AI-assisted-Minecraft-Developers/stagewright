@@ -42,14 +42,14 @@ are identical apart from loader name, run task, results path, and manifest
 
     python3 scripts/stagewright/t0.py --loader neoforge \
         --run-task :neoforge:runDogfoodServer \
-        --results neoforge/run-dogfood/testkit-results.jsonl \
+        --results neoforge/run-dogfood/stagewright-results.jsonl \
         --expect-file scripts/stagewright/expected-scenes-neoforge.txt
 
 **Fabric:**
 
     python3 scripts/stagewright/t0.py --loader fabric \
         --run-task :fabric:runDogfoodServer \
-        --results fabric/run-dogfood/testkit-results.jsonl \
+        --results fabric/run-dogfood/stagewright-results.jsonl \
         --expect-file scripts/stagewright/expected-scenes-fabric.txt
 
 Each boots a full dedicated server with **both** worlddriver and stagewright
@@ -117,7 +117,7 @@ ONE registration serves every loader; since P4a both the provider class and its
 service file live in the `testmod` source set (out of the production jar), e.g.
 `common/src/testmod/resources/META-INF/services/net.magicterra.stagewright.scene.SceneProvider`:
 
-    net.magicterra.worlddriver.bot.testkit.scene.WorldDriverScenes
+    net.magicterra.worlddriver.bot.stagewright.scene.WorldDriverScenes
 
 Keep exactly one service file per provider across all source sets — a copy in
 a loader module alongside the common one double-registers the provider on that
@@ -132,7 +132,7 @@ every retirement). `grep -rn "@GameTest(" common/src neoforge/src fabric/src`
 now returns **zero** test-method call sites. The dogfood suite is
 **131 `wd.*` scenes** across **13 `SceneProvider` classes** — the original seed
 provider plus one per migrated family — all in
-`common/src/testmod/java/net/magicterra/worlddriver/bot/testkit/scene/`, all listed
+`common/src/testmod/java/net/magicterra/worlddriver/bot/stagewright/scene/`, all listed
 (one line each) in the single common service file
 `common/src/testmod/resources/META-INF/services/net.magicterra.stagewright.scene.SceneProvider`:
 
@@ -436,7 +436,7 @@ persistent artifact. Exit codes: **0 GREEN / 1 RED / 2 DEAD / 3 ENV**, as T1.
 T2 does not autorun the scene suite at world-load the way the dogfood/T1 servers
 do. Instead the orchestrator, once the dual-end probe passes, calls **`mc.test.run`**
 on the **server** face: an on-demand trigger that runs the registered scene suite
-and appends its footer to `testkit-results.jsonl`. It is **idempotent** — a
+and appends its footer to `stagewright-results.jsonl`. It is **idempotent** — a
 second call while a run is in flight is rejected by an in-flight latch rather than
 starting an overlapping run — and it is the **first testkit consumer of the P2a
 `registerVerb` SPI** (the product's own paired-registration entry, dogfooded).
@@ -688,12 +688,12 @@ them directly in each `build.gradle`:
   empty-source-bridge role neoforge's set now also plays.
 
 **The `.scene` sub-package JPMS lesson.** The scenes could **not** stay in
-`net.magicterra.worlddriver.bot.testkit` when moved to `testmod`: `main` still owns
+`net.magicterra.worlddriver.bot.stagewright` when moved to `testmod`: `main` still owns
 that package (the production verbs `TestResetVerb` / `TestRunVerb` live there and
 must ship). A package owned by two source sets that both feed the same mod module
 is a **split package** — the loader's module layer rejects it. The fix was to
 move the scenes into a dedicated sub-package
-`net.magicterra.worlddriver.bot.testkit.scene` (the service file becomes
+`net.magicterra.worlddriver.bot.stagewright.scene` (the service file becomes
 `META-INF/services/net.magicterra.stagewright.scene.SceneProvider`). Lesson: when
 relocating classes from `main` into a `testmod` set that is folded into the same
 mod, they must occupy a package `main` does not also populate.
