@@ -1,12 +1,25 @@
 # StageWright
 
 Cross-loader (Fabric + NeoForge) Minecraft mod test framework. Spec:
-`../docs/superpowers/specs/2026-07-16-stagewright-design.md`. Orchestration
-contract: `../docs/stagewright/orchestration-contract-v0.md`.
+`../worlddriver/docs/superpowers/specs/2026-07-16-stagewright-design.md`. Orchestration
+contract: `../worlddriver/docs/stagewright/orchestration-contract-v0.md`.
+
+## Which repo the orchestrators drive
+
+StageWright does not test itself. Every orchestrator under `scripts/` drives a **consumer**
+project — its `gradlew`, its run tasks, its results file, its `expected-scenes-*.txt`. The
+consumer is resolved as `--project-root` > `$STAGEWRIGHT_PROJECT_ROOT` >
+`$TESTKIT_PROJECT_ROOT` > the current directory. So both of these are correct:
+
+    cd ../worlddriver && python3 scripts/stagewright/t0.py --loader fabric   # via the consumer's shim
+    python3 scripts/t0.py --loader fabric --project-root ../worlddriver      # from here
+
+Every path in the command examples below — `--results`, `--expect-file`, the run dirs — is
+relative to the CONSUMER, not to this repo. `scripts/` paths are relative to this repo.
 
 ## T0: server-side scene suite
 
-    python3 scripts/stagewright/t0.py --loader neoforge   # or fabric
+    python3 scripts/t0.py --loader neoforge   # or fabric
 
 Exit codes: 0 GREEN / 1 RED / 2 DEAD (canary mis-judged — framework broken,
 results void) / 3 ENV. The orchestrator is the only verdict authority.
@@ -40,14 +53,14 @@ are identical apart from loader name, run task, results path, and manifest
 
 **NeoForge:**
 
-    python3 scripts/stagewright/t0.py --loader neoforge \
+    python3 scripts/t0.py --loader neoforge \
         --run-task :neoforge:runDogfoodServer \
         --results neoforge/run-dogfood/stagewright-results.jsonl \
         --expect-file scripts/stagewright/expected-scenes-neoforge.txt
 
 **Fabric:**
 
-    python3 scripts/stagewright/t0.py --loader fabric \
+    python3 scripts/t0.py --loader fabric \
         --run-task :fabric:runDogfoodServer \
         --results fabric/run-dogfood/stagewright-results.jsonl \
         --expect-file scripts/stagewright/expected-scenes-fabric.txt
@@ -127,7 +140,7 @@ loader's dev classpath and trips the duplicate-scene-name gate (RED by design).
 
 As of P4c the **entire** legacy `@GameTest` suite has been migrated to `wd.*`
 dogfood scenes and deleted (`migrate-then-delete`; the drift log
-[`../docs/stagewright/migration-log.md`](../docs/stagewright/migration-log.md) records
+[`../worlddriver/docs/stagewright/migration-log.md`](../worlddriver/docs/stagewright/migration-log.md) records
 every retirement). `grep -rn "@GameTest(" common/src neoforge/src fabric/src`
 now returns **zero** test-method call sites. The dogfood suite is
 **131 `wd.*` scenes** across **13 `SceneProvider` classes** — the original seed
@@ -254,12 +267,12 @@ self-consistent false-green.
 
 ## Instrument contract (trust chain)
 
-    python3 scripts/stagewright/instrument.py --loader neoforge   # or fabric
+    python3 scripts/instrument.py --loader neoforge   # or fabric
 
 Bare-RPC contract checks against a plain worlddriver dedicated server —
 the instrument face testkit itself depends on (spec §4). Green here is the
 precondition for trusting any scene's setup/assertions. Contract:
-`../docs/stagewright/instrument-contract-v0.md`.
+`../worlddriver/docs/stagewright/instrument-contract-v0.md`.
 
 ## T1: client topology (fabric, under Xvfb) — P2b
 
@@ -267,7 +280,7 @@ T1 proves the same `wd.*` scene suite runs on a **real Fabric client hosting an
 integrated (singleplayer) server**, not just the dedicated dogfood server T0
 drives. The orchestrator self-manages a headless client end-to-end:
 
-    python3 scripts/stagewright/t1.py
+    python3 scripts/t1.py
 
 It probes a free X display, launches its own **Xvfb** on it (PID-tracked, killed
 by PID on exit — never `pkill`, never the live dev client's `:99`/`:97`), boots
@@ -292,10 +305,10 @@ inventory, #45 attack cooldown, #55 damage source — which a dedicated-server
 FakePlayer cannot exercise), plus the #280 unknown-key live E2E and
 `mc.test.reset` client-entry reset behavior.
 
-    python3 scripts/stagewright/instrument_client.py              # self-launch (reuses the t1.py shell, autorun OFF)
-    python3 scripts/stagewright/instrument_client.py --attach     # reuse an online `t1.py --hold` client
-    python3 scripts/stagewright/instrument_client.py --rounds 3   # client-pool reuse: quit-to-title → re-enter → mc.test.reset, N rounds
-    python3 scripts/stagewright/instrument_client.py --rounds 2 --fresh-process   # discard-and-relaunch fallback instead of in-place re-enter
+    python3 scripts/instrument_client.py              # self-launch (reuses the t1.py shell, autorun OFF)
+    python3 scripts/instrument_client.py --attach     # reuse an online `t1.py --hold` client
+    python3 scripts/instrument_client.py --rounds 3   # client-pool reuse: quit-to-title → re-enter → mc.test.reset, N rounds
+    python3 scripts/instrument_client.py --rounds 2 --fresh-process   # discard-and-relaunch fallback instead of in-place re-enter
 
 Cold client boot is the expensive step (~28-30s); `--rounds` reuse re-enters
 the same world (a `mc.test.reset` between rounds) at roughly **≈7× cheaper**
@@ -311,7 +324,7 @@ cause would reproduce in single-round mode, which still reports ENV.
 First-entry failures (before any round completes) and `--fresh-process`
 transitions remain ENV. The full contract (checks, canaries, `--hold`
 autorun-OFF topology, reuse semantics) is the **client appendix** of
-`../docs/stagewright/instrument-contract-v0.md`
+`../worlddriver/docs/stagewright/instrument-contract-v0.md`
 （"P2b 附录 — 客户端仪表契约（T1 面）"）.
 
 **偏差声明（P2b）**：T1 目前 **仅 fabric**（唯一有成熟客户端工装的 loader —
@@ -336,7 +349,7 @@ JSON record — `{version, topology, loader, rpcHost, rpcPort, worldName, holdPi
 writtenAtEpochMs}`, written atomically (`.tmp` → `os.replace`) so an attaching
 reader never sees a partial file. The authoritative schema and key-by-key
 semantics live in the **attach appendix** of
-`../docs/stagewright/orchestration-contract-v0.md`
+`../worlddriver/docs/stagewright/orchestration-contract-v0.md`
 （`## TESTKIT_ENDPOINT attach 契约（v0 附录，P2c T1）`）. `Endpoint.parse` rejects
 a missing key **loudly** (`IllegalArgumentException`) rather than defaulting it —
 a truncated descriptor never attaches to a wrong port.
@@ -345,7 +358,7 @@ a truncated descriptor never attaches to a wrong port.
 empty) and no `stagewright.endpoint` property, or the named file is absent — `attach`
 throws `StageWrightAttachException` carrying the exact operator hint
 
-    python3 scripts/stagewright/t1.py --hold
+    python3 scripts/t1.py --hold
 
 so a developer who runs a UI test with no topology up gets the one command that
 brings one up, never a silent hang or a mystery connection refusal.
@@ -382,7 +395,7 @@ skips honestly — a test can never fall through both gates and vanish.
 
 **Command walkthrough.**
 
-    python3 scripts/stagewright/t1.py --hold          # boots the T1 client (autorun OFF), stays online,
+    python3 scripts/t1.py --hold          # boots the T1 client (autorun OFF), stays online,
                                                   # prints:  export TESTKIT_ENDPOINT=<abs path>
     export TESTKIT_ENDPOINT=<abs path>            # eval the printed line (fabric: fabric/run-t1/testkit-endpoint.json)
     ./gradlew :stagewright-junit:test --rerun-tasks   # live UI tests attach and run; SIGINT the t1.py
@@ -416,9 +429,9 @@ is the topology that closes P1b's headless gap for real — the server-side
 observation/assertion checks now run against a **dedicated** `PlayerList` holding
 a real `ServerPlayer` that arrived over the network, not a FakePlayer stand-in.
 
-    python3 scripts/stagewright/t2.py                     # scored, fabric (default)
-    python3 scripts/stagewright/t2.py --loader neoforge   # scored, neoforge
-    python3 scripts/stagewright/t2.py --hold              # stand the topology up, run NO scenes, stay online for attach
+    python3 scripts/t2.py                     # scored, fabric (default)
+    python3 scripts/t2.py --loader neoforge   # scored, neoforge
+    python3 scripts/t2.py --hold              # stand the topology up, run NO scenes, stay online for attach
 
 The scored run boots `:<loader>:runT2Server` (a dedicated server on a pinned port
 — fabric 25597, neoforge 25596, dogfood's 25599 all distinct) and the T1
@@ -464,8 +477,8 @@ shortcut a headless/integrated run takes — the headless gap is closed *in the
 production topology itself*, not merely simulated.
 
     export TESTKIT_ENDPOINT=<abs>                                        # from `t2.py --hold`
-    python3 scripts/stagewright/instrument_client.py --topology t2 --attach            # one pass
-    python3 scripts/stagewright/instrument_client.py --topology t2 --attach --rounds 3 # resident-server reuse, N rounds
+    python3 scripts/instrument_client.py --topology t2 --attach            # one pass
+    python3 scripts/instrument_client.py --topology t2 --attach --rounds 3 # resident-server reuse, N rounds
 
 `--rounds` on T2 **disconnects the client and re-connects it to the SAME resident
 dedicated server** (the server is **never restarted** — the per-round
@@ -488,7 +501,7 @@ is an **optional** key: the frozen schema-v1 required-8 set is unchanged, a T1
 descriptor omits it and still parses, and `Endpoint.parse` tolerates its absence —
 so backward compatibility with v1 T1 endpoints is preserved.
 
-    python3 scripts/stagewright/t2.py --hold          # prints: export TESTKIT_ENDPOINT=<abs path>
+    python3 scripts/t2.py --hold          # prints: export TESTKIT_ENDPOINT=<abs path>
     export TESTKIT_ENDPOINT=<abs path>            # fabric/run-t2/testkit-endpoint.json
     ./gradlew :stagewright-junit:test --rerun-tasks   # same UI tests attach over the dedicated_plus_client endpoint
 
@@ -540,7 +553,7 @@ rejects it loudly.
 is applied) instead of being silently dropped. The full contract — namespace
 policy, paired-registration semantics, #280 closure, and the four headless
 checks (18-21) that pin them — is in the P2a appendix of
-`../docs/stagewright/instrument-contract-v0.md`.
+`../worlddriver/docs/stagewright/instrument-contract-v0.md`.
 
 ## Gradle plugin: task entry points (P3b T1)
 
@@ -661,7 +674,7 @@ took — it is loader-mechanism reality, not the plugin flag.
 > and the two run/reconcile scripts) — deleted in commit `9f506d1` plus the
 > P4-final docs close. The full deleted-machinery inventory with commit pointers
 > lives in the drift log's P4-final note:
-> [`../docs/stagewright/migration-log.md`](../docs/stagewright/migration-log.md). The
+> [`../worlddriver/docs/stagewright/migration-log.md`](../worlddriver/docs/stagewright/migration-log.md). The
 > per-loader wiring below is kept as the standing loader-mechanism record, but
 > two present-tense details are now **historical**: the `neoforge` and `fabric`
 > `testmod` sets no longer hold any `.java` sources — both are **empty-source
@@ -757,7 +770,7 @@ retired in bounded waves. Wave 1 (P4a) retired 8 twins (legacy registered
 run machinery itself. stagewright is now the sole test gate.** The full policy,
 per-twin provenance, the reframed legacy acceptance formula, and the P4-final
 machinery-retirement note live in the drift log:
-[`../docs/stagewright/migration-log.md`](../docs/stagewright/migration-log.md).
+[`../worlddriver/docs/stagewright/migration-log.md`](../worlddriver/docs/stagewright/migration-log.md).
 
 ## Client process pool (`pool.py`) — P3b T2
 
@@ -767,9 +780,9 @@ every consumer otherwise pays a fresh cold boot (~30-90s T1, minutes T2). The
 pool amortizes that across invocations: it keeps a `--hold` topology alive and
 lets attachers **reuse** it in ~1s.
 
-    python3 scripts/stagewright/pool.py ensure --topology t2   # reuse a live hold, else launch one DETACHED
-    python3 scripts/stagewright/pool.py status                 # probe every topology×loader
-    python3 scripts/stagewright/pool.py stop   --topology t2   # release the hold this pool started
+    python3 scripts/pool.py ensure --topology t2   # reuse a live hold, else launch one DETACHED
+    python3 scripts/pool.py status                 # probe every topology×loader
+    python3 scripts/pool.py stop   --topology t2   # release the hold this pool started
 
 `ensure` probes the topology's `TESTKIT_ENDPOINT` descriptor (the same file the
 `--hold` shells publish — see the **JUnit 5 attach** section's attach contract)
@@ -782,8 +795,8 @@ exits 0 in ~1s. Otherwise it cleans stale residue, launches the topology's
 endpoint file (t1 240s / t2 360s), verifies liveness, and prints `started`. Feed
 the printed line straight into an attacher:
 
-    eval "$(python3 scripts/stagewright/pool.py ensure --topology t2 | grep '^export')"
-    python3 scripts/stagewright/instrument_client.py --topology t2 --attach   # or: ./gradlew :stagewright-junit:test --rerun-tasks
+    eval "$(python3 scripts/pool.py ensure --topology t2 | grep '^export')"
+    python3 scripts/instrument_client.py --topology t2 --attach   # or: ./gradlew :stagewright-junit:test --rerun-tasks
 
 `stop` SIGINTs the recorded hold PID (its `finally` deletes the endpoint file),
 bounded-waits for the descriptor to vanish (SIGKILL after grace), then drops the
@@ -865,8 +878,8 @@ consumers existed).
 ### Compatibility promise
 
 - The **instrumentation contract v0** frozen surface (see
-  `../docs/stagewright/instrument-contract-v0.md` and
-  `../docs/stagewright/orchestration-contract-v0.md`) is backward-compatible:
+  `../worlddriver/docs/stagewright/instrument-contract-v0.md` and
+  `../worlddriver/docs/stagewright/orchestration-contract-v0.md`) is backward-compatible:
   code written against it keeps working across patch/minor releases of this
   module.
 - The **behavioral surface and internal APIs** (scene execution timing,
