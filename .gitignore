@@ -1,0 +1,30 @@
+build/
+.gradle/
+*/build/
+run/
+run-stagewright/
+.idea/
+*.log
+# log4j2 rolls latest.log into dated .gz archives, which *.log does not cover, and a
+# stray logs/ from any cwd must never be committable either.
+logs/
+
+# Bytecode, repo-wide. Note .gitignore does NOTHING for an already-tracked file — in the
+# parent repo these lines were added after 26 .pyc files had already been committed, and
+# they stayed in the index across three interpreter generations, leaving `git status`
+# permanently dirty. Untrack first, then ignore.
+__pycache__/
+*.py[cod]
+
+# Orchestrator scratch state (world templates, pool locks) — runtime, never commit.
+scripts/.t1-world-template-*/
+scripts/.t2-world-template-*/
+scripts/.pool-state.json
+scripts/.pool-state.lock
+
+# local tooling (jacoco jars, coverage output) — never commit
+.local/
+coverage-out/
+
+# Eclipse/IDE compiled output
+bin/
