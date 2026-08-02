@@ -7,7 +7,7 @@ Task 5 Step 1 现场发现，见下方「运行器时序」）。
 
 运行器：`python3 scripts/stagewright/instrument.py --loader {neoforge|fabric}`。
 
-裸 RPC 直打 `AgentApi.route()`，跑在 worlddriver 裸专服（
+裸 RPC 直打 `DriverApi.route()`，跑在 worlddriver 裸专服（
 `:<loader>:runContractServer`，runDir `<loader>/run-contract/`，RPC 端口
 ephemeral 经 `worlddriver-rpc.port` 发现）。退出码同编排契约 v0：
 0 GREEN / 1 RED / 2 DEAD（金丝雀误判）/ 3 ENV。
@@ -20,11 +20,11 @@ ephemeral 经 `worlddriver-rpc.port` 发现）。退出码同编排契约 v0：
 ## 运行器时序（Task 5 现场发现，已修复）
 
 `launch()` 的就绪门原探针 `mc.system.version`——该方法不调用
-`AgentApi.level()`，RPC 在 `onServerStarting` 起来即可回应,比
-`onServerStarted`（`AgentApi.attachServer()` 所在）早。fabric 首次全量 17 项
+`DriverApi.level()`，RPC 在 `onServerStarting` 起来即可回应,比
+`onServerStarted`（`DriverApi.attachServer()` 所在）早。fabric 首次全量 17 项
 真跑（Task 5 Step 1）在快速 flat-world 首启（RPC 监听到 `Done` 仅约 1s）下
 输了这场竞态：探针在 attach 前就返回就绪，8/17 项touch `api.level()` 的检查
-（world/obs/events 族）全部 `FAIL — AgentApi not attached to a server`；
+（world/obs/events 族）全部 `FAIL — DriverApi not attached to a server`；
 7 项不需要 attach 的检查（route/schema/script/wait 族）正常 PASS。修复
 （`a436c61`）把就绪探针换成 `mc.observe.player`——只读、无副作用（空
 PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数体第一行就是
@@ -39,7 +39,7 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 | # | 检查名 | 断言什么 | 钉住哪条病历 |
 |---|---|---|---|
 | 1 | `system.versionShape` | `mc.system.version` 返回 `modid=="worlddriver"` 且 `uptimeMs` 是非负整数 | 身份/契约基线——信任链起点,后续所有检查隐式依赖 route 本身能回应 |
-| 2 | `route.unknownMethod` | 未知 method → `error` 非空且含 `"unknown method"`,不静默回 `result` | 大声失败基线（`AgentApi.route()` 未知分派必须显式报错,不能被吞成空结果） |
+| 2 | `route.unknownMethod` | 未知 method → `error` 非空且含 `"unknown method"`,不静默回 `result` | 大声失败基线（`DriverApi.route()` 未知分派必须显式报错,不能被吞成空结果） |
 | 3 | `route.invalidParams.missingKey` | `mc.system.waitTicks{}`（缺必填 `ticks`）→ error 含 `invalid params`/`ticks`（Task 3 从 `mc.observe.eventsSince` 换过来,见下方永久断言台账） | 封闭 schema 必填键校验不能被绕过 |
 | 4 | `route.invalidParams.wrongType` | `waitTicks{ticks:"not-a-number"}` → error 存在（同上换过来） | schema 类型校验存在 |
 | 5 | `route.invalidParams.unknownKey` | `waitTicks{ticks:1,bogusKey:1}` → error 含 `unexpected key`/`invalid params` | **#280 静默吞病族**——封闭 schema 必须拒绝未知键,不能悄悄丢弃 |
@@ -74,7 +74,7 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 
 ## 双 loader 验收记录（2026-07-16）
 
-- fabric 首跑（17 项真跑）：`VERDICT: RED`,8/17 FAIL,全部 `AgentApi not
+- fabric 首跑（17 项真跑）：`VERDICT: RED`,8/17 FAIL,全部 `DriverApi not
   attached to a server`——就绪探针竞态（见上方「运行器时序」）,非产品缺陷。
   `worlddriver-rpc.port` 与 neoforge 侧不撞车（fabric 40703 / neoforge 各自独立
   ephemeral 端口）,Task 2 Step 2 的 `configureEach` 端口覆盖风险未兑现。
@@ -127,7 +127,7 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 - **all-or-nothing**：一次调用含**任一**未知键 → 整个调用被拒,**什么都不 apply**
   （A/B 脚本大声失败而非静默半应用)。已知键正常 apply 不受影响。
 - **inert[] 漂移报告**：apply 键集 ⊆ 注册表键集的自检;差集（若有）以 `inert[]` 报告,不静默。
-- **校验统一（transport/side-uniform)**：校验在 `route()` 派发时跑（`AgentApi.route`:
+- **校验统一（transport/side-uniform)**：校验在 `route()` 派发时跑（`DriverApi.route`:
   先 `paramsValidator.validate`,后 handler),**先于** client-only 门。故专服上打未知键
   也得 VALIDATOR 的 unexpected-key 错,不是 client-only 错——见检查 19 的现场定序发现。
 
@@ -143,7 +143,7 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 ### 现场定序发现（检查 19 的诚实记录）
 
 计划把「validator 先于 client-only」当作统一契约的读法。**现场证实即此序**:
-`AgentApi.route()`（common `AgentApi.java`）先跑 `paramsValidator.validate(method, p)`,
+`DriverApi.route()`（common `DriverApi.java`）先跑 `paramsValidator.validate(method, p)`,
 再 `fn.apply(p)`——而 `mc.bot.setting` 的 handler `requireBot()` 在专服上才抛 client-only。
 故专服上未知键先撞 SchemaValidator 的 `unexpected key`（`invalid params for mc.bot.setting:
 unexpected key 'definitelyNotAKnob'`),client-only 门根本没到。两 loader 全量 GREEN 复现。
@@ -158,7 +158,7 @@ additionalProperties is Boolean.TRUE`):**缺失或 false = 封闭,仅 `true` = �
 
 ### schema 读回路径的诚实说明
 
-裸 RPC `/rpc`（`AgentApi.route`）**不暴露** schema 目录;`mc.script.eval` 也读不到——
+裸 RPC `/rpc`（`DriverApi.route`）**不暴露** schema 目录;`mc.script.eval` 也读不到——
 此 Rhino fork 剥了 `Packages` 全局,JS 无法按名解析 `ToolCatalog`（与沙箱 denylist 无关）。
 schema 的结构化读回唯一诚实路径 = MCP `tools/list` HTTP 端点（`ToolSchema.mcpTool` →
 `Schemas.render`,与 route 层 `SchemaValidator` 同一 typed Schema,单源)。专服在
@@ -179,7 +179,7 @@ schema 的结构化读回唯一诚实路径 = MCP `tools/list` HTTP 端点（`To
 这是 `instrument.py`（专服面）的**客户端孪生**：验的是只有在「真客户端 +
 PlayerList 里有真玩家」时才存在的仪表面——即契约 v0「已知缺口」里明确留给 P2 的
 三条永久断言（#41/#45/#55），加上 P2a 附录欠下的 #280 live E2E、setting 已知键
-往返、`mc.test.reset` 行为验收。裸 RPC 直打 `AgentApi.route()`（MCP 层 stale
+往返、`mc.test.reset` 行为验收。裸 RPC 直打 `DriverApi.route()`（MCP 层 stale
 schema 会静默丢键——#280 病史，验新键必走裸 RPC）。verdict 复用共享 `verdict.py`
 （`record_type="check"`），退出码同契约 v0：0 GREEN / 1 RED / 2 DEAD（金丝雀
 误判）/ 3 ENV。
@@ -396,11 +396,11 @@ brief 原写「#55 的 observe 也打 server」。**实测否决**：`player.hur
 - `/damage @p 2 out_of_world` 在 **server** 落，真 ServerPlayer 掉 2 HP（实测 20→18.83）；
 - 但**专服**的 `mc.observe.eventsSince` ring **只载 `command.result`，永不载 `player.hurt`**
   （那是客户端发的）；
-- **客户端**面的 `mc.observe.cursor`/`eventsSince` 直接抛 `AgentApi not attached to a server`
+- **客户端**面的 `mc.observe.cursor`/`eventsSince` 直接抛 `DriverApi not attached to a server`
   （纯客户端没有 attached server，observe ring 读路径要 server）；
 - 故 `player.hurt` 在生产拓扑里的**唯一**客户端面读法是 **push 订阅**（`mc.events.subscribe`）——
-  `AgentApi.emit` 把事件 append 进 ring **并** fan-out 给 push 订阅者（frame 为
-  `notifications/message`，`params.data` = AgentEvent`{seq,timestamp,type,pos,data}`）。实测客户端
+  `DriverApi.emit` 把事件 append 进 ring **并** fan-out 给 push 订阅者（frame 为
+  `notifications/message`，`params.data` = DriverEvent`{seq,timestamp,type,pos,data}`）。实测客户端
   订阅收到 `{"lost":2,"prev":20,"health":18,"source":"outOfWorld"}`——**带 source 归因**。
 
 因此 #55 的忠实生产分派是**跨脸拆**：staging（`/damage`）+ 回血打 **server**，hurt 的 observe 走
