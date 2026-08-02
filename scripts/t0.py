@@ -33,15 +33,27 @@ from verdict import parse, judge
 # The gradle project the run is driven against: its `gradlew` is invoked, and every
 # relative --results / --expect-file resolves against it.
 #
-# It defaults to THIS repo (three levels up from the script), which is what every
-# worlddriver invocation has always meant — but an EXTERNAL consumer applies the
-# stagewright gradle plugin in its own repo while the frozen orchestrators keep living
-# here, and for it the two are different directories. Without an override such a run
-# silently drove worlddriver's build instead of the consumer's: the wrong `gradlew`,
-# the wrong run task, the wrong results file. `--project-root` (or the
-# TESTKIT_PROJECT_ROOT env var, which the gradle plugin sets) names the consumer.
-SCRIPT_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-REPO_ROOT = os.environ.get("TESTKIT_PROJECT_ROOT") or SCRIPT_REPO_ROOT
+# StageWright does not know its consumer. It used to default to THIS repo (three levels
+# up from the script), which was the same directory for every worlddriver invocation —
+# but the orchestrators no longer live inside their consumer, so __file__ now resolves to
+# StageWright's own tree and such a run would silently drive the wrong build: the wrong
+# `gradlew`, the wrong run task, the wrong results file.
+#
+# Resolution order: --project-root > $STAGEWRIGHT_PROJECT_ROOT > $TESTKIT_PROJECT_ROOT
+# (the older name, still honoured so an existing gradle-plugin consumer keeps working)
+# > the current working directory, which makes "cd into your repo and run it" the
+# natural default.
+STAGEWRIGHT_HOME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _default_project_root():
+    return (os.environ.get("STAGEWRIGHT_PROJECT_ROOT")
+            or os.environ.get("TESTKIT_PROJECT_ROOT")
+            or os.getcwd())
+
+
+SCRIPT_REPO_ROOT = _default_project_root()
+REPO_ROOT = SCRIPT_REPO_ROOT
 
 
 def run_dir(loader):
@@ -284,14 +296,20 @@ def self_test():
                                     {"name": "ad.b", "required": True, "canary": "NONE"}]},
                     _scene("ad.a", "PASS"), _scene("ad.b", "PASS"),
                     {"type": "done", "scenes": 2}], expected=["ad.a"])[0] == 1),
-        ("shipped per-loader manifests agree",
-         not check_manifest_siblings(
-             os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                          "expected-scenes-fabric.txt"))),
+        # Manifests belong to the CONSUMER, not to StageWright, so this resolves against
+        # REPO_ROOT rather than the script directory. It reports SKIP — never PASS — when
+        # no consumer manifest is there: check_manifest_siblings() returns [] for a missing
+        # file, so the old `not check_manifest_siblings(...)` form went vacuously green the
+        # moment the manifests stopped being siblings of this script. A cross-loader
+        # agreement gate that silently succeeds when it cannot find either loader's manifest
+        # is worse than no gate, and it is exactly the failure mode --expect-file already
+        # refuses ("expectation source given but contains no scene names").
+        ("shipped per-loader manifests agree", _check_manifest_siblings_or_skip()),
     ]
-    failed = [n for n, ok in checks if not ok]
+    failed = [n for n, ok in checks if ok is False]
     for n, ok in checks:
-        print(f"  [{'PASS' if ok else 'FAIL'}] {n}")
+        label = "SKIP" if ok is None else ("PASS" if ok else "FAIL")
+        print(f"  [{label}] {n}")
     return 0 if not failed else 1
 
 
@@ -358,6 +376,17 @@ def _check_load_expect_file():
         return load_expect_file(path) == ["ad.foo", "ad.bar", "ad.baz"]
     finally:
         os.remove(path)
+
+
+def _check_manifest_siblings_or_skip():
+    """True/False if the consumer's fabric manifest is present, None (SKIP) if it is not.
+
+    Returns a tri-state on purpose — see the call site. StageWright ships no manifests of
+    its own; they live in whichever repo contributes the scenes."""
+    path = os.path.join(REPO_ROOT, "scripts", "stagewright", "expected-scenes-fabric.txt")
+    if not os.path.isfile(path):
+        return None
+    return not check_manifest_siblings(path)
 
 
 def _check_expect_union_dedup():

@@ -73,8 +73,36 @@ import t1  # noqa: E402 — REUSED Xvfb/launch/stop/sweep/kill helpers, not fork
 from verdict import parse, judge  # noqa: E402 — REUSED judging logic, not forked
 from t0 import load_expect_file  # noqa: E402 — REUSED expect-file parser, not forked
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "stagewright")
+# ---- consumer project root -------------------------------------------------
+# StageWright does not know its consumer. These orchestrators drive the CONSUMER's
+# gradle build (its gradlew, its run task, its results file), and since the split they
+# no longer live inside it — deriving the root from __file__ would now resolve to
+# StageWright's own repo and silently drive the wrong build.
+#
+# Resolution order: --project-root > $STAGEWRIGHT_PROJECT_ROOT > $TESTKIT_PROJECT_ROOT
+# (the older name, still honoured so an existing gradle-plugin consumer keeps working)
+# > the current working directory, which makes "cd into your repo and run it" the
+# natural default.
+STAGEWRIGHT_HOME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _default_project_root():
+    return (os.environ.get("STAGEWRIGHT_PROJECT_ROOT")
+            or os.environ.get("TESTKIT_PROJECT_ROOT")
+            or os.getcwd())
+
+
+REPO_ROOT = _default_project_root()
+
+
+def _testkit_dir():
+    """The consumer's StageWright directory — where its per-project scratch (world
+    templates, pool state) lives. A FUNCTION, not a constant: --project-root rebinds
+    REPO_ROOT after import, and a snapshot taken at import time would keep pointing at
+    the old root, minting world templates under whichever repo you happened to be
+    standing in. That is the dirty-world failure mode, arriving silently."""
+    return os.path.join(REPO_ROOT, "scripts", "stagewright")
+
 LOADERS = ("fabric", "neoforge")
 WORLD_NAME = "world"  # a dedicated server always names its level "world" (server.properties level-name)
 
@@ -111,7 +139,7 @@ def resolve_t2(name):
         run_dir=run_dir,
         port_file=os.path.join(run_dir, "worlddriver-rpc.port"),
         world_dir=os.path.join(run_dir, "world"),
-        template_dir=os.path.join(TESTKIT_DIR, f".t2-world-template-{name}"),
+        template_dir=os.path.join(_testkit_dir(), f".t2-world-template-{name}"),
         run_task=f":{name}:runT2Server",
         server_properties=os.path.join(run_dir, "server.properties"),
         server_port=SERVER_PORTS[name],
@@ -580,7 +608,35 @@ def run(args):
 
 
 # -------------------------------------------------------------- self-test -----
+def _fixture_project_root():
+    """Build a throwaway consumer-SHAPED tree (scripts/stagewright/expected-scenes-*.txt)
+    and return its path. Since the split StageWright has no consumer of its own, and the
+    parse/resolution checks below must not need one — a self-test that only passes while
+    standing inside somebody else's repo is not a self-test. The two manifests carry
+    DISTINCT names so the loader-discrimination check has real teeth."""
+    import tempfile
+    root = tempfile.mkdtemp(prefix="stagewright-selftest-")
+    d = os.path.join(root, "scripts", "stagewright")
+    os.makedirs(d, exist_ok=True)
+    for loader in LOADERS:
+        with open(os.path.join(d, f"expected-scenes-{loader}.txt"), "w", encoding="utf-8") as f:
+            print("# fixture", file=f)
+            print(f"wd.fixture{loader.capitalize()}", file=f)
+    return root
+
+
 def self_test():
+    """Install the fixture root for the duration so nothing here reads a consumer's files."""
+    global REPO_ROOT
+    saved = REPO_ROOT
+    REPO_ROOT = _fixture_project_root()
+    try:
+        return _self_test_body()
+    finally:
+        REPO_ROOT = saved
+
+
+def _self_test_body():
     checks = [
         ("resolve_t2 fabric task", resolve_t2("fabric").run_task == ":fabric:runT2Server"),
         ("resolve_t2 neoforge task", resolve_t2("neoforge").run_task == ":neoforge:runT2Server"),
@@ -637,8 +693,12 @@ def self_test():
         ("parse_args --hold default false", _parse(["--self-test"]).hold is False),
         ("parse_args --hold sets true", _parse(["--hold"]).hold is True),
         ("parse_args default expect resolves fabric manifest", _parse([]).expected == _expected_default("fabric")),
+        # Compared against LITERALS, not a second read of the same path: the fixture root
+        # gives the two loaders distinct manifest contents, so this fails if --loader stops
+        # discriminating. Re-reading the resolved file could never catch that.
         ("parse_args --loader neoforge resolves neoforge expect",
-         _parse(["--loader", "neoforge"]).expected == _expected_default("neoforge")),
+         _parse(["--loader", "neoforge"]).expected == ["wd.fixtureNeoforge"]
+         and _parse([]).expected == ["wd.fixtureFabric"]),
         ("parse_args --expect-file overrides", _parse(["--expect-file", _expect_fixture()]).expected
          == ["ad.one", "ad.two"]),
     ]
@@ -765,6 +825,10 @@ def _parse(argv):
     ap.add_argument("--loader", choices=LOADERS, default="fabric",
                     help="target loader (default fabric): selects <loader>/run-t2 + :<loader>:runT2Server "
                          "for the server, and the T1 run-t1/runStageWrightClient for the client")
+    ap.add_argument("--project-root", default=None,
+                    help="the CONSUMER gradle project to drive — its gradlew is what gets "
+                         "launched and relative paths resolve against it (default: "
+                         "$STAGEWRIGHT_PROJECT_ROOT, else the current directory)")
     ap.add_argument("--wall", type=int, default=900, help="wall-clock cap in seconds")
     ap.add_argument("--expect-file", default=None,
                     help="expected-scene manifest (default expected-scenes-<loader>.txt); union "
@@ -777,6 +841,13 @@ def _parse(argv):
                          "stay online for JUnit attach; Ctrl-C to release")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args(argv)
+    global REPO_ROOT
+    if args.project_root:
+        REPO_ROOT = os.path.abspath(args.project_root)
+        t1.REPO_ROOT = REPO_ROOT
+        if not os.path.isdir(REPO_ROOT):
+            ap.error(f"--project-root is not a directory: {REPO_ROOT}")
+
     lp = resolve_t2(args.loader)
     # --hold never judges scenes, so don't couple the attach-only path to the
     # scored-only manifest (final-review Minor 5)

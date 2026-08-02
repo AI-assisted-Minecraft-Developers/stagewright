@@ -11,7 +11,26 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from verdict import parse, judge
 import platform_compat  # noqa: E402
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ---- consumer project root -------------------------------------------------
+# StageWright does not know its consumer. These orchestrators drive the CONSUMER's
+# gradle build (its gradlew, its run task, its results file), and since the split they
+# no longer live inside it — deriving the root from __file__ would now resolve to
+# StageWright's own repo and silently drive the wrong build.
+#
+# Resolution order: --project-root > $STAGEWRIGHT_PROJECT_ROOT > $TESTKIT_PROJECT_ROOT
+# (the older name, still honoured so an existing gradle-plugin consumer keeps working)
+# > the current working directory, which makes "cd into your repo and run it" the
+# natural default.
+STAGEWRIGHT_HOME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _default_project_root():
+    return (os.environ.get("STAGEWRIGHT_PROJECT_ROOT")
+            or os.environ.get("TESTKIT_PROJECT_ROOT")
+            or os.getcwd())
+
+
+ROOT = _default_project_root()
 MODULE = {"neoforge": "neoforge", "fabric": "fabric"}
 SERVER_PORT = 25597
 
@@ -776,9 +795,19 @@ def self_test():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loader", choices=["neoforge", "fabric"], default="neoforge")
+    ap.add_argument("--project-root", default=None,
+                    help="the CONSUMER gradle project to drive — its gradlew is what gets "
+                         "launched and relative paths resolve against it (default: "
+                         "$STAGEWRIGHT_PROJECT_ROOT, else the current directory)")
     ap.add_argument("--wall", type=int, default=300)
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
+    global ROOT
+    if args.project_root:
+        ROOT = os.path.abspath(args.project_root)
+        if not os.path.isdir(ROOT):
+            ap.error(f"--project-root is not a directory: {ROOT}")
+
     sys.exit(self_test() if args.self_test else run_suite(args.loader, args.wall))
 
 

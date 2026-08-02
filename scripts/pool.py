@@ -54,10 +54,42 @@ import t1                       # noqa: E402 — REUSE resolve_loader/run-dir/en
 import t2 as t2mod              # noqa: E402 — REUSE resolve_t2 paths (NOT forked)
 import instrument as inst       # noqa: E402 — REUSE the stdlib synchronous Ws/Ctx for the probe
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-TESTKIT_DIR = os.path.join(REPO_ROOT, "scripts", "stagewright")
-STATE_FILE = os.path.join(TESTKIT_DIR, ".pool-state.json")
-STATE_LOCK = os.path.join(TESTKIT_DIR, ".pool-state.lock")
+# ---- consumer project root -------------------------------------------------
+# StageWright does not know its consumer. These orchestrators drive the CONSUMER's
+# gradle build (its gradlew, its run task, its results file), and since the split they
+# no longer live inside it — deriving the root from __file__ would now resolve to
+# StageWright's own repo and silently drive the wrong build.
+#
+# Resolution order: --project-root > $STAGEWRIGHT_PROJECT_ROOT > $TESTKIT_PROJECT_ROOT
+# (the older name, still honoured so an existing gradle-plugin consumer keeps working)
+# > the current working directory, which makes "cd into your repo and run it" the
+# natural default.
+STAGEWRIGHT_HOME = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _default_project_root():
+    return (os.environ.get("STAGEWRIGHT_PROJECT_ROOT")
+            or os.environ.get("TESTKIT_PROJECT_ROOT")
+            or os.getcwd())
+
+
+REPO_ROOT = _default_project_root()
+
+
+def _testkit_dir():
+    """The consumer's StageWright directory — where the pool's per-project state lives.
+    A FUNCTION, not a constant: --project-root rebinds REPO_ROOT after import, and a
+    snapshot taken at import time would keep pointing at the old root, so `ensure` and
+    `stop` would read two different pools and leak a held topology."""
+    return os.path.join(REPO_ROOT, "scripts", "stagewright")
+
+
+def state_file():
+    return os.path.join(_testkit_dir(), ".pool-state.json")
+
+
+def state_lock():
+    return os.path.join(_testkit_dir(), ".pool-state.lock")
 
 TOPOLOGIES = ("t1", "t2")
 LOADERS = ("fabric", "neoforge")
@@ -89,7 +121,11 @@ def run_dir_for(topology, loader):
 
 
 def hold_script(topology):
-    return os.path.join(TESTKIT_DIR, "t1.py" if topology == "t1" else "t2.py")
+    """StageWright's OWN t1/t2 — its siblings on disk, not the consumer's
+    scripts/stagewright/. Since the split the consumer only carries thin shims there, and
+    routing through those would re-enter the project-root resolution a second time."""
+    return os.path.join(STAGEWRIGHT_HOME, "scripts",
+                        "t1.py" if topology == "t1" else "t2.py")
 
 
 def endpoint_ports(topology, doc):
@@ -152,10 +188,11 @@ def status_classify(endpoint_exists, alive):
 
 
 # --------------------------------------------------------------- state file ---
-def load_state(path=STATE_FILE):
+def load_state(path=None):
     """Read the pool state file → {"version":1,"entries":{key:entry}}. A missing or
     corrupt file degrades to an empty pool (never raises — a stop/status on a fresh
     checkout must still work)."""
+    path = path or state_file()
     try:
         with open(path, encoding="utf-8") as f:
             d = json.load(f)
@@ -166,9 +203,10 @@ def load_state(path=STATE_FILE):
     return {"version": 1, "entries": {}}
 
 
-def save_state(state, path=STATE_FILE):
+def save_state(state, path=None):
     """Atomically persist the state file (write .tmp then os.replace, so a concurrent
     reader never observes a half-written pool state)."""
+    path = path or state_file()
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=2)
@@ -176,13 +214,14 @@ def save_state(state, path=STATE_FILE):
 
 
 @contextlib.contextmanager
-def _state_lock(lock_path=STATE_LOCK):
+def _state_lock(lock_path=None):
     """Hold an exclusive fcntl.flock across a load→mutate→save critical section. Two
     concurrent `ensure` runs for DIFFERENT keys are both multi-minute cold boots whose
     put_entry() calls would otherwise interleave (load A, load A, set-t1 save, set-t2
     save) and the last writer would erase the other's PID — a launched hold left running
     with no recorded PID, unreleasable by `stop`. The lock serializes every read-modify-
     write so each mutation observes the prior one's committed state."""
+    lock_path = lock_path or state_lock()
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX)
@@ -192,7 +231,7 @@ def _state_lock(lock_path=STATE_LOCK):
         os.close(fd)
 
 
-def _mutate_state(mutate, lock_path=STATE_LOCK, path=STATE_FILE):
+def _mutate_state(mutate, lock_path=None, path=None):
     """Serialized read-modify-write: reload INSIDE the lock (so a sibling key another
     process committed while we waited is preserved), apply ``mutate(state)``, save."""
     with _state_lock(lock_path):
@@ -335,7 +374,11 @@ def _launch_hold(topology, loader, log):
     """Launch ``t1.py/t2.py --hold`` DETACHED: its own session (start_new_session, so a
     Ctrl-C on pool.py never reaches it), stdin closed, stdout+stderr → the run-dir log.
     Returns the Popen (its .pid is what we record + later SIGINT)."""
-    cmd = platform_compat.python_cmd(hold_script(topology), "--hold", "--loader", loader)
+    # --project-root is passed EXPLICITLY, not left to cwd/env: pool may have been given
+    # a --project-root that disagrees with an inherited $STAGEWRIGHT_PROJECT_ROOT, and the
+    # hold must drive the same repo this pool is bookkeeping for.
+    cmd = platform_compat.python_cmd(hold_script(topology), "--hold", "--loader", loader,
+                                     "--project-root", REPO_ROOT)
     logf = open(log, "w")
     logf.write(f"# pool.py --hold launch: {' '.join(cmd)} @ {time.ctime()}\n")
     logf.flush()
@@ -488,7 +531,7 @@ def cmd_stop(topology, loader):
 def cmd_status():
     st = load_state()
     n = len(st["entries"])
-    print(f"[pool] state file {STATE_FILE} — {n} managed entr{'y' if n == 1 else 'ies'}")
+    print(f"[pool] state file {state_file()} — {n} managed entr{'y' if n == 1 else 'ies'}")
     print(f"  {'topology/loader':<18}{'status':<8}{'origin':<14}{'pid':<8}endpoint")
     for topology in TOPOLOGIES:
         for loader in LOADERS:
@@ -664,9 +707,18 @@ def _parse(argv):
                          "status probes ALL topology×loader regardless")
     ap.add_argument("--loader", choices=LOADERS, default="fabric",
                     help="target loader (default fabric)")
+    ap.add_argument("--project-root", default=None,
+                    help="the CONSUMER repo to drive (its gradlew, its run dirs); "
+                         "defaults to $STAGEWRIGHT_PROJECT_ROOT, else the cwd")
     ap.add_argument("--self-test", action="store_true",
                     help="pure decision-table + state round-trip + arg tests (no live processes)")
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    if args.project_root:
+        global REPO_ROOT
+        REPO_ROOT = os.path.abspath(args.project_root)
+        if not os.path.isdir(REPO_ROOT):
+            ap.error(f"--project-root is not a directory: {REPO_ROOT}")
+    return args
 
 
 def main():
