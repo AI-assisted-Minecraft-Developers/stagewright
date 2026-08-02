@@ -106,7 +106,8 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 ### 命名空间政策（配对注册入口 enforcement）
 
 - `mc.*` 保留给驱动层。
-- `mc.test.*` 授予 testkit-runtime;`mc.test.yaml` 为既有驱动层 harness verb,**祖父条款**。
+- `mc.test.*` 授予 StageWright runtime,且为**独占**授予:驱动层自有的 `mc.test.yaml`
+  (原祖父条款持有者)已随 YAML harness 一并退役,该命名空间不再有第二个主张者。
 - 第三方一律 `<modid>.*`。
 - 新配对注册入口 `ToolCatalog.registerVerb(schema, handler)` 对违反者**注册时即抛**;
   且拒绝劫持驱动层既有 baseline 名（verb-hijack guard,review I-1）。
