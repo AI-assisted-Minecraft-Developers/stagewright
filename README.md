@@ -61,7 +61,7 @@ built-in scenes plus every downstream `wd.*` scene.
 
 The `wd.*` scenes live in `common` behind a loader-injected body-factory seam
 (neoforge injects `FakePlayerFactory`; fabric injects a vanilla-only
-`AgentFakePlayer`), so both loaders register the **same** scenes via the **same**
+`AvatarFakePlayer`), so both loaders register the **same** scenes via the **same**
 common `SceneProvider` service file. P1.6's dual-loader ×3 determinism matrix
 found every `wd.*` scene metric **byte-identical across both loaders** (fabric ==
 neoforge; the sole timing variance is `wd.entityLeash`'s await tick count — an
