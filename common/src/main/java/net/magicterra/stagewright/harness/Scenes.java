@@ -1,4 +1,8 @@
-package net.magicterra.stagewright.scene;
+package net.magicterra.stagewright.harness;
+
+import net.magicterra.stagewright.scene.Canary;
+import net.magicterra.stagewright.scene.Scene;
+import net.magicterra.stagewright.scene.SceneProvider;
 
 import java.util.ArrayList;
 import java.util.List;

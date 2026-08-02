@@ -1,0 +1,36 @@
+// StageWright's PUBLISHED CONTRACT — the only thing a downstream mod compiles against to
+// contribute scenes: Scene, SceneContext, SceneProvider, SceneOutcome, SceneFailure, Canary.
+//
+// It exists to keep the artifact graph acyclic once StageWright and WorldDriver are separate
+// repos. StageWright's RUNTIME (stagewright-common: harness, results writer, the mc.test.*
+// verbs) depends on WorldDriver, while WorldDriver's `testmod` needs the scene types to declare
+// its wd.* dogfood scenes. In one Gradle build that is fine — different source sets, acyclic
+// task graph. Across two independently PUBLISHED artifacts it would be a version cycle, so the
+// contract is split out here where it depends on nobody:
+//
+//     stagewright-api      (this: Minecraft only, zero worlddriver)
+//         ^         ^
+//         |         `-- stagewright-common/-fabric/-neoforge  (+ worlddriver)
+//         `------------ worlddriver :common testmod
+//
+// Release order follows the arrows: stagewright-api -> worlddriver -> stagewright runtime.
+// Being interfaces + value types, this artifact changes rarely, which is what keeps that
+// ordering from being a daily tax.
+//
+// KEEP IT DEPENDENCY-FREE. Anything added here that reaches for worlddriver, the harness, or
+// the results writer reintroduces the cycle the split exists to remove. It also owns the
+// package net.magicterra.stagewright.scene OUTRIGHT — Scenes (the built-in registry) lives in
+// .harness precisely so this package is not split across two modules, which FML resolves as a
+// hard java.lang.module.ResolutionException at boot.
+architectury {
+    common rootProject.enabled_platforms.split(',')
+}
+
+base {
+    archivesName = 'mc_stagewright-api'
+}
+
+dependencies {
+    // Provides the @Environment annotation; do NOT use other Fabric Loader classes from common
+    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+}

@@ -36,6 +36,9 @@ repositories {
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
 
+    common(project(path: ':stagewright-api', configuration: 'namedElements')) { transitive false }
+    shadowBundle project(path: ':stagewright-api', configuration: 'transformProductionNeoForge')
+
     common(project(path: ':stagewright-common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':stagewright-common', configuration: 'transformProductionNeoForge')
 }

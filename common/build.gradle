@@ -10,6 +10,11 @@ dependencies {
     // Provides the @Environment annotation; do NOT use other Fabric Loader classes from common
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
 
+    // The published scene contract (Scene/SceneContext/SceneProvider/...). Split out so the
+    // artifact graph stays acyclic once this repo and worlddriver publish separately — see
+    // stagewright/api/build.gradle for the full reasoning.
+    implementation project(path: ':stagewright-api', configuration: 'namedElements')
+
     // The flipped edge: StageWright depends on the driver it drives — the direction the
     // chrome/chromedriver framing implies, and the reverse of what shipped until now. It buys
     // the mc.test.* verbs the ability to call ToolCatalog.registerVerb directly, which is why

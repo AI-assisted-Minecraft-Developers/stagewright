@@ -11,7 +11,7 @@ import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.verbs.TestInputVerbs;
 import net.magicterra.stagewright.verbs.TestResetVerb;
 import net.magicterra.stagewright.verbs.TestRunVerb;
-import net.magicterra.stagewright.scene.Scenes;
+import net.magicterra.stagewright.harness.Scenes;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 
