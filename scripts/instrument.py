@@ -433,7 +433,10 @@ def check_test_run_paired(ctx):
     # topology where the testkit runtime armed and registered the verb through its own
     # StageWrightVerbHook SPI). Two assertions, mirroring the mc.test.reset precedent (checks ③/④):
     #   (a) HIDDEN: mc.test.run must NOT appear in the MCP tools/list catalog — it is a dev/test
-    #       harness verb, reachable over RPC only, exactly like mc.test.reset / mc.test.yaml.
+    #       harness verb, reachable over RPC only, exactly like mc.test.reset.
+    #       These two assertions are also the ONLY remaining gate on what "hidden" means
+    #       (out of tools/list, still declared + routable + schema-validated): the unit-level
+    #       ToolCatalogHiddenTest went away with mc.test.yaml, its sole fixed-catalog subject.
     #   (b) SCHEMA-PAIRED: a bogus param key must be rejected by the VALIDATOR (unexpected-key)
     #       BEFORE the handler ever triggers a run — proving the schema was registered atomically
     #       with the route (registerVerb pairing) AND is closed AND validation is uniform. If the
