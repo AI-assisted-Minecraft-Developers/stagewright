@@ -162,7 +162,7 @@ def check_client_only_verb(ctx):
 def check_script_eval_parity(ctx):
     # in-JVM route (invokeJson) must agree with the external transport
     r = ctx.call("mc.script.eval",
-                 {"source": "Agent.invoke('mc.system.version').modid", "timeoutMs": 5000})
+                 {"source": "Driver.invoke('mc.system.version').modid", "timeoutMs": 5000})
     if r.get("error"):
         raise ContractFailure(f"script error: {r['error']}")
     if r.get("result") != "worlddriver":
