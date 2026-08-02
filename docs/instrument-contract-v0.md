@@ -44,7 +44,7 @@ PlayerList 上返回 `{present:false}`，从不因内容抛错），但其函数
 | 4 | `route.invalidParams.wrongType` | `waitTicks{ticks:"not-a-number"}` → error 存在（同上换过来） | schema 类型校验存在 |
 | 5 | `route.invalidParams.unknownKey` | `waitTicks{ticks:1,bogusKey:1}` → error 含 `unexpected key`/`invalid params` | **#280 静默吞病族**——封闭 schema 必须拒绝未知键,不能悄悄丢弃 |
 | 6 | `route.clientOnlyVerb` | `mc.bot.status` 在专服上 → error 含 `client only`,不静默返回/no-op | **#280 静默吞病族**——client-only verb 在专服上必须大声失败,不能悄悄不作为 |
-| 7 | `script.evalParity` | `Agent.invoke('mc.system.version').modid` 走 in-JVM `invokeJson` 路由,结果与外部 RPC 传输一致 | schema 单源校验（`project_schema_single_source_merged`）——两条调用路径不能分叉出不同行为 |
+| 7 | `script.evalParity` | `Driver.invoke('mc.system.version').modid` 走 in-JVM `invokeJson` 路由,结果与外部 RPC 传输一致 | schema 单源校验（`project_schema_single_source_merged`）——两条调用路径不能分叉出不同行为 |
 | 8 | `world.setblockQueryReadback` | vanilla `/setblock` 写入 → `mc.query` 读回同一方块同一坐标 | 双源对账基线（spec §4.2）——driver 读路径与 vanilla 写路径必须一致,不能有独立于游戏状态的镜像态 |
 | 9 | `world.fillCount` | `mc.action.fill` 3×3×3=27 格 → `placed==27` 且 `mc.query` 读回 27 个 | 双源对账——批量写入计数与读回计数必须双向一致 |
 | 10 | `world.snapshotRestore` | snapshot → 篡改 → restore(discard) → 标记块消失 | world 快照/恢复往返干净性（无残留） |
