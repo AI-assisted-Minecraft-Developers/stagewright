@@ -517,11 +517,12 @@ was the #280-shaped hole). It also enforces the namespace policy at registration
 time (throws on violation):
 
 - `mc.*` — reserved for the driver layer.
-- `mc.test.*` — granted to the testkit runtime. `mc.test.yaml` is a
-  grandfathered driver-layer harness verb.
+- `mc.test.*` — granted to the StageWright runtime, and now granted *wholly*: the
+  driver's own `mc.test.yaml` (previously grandfathered into this namespace) was
+  retired along with the YAML harness, so the grant has a single claimant.
 - `<modid>.*` — everything third-party.
-- **Hijack guard**: driver-owned names (the built-in curated + hidden catalog,
-  e.g. `mc.test.yaml`) are rejected by `registerVerb` even when the name falls
+- **Hijack guard**: driver-owned names (the built-in curated + hidden catalog) are
+  rejected by `registerVerb` even when the name falls
   inside a granted namespace — a third party cannot shadow a driver verb through
   the paired entry. Within the third-party/extra space, last-wins applies
   (same-classpath trust boundary; two mods colliding on one `<modid>.<verb>` is
@@ -817,7 +818,7 @@ to `~/.m2/repository/net/magicterra/`:
 
 **Two opposite POM rules, and why.** The six mod-jar publications (root
 `subprojects{}` block in the top-level `build.gradle`) nest their runtime
-dependencies (Rhino, netty-codec-http, snakeyaml, and for the testkit
+dependencies (Rhino, netty-codec-http, and for the testkit
 mod-jars each other) via Jar-in-Jar and are remapped, self-contained
 artifacts — a POM that re-declared those deps would hand a naive consumer a
 second, unremapped copy of the same classes on their classpath
