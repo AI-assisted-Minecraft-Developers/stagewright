@@ -392,9 +392,19 @@ def provision(reuse):
     # Seed options.txt so the client boots straight to TitleScreen: a fresh game dir
     # otherwise opens the AccessibilityOnboardingScreen (its dismiss button is not a
     # reliable label-click target over RPC), and we disable the narrator so no TTS is
-    # attempted headless. MC merges missing keys with defaults, so these two lines suffice.
+    # attempted headless. MC merges missing keys with defaults, so these lines suffice.
+    #
+    # pauseOnLostFocus:false is load-bearing on a host with a REAL desktop (the Linux CI box is
+    # headless and never loses focus; a developer workstation does, constantly). Vanilla
+    # singleplayer pauses when the window is deactivated, and the resulting PauseScreen does not
+    # merely stall the run — it sits UNDERNEATH every later screen assertion, so a close
+    # round-trip reports "screen should be null" and a timing check sees a world that advanced
+    # no ticks. Diagnosed 2026-08-02: one focus slip turned a 1-failure baseline into 5
+    # unrelated-looking failures (10_client / 12_use_item / 41_defense / 42_combat).
+    # BotConfig.keepTickingUnfocused covers the same hazard while a bot process owns the tick;
+    # this covers the client-face scripts, which drive the client with no process running.
     with open(os.path.join(RUN_DIR, "options.txt"), "w") as f:
-        f.write("onboardAccessibility:false\nnarrator:0\n")
+        f.write("onboardAccessibility:false\nnarrator:0\npauseOnLostFocus:false\n")
     if os.path.exists(RESULTS):
         os.remove(RESULTS)
     if os.path.exists(PORT_FILE):

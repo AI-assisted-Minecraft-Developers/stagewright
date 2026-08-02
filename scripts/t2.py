@@ -313,7 +313,11 @@ def provision_client(loader):
     t1._install_loader(loader)
     os.makedirs(t1.RUN_DIR, exist_ok=True)
     with open(os.path.join(t1.RUN_DIR, "options.txt"), "w") as f:
-        f.write("onboardAccessibility:false\nnarrator:0\nskipMultiplayerWarning:true\n")
+        # pauseOnLostFocus:false for the same reason as T1 (see its provision()) — multiplayer
+        # does not pause on lost focus, but keeping the two seeds identical means a future
+        # singleplayer step here cannot silently reintroduce the flake.
+        f.write("onboardAccessibility:false\nnarrator:0\nskipMultiplayerWarning:true\n"
+                "pauseOnLostFocus:false\n")
     if os.path.exists(t1.PORT_FILE):
         os.remove(t1.PORT_FILE)
 
