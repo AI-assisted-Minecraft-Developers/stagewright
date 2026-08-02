@@ -116,7 +116,7 @@ def check_unknown_method(ctx):
 
 def check_invalid_params_missing(ctx):
     # NOTE: the brief's draft asserted this against mc.observe.eventsSince, but
-    # AgentApi.java:107 defaults a missing `cursor` to 0L and ObserveActionTools.java's
+    # DriverApi.java:107 defaults a missing `cursor` to 0L and ObserveActionTools.java's
     # schema declares cursor as integer().min(0) with no .req() — cursor is optional,
     # so that call round-trips clean (verified live with ctx.call_raw before writing
     # this). Substituted mc.system.waitTicks, whose SystemTools.java schema is
@@ -254,8 +254,8 @@ def check_command_result_event(ctx):
     #    ctx.call("mc.observe.cursor")["cursor"], which would TypeError on a plain
     #    int. Tightened to use the raw return value directly.
     # 2. mc.observe.eventsSince routes DIRECTLY to
-    #    ObserveApi.eventsSince(cursor, types, limit) (AgentApi.java:107-118),
-    #    which returns a bare List<AgentEvent> (ObserveApi.java:54-76) — unlike
+    #    ObserveApi.eventsSince(cursor, types, limit) (DriverApi.java:107-118),
+    #    which returns a bare List<DriverEvent> (ObserveApi.java:54-76) — unlike
     #    mc.wait.event / mc.wait.condition, which wrap the same call in
     #    {events, timedOut, cursor, ms} (WaitApi.java:139-164). There is no
     #    envelope key here; the RPC result IS the array. Tightened accordingly
@@ -316,7 +316,7 @@ def check_wait_condition_value(ctx):
 
 
 # ---------- MCP tools/list reader (P2a: schema readback for the closed-schema contract) ----------
-# The bare-RPC /rpc transport (AgentApi.route) does NOT expose the schema catalog — schemas are
+# The bare-RPC /rpc transport (DriverApi.route) does NOT expose the schema catalog — schemas are
 # advertised through the MCP HTTP endpoint's `tools/list` (the SAME typed Schema the route-layer
 # SchemaValidator enforces; ToolSchema.mcpTool -> Schemas.render, single source). The contract
 # server brings the MCP server up in WorldDriverCommon.ensureMcpUp (onServerStarting, alongside
@@ -389,7 +389,7 @@ def check_setting_schema_closed(ctx):
 
 def check_setting_unknown_key_rejected(ctx):
     # #280 BEHAVIORAL half + validator-first ordering contract (check ②): mc.bot.setting is
-    # client-only, but route() runs the SchemaValidator (AgentApi.java:444) BEFORE the handler
+    # client-only, but route() runs the SchemaValidator (DriverApi.java:444) BEFORE the handler
     # (line 445, where requireBot() throws client-only). So on a DEDICATED server a bogus-key call
     # must fail with the VALIDATOR's unexpected-key error, NOT the client-only error — validation is
     # transport/side-uniform. Order confirmed by code + this live gate (see contract appendix).
@@ -399,7 +399,7 @@ def check_setting_unknown_key_rejected(ctx):
     if "definitelyNotAKnob" not in error or "unexpected key" not in error:
         raise ContractFailure(
             f"expected the validator's unexpected-key error (validation runs before the "
-            f"client-only gate — see AgentApi.route), got: {error!r}")
+            f"client-only gate — see DriverApi.route), got: {error!r}")
 
 
 def check_test_reset_client_only(ctx):
@@ -565,9 +565,9 @@ def launch(loader, wall):
         return None
     # RPC comes up (onServerStarting) before attachServer (onServerStarted) —
     # confirmed live on fabric (2026-07-16): mc.system.version answers with no
-    # server attached at all (it doesn't call AgentApi.level()), so probing
+    # server attached at all (it doesn't call DriverApi.level()), so probing
     # with it raced attachServer and lost on a fast fabric boot (RPC-listen to
-    # "Done" ~1s), producing "AgentApi not attached to a server" on every
+    # "Done" ~1s), producing "DriverApi not attached to a server" on every
     # check needing api.level() (ObserveApi.player() etc. call api.level() as
     # an explicit "assert attached" first line). mc.observe.player is
     # side-effect-free (a read-only PlayerList probe, {present:false} on an

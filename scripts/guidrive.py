@@ -436,7 +436,7 @@ async def drive_multiplayer_connect(rpc, address):
 async def quit_to_title(rpc):
     """Open pause → Save and Quit (or Quit to Title) → wait TitleScreen. Best effort.
 
-    There is no dedicated open-pause RPC route (AgentApi comment: "Inventory / pause
+    There is no dedicated open-pause RPC route (DriverApi comment: "Inventory / pause
     are reachable via mc.client.input.key"); the ESCAPE key with no screen open
     toggles the pause menu, so we synthesize it."""
     await rpc.call("mc.client.input.key", {"key": "ESCAPE"})

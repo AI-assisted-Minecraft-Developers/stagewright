@@ -134,9 +134,9 @@ def _await_push_event(ctx, event_type, stage_fn, *, timeout=12.0):
     CLIENT-emitted events (player.hurt) that the SERVER-attached observe ring does NOT carry in
     the dedicated topology: player.hurt is emitted by the client-side ClientEventDetector (which
     mirrors the server's DamageSource from the ClientboundDamageEventPacket), fanned out to push
-    subscribers via AgentApi.emit. mc.observe.eventsSince needs a server attachment (it throws
+    subscribers via DriverApi.emit. mc.observe.eventsSince needs a server attachment (it throws
     "not attached to a server" on a pure client), so the push subscription is player.hurt's only
-    client-face reader. Frame shape: notifications/message → params.data = AgentEvent
+    client-face reader. Frame shape: notifications/message → params.data = DriverEvent
     {seq,timestamp,type,pos,data}, whose inner ``data`` is the payload ITSELF — an object for
     structured events, a bare string for scalar ones. (It used to always be a string with JSON
     escaped inside it; the isinstance check below already handled both, so this reader needed
