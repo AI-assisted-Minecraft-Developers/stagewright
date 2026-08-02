@@ -5,10 +5,12 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.ServiceLoader;
 import net.magicterra.stagewright.harness.ResultsJsonl;
 import net.magicterra.stagewright.harness.StageWrightHarness;
 import net.magicterra.stagewright.scene.Scene;
+import net.magicterra.stagewright.verbs.TestInputVerbs;
+import net.magicterra.stagewright.verbs.TestResetVerb;
+import net.magicterra.stagewright.verbs.TestRunVerb;
 import net.magicterra.stagewright.scene.Scenes;
 import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
@@ -65,8 +67,8 @@ public final class StageWrightCommon {
      *       "armed, awaiting mc.test.run" and wait for the {@code mc.test.run} RPC verb to trigger
      *       {@link #triggerOnDemandRun()}.</li>
      * </ul>
-     * In BOTH paths the {@code mc.test.*} verbs are registered here via the {@link StageWrightVerbHook}
-     * ServiceLoader SPI — so the verb surface (and its hidden-schema contract) is identical whether
+     * In BOTH paths the {@code mc.test.*} verbs are registered here, directly — so the verb surface
+     * (and its hidden-schema contract) is identical whether
      * or not the suite auto-runs. Runs on the server thread; called by every loader entry after
      * worlddriver has wired its route sink at SERVER_STARTING.
      */
@@ -83,8 +85,8 @@ public final class StageWrightCommon {
         // on-demand builds from the SAME list later, and needs its size synchronously to answer
         // {scenes:N} without re-running ServiceLoader off the server thread.
         resolvedScenes = Scenes.all();
-        // Register the mc.test.* verbs (mc.test.run) through the paired SPI — BOTH autorun states,
-        // so the hidden-verb contract is topology-uniform.
+        // Register the mc.test.* verbs — BOTH autorun states, so the hidden-verb contract is
+        // topology-uniform.
         installVerbHooks();
 
         if (Boolean.getBoolean("stagewright.autorun")) {
@@ -95,18 +97,23 @@ public final class StageWrightCommon {
         }
     }
 
-    /** Discover + invoke every {@link StageWrightVerbHook} once (idempotent). A hook that throws is
-     *  logged but must not abort arming — the suite (autorun or on-demand) is independent of any
-     *  single verb registration. */
+    /** Register StageWright's own {@code mc.test.*} verbs into the driver's ToolCatalog (idempotent).
+     *  A verb that throws is logged but must not abort arming — the suite (autorun or on-demand) is
+     *  independent of any single verb registration.
+     *
+     *  <p>This used to go through a {@code StageWrightVerbHook} ServiceLoader SPI implemented on the
+     *  worlddriver side, because stagewright-common could not import {@code ToolCatalog} without a
+     *  circular module dependency. StageWright now depends on the driver it drives, so it registers
+     *  its own verbs and the SPI is deleted. */
     private static void installVerbHooks() {
         if (verbHooksInstalled) return;
         verbHooksInstalled = true;
-        for (StageWrightVerbHook hook : ServiceLoader.load(StageWrightVerbHook.class)) {
+        for (Runnable reg : List.<Runnable>of(
+                TestRunVerb::register, TestResetVerb::register, TestInputVerbs::register)) {
             try {
-                hook.registerVerbs();
+                reg.run();
             } catch (Throwable t) {
-                LOG.error("[{}] testkit verb hook {} failed to register",
-                        MOD_ID, hook.getClass().getName(), t);
+                LOG.error("[{}] stagewright verb registration failed", MOD_ID, t);
             }
         }
     }
