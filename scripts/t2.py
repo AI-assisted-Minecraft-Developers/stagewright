@@ -27,7 +27,7 @@ reused verbatim from T1 via importing t1.py — NOT forked). Flow:
     RPC port → guidrive: title → Multiplayer → (online-play warning if present) → Direct Connection →
     127.0.0.1:<server-port> → Join Server → in-world → DUAL-END PROBE (client mc.client.player has a
     pos AND server mc.observe.player is present in the DEDICATED PlayerList) → fire mc.test.run over
-    the SERVER RPC (bare envelope; assert accepted:true) → poll run-t2/testkit-results.jsonl for the
+    the SERVER RPC (bare envelope; assert accepted:true) → poll run-t2/stagewright-results.jsonl for the
     done footer → judge via verdict.py + expected-scenes-<loader>.txt (reconciled against the suite
     header's registered[]) → exit 0/1/2/3. The three byte-metric goldens (descentYaw, selfShaftDigUp
     worstBackslide, gearScope attributes) are asserted INSIDE the scenes, so a scene PASS == byte-hit.
@@ -97,7 +97,7 @@ class T2Paths:
     run_task: str           # :<loader>:runT2Server
     server_properties: str  # run-t2/server.properties
     server_port: int        # multiplayer listen socket
-    results: str            # run-t2/testkit-results.jsonl (harness writes here, cwd-relative)
+    results: str            # run-t2/stagewright-results.jsonl (harness writes here, cwd-relative)
     endpoint_file: str      # run-t2/testkit-endpoint.json (--hold attach descriptor)
     default_expect: str     # scripts/stagewright/expected-scenes-<loader>.txt (reconciliation gate)
 
@@ -115,10 +115,10 @@ def resolve_t2(name):
         run_task=f":{name}:runT2Server",
         server_properties=os.path.join(run_dir, "server.properties"),
         server_port=SERVER_PORTS[name],
-        # The dedicated harness writes OUT_FILE="testkit-results.jsonl" relative to its own
+        # The dedicated harness writes OUT_FILE="stagewright-results.jsonl" relative to its own
         # working directory (loom launches the forked server with cwd == run-t2), so the scored
         # footer lands here — the exact same cwd-relative contract T0/T1 rely on.
-        results=os.path.join(run_dir, "testkit-results.jsonl"),
+        results=os.path.join(run_dir, "stagewright-results.jsonl"),
         endpoint_file=os.path.join(run_dir, "testkit-endpoint.json"),
         default_expect=os.path.join("scripts", "stagewright", f"expected-scenes-{name}.txt"),
     )
@@ -613,7 +613,7 @@ def self_test():
         ("template_reuse (t1 helper) false when absent",
          t1.template_reuse("/nonexistent/xyz") is False),
         ("resolve_t2 results/endpoint derive from run-dir",
-         resolve_t2("fabric").results == os.path.join(resolve_t2("fabric").run_dir, "testkit-results.jsonl")
+         resolve_t2("fabric").results == os.path.join(resolve_t2("fabric").run_dir, "stagewright-results.jsonl")
          and resolve_t2("fabric").endpoint_file
          == os.path.join(resolve_t2("fabric").run_dir, "testkit-endpoint.json")),
         ("resolve_t2 default-expect per loader",

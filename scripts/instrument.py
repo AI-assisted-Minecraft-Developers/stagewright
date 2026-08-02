@@ -622,7 +622,7 @@ def provision_dogfood(loader):
             "sync-chunk-writes=false", "spawn-protection=0", "motd=instrument-dogfood",
         ]) + "\n")
     subprocess.run(["rm", "-rf", os.path.join(rd, "world")], check=True)
-    for leftover in ("worlddriver-rpc.port", "worlddriver-mcp.port", "testkit-results.jsonl"):
+    for leftover in ("worlddriver-rpc.port", "worlddriver-mcp.port", "stagewright-results.jsonl"):
         p = os.path.join(rd, leftover)
         if os.path.exists(p):
             os.remove(p)

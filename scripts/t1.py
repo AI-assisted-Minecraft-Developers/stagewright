@@ -15,7 +15,7 @@ default fabric; all loader-specific paths/tasks resolve via LoaderPaths). Flow:
   4. drive title → singleplayer → world (guidrive, RPC widget clicks, no WM) —
      reuse the template world, or GUI-create it once and archive it as the template
   5. world entry starts the integrated server → SERVER_STARTED arms the harness →
-     scenes auto-run → poll run-t1/testkit-results.jsonl for the done footer
+     scenes auto-run → poll run-t1/stagewright-results.jsonl for the done footer
   6. judge via verdict.py (REUSED, not forked) with --expect-file
   7. teardown: quit-to-title (best effort) → kill client JVM by PID → kill Xvfb by
      PID → delete the saves/StageWrightT1 copy (leave the template archive)
@@ -81,7 +81,7 @@ def resolve_loader(name):
         loader=name,
         run_dir=run_dir,
         port_file=os.path.join(run_dir, "worlddriver-rpc.port"),
-        results=os.path.join(run_dir, "testkit-results.jsonl"),
+        results=os.path.join(run_dir, "stagewright-results.jsonl"),
         saves=saves,
         world_dir=os.path.join(saves, WORLD_NAME),
         template_dir=os.path.join(TESTKIT_DIR, f".t1-world-template-{name}"),
@@ -687,7 +687,7 @@ def _check_loader_paths_derive(name):
         lp.saves == os.path.join(lp.run_dir, "saves")
         and lp.world_dir == os.path.join(lp.run_dir, "saves", WORLD_NAME)
         and lp.port_file == os.path.join(lp.run_dir, "worlddriver-rpc.port")
-        and lp.results == os.path.join(lp.run_dir, "testkit-results.jsonl")
+        and lp.results == os.path.join(lp.run_dir, "stagewright-results.jsonl")
     )
 
 

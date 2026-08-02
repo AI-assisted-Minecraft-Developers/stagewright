@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """stagewright T0 orchestrator (contract v0).
 
-Provisions the loader's run-testkit dir, launches the plain dedicated server run
+Provisions the loader's run-stagewright dir, launches the plain dedicated server run
 (:testkit-<loader>:runStageWrightServer, armed by -Dstagewright.autorun), wall-caps it,
-then judges testkit-results.jsonl:
+then judges stagewright-results.jsonl:
 
   exit 0  GREEN  — footer present, registered==executed (swallow-canaries excepted),
                    every canary on its expected outcome, every non-canary PASS
@@ -45,11 +45,11 @@ REPO_ROOT = os.environ.get("TESTKIT_PROJECT_ROOT") or SCRIPT_REPO_ROOT
 
 
 def run_dir(loader):
-    return os.path.join(REPO_ROOT, "stagewright", loader, "run-testkit")
+    return os.path.join(REPO_ROOT, "stagewright", loader, "run-stagewright")
 
 
 def default_results(loader):
-    return os.path.join(run_dir(loader), "testkit-results.jsonl")
+    return os.path.join(run_dir(loader), "stagewright-results.jsonl")
 
 
 def provision(results):
@@ -197,7 +197,7 @@ def _check_provision_clears_server_log():
     stale = os.path.join(logs, "latest.log")
     with open(stale, "w") as f:
         f.write("previous run")
-    provision(os.path.join(d, "testkit-results.jsonl"))
+    provision(os.path.join(d, "stagewright-results.jsonl"))
     return not os.path.exists(stale)
 
 
@@ -212,7 +212,7 @@ def _check_build_phase_timeout_is_env_not_red():
         def kill(self): pass
 
     d = tempfile.mkdtemp()
-    results = os.path.join(d, "testkit-results.jsonl")
+    results = os.path.join(d, "stagewright-results.jsonl")
     real_popen, real_sweep = subprocess.Popen, globals()["sweep"]
     subprocess.Popen = lambda *a, **k: NeverExits()
     globals()["sweep"] = lambda: None
@@ -392,7 +392,7 @@ def main():
     ap.add_argument("--run-task", default=None,
                     help="gradle run task (default :testkit-<loader>:runStageWrightServer)")
     ap.add_argument("--results", default=None,
-                    help="results JSONL path (default stagewright/<loader>/run-testkit/testkit-results.jsonl)")
+                    help="results JSONL path (default stagewright/<loader>/run-stagewright/stagewright-results.jsonl)")
     ap.add_argument("--expect-scene", default=None,
                     help="comma-separated scene names that MUST appear in registered[] (RED if absent)")
     ap.add_argument("--expect-file", default=None,
