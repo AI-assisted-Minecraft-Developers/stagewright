@@ -12,6 +12,9 @@
   "entrypoints": {
     "main": [
       "net.magicterra.stagewright.fabric.StageWrightFabric"
+    ],
+    "client": [
+      "net.magicterra.stagewright.fabric.StageWrightFabricClient"
     ]
   },
   "depends": {
