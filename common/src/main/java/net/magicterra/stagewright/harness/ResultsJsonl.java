@@ -31,8 +31,23 @@ import net.magicterra.stagewright.scene.SceneOutcome;
 public final class ResultsJsonl {
     private final Path file;
 
+    /** Scene records written so far. Guarded by this object's monitor, like every write. */
+    private int sceneRecords;
+
     public ResultsJsonl(Path file) {
         this.file = file;
+    }
+
+    /**
+     * How many scene records are on disk.
+     *
+     * <p>For the stall watchdog, which has to write a done footer from a thread that is not the one
+     * that wrote the records. Counting here rather than at the call site means the footer cannot
+     * disagree with the file it terminates — and a footer whose count disagrees is reported as
+     * TRUNCATED, which would bury the stall the watchdog exists to name.
+     */
+    public synchronized int sceneRecordCount() {
+        return sceneRecords;
     }
 
     public void writeSuiteHeader(String loader, List<Scene> scenes) {
@@ -69,8 +84,9 @@ public final class ResultsJsonl {
      *             plotted downstream without every consumer re-parsing it, which is the whole reason
      *             a scene bothers to record it.
      */
-    public void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs, String reason,
-                           java.util.Map<String, Object> data) {
+    public synchronized void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs,
+                           String reason, java.util.Map<String, Object> data) {
+        sceneRecords++;
         StringBuilder sb = new StringBuilder();
         sb.append("{\"type\":\"scene\",\"name\":\"").append(escape(name))
           .append("\",\"outcome\":\"").append(escape(String.valueOf(outcome)))
@@ -103,11 +119,14 @@ public final class ResultsJsonl {
         return '"' + escape(String.valueOf(v)) + '"';
     }
 
-    public void writeDone(int scenes) {
+    public synchronized void writeDone(int scenes) {
         write("{\"type\":\"done\",\"scenes\":" + scenes + "}\n", false);
     }
 
-    private void write(String line, boolean truncate) {
+    /** Synchronized because the stall watchdog writes from its own thread: the server thread it
+     *  would otherwise interleave with is wedged by definition, but "by definition" is not a
+     *  guarantee, and a half-written line reads to the orchestrator as a dropped record. */
+    private synchronized void write(String line, boolean truncate) {
         try {
             if (truncate) {
                 Files.writeString(file, line, StandardCharsets.UTF_8,
