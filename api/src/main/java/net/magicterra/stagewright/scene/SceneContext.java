@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * Per-scene handle: origin-relative world ops, assertions, and tick-continuation
@@ -155,9 +156,32 @@ public final class SceneContext {
         return origin.offset(dx, dy, dz);
     }
 
+    /**
+     * Place a block, reverting it at teardown if it carries a block entity.
+     *
+     * <p>Same reasoning as {@link #playerHere()}, applied to the other thing that keeps ticking after
+     * a scene resolves. Releasing the force-load does not stop a block entity: the chunk stays
+     * resident while anything holds it, and a hopper or a beacon left in scene N's arena spends tick
+     * budget for the rest of the suite. The failure that would produce — a LATER scene missing a
+     * timing assertion by a hair, with nothing in its own arena to explain it — is the kind that
+     * gets diagnosed as flakiness, so this closes it by symmetry with the player rather than after
+     * being made to. No run has been observed failing this way.
+     *
+     * <p>Only block-entity placements are tracked. Plain blocks are inert once set, the grid keeps
+     * them 512 blocks from the next arena, and reverting every {@code floor()} cell would cost more
+     * teardown than it saves.
+     */
     public void setBlock(int dx, int dy, int dz, Block block) {
-        level.setBlockAndUpdate(rel(dx, dy, dz), block.defaultBlockState());
+        BlockPos pos = rel(dx, dy, dz);
+        BlockState state = block.defaultBlockState();
+        if (state.hasBlockEntity() && tickingPlacements.add(pos.immutable())) {
+            cleanup(() -> level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState()));
+        }
+        level.setBlockAndUpdate(pos, state);
     }
+
+    /** Positions this scene gave a block entity, so a re-set of one is not queued for cleanup twice. */
+    private final java.util.Set<BlockPos> tickingPlacements = new java.util.HashSet<>();
 
     /** size x size stone-slab floor at dy=0, cleared air 4 above — the minimal clean pad. */
     public void floor(int size, Block block) {
