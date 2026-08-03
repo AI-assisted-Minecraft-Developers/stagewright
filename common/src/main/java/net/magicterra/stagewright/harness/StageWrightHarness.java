@@ -56,6 +56,12 @@ public final class StageWrightHarness {
      *  arena in one level and assert about it in another if a dimension is unloaded mid-scene. */
     private ServerLevel sceneLevel;
 
+    /** The world as it stood before the current scene's body ran, for the teardown leak audit. */
+    private ArenaAudit.Snapshot arenaBefore;
+
+    /** Every scene that left something behind, named once per suite. */
+    private final Set<String> leakedScenes = new java.util.LinkedHashSet<>();
+
     private long sceneStartMs;
     private boolean finished;
 
@@ -180,6 +186,7 @@ public final class StageWrightHarness {
                 ServerLevel level = sceneLevel;
                 if (allChunksLoaded(level, origin, radius)) {
                     ctx = new SceneContext(level, arenaOrigin(scene, level, origin), radius);
+                    arenaBefore = ArenaAudit.take(level, origin, radius);
                     phase = Phase.RUN;
                     phaseTicks = 0;
                 } else if (phaseTicks > PREP_BUDGET_TICKS) {
@@ -247,7 +254,48 @@ public final class StageWrightHarness {
         if (ctx != null) {
             ctx.runCleanups(msg -> StageWrightCommon.LOG.warn("[{}] {}: {}", StageWrightCommon.MOD_ID, scene.name(), msg));
         }
+        sweepArena(scene, level, origin, radius);
         forceChunks(level, origin, radius, false);
+        auditLeaks(scene, level, origin, radius);
+    }
+
+    /**
+     * Discard whatever the scene added to its arena and did not remove itself.
+     *
+     * <p>Before the chunks are released, because discarding an entity in an unloaded chunk does not
+     * do anything and the leak survives to the next run's world.
+     *
+     * <p>The scene's own cleanups have already run at this point, so anything still standing here is
+     * something the scene did not know it created — a mob's drops, a projectile, a spawned helper it
+     * forgot. Sweeping is a backstop for that, not a replacement for the cleanups: a scene that
+     * relies on this instead of discarding its own avatar still leaks everywhere the arena is not.
+     */
+    private void sweepArena(Scene scene, ServerLevel level, BlockPos origin, int radius) {
+        if (arenaBefore == null) return;
+        int swept = ArenaAudit.sweep(level, origin, radius, arenaBefore);
+        if (swept > 0) {
+            StageWrightCommon.LOG.info("[{}] swept {} leftover entit{} from '{}' arena",
+                    StageWrightCommon.MOD_ID, swept, swept == 1 ? "y" : "ies", scene.name());
+        }
+    }
+
+    /**
+     * Report what the scene left in the world after its own cleanups had their turn.
+     *
+     * <p>Logged rather than folded into the scene's result: the record for this scene is already
+     * written by the time teardown runs, and moving the write after teardown would mean a cleanup
+     * that throws could take the result with it. A leak is a property of the suite anyway — it
+     * matters because of what it does to the NEXT scene — so the count that gets acted on is the
+     * suite total, logged at {@link #finish()}.
+     */
+    private void auditLeaks(Scene scene, ServerLevel level, BlockPos origin, int radius) {
+        if (arenaBefore == null) return;                // ENV_FAIL out of PREP: nothing ever ran
+        for (String leak : ArenaAudit.diff(arenaBefore, ArenaAudit.take(level, origin, radius))) {
+            leakedScenes.add(scene.name());
+            StageWrightCommon.LOG.warn("[{}] LEAK after '{}': {}", StageWrightCommon.MOD_ID,
+                    scene.name(), leak);
+        }
+        arenaBefore = null;
     }
 
     /** PREP waits for the full (2r+1)x(2r+1) force-loaded neighborhood, not just the
@@ -276,6 +324,13 @@ public final class StageWrightHarness {
         // not a stall, and a watchdog still armed would eventually call it one.
         stallWatchdog.stop();
         long executed = scenes.stream().filter(s -> s.canary() != Canary.MUST_SWALLOW).count();
+        if (leakedScenes.isEmpty()) {
+            StageWrightCommon.LOG.info("[{}] arena audit: no scene left anything behind",
+                    StageWrightCommon.MOD_ID);
+        } else {
+            StageWrightCommon.LOG.warn("[{}] arena audit: {} of {} scenes leaked into the world — {}",
+                    StageWrightCommon.MOD_ID, leakedScenes.size(), executed, leakedScenes);
+        }
         out.writeDone((int) executed);
         StageWrightCommon.LOG.info("[{}] suite complete ({} scenes executed) — halting server",
                 StageWrightCommon.MOD_ID, executed);
