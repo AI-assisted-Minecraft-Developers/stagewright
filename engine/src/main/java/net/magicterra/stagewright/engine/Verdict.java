@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.gradle;
+package net.magicterra.stagewright.engine;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -30,16 +30,16 @@ import java.util.TreeSet;
  *       "the server did not start" must not read as "your code is broken".</li>
  * </ul>
  */
-final class Verdict {
+public final class Verdict {
 
-    static final String[] LABELS = {"GREEN", "RED", "DEAD", "ENV"};
+    public static final String[] LABELS = {"GREEN", "RED", "DEAD", "ENV"};
 
     /** Canary kind to the outcome it must produce. */
     private static final Map<String, String> CANARY_EXPECT =
             Map.of("MUST_FAIL", "FAIL", "MUST_TIMEOUT", "TIMEOUT");
 
-    record Result(int code, List<String> report) {
-        String label() {
+    public record Result(int code, List<String> report) {
+        public String label() {
             return code >= 0 && code < LABELS.length ? LABELS[code] : "FAILED(" + code + ")";
         }
     }
@@ -52,7 +52,7 @@ final class Verdict {
      * <p>Dropping can only push a verdict toward RED, never toward a false GREEN: a lost footer
      * fails the footer check, a lost scene record surfaces as SWALLOWED, and a lost header is an ENV.
      */
-    static List<Map<String, Object>> parse(Path file, List<String> warnings) throws IOException {
+    public static List<Map<String, Object>> parse(Path file, List<String> warnings) throws IOException {
         List<Map<String, Object>> records = new ArrayList<>();
         List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
         for (int i = 0; i < lines.size(); i++) {
@@ -75,7 +75,7 @@ final class Verdict {
     }
 
     /** @param expected scene names that MUST be registered, or null to skip reconciliation. */
-    static Result judge(List<Map<String, Object>> records, List<String> expected) {
+    public static Result judge(List<Map<String, Object>> records, List<String> expected) {
         Map<String, Object> suite = null;
         Map<String, Object> done = null;
         Map<String, Map<String, Object>> scenes = new LinkedHashMap<>();

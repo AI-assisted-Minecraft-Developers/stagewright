@@ -1,0 +1,53 @@
+// The parts of a StageWright run that are neither Gradle nor Minecraft.
+//
+// Judging a results file, and preparing the directory a run happens in, are the same work whether
+// the run was started by the Gradle plugin against a dev task or by the CLI against an installed
+// modpack. Holding them once is not tidiness: two implementations of the verdict rules would
+// eventually disagree about the same results file, and nothing would say which was right. This
+// repository already paid that bill once — the Python orchestrators it is retiring were exactly
+// that second implementation.
+//
+// NO EXTERNAL DEPENDENCIES, and that constraint is inherited rather than chosen. This artifact
+// lands on a consumer's BUILDSCRIPT classpath through the gradle plugin, where a third-party JSON
+// library is a version conflict waiting to happen. Hence the hand-rolled parser in Json.java.
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'net.magicterra'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'stagewright-engine'
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}

@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.gradle;
+package net.magicterra.stagewright.engine;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -18,7 +18,7 @@ import java.util.Map;
  * map to their obvious Java types. No streaming, no pretty printing — the input is one small object
  * per line.
  */
-final class Json {
+public final class Json {
 
     private final String src;
     private int at;
@@ -28,7 +28,7 @@ final class Json {
     }
 
     /** Parse one JSON value. Throws {@link IllegalArgumentException} on anything malformed. */
-    static Object parse(String text) {
+    public static Object parse(String text) {
         Json p = new Json(text);
         p.ws();
         Object v = p.value();

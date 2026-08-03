@@ -11,8 +11,13 @@
 //           against. Runs before StageWright exists as an artifact, because worlddriver's
 //           MAIN source set has never needed StageWright.
 //   2. here:         ./gradlew publishToMavenLocal
+//                    ./gradlew -p engine publishToMavenLocal
 //                    ./gradlew -p gradle-plugin publishToMavenLocal
-//        -> mc_stagewright-{api,common,fabric,neoforge,junit} and the plugin marker.
+//        -> mc_stagewright-{api,common,fabric,neoforge,junit}, stagewright-engine, and the
+//           plugin marker. The engine comes BEFORE the plugin: the plugin declares it as an
+//           `api` dependency, so a consumer resolving the plugin from a repository resolves the
+//           engine from the same one. Locally the plugin's includeBuild('../engine') covers this,
+//           which is exactly why the ordering only bites someone building from a clean checkout.
 //   3. worlddriver:  ./gradlew build
 //        -> its TESTMOD compiles against mc_stagewright-api:dev, and its dev runs put
 //           mc_stagewright-<loader> on the classpath.

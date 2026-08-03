@@ -1,0 +1,10 @@
+// StageWright engine — standalone build, deliberately.
+//
+// Not a subproject of the root build: that one applies loom and architectury to everything it
+// contains, and this module must never see a Minecraft classpath. Not a subproject of the gradle
+// plugin either, because the plugin is itself an included build of the root — depending on a
+// sibling of its own includer would be circular.
+//
+// Standing alone, it is includeBuild'd by both consumers (the gradle plugin and the CLI) and
+// published to mavenLocal for anyone resolving it as a coordinate.
+rootProject.name = 'stagewright-engine'

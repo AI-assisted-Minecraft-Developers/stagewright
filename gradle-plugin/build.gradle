@@ -44,6 +44,12 @@ configurations.named('functionalTestRuntimeOnly') {
 }
 
 dependencies {
+    // The one dependency, and it is ours. The no-external-dependencies rule above is about
+    // third-party libraries colliding on a consumer's buildscript classpath; this artifact exists
+    // so the CLI and this plugin judge a results file by the same code, and it pulls in nothing
+    // itself for exactly that reason.
+    api 'net.magicterra:stagewright-engine:0.1.0'
+
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'

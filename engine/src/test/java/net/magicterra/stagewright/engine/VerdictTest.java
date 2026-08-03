@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.gradle;
+package net.magicterra.stagewright.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
