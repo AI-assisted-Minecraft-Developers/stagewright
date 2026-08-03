@@ -68,7 +68,12 @@ public final class ClientDirector {
 
     /** Fixed seed so the client topology generates the same world every run. Scene arenas are
      *  force-loaded at a fixed origin far from spawn, so terrain barely matters — but "barely" is
-     *  not "not at all", and a random seed would make a one-off failure unreproducible. */
+     *  not "not at all", and a random seed would make a one-off failure unreproducible.
+     *
+     *  <p>Matched by {@code RunDirectory.FIXED_SEED}, which pins the same value into
+     *  server.properties for the topologies whose world a dedicated server creates instead. A scene
+     *  that declares {@code Terrain.GENERATED} asserts about ground this seed decides, so the two
+     *  numbers disagreeing would hand it a different landscape per topology. */
     private static final long WORLD_SEED = 5471L;
 
     private enum Phase { WAITING_FOR_TITLE, DRIVING, IN_WORLD, FINISHING }

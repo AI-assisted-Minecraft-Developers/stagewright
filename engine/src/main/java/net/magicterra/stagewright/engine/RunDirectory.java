@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -123,21 +125,47 @@ public final class RunDirectory {
      * gate's own directory. Every other key the file carries is left exactly as it was.
      */
     private static void seedOfflineMode(Path properties) {
+        force(properties, "online-mode", "false");
+        force(properties, "level-seed", FIXED_SEED);
+    }
+
+    /**
+     * The world seed every run gets.
+     *
+     * <p>Left empty, the server rolls a fresh seed per run. That is invisible while every arena sits
+     * in empty sky at {@code y=200}, and becomes the difference between a reproducible suite and a
+     * flaky one the moment a scene asks for generated terrain: the same arena coordinates would be a
+     * hilltop one run and a lake the next, and the scene that failed would look like a bot bug.
+     *
+     * <p>Must equal {@code ClientDirector.WORLD_SEED}, which pins the same thing for the topologies
+     * whose world a client creates rather than this provisioner. The value is arbitrary; that the
+     * two agree is not. Reproducible-per-topology is not enough — a scene asserting about the ground
+     * it landed on has to see the same ground on all three, or its assertion is a statement about
+     * which gate happened to run it. The constant is written twice because the two live in builds
+     * that cannot see each other: this one has no Minecraft on its classpath, and the other cannot
+     * run outside the game.
+     */
+    private static final String FIXED_SEED = "5471";
+
+    /** Force one server.properties key, leaving every other line exactly as it was. */
+    private static void force(Path properties, String key, String value) {
+        String line = key + "=" + value;
         try {
             if (!Files.exists(properties)) {
-                Files.writeString(properties, "online-mode=false\n");
+                Files.writeString(properties, line + "\n");
                 return;
             }
             String body = Files.readString(properties);
-            String patched = body.replaceAll("(?m)^online-mode\\s*=.*$", "online-mode=false");
-            if (patched.equals(body) && !body.contains("online-mode=false")) {
-                patched = body + (body.endsWith("\n") ? "" : "\n") + "online-mode=false\n";
+            String patched = body.replaceAll("(?m)^" + Pattern.quote(key) + "\\s*=.*$",
+                    Matcher.quoteReplacement(line));
+            if (patched.equals(body) && !body.contains(line)) {
+                patched = body + (body.endsWith("\n") ? "" : "\n") + line + "\n";
             }
             if (!patched.equals(body)) {
                 Files.writeString(properties, patched);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("cannot set offline mode in " + properties, e);
+            throw new UncheckedIOException("cannot set " + key + " in " + properties, e);
         }
     }
 
