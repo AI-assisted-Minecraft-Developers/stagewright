@@ -11,6 +11,7 @@ import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.scene.SceneContext;
 import net.magicterra.stagewright.scene.SceneFailure;
 import net.magicterra.stagewright.scene.SceneOutcome;
+import net.magicterra.stagewright.scene.SceneSkipped;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -135,7 +136,7 @@ public final class StageWrightHarness {
                 }
                 phaseTicks++;
                 if (allChunksLoaded(level, origin, radius)) {
-                    ctx = new SceneContext(level, origin);
+                    ctx = new SceneContext(level, origin, radius);
                     phase = Phase.RUN;
                     phaseTicks = 0;
                 } else if (phaseTicks > PREP_BUDGET_TICKS) {
@@ -160,6 +161,12 @@ public final class StageWrightHarness {
                                 "scene budget " + scene.budgetTicks() + " ticks exhausted");
                         teardown(scene, level, origin, radius);
                     }
+                } catch (SceneSkipped s) {
+                    // Entered, resolved, and carrying its reason into the results — the scene is
+                    // accounted for, so coverage reconciliation still sees it, and the one thing
+                    // it must not do is look like a scene that quietly did its job.
+                    record(scene, SceneOutcome.PASS, ctx.ticks(), "skipped: " + s.getMessage());
+                    teardown(scene, level, origin, radius);
                 } catch (SceneFailure f) {
                     record(scene, SceneOutcome.FAIL, ctx.ticks(), f.getMessage());
                     teardown(scene, level, origin, radius);
@@ -177,7 +184,13 @@ public final class StageWrightHarness {
         long wallMs = System.currentTimeMillis() - sceneStartMs;
         StageWrightCommon.LOG.info("[{}] scene '{}' -> {} ({} ticks, {} ms){}", StageWrightCommon.MOD_ID,
                 scene.name(), outcome, ticks, wallMs, reason == null ? "" : " — " + reason);
-        out.writeScene(scene.name(), outcome, ticks, wallMs, reason);
+        // Recorded values travel with EVERY outcome, not just failures. On a PASS they are the
+        // measurement the scene exists to take (a tick cost, a channel count, a TPS ratio), and the
+        // results file is the only place downstream tooling can read them; a value that lives solely
+        // in a failure message is unavailable exactly when the run is healthy.
+        // ctx is null when a scene ENV_FAILs out of PREP, before any context exists.
+        out.writeScene(scene.name(), outcome, ticks, wallMs, reason,
+                ctx == null ? java.util.Map.of() : ctx.records());
         phase = Phase.ADVANCE_DONE;
     }
 

@@ -2,10 +2,13 @@ package net.magicterra.stagewright.scene;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
@@ -24,18 +27,107 @@ public final class SceneContext {
 
     private final ServerLevel level;
     private final BlockPos origin;
+    private final int chunkRadius;
     private final Deque<Step> steps = new ArrayDeque<>();
+    private final java.util.List<String> softViolations = new java.util.ArrayList<>();
+    private final java.util.Map<String, Object> records = new java.util.LinkedHashMap<>();
     private int ticks;
     private int currentStepTicks;
     private String failureReason;
 
     public SceneContext(ServerLevel level, BlockPos origin) {
+        this(level, origin, 1);
+    }
+
+    /** @param chunkRadius the scene's force-loaded window, so the context can tell a scene when it
+     *                     is reaching outside it instead of letting the write vanish. */
+    public SceneContext(ServerLevel level, BlockPos origin, int chunkRadius) {
         this.level = level;
         this.origin = origin;
+        this.chunkRadius = chunkRadius;
+    }
+
+    /** This scene's force-loaded window, in chunks either side of the origin chunk. */
+    public int chunkRadius() { return chunkRadius; }
+
+    /** True when an origin-relative column falls outside the force-loaded window. Writes there are
+     *  silently lost, and the scene then fails on an assertion about terrain that never existed. */
+    public boolean outsideForcedChunks(int dx, int dz) {
+        int originChunkX = origin.getX() >> 4;
+        int originChunkZ = origin.getZ() >> 4;
+        int cellChunkX = (origin.getX() + dx) >> 4;
+        int cellChunkZ = (origin.getZ() + dz) >> 4;
+        return Math.abs(cellChunkX - originChunkX) > chunkRadius
+                || Math.abs(cellChunkZ - originChunkZ) > chunkRadius;
     }
 
     /** The backing server level — for scenes that drive entities/avatars directly. */
     public ServerLevel level() { return level; }
+
+    /** The server running this suite. */
+    public MinecraftServer server() { return level.getServer(); }
+
+    // ---- players ----
+
+    /**
+     * Everyone currently connected, across all levels.
+     *
+     * <p>Empty on a bare dedicated-server run and non-empty under both the client and the
+     * client-joins-server topologies — which is the whole reason those topologies exist rather than
+     * being three ways to run the same scenes.
+     */
+    public List<ServerPlayer> players() {
+        return level.getServer().getPlayerList().getPlayers();
+    }
+
+    /** The first connected player, or null when nobody is on. */
+    public ServerPlayer playerOrNull() {
+        List<ServerPlayer> players = players();
+        return players.isEmpty() ? null : players.get(0);
+    }
+
+    /**
+     * The first connected player, or {@link #skip} out of the body when there is none.
+     *
+     * <p>The player is left exactly where they are. Use {@link #playerHere()} when the interaction
+     * under test cares about proximity — most do, and a player standing at world spawn 100k blocks
+     * from the arena fails those tests for a reason that has nothing to do with the mod.
+     */
+    public ServerPlayer player() {
+        ServerPlayer player = playerOrNull();
+        if (player == null) {
+            skip("no connected player — this scene only runs on a topology that has one");
+        }
+        return player;
+    }
+
+    /**
+     * The first connected player, moved into this scene's arena, restored to where they were when
+     * the scene resolves.
+     *
+     * <p>Restoring is not politeness: the grid places consecutive scenes 512 blocks apart, so a
+     * player left standing in scene N's arena keeps those chunks hot and their entity ticking while
+     * scene N+1 measures tick cost. The cleanup runs on FAIL and TIMEOUT too, so one broken scene
+     * cannot drag the player through the rest of the suite.
+     */
+    public ServerPlayer playerHere() {
+        ServerPlayer player = player();
+        ServerLevel from = player.serverLevel();
+        double x = player.getX(), y = player.getY(), z = player.getZ();
+        float yaw = player.getYRot(), pitch = player.getXRot();
+        cleanup(() -> player.teleportTo(from, x, y, z, java.util.Set.of(), yaw, pitch));
+        player.teleportTo(level, origin.getX() + 0.5, origin.getY() + 1, origin.getZ() + 0.5,
+                java.util.Set.of(), 0f, 0f);
+        return player;
+    }
+
+    /**
+     * Stop the body here; the scene resolves PASS carrying this reason. See {@link SceneSkipped} for
+     * why a skip is a recorded outcome rather than a silent one.
+     */
+    public void skip(String why) {
+        throw new SceneSkipped(why);
+    }
 
     /** Absolute origin of this scene's grid cell (scene code should prefer rel()). */
     public BlockPos origin() { return origin; }
@@ -77,18 +169,103 @@ public final class SceneContext {
             }
     }
 
+    /** Build this scene's terrain from a text grid per layer. See {@link Arena}. */
+    public Arena arena() {
+        return new Arena(this);
+    }
+
+    /** Measure TPS / tick cadence / heap / CPU over a window of ticks. See {@link Perf}. */
+    public Perf perf() {
+        return new Perf(this);
+    }
+
+    /** The block currently at an origin-relative position. */
+    public Block blockAt(int dx, int dy, int dz) {
+        return level.getBlockState(rel(dx, dy, dz)).getBlock();
+    }
+
     // ---- assertions ----
 
     public void assertBlock(int dx, int dy, int dz, Block expected) {
-        Block actual = level.getBlockState(rel(dx, dy, dz)).getBlock();
+        Block actual = blockAt(dx, dy, dz);
         if (actual != expected) {
             throw new SceneFailure("block at rel(" + dx + "," + dy + "," + dz + ") is "
-                    + actual + ", expected " + expected);
+                    + actual + ", expected " + expected + note());
         }
     }
 
+    /**
+     * Assert about a value, failing the scene at the first violation.
+     *
+     * <p>Prefer {@link #check} when a body probes a SET of things — twenty blocks, every upgrade in
+     * a list — because the first offender is rarely the informative one.
+     */
+    public Expect expect(Object actual) {
+        return new Expect(this, false, actual);
+    }
+
+    /**
+     * Assert about a value, recording the violation and carrying on. Every violation collected this
+     * way is reported together when the scene finishes, and the scene still fails.
+     */
+    public Expect check(Object actual) {
+        return new Expect(this, true, actual);
+    }
+
+    /** {@link #expect} on a block, pre-labelled with its position. */
+    public Expect expectBlock(int dx, int dy, int dz) {
+        return expect(blockAt(dx, dy, dz)).as("block at rel(" + dx + "," + dy + "," + dz + ")");
+    }
+
+    /** {@link #check} on a block, pre-labelled with its position. */
+    public Expect checkBlock(int dx, int dy, int dz) {
+        return check(blockAt(dx, dy, dz)).as("block at rel(" + dx + "," + dy + "," + dz + ")");
+    }
+
     public void fail(String reason) {
-        throw new SceneFailure(reason);
+        throw new SceneFailure(reason + note());
+    }
+
+    /**
+     * Attach a named value to this scene's record.
+     *
+     * <p>Recorded values are appended to EVERY failure message this scene produces, and travel with
+     * a passing scene into the results JSONL. The reason this is framework machinery rather than
+     * something each scene does by hand: the failure {@code reason} is the only diagnostic channel
+     * that reliably survives a full suite, because the async logger drops bursts precisely when a
+     * long run is finishing. Scenes that hand-assembled their evidence into the failure string were
+     * doing the framework's job.
+     */
+    public void record(String key, Object value) {
+        records.put(key, value);
+    }
+
+    /** Harness-internal: the values {@link #record}ed by this scene, in insertion order. */
+    public java.util.Map<String, Object> records() {
+        return java.util.Collections.unmodifiableMap(records);
+    }
+
+    /** Expect-internal: report one violation, hard or soft. */
+    void violation(String message, boolean soft) {
+        if (soft) {
+            softViolations.add(message);
+            return;
+        }
+        throw new SceneFailure(message + note());
+    }
+
+    /** Renders the record as a message suffix. Empty when nothing was recorded, so scenes that do
+     *  not use it produce byte-identical messages to before. */
+    private String note() {
+        if (records.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder(" [");
+        boolean first = true;
+        for (java.util.Map.Entry<String, Object> e : records.entrySet()) {
+            if (!first) sb.append(", ");
+            first = false;
+            sb.append(e.getKey()).append('=').append(e.getValue());
+        }
+        return sb.append(']').toString();
     }
 
     private String passNote;
@@ -147,6 +324,14 @@ public final class SceneContext {
                 return Progress.STEP_TIMEOUT;
             }
             return Progress.RUNNING;
+        }
+        // Every step has drained, so this is the scene's last word: soft violations turn it into a
+        // FAIL now, reported together. Deliberately NOT checked on the STEP_TIMEOUT path above — a
+        // timeout already names its own cause, and burying it under a list of soft findings would
+        // hide which of the two actually stopped the scene.
+        if (!softViolations.isEmpty()) {
+            throw new SceneFailure(softViolations.size() + " check(s) failed: "
+                    + String.join("; ", softViolations) + note());
         }
         return Progress.DONE;
     }
