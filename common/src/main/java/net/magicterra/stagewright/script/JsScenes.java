@@ -177,7 +177,7 @@ public final class JsScenes {
                     || e instanceof net.magicterra.stagewright.scene.SceneSkipped) {
                 throw e;
             }
-            ctx.fail(message(e));
+            ctx.fail(explainIntermediary(message(e)));
         }
     }
 
@@ -199,6 +199,32 @@ public final class JsScenes {
             spent += OBSERVER_THRESHOLD;
             if (spent > BODY_INSTRUCTION_BUDGET) throw new BodyTooLong();
         }
+    }
+
+    /** Intermediary names ({@code class_2338}, {@code method_10263}) leaking into an error message. */
+    private static final java.util.regex.Pattern INTERMEDIARY =
+            java.util.regex.Pattern.compile("\\b(class|method|field)_\\d+\\b");
+
+    /**
+     * Explain the one failure that only happens in production, and only on one loader.
+     *
+     * <p>A scene file that calls a method on a Minecraft object works in a dev run and on a
+     * production NeoForge server (both mojmap) and fails on a production Fabric server, where the
+     * jar is remapped to intermediary and the method is named {@code method_10263}. Rhino's own
+     * message — {@code Cannot find function getX in object class_2338} — is accurate and useless: it
+     * names neither the cause nor the fix, and the obvious reading (a StageWright bug) is wrong.
+     *
+     * <p>Detected by the intermediary naming scheme rather than by a list of types, because the point
+     * is not which class it was. If a {@code class_1234} reached a scene author's error message at
+     * all, they crossed the boundary this explains.
+     */
+    private static String explainIntermediary(String message) {
+        if (message == null || !INTERMEDIARY.matcher(message).find()) return message;
+        return message + " — this is a remapped Minecraft name: the scene called a method ON a"
+                + " Minecraft object, which only works where the jar is mojmap (a dev run, or a"
+                + " NeoForge server). Scene files may hold and pass Minecraft objects but must call"
+                + " only StageWright's own methods on them — for a position, use ctx.originX() and"
+                + " friends rather than ctx.origin().getX().";
     }
 
     /** Strip the Java exception class name Rhino prefixes onto wrapped errors. */
