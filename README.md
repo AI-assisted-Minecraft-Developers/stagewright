@@ -4,6 +4,106 @@ Cross-loader (Fabric + NeoForge) Minecraft mod test framework. Spec:
 `../worlddriver/docs/superpowers/specs/2026-07-16-stagewright-design.md`. Orchestration
 contract: `docs/orchestration-contract-v0.md`.
 
+## Writing a scene
+
+A scene is a static method taking a `SceneContext`. `@SceneSet` names the prefix; `@SceneDef` sets
+the tick budget and the force-loaded chunk radius. The body runs once, on the scene's first tick, at
+an origin the harness picked — scene code never sees absolute coordinates.
+
+```java
+@SceneSet("ws")
+public final class WaystoneScenes implements SceneProvider {
+
+    @SceneDef(budget = 200)
+    static void placingAWaystoneRegistersItInTheDatabase(SceneContext s) {
+        s.arena().key('#', Blocks.STONE).at(-6, -6).layer(0, floor).layer(1, air).build();
+
+        var waystone = WaystonesAPI.placeWaystone(s.level(), s.rel(0, 1, 0), DEFAULT).orElseThrow();
+        s.record("uid", waystone.getWaystoneUid());
+
+        s.expect(waystone.getPos()).as("recorded position").isEqualTo(s.rel(0, 1, 0));
+        s.check(uids(s)).as("the database").contains(waystone.getWaystoneUid());
+
+        s.await(future::isDone).within(200).then(() -> s.expect(...));
+    }
+}
+```
+
+- `expect` fails at the first violation; `check` records it and carries on, so a body probing twenty
+  things reports all twenty rather than the first.
+- `record(k, v)` attaches a value to the scene's results line **and** to every failure message it
+  produces. The failure `reason` is the only diagnostic channel that reliably survives a long run —
+  the async logger drops bursts exactly when a suite is finishing.
+- `await(cond).within(n).then(...)` is the only way to span ticks. Bodies never block or sleep.
+- `cleanup(r)` runs on PASS, FAIL and TIMEOUT alike. Anything server-wide that outlives the scene's
+  chunks — a database row, a player's inventory — belongs here, or scene N+1 inherits it.
+- `perf().sampleFor(n, w -> …)` and `perf().afterLoading(load, n, w -> …)` measure TPS, mean and p99
+  tick interval, peak heap, process CPU, and client FPS, all against a baseline taken moments earlier
+  in the same world so the assertion is about the mod rather than the machine.
+
+## Three topologies, and why they are not three copies of one
+
+All three run scenes on a **server**. What differs is which server, and whether a real client is
+attached to it — so the names say that. ("The client topology" never ran a scene on a client.)
+
+| topology | scenes run on | player | client FPS |
+|---|---|---|---|
+| `dedicatedServer` | a headless dedicated server | none | — |
+| `integratedServer` | the integrated server inside a real game client | yes | measurable |
+| `dedicatedServerWithClient` | a dedicated server, with a client joined over multiplayer | yes | — (no client in that JVM) |
+
+Scenes needing a real player call `s.player()` or `s.playerHere()`; where there is none the scene
+resolves PASS carrying `skipped:` and the reason, so it is still counted, still reconciled against
+the expected-scenes manifest, and visibly did not run. `Perf.Window.fps()` works the same way — a
+number under `integratedServer`, NaN elsewhere, guarded with `hasFps()`.
+
+The built-in `remotePlayerIsPresent` scene is what makes the third topology's claim checkable: it
+asserts a connected player with a live network connection, and skips where none is expected.
+
+**The world must be the same world.** `integratedServer` creates its singleplayer world with the
+settings a dedicated server boots with — survival, easy, cheats on — not the creative/peaceful pair a
+sandbox would reach for. It was creative/peaceful once, and the effect was not a warning: hostile
+mobs never spawned and a creative player was immune to the damage those scenes assert on, so five of
+worlddriver's combat scenes reported timeouts and "mock player refused mobAttack damage" and read
+exactly like bot bugs. A topology that differs in gamemode or difficulty is not a second topology, it
+is a second product, and every disagreement it reports is about itself.
+
+## Gates
+
+Applying `net.magicterra.stagewright` to a mod project turns each declared topology into one task
+that provisions a clean run directory, runs that topology's own dev-run task, and judges the results:
+
+```groovy
+stagewright {
+    topologies {
+        dedicatedServer {
+            runTask = 'runStagewrightDedicatedServer'
+            expectFile = file('src/testmod/expected-scenes.txt')
+        }
+        integratedServer {
+            runTask = 'runStagewrightIntegratedServer'
+            virtualDisplay = true          // start an Xvfb on headless Linux; no-op elsewhere
+        }
+        dedicatedServerWithClient {
+            runTask          = 'runStagewrightDedicatedServerWithClient'
+            companionRunTask = 'runStagewrightJoiningClient'   // stood up beside it, killed after
+        }
+    }
+}
+```
+
+    ./gradlew stagewrightDedicatedServer     # 0 GREEN / 1 RED / 2 DEAD / 3 ENV
+
+One command each, including the two-process one. No orchestrator, no Gradle-inside-Gradle: the run is
+an ordinary task dependency, the companion is a process built from that run task's own resolved
+`JavaExec` spec, and a build service owns both so Gradle tears them down on every exit path.
+
+`runTask` takes a task path (`':neoforge:runDogfoodServer'`) when the run lives on a loader
+subproject and the gate belongs on the root — which is every multi-loader build.
+
+See `../conformance-mods/README.md` for the six-step recipe for adding this to a mod that has never
+heard of StageWright, and for the three third-party mods it is exercised against.
+
 ## Which repo the orchestrators drive
 
 StageWright does not test itself. Every orchestrator under `scripts/` drives a **consumer**
