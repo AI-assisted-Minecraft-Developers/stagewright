@@ -56,10 +56,51 @@ public final class ResultsJsonl {
     }
 
     public void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs, String reason) {
-        write("{\"type\":\"scene\",\"name\":\"" + escape(name)
-                + "\",\"outcome\":\"" + escape(String.valueOf(outcome))
-                + "\",\"ticks\":" + ticks + ",\"wallMs\":" + wallMs
-                + ",\"reason\":\"" + escape(reason == null ? "" : reason) + "\"}\n", false);
+        writeScene(name, outcome, ticks, wallMs, reason, java.util.Map.of());
+    }
+
+    /**
+     * @param data values the scene attached with {@code SceneContext.record}. Emitted as a
+     *             {@code "data"} object, and OMITTED entirely when empty so that every scene
+     *             predating the record API produces a byte-identical line.
+     *
+     *             <p>Values are rendered as JSON numbers when they are numeric and as strings
+     *             otherwise — a measurement that arrives as {@code "19.6"} cannot be compared or
+     *             plotted downstream without every consumer re-parsing it, which is the whole reason
+     *             a scene bothers to record it.
+     */
+    public void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs, String reason,
+                           java.util.Map<String, Object> data) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"type\":\"scene\",\"name\":\"").append(escape(name))
+          .append("\",\"outcome\":\"").append(escape(String.valueOf(outcome)))
+          .append("\",\"ticks\":").append(ticks).append(",\"wallMs\":").append(wallMs)
+          .append(",\"reason\":\"").append(escape(reason == null ? "" : reason)).append('"');
+        if (data != null && !data.isEmpty()) {
+            sb.append(",\"data\":{");
+            boolean first = true;
+            for (java.util.Map.Entry<String, Object> e : data.entrySet()) {
+                if (!first) sb.append(',');
+                first = false;
+                sb.append('"').append(escape(e.getKey())).append("\":").append(jsonValue(e.getValue()));
+            }
+            sb.append('}');
+        }
+        sb.append("}\n");
+        write(sb.toString(), false);
+    }
+
+    private static String jsonValue(Object v) {
+        if (v instanceof Boolean b) return b.toString();
+        if (v instanceof Number n) {
+            double d = n.doubleValue();
+            // NaN and infinities are not JSON. They reach here from a perf ratio whose baseline was
+            // zero, and emitting them raw produces a line the orchestrator's parser drops — which
+            // silently turns a scene record into a SWALLOWED report naming the wrong problem.
+            if (Double.isNaN(d) || Double.isInfinite(d)) return '"' + String.valueOf(d) + '"';
+            return n.toString();
+        }
+        return '"' + escape(String.valueOf(v)) + '"';
     }
 
     public void writeDone(int scenes) {
