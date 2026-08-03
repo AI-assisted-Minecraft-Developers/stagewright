@@ -8,8 +8,19 @@
 // that second implementation.
 //
 // NO EXTERNAL DEPENDENCIES, and that constraint is inherited rather than chosen. This artifact
-// lands on a consumer's BUILDSCRIPT classpath through the gradle plugin, where a third-party JSON
-// library is a version conflict waiting to happen. Hence the hand-rolled parser in Json.java.
+// lands on a consumer's BUILDSCRIPT classpath through the gradle plugin, where a third-party
+// coordinate has to resolve from whatever `pluginManagement { repositories }` the consumer happens
+// to have — worlddriver's lists no Maven Central at all.
+//
+// That is an argument against DEPENDING on a JSON library, not against USING one, and the two were
+// conflated here until a hand-written parser sat under the verdict. The library is vendored instead:
+// see src/main/java/.../engine/json/VENDORED.md.
+//
+// Relocating a real dependency with Shadow was measured as the alternative. It works only with
+// deliberate wiring — composite-build substitution resolves `runtimeElements`, i.e. the plain `jar`,
+// so with the obvious configuration the plugin still gets the unrelocated library as a transitive
+// dependency and the published POM still declares it. Worth revisiting if this module ever needs
+// several third-party libraries; overkill for one.
 plugins {
     id 'java-library'
     id 'maven-publish'
