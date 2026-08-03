@@ -90,7 +90,16 @@ public final class StageWrightCommon {
         installVerbHooks();
 
         if (Boolean.getBoolean("stagewright.autorun")) {
-            harness = new StageWrightHarness(server, loader, resolvedScenes, new ResultsJsonl(Path.of(OUT_FILE)));
+            if (Boolean.getBoolean(AWAIT_PLAYER)) {
+                // Production topology: a dedicated server with a real client connected to it. The
+                // scenes must not start before that client is actually in — otherwise the run
+                // proves nothing the single-JVM topology did not already prove, and any scene that
+                // observes a player would be racing the login sequence.
+                LOG.info("[{}] armed, deferring the suite until a player joins (-D{}) — {} scenes",
+                        MOD_ID, AWAIT_PLAYER, resolvedScenes.size());
+            } else {
+                harness = new StageWrightHarness(server, loader, resolvedScenes, new ResultsJsonl(Path.of(OUT_FILE)));
+            }
         } else {
             LOG.info("[{}] armed, awaiting mc.test.run ({} scenes) — stagewright.autorun not set",
                     MOD_ID, resolvedScenes.size());
@@ -260,7 +269,24 @@ public final class StageWrightCommon {
             }
             if (!settled) return;
         }
+        if (harness == null && armed && Boolean.getBoolean("stagewright.autorun")
+                && Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() > 0) {
+            armDeferredSuite(server);
+        }
+
         StageWrightHarness h = harness;
         if (h != null) h.tick();
+    }
+
+    /** Property that holds the suite back until a player is on the server. */
+    private static final String AWAIT_PLAYER = "stagewright.awaitPlayer";
+
+    /** Build the deferred harness, on the server thread, exactly once. */
+    private static synchronized void armDeferredSuite(MinecraftServer server) {
+        if (harness != null) return;
+        LOG.info("[{}] a player joined — starting the deferred suite ({} scenes)",
+                MOD_ID, resolvedScenes.size());
+        harness = new StageWrightHarness(server, armedLoader, resolvedScenes,
+                new ResultsJsonl(Path.of(OUT_FILE)));
     }
 }
