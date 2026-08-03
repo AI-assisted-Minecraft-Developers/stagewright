@@ -232,6 +232,43 @@ public final class StageWrightHarness {
         StageWrightCommon.LOG.info("[{}] suite complete ({} scenes executed) — halting server",
                 StageWrightCommon.MOD_ID, executed);
         server.halt(false);
+        armExitWatchdog();
+    }
+
+    /** Grace period between the server halting and forcing the JVM down, long enough for the world
+     *  save that {@code halt} triggers to finish. The save is synchronous on the server thread, so
+     *  this is bounded by disk rather than by anything that could legitimately still be running. */
+    private static final long EXIT_GRACE_MS = 30_000;
+
+    /**
+     * Force the JVM down if halting the server did not end it.
+     *
+     * <p>Third-party mods leave non-daemon threads behind — a scheduled executor that was never shut
+     * down is enough — and one of them keeps the process alive forever after the world has saved and
+     * the results file is closed. From outside, that is indistinguishable from a suite still running:
+     * the gate waits, the wall clock runs, and the verdict it is waiting for is already sitting
+     * complete on disk. Exit code 0 because the results file, not the process, carries the verdict.
+     *
+     * <p>Dedicated servers only. Under the client topology this JVM is a game the director is still
+     * shutting down in an orderly way, and halting it here would race that.
+     */
+    private void armExitWatchdog() {
+        if (!server.isDedicatedServer()) return;
+        Thread watchdog = new Thread(() -> {
+            try {
+                Thread.sleep(EXIT_GRACE_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            StageWrightCommon.LOG.warn("[{}] the JVM is still up {}s after the suite halted the"
+                    + " server — a mod is holding a non-daemon thread. Forcing exit; the results file"
+                    + " is already complete.", StageWrightCommon.MOD_ID, EXIT_GRACE_MS / 1000);
+            Runtime.getRuntime().halt(0);
+        }, "stagewright-exit-watchdog");
+        // Daemon, so it cannot itself become the thread that keeps the JVM alive on a clean shutdown.
+        watchdog.setDaemon(true);
+        watchdog.start();
     }
 
     private static BlockPos originFor(int slot) {
