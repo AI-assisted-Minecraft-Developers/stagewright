@@ -133,6 +133,29 @@ public final class SceneContext {
     /** Absolute origin of this scene's grid cell (scene code should prefer rel()). */
     public BlockPos origin() { return origin; }
 
+    /**
+     * Absolute origin coordinates as plain integers.
+     *
+     * <p>These exist for scenes written in JavaScript, and the reason is worth stating because it is
+     * invisible until it costs someone a day. A Java scene calls {@code origin().getX()} and loom
+     * remaps that call site along with the rest of the mod, so it keeps working on both loaders. A JS
+     * scene resolves {@code getX} by NAME at runtime, against whatever the jar was remapped to — and
+     * a production Fabric jar is intermediary, where {@link BlockPos} is {@code class_2338} and
+     * {@code getX} is {@code method_10263}. The same file passes on NeoForge (which runs mojmap) and
+     * fails on Fabric with {@code Cannot find function getX in object class_2338}, which names
+     * neither the cause nor the fix.
+     *
+     * <p>The rule that follows, and the one the JS surface is built to keep: <b>a scene file may call
+     * StageWright's own methods and pass Minecraft objects around, but must never call a method ON a
+     * Minecraft object.</b> Our names are not remapped; theirs are. So anything a scene legitimately
+     * needs from a Minecraft type has to be reachable through an accessor like these.
+     */
+    public int originX() { return origin.getX(); }
+
+    public int originY() { return origin.getY(); }
+
+    public int originZ() { return origin.getZ(); }
+
     private final Deque<Runnable> cleanups = new ArrayDeque<>();
 
     /**
