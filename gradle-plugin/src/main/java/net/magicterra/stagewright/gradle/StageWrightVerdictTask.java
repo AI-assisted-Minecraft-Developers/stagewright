@@ -3,7 +3,7 @@ package net.magicterra.stagewright.gradle;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
+
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
@@ -93,26 +93,10 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
     private List<String> readExpected() {
         if (!getExpectFile().isPresent()) return null;
         File file = getExpectFile().get().getAsFile();
-        List<String> names = new ArrayList<>();
-        try {
-            for (String raw : Files.readAllLines(file.toPath(), StandardCharsets.UTF_8)) {
-                String line = raw.trim();
-                // '#' comments and blank lines, and commas so a manifest can be written either one
-                // name per line or comma-separated without the two forms disagreeing.
-                int hash = line.indexOf('#');
-                if (hash >= 0) line = line.substring(0, hash).trim();
-                if (line.isEmpty()) continue;
-                for (String part : line.split(",")) {
-                    String name = part.trim();
-                    if (!name.isEmpty()) names.add(name);
-                }
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot read the expected-scenes manifest " + file, e);
-        }
+        List<String> names = net.magicterra.stagewright.engine.Manifest.read(file.toPath());
         if (names.isEmpty()) {
             throw new GradleException("the expected-scenes manifest " + file + " names no scenes —"
-                    + " an empty manifest would silently disable coverage reconciliation");
+                    + " an empty manifest reconciles against nothing and would pass any run");
         }
         return names;
     }
