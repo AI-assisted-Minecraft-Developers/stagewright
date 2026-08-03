@@ -1,0 +1,6 @@
+// StageWright CLI — standalone build, for the same reason the engine is: it must never see a
+// Minecraft or a Gradle-API classpath. It shares the engine with the gradle plugin so that a
+// modpack author and a mod developer get the same verdict from the same rules.
+includeBuild('../engine')
+
+rootProject.name = 'stagewright-cli'
