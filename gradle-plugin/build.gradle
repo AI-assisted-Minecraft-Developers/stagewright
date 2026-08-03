@@ -1,11 +1,14 @@
 // stagewright gradle plugin — standalone included build.
 //
-// Publishes plugin id `net.magicterra.stagewright`, which registers three tasks
-// (stagewrightServer / stagewrightClient / stagewrightE2E) on the project it is applied to.
-// Each task SHELLS the frozen python orchestration contract (t0.py / t1.py /
-// t2.py) and propagates the orchestrator's exit code verbatim; the plugin never
-// parses JSONL nor re-judges — the orchestrator remains the sole verdict
-// authority. See src/main/java/.../StageWrightPlugin.java.
+// Publishes plugin id `net.magicterra.stagewright`. Applied to a mod project, it turns each declared
+// topology into a `stagewright<Name>` task that provisions a clean run directory, runs that
+// topology's own dev-run task, and judges the results file against the orchestration contract.
+//
+// No Python, and no process boundary: the run is an ordinary task dependency, so Gradle supervises a
+// process it already knew how to supervise. That is why this module has no external dependencies —
+// the JSONL parser and the verdict rules are both in here, because a build plugin that drags a JSON
+// library onto a consumer's buildscript classpath is a version conflict waiting to happen.
+// See src/main/java/.../StageWrightPlugin.java.
 plugins {
     id 'java-gradle-plugin'
     // java-gradle-plugin only CREATES the plugin-marker publication once maven-publish is

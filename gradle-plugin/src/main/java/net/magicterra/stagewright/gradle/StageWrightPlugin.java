@@ -1,160 +1,234 @@
 package net.magicterra.stagewright.gradle;
 
+import java.io.File;
+import java.util.Locale;
+
+import org.gradle.api.GradleException;
+import org.gradle.api.NamedDomainObjectContainer;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.Task;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import org.gradle.api.tasks.TaskProvider;
 
 /**
- * Registers the {@code stagewright { ... }} extension and three tasks — {@code stagewrightServer}
- * / {@code stagewrightClient} / {@code stagewrightE2E} — on the project it is applied to (the root
- * project for the dogfood consumer, this repo). Each task shells the frozen python
- * orchestration contract; the argument assembly below is FROZEN (P3b T1) and mirrored in
- * the plan's File Structure table.
+ * Registers the {@code stagewright { ... }} block and, per declared topology, a
+ * {@code stagewright<Name>} task that provisions a clean run directory, runs the host build's own
+ * run task, and judges the results.
  *
- * <p>Task registration is lazy ({@code tasks.register}) so applying the plugin adds
- * negligible configuration-time cost and never breaks an existing task.
+ * <p><b>What this plugin deliberately does not do: start the game.</b> It used to shell a Python
+ * orchestrator which itself shelled {@code ./gradlew}, so one gate ran Gradle inside Gradle — two
+ * daemons, the outer holding a lock while the inner built, and a process tree that had to be killed
+ * by pattern differently on each platform. Most of that Python was not orchestration; it was the
+ * cost of a process boundary that never needed crossing. Here the run is an ordinary task
+ * dependency, so Gradle supervises a process it always knew how to supervise, and the platform
+ * differences — path separators, how to kill a child, wrapper script versus batch file — go back to
+ * being Gradle's problem.
+ *
+ * <p>This works because the suite ends itself: the harness halts the server once its registry
+ * drains, so "the run task returned" is a real completion signal rather than a timeout.
  */
 public class StageWrightPlugin implements Plugin<Project> {
 
     static final String TASK_GROUP = "verification";
+    static final String DEFAULT_RESULTS = "stagewright-results.jsonl";
+    static final int DEFAULT_TIMEOUT_MINUTES = 20;
 
     @Override
     public void apply(Project project) {
-        StageWrightExtension ext =
-            project.getExtensions().create("stagewright", StageWrightExtension.class);
-        ext.getLoader().convention("fabric");
-        ext.getPythonExecutable().convention("python3");
-        ext.getScriptsDir().convention("scripts/stagewright");
-        ext.getExtraArgs().convention(Collections.emptyList());
+        NamedDomainObjectContainer<StageWrightTopology> topologies =
+                project.getObjects().domainObjectContainer(StageWrightTopology.class,
+                        name -> project.getObjects().newInstance(StageWrightTopology.class, name));
+
+        StageWrightExtension ext = project.getExtensions()
+                .create("stagewright", StageWrightExtension.class, topologies);
         ext.getTestmodSourceSet().convention(false);
 
-        // testmod source-set convention (v1, P3b T3): opt-in registration only, gated on
-        // the `java` plugin being present. withType(JavaPlugin) is a REACTION, not a
-        // point-in-time check — it fires immediately if `java` is already applied, or
-        // later if it gets applied afterwards, and never fires at all otherwise (so a
-        // plain non-java consumer with the flag on does NOT crash: registration is simply
-        // skipped). The actual create-or-not decision is deferred to afterEvaluate so it
-        // reads the FINAL flag value regardless of whether the consumer's `stagewright { }`
-        // config block runs before or after the `plugins { }` block finishes applying
-        // this plugin.
-        project.getPlugins().withType(JavaPlugin.class, javaPlugin ->
-            project.afterEvaluate(p -> {
-                if (Boolean.TRUE.equals(ext.getTestmodSourceSet().getOrElse(false))) {
-                    registerTestmodSourceSet(p, ext);
-                }
-            }));
+        // A reaction, not a point-in-time check: this fires whether `java` was applied before or
+        // after this plugin, and never fires at all for a non-java consumer — so the flag being on
+        // in such a build is a no-op rather than a crash.
+        project.getPlugins().withType(JavaPlugin.class, java ->
+                project.afterEvaluate(p -> {
+                    if (Boolean.TRUE.equals(ext.getTestmodSourceSet().getOrElse(false))) {
+                        registerTestmodSourceSet(p, ext);
+                    }
+                }));
 
-        // stagewrightServer → t0.py, dedicated-server dogfood triplet (frozen assembly).
-        //   t0.py --loader L --run-task :L:runDogfoodServer
-        //         --results L/run-dogfood/stagewright-results.jsonl
-        //         --expect-file <scriptsDir>/expected-scenes-L.txt   [+ extraArgs]
-        project.getTasks().register("stagewrightServer", StageWrightRunTask.class, task -> {
-            task.setGroup(TASK_GROUP);
-            task.setDescription("Runs the testkit dedicated-server dogfood suite (t0.py), "
-                + "shelling the frozen orchestration contract.");
-            wireCommon(project, ext, task);
-            task.getScriptArgs().set(project.provider(() -> {
-                String loader = ext.getLoader().get();
-                String scripts = ext.getScriptsDir().get();
-                List<String> a = new ArrayList<>();
-                a.add(scripts + "/t0.py");
-                a.add("--loader");
-                a.add(loader);
-                // The orchestrators live in stagewright's own repo but must drive the APPLIED
-                // project's gradle build. Without this they derive the project from their own
-                // __file__ and an external consumer silently runs stagewright's build instead
-                // of its own.
-                a.add("--project-root");
-                a.add(project.getProjectDir().getAbsolutePath());
-                a.add("--run-task");
-                a.add(ext.getServerRunTask().getOrElse(":" + loader + ":runDogfoodServer"));
-                a.add("--results");
-                a.add(ext.getServerResults()
-                    .getOrElse(loader + "/run-dogfood/stagewright-results.jsonl"));
-                a.add("--expect-file");
-                a.add(ext.getServerExpectFile().isPresent()
-                    ? ext.getServerExpectFile().get().getAsFile().getAbsolutePath()
-                    : scripts + "/expected-scenes-" + loader + ".txt");
-                a.addAll(ext.getExtraArgs().get());
-                return a;
-            }));
+        // One service per build, shared by every topology. Gradle closes it on every exit path, which
+        // is what makes "the companion client is always killed" a guarantee rather than a hope.
+        var sideProcesses = project.getGradle().getSharedServices().registerIfAbsent(
+                "stagewrightSideProcesses", StageWrightSideProcessService.class, spec -> {});
+
+        topologies.all(topology -> {
+            topology.getResultsFile().convention(DEFAULT_RESULTS);
+            topology.getCleanWorld().convention(true);
+            topology.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
+            topology.getVirtualDisplay().convention(false);
+            topology.getGameDirectory().convention(project.getLayout().getProjectDirectory()
+                    .dir("run-stagewright-" + topology.getName()));
+            registerTopologyTasks(project, topology, sideProcesses);
         });
-
-        // stagewrightClient → t1.py (client topology); stagewrightE2E → t2.py (end-to-end).
-        // Both: plain `--loader L`; extension.expectFile threaded as --expect-file when
-        // present; extraArgs appended.
-        registerClientTopology(project, ext, "stagewrightClient", "t1.py",
-            "Runs the testkit client (T1) suite (t1.py), shelling the frozen orchestration contract.");
-        registerClientTopology(project, ext, "stagewrightE2E", "t2.py",
-            "Runs the testkit end-to-end (T2) suite (t2.py), shelling the frozen orchestration contract.");
     }
 
-    private void registerClientTopology(Project project, StageWrightExtension ext,
-                                        String taskName, String script, String description) {
-        project.getTasks().register(taskName, StageWrightRunTask.class, task -> {
+    private void registerTopologyTasks(Project project, StageWrightTopology topology,
+                                       org.gradle.api.provider.Provider<StageWrightSideProcessService> sideProcesses) {
+        String suffix = capitalize(topology.getName());
+
+        TaskProvider<StageWrightProvisionTask> provision = project.getTasks().register(
+                "stagewright" + suffix + "Provision", StageWrightProvisionTask.class, task -> {
+                    task.setGroup(TASK_GROUP);
+                    task.setDescription("Clears the " + topology.getName()
+                            + " run directory so the next scene run cannot inherit its world.");
+                    task.getGameDirectory().set(topology.getGameDirectory());
+                    task.getResultsFile().set(topology.getResultsFile());
+                    task.getCleanWorld().set(topology.getCleanWorld());
+                });
+
+        project.getTasks().register("stagewright" + suffix, StageWrightVerdictTask.class, task -> {
             task.setGroup(TASK_GROUP);
-            task.setDescription(description);
-            wireCommon(project, ext, task);
-            task.getScriptArgs().set(project.provider(() -> {
-                String loader = ext.getLoader().get();
-                String scripts = ext.getScriptsDir().get();
-                List<String> a = new ArrayList<>();
-                a.add(scripts + "/" + script);
-                a.add("--loader");
-                a.add(loader);
-                if (ext.getExpectFile().isPresent()) {
-                    a.add("--expect-file");
-                    a.add(ext.getExpectFile().get().getAsFile().getAbsolutePath());
+            task.setDescription("Runs the " + topology.getName()
+                    + " scene topology and judges its results against the orchestration contract.");
+            task.getTopologyName().set(topology.getName());
+            task.getResults().set(topology.getGameDirectory().file(topology.getResultsFile()));
+            task.getExpectFile().set(topology.getExpectFile());
+            task.dependsOn(provision);
+
+            // Resolved lazily. The host loader plugin normally registers its run tasks after this
+            // plugin is applied, so naming one eagerly would fail on a task that does not exist yet.
+            task.dependsOn(project.provider(() -> {
+                String runTaskName = topology.getRunTask().getOrNull();
+                if (runTaskName == null) {
+                    throw new GradleException("stagewright topology '" + topology.getName()
+                            + "' declares no runTask");
                 }
-                a.addAll(ext.getExtraArgs().get());
-                return a;
+                Task run = resolveRunTask(project, runTaskName);
+                if (run == null) {
+                    throw new GradleException("stagewright topology '" + topology.getName()
+                            + "' points at run task '" + runTaskName
+                            + "', which " + project.getPath() + " does not declare"
+                            + " — a task in another project needs its full path,"
+                            + " e.g. ':neoforge:runDogfoodServer'");
+                }
+                // The world must be gone BEFORE the game opens it. Without this the two tasks are
+                // merely both-required and unordered, so provisioning can land after the run and
+                // tidy up for a run that already read the dirty world.
+                run.mustRunAfter(provision);
+                run.getTimeout().set(java.time.Duration.ofMinutes(
+                        topology.getTimeoutMinutes().getOrElse(DEFAULT_TIMEOUT_MINUTES)));
+                attachSideProcesses(project, topology, run, sideProcesses);
+                return run;
             }));
+
+            // A gate re-runs every invocation. Its input is a file the run rewrites, so letting
+            // Gradle call it up to date would report the previous run's verdict for a run that never
+            // happened.
+            task.getOutputs().upToDateWhen(t -> false);
         });
     }
 
     /**
-     * Registers the {@code testmod} source set on {@code project} (which is guaranteed to
-     * carry the {@code java} plugin — the caller only reaches here via the
-     * {@code withType(JavaPlugin.class, ...)} reaction). v1 boundary: classpath wiring
-     * ONLY — {@code testmod}'s compile+runtime classpaths gain main's output directory
-     * plus main's own compile/runtime classpaths (so testmod code can see main code and
-     * main's dependencies), and nothing else. No loom run-config edits, no dependency
-     * additions beyond that, no jar packaging changes; loom auto-wiring is left to
-     * consumers (documented as v2 scope in {@code stagewright/README.md}).
+     * Hang the display and the companion off the run task itself.
+     *
+     * <p>{@code doFirst} rather than a task of their own, because both have to be live for the
+     * duration of THIS process and Gradle runs tasks in a project's graph one after another — a
+     * companion started by an earlier task would have to outlive its own task, which is exactly the
+     * ownership problem that produced orphaned game JVMs in the first place. Started here, owned by
+     * the build service, closed by Gradle whatever happens.
+     *
+     * <p>The companion's own task dependencies are added to the run, not the companion task itself:
+     * ModDevGradle and loom both generate argfiles from those tasks, and the companion cannot start
+     * without them — but running the companion TASK would block, since Gradle would wait for the
+     * game to exit before starting the one it is supposed to run alongside.
+     *
+     * <p>Note for later: reading another task's state from an execution-time action is not
+     * configuration-cache friendly. Only the topologies that declare a companion are affected; the
+     * plain server topology stays cacheable.
      */
+    private void attachSideProcesses(Project project, StageWrightTopology topology, Task run,
+                                     org.gradle.api.provider.Provider<StageWrightSideProcessService> sideProcesses) {
+        String companionName = topology.getCompanionRunTask().getOrNull();
+        boolean wantsDisplay = Boolean.TRUE.equals(topology.getVirtualDisplay().getOrElse(false));
+        if (companionName == null && !wantsDisplay) return;
+
+        JavaExec companion = null;
+        if (companionName != null) {
+            Task resolved = resolveRunTask(project, companionName);
+            if (!(resolved instanceof JavaExec exec)) {
+                throw new GradleException("stagewright topology '" + topology.getName()
+                        + "' names companionRunTask '" + companionName + "', which is "
+                        + (resolved == null ? "not a task in this build"
+                                            : "a " + resolved.getClass().getSimpleName()
+                                              + " rather than a JavaExec — a companion has to be a"
+                                              + " dev run this plugin can copy a command line from"));
+            }
+            companion = exec;
+            run.dependsOn(companion.getDependsOn());
+            // ...and on whatever produces its inputs. A run task's classpath is a file collection
+            // carrying its own build dependencies, which are not in dependsOn — so a companion
+            // launched without this can be handed a path to a jar nothing has built yet.
+            run.dependsOn(companion.getInputs().getFiles());
+        }
+
+        JavaExec companionSpec = companion;
+        File companionLog = new File(topology.getGameDirectory().get().getAsFile(),
+                "companion-" + (companionName == null ? "none" : companionName.replace(':', '-')) + ".log");
+        run.doFirst(t -> {
+            StageWrightSideProcessService service = sideProcesses.get();
+            String display = wantsDisplay ? service.ensureVirtualDisplay(t.getLogger()) : null;
+            if (display != null && t instanceof JavaExec exec) {
+                exec.environment("DISPLAY", display);
+            }
+            if (companionSpec != null) {
+                companionLog.getParentFile().mkdirs();
+                service.startCompanion(companionSpec, companionLog, display, t.getLogger());
+            }
+        });
+    }
+
+    /**
+     * Find the run task, by plain name in this project or by full path in another.
+     *
+     * <p>Path support is not a convenience. Under loom and ModDevGradle alike, a multi-loader build
+     * declares its runs on the per-loader SUBprojects while the thing a developer wants to type
+     * (`./gradlew stagewrightServer`) belongs on the root — so a plugin that could only see its own
+     * project would force every multi-loader consumer to apply it once per loader and then remember
+     * which of the near-identical task names it wanted.
+     */
+    private static Task resolveRunTask(Project project, String runTaskName) {
+        int lastColon = runTaskName.lastIndexOf(':');
+        if (lastColon < 0) {
+            return project.getTasks().findByName(runTaskName);
+        }
+        String projectPath = lastColon == 0 ? ":" : runTaskName.substring(0, lastColon);
+        String taskName = runTaskName.substring(lastColon + 1);
+        Project owner = project.getRootProject().findProject(projectPath);
+        return owner == null ? null : owner.getTasks().findByName(taskName);
+    }
+
+    /** v1 boundary: classpath wiring only — testmod sees main's output plus main's own compile and
+     *  runtime classpaths, and nothing else changes. */
     private void registerTestmodSourceSet(Project project, StageWrightExtension ext) {
         SourceSetContainer sourceSets =
-            project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
+                project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
         SourceSet main = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
-        SourceSet testmod = sourceSets.create("testmod");
+        SourceSet testmod = sourceSets.maybeCreate("testmod");
 
         testmod.setCompileClasspath(testmod.getCompileClasspath()
-            .plus(main.getOutput())
-            .plus(project.getConfigurations()
-                .getByName(main.getCompileClasspathConfigurationName())));
+                .plus(main.getOutput())
+                .plus(project.getConfigurations().getByName(main.getCompileClasspathConfigurationName())));
         testmod.setRuntimeClasspath(testmod.getRuntimeClasspath()
-            .plus(main.getOutput())
-            .plus(project.getConfigurations()
-                .getByName(main.getRuntimeClasspathConfigurationName())));
+                .plus(main.getOutput())
+                .plus(project.getConfigurations().getByName(main.getRuntimeClasspathConfigurationName())));
 
         ext.setTestmodSourceSetRef(testmod);
     }
 
-    private void wireCommon(Project project, StageWrightExtension ext, StageWrightRunTask task) {
-        task.getPythonExecutable().set(ext.getPythonExecutable());
-        // Working dir = the applied project's directory (root project for the dogfood
-        // consumer); the frozen relative paths (scripts/stagewright/..., L/run-dogfood/...)
-        // resolve against it.
-        task.getWorkingDir().set(project.getLayout().getProjectDirectory());
-        // A test-runner that shells a long-lived orchestrator must re-run every
-        // invocation; it declares no outputs, so pin it never-up-to-date explicitly.
-        task.getOutputs().upToDateWhen(t -> false);
+    private static String capitalize(String s) {
+        if (s.isEmpty()) return s;
+        return s.substring(0, 1).toUpperCase(Locale.ROOT) + s.substring(1);
     }
 }
