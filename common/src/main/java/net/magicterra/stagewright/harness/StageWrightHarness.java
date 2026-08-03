@@ -48,6 +48,15 @@ public final class StageWrightHarness {
     private long sceneStartMs;
     private boolean finished;
 
+    /** Bumped every tick, read by {@link StallWatchdog} from its own thread — volatile because
+     *  those are different threads and a cached read would report a stall that is not happening. */
+    private volatile long ticksObserved;
+
+    /** The scene the tick is inside, so a stall can be blamed on it by name rather than on the run. */
+    private volatile String runningScene = "<arming>";
+
+    private final StallWatchdog stallWatchdog;
+
     public StageWrightHarness(MinecraftServer server, String loader, List<Scene> scenes, ResultsJsonl out) {
         this.server = server;
         this.scenes = scenes;
@@ -55,6 +64,10 @@ public final class StageWrightHarness {
         rejectDuplicateNames(scenes);
         this.slotByName = assignSlots(scenes);
         out.writeSuiteHeader(loader, scenes);
+        // Started at arming, not at the first scene: a mod that wedges the tick does it during its
+        // own setup as readily as inside a scene, and that stall has to be nameable too.
+        this.stallWatchdog = new StallWatchdog(out, () -> ticksObserved, () -> runningScene);
+        this.stallWatchdog.start();
         StageWrightCommon.LOG.info("[{}] harness armed: {} scenes", StageWrightCommon.MOD_ID, scenes.size());
     }
 
@@ -111,11 +124,23 @@ public final class StageWrightHarness {
         return finished;
     }
 
+    /**
+     * Liveness signal for the stall watchdog, called every server tick.
+     *
+     * <p>Separate from {@link #tick()} because tick() is gated behind the startup settle barrier and
+     * is not called at all while tick debt drains. Counting there would read a server that is
+     * healthily catching up as a wedged one, and the watchdog would kill a run that was fine.
+     */
+    public void observeServerTick() {
+        ticksObserved++;
+    }
+
     public void tick() {
         if (finished) return;
         if (index >= scenes.size()) { finish(); return; }
 
         Scene scene = scenes.get(index);
+        runningScene = scene.name();
         if (scene.canary() == Canary.MUST_SWALLOW) {
             // Deliberately never executed and never recorded: the orchestrator must
             // flag exactly this omission, proving the swallow gate is alive (spec §5).
@@ -227,6 +252,9 @@ public final class StageWrightHarness {
     private void finish() {
         if (finished) return;
         finished = true;
+        // Before the footer: the suite is over, so a server that now takes its time shutting down is
+        // not a stall, and a watchdog still armed would eventually call it one.
+        stallWatchdog.stop();
         long executed = scenes.stream().filter(s -> s.canary() != Canary.MUST_SWALLOW).count();
         out.writeDone((int) executed);
         StageWrightCommon.LOG.info("[{}] suite complete ({} scenes executed) — halting server",

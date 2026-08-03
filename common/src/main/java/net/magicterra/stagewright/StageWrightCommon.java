@@ -245,6 +245,12 @@ public final class StageWrightCommon {
     }
 
     public static void onServerTick(MinecraftServer server) {
+        // Liveness for the stall watchdog, ABOVE the settle barrier: this must count every server
+        // tick, including the catch-up ticks the barrier below deliberately swallows. A watchdog fed
+        // from the other side of that `return` would see a draining tick debt as a wedged server.
+        StageWrightHarness live = harness;
+        if (live != null) live.observeServerTick();
+
         // Settle barrier (task#88): drain startup tick debt before arming scenes. See the field
         // block above for the full rationale. Until the cadence settles we track tick spacing and
         // forward NOTHING to the harness — so all tick budgets count from the first post-settle tick.
