@@ -97,24 +97,64 @@ public final class StageWrightCommon {
         }
     }
 
-    /** Register StageWright's own {@code mc.test.*} verbs into the driver's ToolCatalog (idempotent).
-     *  A verb that throws is logged but must not abort arming — the suite (autorun or on-demand) is
-     *  independent of any single verb registration.
+    /** Fully-qualified probe for the driver's verb registry, resolved BY NAME and deliberately not
+     *  imported: the whole point is to answer "is worlddriver on this classpath" without linking
+     *  against it. */
+    private static final String DRIVER_PROBE = "net.magicterra.worlddriver.mcp.ToolCatalog";
+
+    /** Register StageWright's own {@code mc.test.*} verbs into the driver's ToolCatalog (idempotent),
+     *  when a driver is present at all. A verb that throws is logged but must not abort arming — the
+     *  suite (autorun or on-demand) is independent of any single verb registration.
      *
      *  <p>This used to go through a {@code StageWrightVerbHook} ServiceLoader SPI implemented on the
      *  worlddriver side, because stagewright-common could not import {@code ToolCatalog} without a
      *  circular module dependency. StageWright now depends on the driver it drives, so it registers
-     *  its own verbs and the SPI is deleted. */
+     *  its own verbs and the SPI is deleted.
+     *
+     *  <p><b>Why the presence probe.</b> The three classes under {@code verbs/} are the ONLY part of
+     *  StageWright that touches worlddriver; the scene API, the harness and the loader entries need
+     *  nothing but Minecraft. That separation only buys anything if arming survives worlddriver's
+     *  ABSENCE — which is the normal case the moment StageWright is loaded into a third-party mod's
+     *  dev runtime, since such a mod depends on neither repo.
+     *
+     *  <p>The probe must come first, and must go by name. {@code List.of(TestRunVerb::register, …)}
+     *  resolves all three classes at the lambda-metafactory bootstrap, i.e. while building the list
+     *  and therefore BEFORE the loop body — so a try/catch around {@code reg.run()} never sees the
+     *  resulting NoClassDefFoundError. Loading {@code TestRunVerb} alone is already fatal: its
+     *  {@code SCHEMA} initializer calls into worlddriver's {@code Schemas}. */
     private static void installVerbHooks() {
         if (verbHooksInstalled) return;
         verbHooksInstalled = true;
-        for (Runnable reg : List.<Runnable>of(
-                TestRunVerb::register, TestResetVerb::register, TestInputVerbs::register)) {
-            try {
-                reg.run();
-            } catch (Throwable t) {
-                LOG.error("[{}] stagewright verb registration failed", MOD_ID, t);
+        if (!driverPresent()) {
+            LOG.info("[{}] no worlddriver on this classpath — skipping the mc.test.* verbs. Scenes still "
+                    + "run; what is absent is the on-demand trigger and the bot input verbs, so this "
+                    + "runtime is autorun-only.", MOD_ID);
+            return;
+        }
+        try {
+            for (Runnable reg : List.<Runnable>of(
+                    TestRunVerb::register, TestResetVerb::register, TestInputVerbs::register)) {
+                try {
+                    reg.run();
+                } catch (Throwable t) {
+                    LOG.error("[{}] stagewright verb registration failed", MOD_ID, t);
+                }
             }
+        } catch (Throwable t) {
+            // A driver that is PRESENT but incompatible (ToolCatalog moved, Schemas signature changed)
+            // fails while the list is being built, outside the inner catch. Land it here rather than
+            // aborting the arm: the verbs are a convenience, the suite is the product.
+            LOG.error("[{}] verb wiring failed against the driver on this classpath — continuing "
+                    + "without the mc.test.* verbs", MOD_ID, t);
+        }
+    }
+
+    private static boolean driverPresent() {
+        try {
+            Class.forName(DRIVER_PROBE, false, StageWrightCommon.class.getClassLoader());
+            return true;
+        } catch (Throwable t) {
+            return false;
         }
     }
 
@@ -180,6 +220,19 @@ public final class StageWrightCommon {
         result.put("accepted", true);
         result.put("scenes", scenes.size());
         return result;
+    }
+
+    /**
+     * True once the suite has drained its registry and written the done footer.
+     *
+     * <p>Read by the client director to know when an INTEGRATED-server run is over. It is
+     * deliberately the harness's own flag rather than a poll of the results file: the file is the
+     * orchestrator's contract with the outside world, and having the in-JVM client race the
+     * orchestrator to read it would make the client's exit depend on filesystem timing.
+     */
+    public static boolean suiteFinished() {
+        StageWrightHarness h = harness;
+        return h != null && h.isFinished();
     }
 
     public static void onServerTick(MinecraftServer server) {
