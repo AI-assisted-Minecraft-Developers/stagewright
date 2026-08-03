@@ -5,139 +5,57 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.magicterra.stagewright.engine.json.JsonObject;
+import net.magicterra.stagewright.engine.json.JsonValue;
+
 /**
- * A recursive-descent JSON reader, sized for the results stream and nothing else.
+ * Reads one results line into plain Java values.
  *
- * <p>Hand-written rather than pulled from a library because this class decides whether a build
- * passes. Gradle exposes no JSON parser of its own, so the alternatives were a dependency that must
- * resolve identically on Gradle 8.9 and 9.3 across every consumer's repository setup, or Groovy's
- * {@code JsonSlurper}, which ties the verdict to whichever Groovy the running Gradle bundles. Both
- * put a moving part underneath the one component that must never be the reason a build is wrong.
+ * <p>An adapter over the vendored minimal-json, not a parser. This class used to be a hand-written
+ * recursive-descent reader, which was a mistake worth naming: it is the component that decides
+ * whether a build passes, and the places a JSON parser goes wrong — escapes, surrogate pairs, the
+ * number grammar — are exactly the ones that fail quietly and produce a confident wrong verdict.
+ * See {@code json/VENDORED.md} for why the library is copied in rather than depended on.
  *
  * <p>Objects become {@link LinkedHashMap}, arrays {@link List}, numbers {@link Double}, and the rest
- * map to their obvious Java types. No streaming, no pretty printing — the input is one small object
- * per line.
+ * map to their obvious Java types — the shapes {@link Verdict} reads. Insertion order is preserved,
+ * because a report that lists a run's scenes in a different order than the file did is harder to
+ * check against the file.
  */
 public final class Json {
 
-    private final String src;
-    private int at;
-
-    private Json(String src) {
-        this.src = src;
-    }
+    private Json() {}
 
     /** Parse one JSON value. Throws {@link IllegalArgumentException} on anything malformed. */
     public static Object parse(String text) {
-        Json p = new Json(text);
-        p.ws();
-        Object v = p.value();
-        p.ws();
-        if (p.at != p.src.length()) {
-            throw new IllegalArgumentException("trailing characters at offset " + p.at);
-        }
-        return v;
-    }
-
-    private Object value() {
-        if (at >= src.length()) throw new IllegalArgumentException("unexpected end of input");
-        char c = src.charAt(at);
-        switch (c) {
-            case '{': return object();
-            case '[': return array();
-            case '"': return string();
-            case 't': expect("true"); return Boolean.TRUE;
-            case 'f': expect("false"); return Boolean.FALSE;
-            case 'n': expect("null"); return null;
-            default: return number();
+        try {
+            return toJava(net.magicterra.stagewright.engine.json.Json.parse(text));
+        } catch (RuntimeException e) {
+            // The library's parse failures are unchecked and its own type. Callers upstream catch
+            // IllegalArgumentException and drop the line; that contract must not change just
+            // because the parser behind it did.
+            throw new IllegalArgumentException("malformed JSON: " + e.getMessage(), e);
         }
     }
 
-    private Map<String, Object> object() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        at++;                                       // '{'
-        ws();
-        if (peek() == '}') { at++; return out; }
-        while (true) {
-            ws();
-            String key = string();
-            ws();
-            if (peek() != ':') throw new IllegalArgumentException("expected ':' at offset " + at);
-            at++;
-            ws();
-            out.put(key, value());
-            ws();
-            char c = peek();
-            at++;
-            if (c == '}') return out;
-            if (c != ',') throw new IllegalArgumentException("expected ',' or '}' at offset " + (at - 1));
-        }
-    }
-
-    private List<Object> array() {
-        List<Object> out = new ArrayList<>();
-        at++;                                       // '['
-        ws();
-        if (peek() == ']') { at++; return out; }
-        while (true) {
-            ws();
-            out.add(value());
-            ws();
-            char c = peek();
-            at++;
-            if (c == ']') return out;
-            if (c != ',') throw new IllegalArgumentException("expected ',' or ']' at offset " + (at - 1));
-        }
-    }
-
-    private String string() {
-        if (peek() != '"') throw new IllegalArgumentException("expected a string at offset " + at);
-        at++;
-        StringBuilder sb = new StringBuilder();
-        while (true) {
-            if (at >= src.length()) throw new IllegalArgumentException("unterminated string");
-            char c = src.charAt(at++);
-            if (c == '"') return sb.toString();
-            if (c != '\\') { sb.append(c); continue; }
-            char esc = src.charAt(at++);
-            switch (esc) {
-                case '"' -> sb.append('"');
-                case '\\' -> sb.append('\\');
-                case '/' -> sb.append('/');
-                case 'b' -> sb.append('\b');
-                case 'f' -> sb.append('\f');
-                case 'n' -> sb.append('\n');
-                case 'r' -> sb.append('\r');
-                case 't' -> sb.append('\t');
-                case 'u' -> {
-                    sb.append((char) Integer.parseInt(src.substring(at, at + 4), 16));
-                    at += 4;
-                }
-                default -> throw new IllegalArgumentException("bad escape \\" + esc);
+    private static Object toJava(JsonValue value) {
+        if (value == null || value.isNull()) return null;
+        if (value.isObject()) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            JsonObject object = value.asObject();
+            for (JsonObject.Member member : object) {
+                out.put(member.getName(), toJava(member.getValue()));
             }
+            return out;
         }
-    }
-
-    private Double number() {
-        int start = at;
-        while (at < src.length() && "+-0123456789.eE".indexOf(src.charAt(at)) >= 0) at++;
-        if (start == at) throw new IllegalArgumentException("expected a value at offset " + at);
-        return Double.valueOf(src.substring(start, at));
-    }
-
-    private void expect(String literal) {
-        if (!src.startsWith(literal, at)) {
-            throw new IllegalArgumentException("expected '" + literal + "' at offset " + at);
+        if (value.isArray()) {
+            List<Object> out = new ArrayList<>();
+            for (JsonValue item : value.asArray()) out.add(toJava(item));
+            return out;
         }
-        at += literal.length();
-    }
-
-    private char peek() {
-        if (at >= src.length()) throw new IllegalArgumentException("unexpected end of input");
-        return src.charAt(at);
-    }
-
-    private void ws() {
-        while (at < src.length() && Character.isWhitespace(src.charAt(at))) at++;
+        if (value.isString()) return value.asString();
+        if (value.isBoolean()) return value.asBoolean();
+        if (value.isNumber()) return value.asDouble();
+        return value.toString();
     }
 }
