@@ -112,6 +112,7 @@ public final class JsScenes {
             // Java, on the same terms KubeJS gives it. See JavaAccess for the trust boundary and for
             // why the fork's own initStandardObjects() does not supply this.
             JavaAccess.install(cx, scope);
+            DriverAccess.install(cx, scope);
             cx.evaluateString(scope, prelude(), "<stagewright-prelude>", 1, null);
             cx.evaluateString(scope, source, name, 1, null);
             return harvest(cx, scope, name);
