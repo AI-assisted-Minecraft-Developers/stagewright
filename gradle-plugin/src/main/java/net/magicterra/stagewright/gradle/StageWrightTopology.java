@@ -107,4 +107,18 @@ public abstract class StageWrightTopology implements Named {
      * already set (a real desktop, which is a better display than one we would start).
      */
     public abstract Property<Boolean> getVirtualDisplay();
+
+    /**
+     * A checked-in directory of {@code .js} scene files, installed into the run directory's
+     * {@code config/stagewright/scenes} before the game starts. Optional.
+     *
+     * <p>The surface a modpack uses: scenes as files beside the pack's configs, no source set and no
+     * build. Pointing a topology at a directory of them is what lets those files live in a repo and
+     * still arrive where a pack would put them. They register into the same registry as compiled
+     * scenes and are reconciled against the same {@link #getExpectFile() manifest}.
+     *
+     * <p>Requires Rhino on the run's classpath, which arrives with worlddriver. Without it the
+     * harness fails the run rather than skipping the files.
+     */
+    public abstract DirectoryProperty getSceneScripts();
 }

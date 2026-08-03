@@ -86,6 +86,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                     task.getGameDirectory().set(topology.getGameDirectory());
                     task.getResultsFile().set(topology.getResultsFile());
                     task.getCleanWorld().set(topology.getCleanWorld());
+                    task.getSceneScripts().set(topology.getSceneScripts());
                 });
 
         project.getTasks().register("stagewright" + suffix, StageWrightVerdictTask.class, task -> {

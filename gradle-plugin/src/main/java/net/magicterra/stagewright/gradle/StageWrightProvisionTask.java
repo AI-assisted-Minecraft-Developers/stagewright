@@ -41,6 +41,10 @@ public abstract class StageWrightProvisionTask extends DefaultTask {
     @Input
     public abstract Property<Boolean> getCleanWorld();
 
+    /** A checked-in directory of {@code .js} scene files to install for this run. */
+    @Internal
+    public abstract DirectoryProperty getSceneScripts();
+
     @TaskAction
     public void provision() {
         File gameDir = getGameDirectory().get().getAsFile();
@@ -68,6 +72,43 @@ public abstract class StageWrightProvisionTask extends DefaultTask {
         seedClientOptions(gameDir.toPath().resolve("options.txt"));
         seedServerEula(gameDir.toPath().resolve("eula.txt"));
         seedOfflineMode(gameDir.toPath().resolve("server.properties"));
+        installSceneScripts(gameDir.toPath().resolve("config/stagewright/scenes"));
+    }
+
+    /**
+     * Copy the build's scene scripts into the run directory's {@code config/stagewright/scenes}.
+     *
+     * <p>The run directory is generated and gitignored, so a scene file authored there is not a
+     * committable artifact — but it is where the harness must find one, because that is where a
+     * modpack keeps it. Declaring a checked-in source directory keeps both true: the file lives in
+     * the repo and arrives at the path a real pack would use.
+     *
+     * <p>The target is cleared first, for the same reason the world is: a scene file deleted from
+     * the source but left in the run directory keeps running, and it is reconciled against the
+     * manifest like any other, so the suite stays green while testing a file nobody can find.
+     */
+    private void installSceneScripts(Path target) {
+        deleteTree(target);
+        if (!getSceneScripts().isPresent()) return;
+
+        Path source = getSceneScripts().get().getAsFile().toPath();
+        if (!Files.isDirectory(source)) {
+            // Loud, because the failure it prevents is silent: no directory means no scenes loaded,
+            // and a suite that runs none of them still reports GREEN.
+            throw new UncheckedIOException(new IOException(
+                    "sceneScripts points at " + source + ", which is not a directory"));
+        }
+        try (Stream<Path> files = Files.list(source)) {
+            Files.createDirectories(target);
+            int copied = 0;
+            for (Path file : files.filter(p -> p.getFileName().toString().endsWith(".js")).toList()) {
+                Files.copy(file, target.resolve(file.getFileName()));
+                copied++;
+            }
+            getLogger().lifecycle("[stagewright] installed {} scene script(s) from {}", copied, source);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot install the scene scripts from " + source, e);
+        }
     }
 
     /**
