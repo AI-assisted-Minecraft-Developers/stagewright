@@ -98,6 +98,26 @@ public final class Scenes {
                         ctx.assertBlock(0, 0, 0, Blocks.STONE);
                     });
                 }),
+                // -- topology probe --
+                /*
+                 * The client-joins-server topology's whole claim is that the scenes ran with a real
+                 * remote player attached to a real dedicated server. This asserts exactly that, and
+                 * it lives here rather than in an orchestrator because it is an assertion: the
+                 * out-of-process version had to open two RPC connections, ask the client whether it
+                 * had a position and the server whether its PlayerList held a ServerPlayer, and
+                 * agree with itself about what "both ends live" meant. In here it is one line, and
+                 * it fails the run through the same path every other assertion does.
+                 *
+                 * Skips on a bare dedicated server, where no player is expected — so the same suite
+                 * is honest on all three topologies without a per-topology scene list.
+                 */
+                Scene.of("remotePlayerIsPresent", 100, ctx -> {
+                    var player = ctx.player();
+                    ctx.record("player", player.getGameProfile().getName());
+                    ctx.record("dedicated", ctx.server().isDedicatedServer());
+                    ctx.expect(ctx.players()).as("players on the server").isNotEmpty();
+                    ctx.expect(player.connection).as("the player's network connection").isNotNull();
+                }),
                 // -- canaries (spec §5): the framework must CATCH these, or the gate is dead --
                 Scene.canary("canaryMustFail", 100, Canary.MUST_FAIL,
                         ctx -> ctx.fail("canary: this scene must be reported as FAIL")),
