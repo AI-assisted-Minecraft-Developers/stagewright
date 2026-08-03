@@ -64,6 +64,11 @@ subprojects {
         // yet. This is the bootstrap cost of separate repos — see the release-order note below.
         mavenLocal()
         mavenCentral()
+        // Rhino (KubeJS fork), compile-only, for the JavaScript scene loader. Not on Maven Central.
+        maven {
+            name = 'latvian-releases'
+            url = 'https://maven.latvian.dev/releases'
+        }
     }
 
     loom {

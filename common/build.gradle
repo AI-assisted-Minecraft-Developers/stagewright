@@ -38,4 +38,11 @@ dependencies {
     } else {
         implementation "net.magicterra:worlddriver-common:${rootProject.worlddriver_version}:dev"
     }
+
+    // JavaScript scene files. compileOnly, and that is the whole point: the runtime copy is the one
+    // worlddriver nests, so this jar neither embeds Rhino nor declares a runtime dependency on it,
+    // and a mod that loads StageWright without worlddriver still boots. `JsScenes` is the only class
+    // that touches it and is reached solely through a name probe, so its absence is a missing
+    // feature, not a NoClassDefFoundError at arm time.
+    compileOnly "dev.latvian.mods:rhino:${rootProject.rhino_version}"
 }

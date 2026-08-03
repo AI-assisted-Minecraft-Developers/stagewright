@@ -23,7 +23,43 @@ public final class Scenes {
         for (SceneProvider p : ServiceLoader.load(SceneProvider.class)) {
             out.addAll(p.scenes());
         }
+        out.addAll(scriptScenes());
         return List.copyOf(filter(out, System.getProperty(FILTER_PROPERTY)));
+    }
+
+    /** Rhino, probed by name for the same reason worlddriver is: to answer "can we run JS here"
+     *  without linking against a library that may not be present. */
+    private static final String RHINO_PROBE = "dev.latvian.mods.rhino.Context";
+
+    /** Where a pack keeps its scenes. Duplicated from {@code JsScenes} deliberately — this side must
+     *  be able to say the path in the message below without loading that class. */
+    private static final String SCENES_DIR = "config/stagewright/scenes";
+
+    /**
+     * Scenes a modpack contributed as JavaScript files, after the compiled ones.
+     *
+     * <p>Last, so a pack's scenes can never shift the origin slots of the mod scenes they run
+     * beside: slot assignment follows registry order, and a pack that added a file would otherwise
+     * move every mod scene's arena and turn a byte-pinned result into a diff.
+     *
+     * <p>The Rhino check is a presence probe, not a feature flag, and its absence is reported rather
+     * than passed over. A pack author who wrote scene files, ran the gate, and got GREEN without a
+     * single one of them executing has been told nothing — and the results file would look complete,
+     * because the scenes that did not load are not in it to be missed.
+     */
+    private static List<Scene> scriptScenes() {
+        if (!java.nio.file.Files.isDirectory(java.nio.file.Path.of(SCENES_DIR))) {
+            return List.of();
+        }
+        try {
+            Class.forName(RHINO_PROBE, false, Scenes.class.getClassLoader());
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException(SCENES_DIR + " holds scene files, but Rhino is not on this"
+                    + " runtime's classpath, so none of them can run. Rhino ships with worlddriver —"
+                    + " add it to the pack, or remove the directory if the scenes were not meant to"
+                    + " run here.");
+        }
+        return net.magicterra.stagewright.script.JsScenes.load();
     }
 
     /** {@code -Dstagewright.filter=sb.magnet*,wd.bridge*} — comma-separated globs ({@code *} and
