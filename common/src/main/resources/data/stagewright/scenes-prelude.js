@@ -8,22 +8,34 @@
 
 var __scenes = [];
 
-// scene(name, budgetTicks, body)
+// scene(name, budgetTicks, body[, options])
 //
 // budgetTicks is how long the scene may take in SERVER TICKS, not milliseconds — a scene is not a
 // test thread, it runs inline on the tick loop. Anything that needs time to happen goes through
 // s.await(...), never a loop.
-function scene(name, budgetTicks, body) {
+//
+// options.terrain picks the ground the arena is built on:
+//   'run_world'  (default) empty sky at the grid altitude — you build every block you assert about
+//   'superflat'  a bedrock/dirt/grass plain, arena at the surface
+//   'generated'  a normally-generated overworld — hills, caves, water, trees — arena at the surface
+// The last two are separate dimensions StageWright ships, so they are the same whatever world type
+// the run itself was launched with, and 'generated' uses a fixed seed so the landscape under a
+// given scene is the same every run.
+function scene(name, budgetTicks, body, options) {
     if (typeof name !== 'string' || !name) throw new Error('scene() needs a name');
     if (typeof budgetTicks !== 'number') throw new Error("scene '" + name + "' needs a tick budget");
     if (typeof body !== 'function') throw new Error("scene '" + name + "' needs a body function");
-    __scenes.push({ name: name, budgetTicks: budgetTicks | 0, body: body, optional: false });
+    var opts = options || {};
+    __scenes.push({
+        name: name, budgetTicks: budgetTicks | 0, body: body, optional: false,
+        terrain: opts.terrain ? String(opts.terrain) : 'run_world'
+    });
 }
 
 // A scene that may fail without failing the run. For a defect you have accepted and want watched
 // rather than fixed — it still runs, still reports, and still shows up in the results.
-scene.optional = function (name, budgetTicks, body) {
-    scene(name, budgetTicks, body);
+scene.optional = function (name, budgetTicks, body, options) {
+    scene(name, budgetTicks, body, options);
     __scenes[__scenes.length - 1].optional = true;
 };
 

@@ -3,6 +3,7 @@ package net.magicterra.stagewright.harness;
 import net.magicterra.stagewright.scene.Canary;
 import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.scene.SceneProvider;
+import net.magicterra.stagewright.scene.Terrain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -134,6 +135,50 @@ public final class Scenes {
                         ctx.assertBlock(0, 0, 0, Blocks.STONE);
                     });
                 }),
+                // -- terrain --
+                /*
+                 * The two shipped dimensions, asserted the only way that means anything: on what is
+                 * actually under the arena. A missing datapack, a dimension that failed to register,
+                 * or an arena left at the grid altitude instead of dropped to the surface all produce
+                 * air at dy=-1, and all three are the same bug from a scene author's chair — "I asked
+                 * for ground and did not get any".
+                 */
+                Scene.of("terrainSuperflatHasGroundUnderfoot", 100, ctx -> {
+                    ctx.assertBlock(0, -1, 0, Blocks.GRASS_BLOCK);
+                    ctx.assertBlock(0, 0, 0, Blocks.AIR);
+                    ctx.record("surfaceY", ctx.originY());
+                }).withTerrain(Terrain.SUPERFLAT),
+                /*
+                 * Asserts the two things that are true of generated terrain wherever the grid puts
+                 * an arena, and records the rest rather than asserting it. What is actually under a
+                 * given slot is worldgen's business: slot 2001 is open ocean, so `underfoot` reads
+                 * `water` and `relief` is 0. A scene demanding dry land here would be a scene about
+                 * where the grid happened to land, and it would break the day the grid moved.
+                 *
+                 * Pinned, because the whole point is that the landscape under this scene is the same
+                 * every run: fixed seed plus fixed slot is what makes generated terrain reproducible,
+                 * and an auto slot moves as the suite grows.
+                 */
+                Scene.of("terrainGeneratedPutsTheArenaOnTheSurface", 200, ctx -> {
+                    // Not air: the arena was dropped onto the world instead of left at y=200.
+                    ctx.assertNotBlock(0, -1, 0, Blocks.AIR);
+                    // Both flat generators in play — the run world's level-type and the superflat
+                    // dimension — surface below y=0. A noise overworld's is up at sea level, so the
+                    // altitude alone says which generator built this.
+                    int here = ctx.surfaceY(0, 0);
+                    int relief = 0;
+                    for (int d = 4; d <= 12; d += 4) {
+                        relief = Math.max(relief, Math.abs(ctx.surfaceY(d, 0) - here));
+                        relief = Math.max(relief, Math.abs(ctx.surfaceY(0, d) - here));
+                    }
+                    ctx.record("surfaceY", here);
+                    ctx.record("relief", relief);
+                    ctx.record("underfoot", ctx.blockAt(0, -1, 0).toString());
+                    if (here <= 0) {
+                        ctx.fail("generated terrain surfaces at y=" + here + ", below sea level for the"
+                                + " whole arena — this is a flat generator, not the noise one");
+                    }
+                }).withTerrain(Terrain.GENERATED).withOriginSlot(2001),
                 // -- topology probe --
                 /*
                  * The client-joins-server topology's whole claim is that the scenes ran with a real

@@ -12,9 +12,14 @@ import net.magicterra.stagewright.scene.SceneContext;
 import net.magicterra.stagewright.scene.SceneFailure;
 import net.magicterra.stagewright.scene.SceneOutcome;
 import net.magicterra.stagewright.scene.SceneSkipped;
+import net.magicterra.stagewright.scene.Terrain;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
  * Serial T0 scheduler on a PLAIN dedicated server. One scene at a time, each on
@@ -45,6 +50,12 @@ public final class StageWrightHarness {
     private Phase phase = Phase.PREP;
     private int phaseTicks;
     private SceneContext ctx;
+
+    /** The level the current scene's arena lives in — its {@link Scene#terrain()}'s dimension, or the
+     *  overworld. Resolved once at PREP rather than per tick: a scene must not be able to build its
+     *  arena in one level and assert about it in another if a dimension is unloaded mid-scene. */
+    private ServerLevel sceneLevel;
+
     private long sceneStartMs;
     private boolean finished;
 
@@ -149,19 +160,26 @@ public final class StageWrightHarness {
             return;
         }
 
-        ServerLevel level = server.overworld();
         BlockPos origin = originFor(slotByName.get(scene.name()));
         int radius = scene.chunkRadius();
 
         switch (phase) {
             case PREP -> {
                 if (phaseTicks == 0) {
-                    forceChunks(level, origin, radius, true);
                     sceneStartMs = System.currentTimeMillis();
+                    sceneLevel = levelFor(scene);
+                    if (sceneLevel == null) {
+                        record(scene, SceneOutcome.ENV_FAIL, 0, "terrain " + scene.terrain()
+                                + " needs dimension '" + scene.terrain().dimension() + "', which this"
+                                + " server does not have — StageWright's datapack did not load");
+                        return;
+                    }
+                    forceChunks(sceneLevel, origin, radius, true);
                 }
                 phaseTicks++;
+                ServerLevel level = sceneLevel;
                 if (allChunksLoaded(level, origin, radius)) {
-                    ctx = new SceneContext(level, origin, radius);
+                    ctx = new SceneContext(level, arenaOrigin(scene, level, origin), radius);
                     phase = Phase.RUN;
                     phaseTicks = 0;
                 } else if (phaseTicks > PREP_BUDGET_TICKS) {
@@ -171,6 +189,7 @@ public final class StageWrightHarness {
                 }
             }
             case RUN -> {
+                ServerLevel level = sceneLevel;
                 phaseTicks++;
                 try {
                     if (phaseTicks == 1) ctx.runBody(scene.body());
@@ -246,6 +265,7 @@ public final class StageWrightHarness {
         phase = Phase.PREP;
         phaseTicks = 0;
         ctx = null;
+        sceneLevel = null;
         if (index >= scenes.size()) finish();
     }
 
@@ -297,6 +317,40 @@ public final class StageWrightHarness {
         // Daemon, so it cannot itself become the thread that keeps the JVM alive on a clean shutdown.
         watchdog.setDaemon(true);
         watchdog.start();
+    }
+
+    /**
+     * The level this scene's arena is built in, or {@code null} if the terrain it asked for names a
+     * dimension this server does not have.
+     *
+     * <p>Null rather than a fallback to the overworld on purpose. A scene asking for
+     * {@link Terrain#GENERATED} wants hills; handing it the run world's empty sky instead would let
+     * it fail its own terrain assertions with a message about missing blocks, sending whoever reads
+     * the run looking for a bug in the scene rather than for the datapack that did not load.
+     */
+    private ServerLevel levelFor(Scene scene) {
+        Terrain terrain = scene.terrain();
+        if (terrain.dimension() == null) return server.overworld();
+        return server.getLevel(ResourceKey.create(Registries.DIMENSION,
+                ResourceLocation.parse(terrain.dimension())));
+    }
+
+    /**
+     * Where the scene's arena actually sits.
+     *
+     * <p>For {@link Terrain#RUN_WORLD} that is the grid position unchanged — {@code y=200} in empty
+     * sky, which is what every scene got before terrain was a choice. For the terrain dimensions it
+     * is the surface at the grid's x/z, one block up, so {@code dy=0} is the block a player standing
+     * there occupies and {@code setBlock(0, -1, 0, …)} replaces the ground under their feet. Without
+     * this a scene that asked for terrain would get its arena 200 blocks above it, which is the
+     * least useful possible answer to "put me on the ground".
+     *
+     * <p>Safe to call only once the arena chunks are loaded: the heightmap of an ungenerated chunk
+     * answers for terrain that does not exist yet.
+     */
+    private static BlockPos arenaOrigin(Scene scene, ServerLevel level, BlockPos gridOrigin) {
+        if (!scene.terrain().onSurface()) return gridOrigin;
+        return level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, gridOrigin);
     }
 
     private static BlockPos originFor(int slot) {

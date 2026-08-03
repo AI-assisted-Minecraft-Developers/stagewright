@@ -57,7 +57,7 @@ public final class Stages {
             SceneDef def = m.getAnnotation(SceneDef.class);
             String name = prefix + m.getName();
             out.add(new Scene(name, def.budget(), def.required(), Canary.NONE,
-                    invoker(name, m), def.originSlot(), def.chunkRadius()));
+                    invoker(name, m), def.originSlot(), def.chunkRadius(), def.terrain()));
         }
         return out;
     }

@@ -16,9 +16,11 @@ import dev.latvian.mods.rhino.Function;
 import dev.latvian.mods.rhino.NativeArray;
 import dev.latvian.mods.rhino.Scriptable;
 import dev.latvian.mods.rhino.ScriptableObject;
+import dev.latvian.mods.rhino.Undefined;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.scene.SceneContext;
+import net.magicterra.stagewright.scene.Terrain;
 
 /**
  * Scenes written in JavaScript, loaded from the run directory rather than compiled into a mod.
@@ -141,10 +143,26 @@ public final class JsScenes {
             if (!(body instanceof Function fn)) {
                 throw new IllegalStateException("scene '" + name + "' in " + file + " has no body");
             }
-            Scene scene = Scene.of(name, budget, ctx -> invoke(scope, fn, ctx, name));
+            Scene scene = Scene.of(name, budget, ctx -> invoke(scope, fn, ctx, name))
+                    .withTerrain(terrainOf(cx, s, name, file));
             out.add(optional ? scene.withRequired(false) : scene);
         }
         return out;
+    }
+
+    /** Read {@code options.terrain}, naming the file and scene if it is not a terrain we ship. The
+     *  prelude always sets the property, so an absent one means a scene file built its registration
+     *  by hand — treat that as the default rather than as an error. */
+    private static Terrain terrainOf(Context cx, Scriptable s, String name, String file) {
+        Object raw = ScriptableObject.getProperty(s, "terrain", cx);
+        if (raw == null || raw == Scriptable.NOT_FOUND || Undefined.isUndefined(raw)) {
+            return Terrain.RUN_WORLD;
+        }
+        try {
+            return Terrain.parse(String.valueOf(raw));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("scene '" + name + "' in " + file + ": " + e.getMessage(), e);
+        }
     }
 
     /**

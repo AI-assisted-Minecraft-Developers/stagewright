@@ -12,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
  * Per-scene handle: origin-relative world ops, assertions, and tick-continuation
@@ -239,6 +240,25 @@ public final class SceneContext {
             throw new SceneFailure("block at rel(" + dx + "," + dy + "," + dz + ") is "
                     + actual + ", expected " + expected + note());
         }
+    }
+
+    /** The inverse: for scenes that care that something is there without caring what. Mostly
+     *  {@code assertNotBlock(dx, -1, dz, Blocks.AIR)} — "there is ground under this" — which is the
+     *  only honest assertion about generated terrain, whose surface block is a biome's business. */
+    public void assertNotBlock(int dx, int dy, int dz, Block unwanted) {
+        Block actual = blockAt(dx, dy, dz);
+        if (actual == unwanted) {
+            throw new SceneFailure("block at rel(" + dx + "," + dy + "," + dz + ") is "
+                    + actual + ", which is exactly what it must not be" + note());
+        }
+    }
+
+    /** The world y of the first free block above the surface at an origin-relative column — the same
+     *  heightmap the harness uses to drop a terrain arena onto the ground, so a scene can measure
+     *  the shape of what it landed on. */
+    public int surfaceY(int dx, int dz) {
+        return level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                origin.offset(dx, 0, dz)).getY();
     }
 
     /**

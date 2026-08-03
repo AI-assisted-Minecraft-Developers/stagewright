@@ -32,6 +32,11 @@ public @interface SceneDef {
      *  product bugs. Being SWALLOWED still REDs regardless. */
     boolean required() default true;
 
+    /** The ground the arena is built on. Defaults to the run world's empty sky at the grid
+     *  altitude — ask for {@link Terrain#SUPERFLAT} or {@link Terrain#GENERATED} to stand on
+     *  actual terrain instead. */
+    Terrain terrain() default Terrain.RUN_WORLD;
+
     /** Free-form labels for {@code -Dstagewright.filter}. Not part of the name, not reconciled. */
     String[] tags() default {};
 }
