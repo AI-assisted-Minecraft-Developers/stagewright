@@ -95,11 +95,12 @@ final class ArenaAudit {
      * of entities it started with has not leaked, and tracking which ones would mean holding
      * references to entities across a teardown that exists to let go of them.
      *
-     * <p>None of this measured anything until 2026-08-05. Arena chunks were never promoted to
-     * entity-ticking, so every query behind these numbers returned nothing and the audit reported a
-     * spotless world it could not see. A metric that cannot fail is worse than no metric, so if this
-     * ever reads clean across a whole suite again, check that {@code entitiesLiveInTheArena} is
-     * still in the registry and still passing before believing it.
+     * <p>This has caught something since its first run: on 2026-08-04 it swept four entities out of
+     * each of worlddriver's two combat arenas — a day before an arena could tick an entity at all.
+     * Which is the useful thing to know about it. An arena that cannot tick still shows its entities
+     * to every query here, so the audit reads the same four either way and cannot tell a live arena
+     * from an inert one. It is a leak detector, not a liveness one; {@code entitiesLiveInTheArena}
+     * answers liveness.
      */
     static List<String> diff(Snapshot before, Snapshot after) {
         List<String> out = new ArrayList<>();

@@ -305,12 +305,16 @@ public final class StageWrightHarness {
      * forceChunks' footprint so scene bodies never touch a not-yet-loaded neighbour chunk on their
      * first tick.
      *
-     * <p>Entity ticking is checked as well as presence, and the difference is not academic:
-     * {@code hasChunkAt} answers yes at FULL, which is two promotions short of a chunk that runs
-     * entities. An arena that starts a scene without it looks completely normal — blocks read and
-     * write — while every entity in it sits inert and invisible to {@code getEntities} and to every
-     * command selector. Waiting here is also what makes the ticket radius self-checking: get it
-     * wrong and scenes ENV_FAIL in PREP, instead of passing while testing nothing.
+     * <p>Entity ticking is checked as well as presence, and the difference is not academic.
+     * {@code hasChunkAt} answers yes at FULL, and the promotion to ENTITY_TICKING is an asynchronous
+     * step after that: {@code ChunkMap.prepareEntityTickingChunk} waits for the whole 5×5 around the
+     * chunk to be FULL, which at an arena 100k blocks out is fresh worldgen and takes real ticks. A
+     * scene that starts inside that gap gets an arena which reads completely normal — blocks work,
+     * and every entity in it is visible to {@code getEntities} and to command selectors, because
+     * FULL already means {@code Visibility.TRACKED}. The only thing missing is that nothing in it
+     * ever ticks, which no assertion notices until one depends on it. Waiting here is also what
+     * makes the ticket radius self-checking: get it wrong and scenes ENV_FAIL in PREP, instead of
+     * passing while testing nothing.
      */
     private boolean arenaReady(ServerLevel level, BlockPos origin, int radius) {
         for (int dx = -radius; dx <= radius; dx++)
@@ -430,11 +434,10 @@ public final class StageWrightHarness {
      * Chunks forced beyond the arena itself, so the arena can tick entities.
      *
      * <p>A chunk only becomes {@code ENTITY_TICKING} once the 5×5 around it is FULL — that is what
-     * {@code ChunkMap.prepareEntityTickingChunk} waits for. Forcing only the arena's own radius left
-     * the arena with a ticket that said entity-ticking and a promotion that never completed, and the
-     * failure was silent in the worst way: blocks worked, so scenes passed, while every entity placed
-     * in an arena sat in a HIDDEN section — never ticked, and invisible to {@code getEntities} and to
-     * every command selector.
+     * {@code ChunkMap.prepareEntityTickingChunk} waits for. A region ticket cut to exactly the
+     * arena's radius cannot deliver it: that puts level 32 on the centre, which is BLOCK_TICKING,
+     * and no entity in the arena would ever tick. Two chunks of skirt is the smallest margin that
+     * leaves the arena at 31 and its 5×5 at FULL.
      */
     private static final int ENTITY_TICKING_MARGIN = 2;
 
@@ -451,9 +454,8 @@ public final class StageWrightHarness {
      * <p>The radius is {@code chunkRadius + 2} because a region ticket puts level
      * {@code 33 - radius} on the centre and spreads outward by one per chunk: the arena's own chunks
      * land at or under 31, which is entity-ticking, and the two-chunk skirt lands at 32 and 33, which
-     * is FULL. That skirt is not decoration — a chunk is only promoted to ENTITY_TICKING once the 5×5
-     * around it is FULL, and without it the arena carried a ticket that claimed entity ticking while
-     * the promotion never ran.
+     * is FULL. That skirt is not decoration: drop it and the centre lands at 32, and an arena that
+     * cannot tick an entity looks exactly like one that can.
      *
      * <p>Region tickets are also not persisted, so a run killed mid-scene leaves nothing pinned for
      * the next one to inherit — which {@code setChunkForced} does, through the saved data.
