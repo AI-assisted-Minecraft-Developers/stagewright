@@ -19,6 +19,8 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
@@ -184,14 +186,14 @@ public final class StageWrightHarness {
                 }
                 phaseTicks++;
                 ServerLevel level = sceneLevel;
-                if (allChunksLoaded(level, origin, radius)) {
+                if (arenaReady(level, origin, radius)) {
                     ctx = new SceneContext(level, arenaOrigin(scene, level, origin), radius);
-                    arenaBefore = ArenaAudit.take(level, origin, radius, forcedReach(radius));
+                    arenaBefore = ArenaAudit.take(level, origin, radius);
                     phase = Phase.RUN;
                     phaseTicks = 0;
                 } else if (phaseTicks > PREP_BUDGET_TICKS) {
-                    record(scene, SceneOutcome.ENV_FAIL, 0, "arena chunks not loaded within "
-                            + PREP_BUDGET_TICKS + " ticks");
+                    record(scene, SceneOutcome.ENV_FAIL, 0, "arena chunks were not loaded and"
+                            + " entity-ticking within " + PREP_BUDGET_TICKS + " ticks");
                     teardown(scene, level, origin, radius);
                 }
             }
@@ -290,7 +292,7 @@ public final class StageWrightHarness {
      */
     private void auditLeaks(Scene scene, ServerLevel level, BlockPos origin, int radius) {
         if (arenaBefore == null) return;                // ENV_FAIL out of PREP: nothing ever ran
-        for (String leak : ArenaAudit.diff(arenaBefore, ArenaAudit.take(level, origin, radius, forcedReach(radius)))) {
+        for (String leak : ArenaAudit.diff(arenaBefore, ArenaAudit.take(level, origin, radius))) {
             leakedScenes.add(scene.name());
             StageWrightCommon.LOG.warn("[{}] LEAK after '{}': {}", StageWrightCommon.MOD_ID,
                     scene.name(), leak);
@@ -298,13 +300,25 @@ public final class StageWrightHarness {
         arenaBefore = null;
     }
 
-    /** PREP waits for the full (2r+1)x(2r+1) force-loaded neighborhood, not just the
-     *  origin chunk — matching forceChunks' footprint so scene bodies never touch a
-     *  not-yet-loaded neighbor chunk on their first tick. */
-    private boolean allChunksLoaded(ServerLevel level, BlockPos origin, int radius) {
+    /**
+     * PREP waits for the full (2r+1)x(2r+1) arena, not just the origin chunk — matching
+     * forceChunks' footprint so scene bodies never touch a not-yet-loaded neighbour chunk on their
+     * first tick.
+     *
+     * <p>Entity ticking is checked as well as presence, and the difference is not academic:
+     * {@code hasChunkAt} answers yes at FULL, which is two promotions short of a chunk that runs
+     * entities. An arena that starts a scene without it looks completely normal — blocks read and
+     * write — while every entity in it sits inert and invisible to {@code getEntities} and to every
+     * command selector. Waiting here is also what makes the ticket radius self-checking: get it
+     * wrong and scenes ENV_FAIL in PREP, instead of passing while testing nothing.
+     */
+    private boolean arenaReady(ServerLevel level, BlockPos origin, int radius) {
         for (int dx = -radius; dx <= radius; dx++)
-            for (int dz = -radius; dz <= radius; dz++)
-                if (!level.hasChunkAt(origin.offset(dx * 16, 0, dz * 16))) return false;
+            for (int dz = -radius; dz <= radius; dz++) {
+                BlockPos p = origin.offset(dx * 16, 0, dz * 16);
+                if (!level.hasChunkAt(p)) return false;
+                if (!level.isPositionEntityTicking(p)) return false;
+            }
         return true;
     }
 
@@ -424,16 +438,33 @@ public final class StageWrightHarness {
      */
     private static final int ENTITY_TICKING_MARGIN = 2;
 
-    /** How far the harness actually pins, as opposed to how far the scene's arena reaches. */
-    static int forcedReach(int radius) {
-        return radius + ENTITY_TICKING_MARGIN;
-    }
-
+    /**
+     * Pin the arena open, wide enough that it will tick entities.
+     *
+     * <p>One region ticket, not a grid of {@code setChunkForced} calls. Both pin the same chunks, but
+     * {@code setChunkForced} loads each newly forced chunk SYNCHRONOUSLY — and an arena sits 100k
+     * blocks out, so every one of those is a fresh worldgen. Nine of them fit in a tick. Twenty-five
+     * took sixty seconds, and the server's own watchdog declared the tick crashed and killed the run.
+     * A region ticket asks for the same chunks and lets the chunk system deliver them across the
+     * ticks that follow, which is what {@code PREP} is already waiting through.
+     *
+     * <p>The radius is {@code chunkRadius + 2} because a region ticket puts level
+     * {@code 33 - radius} on the centre and spreads outward by one per chunk: the arena's own chunks
+     * land at or under 31, which is entity-ticking, and the two-chunk skirt lands at 32 and 33, which
+     * is FULL. That skirt is not decoration — a chunk is only promoted to ENTITY_TICKING once the 5×5
+     * around it is FULL, and without it the arena carried a ticket that claimed entity ticking while
+     * the promotion never ran.
+     *
+     * <p>Region tickets are also not persisted, so a run killed mid-scene leaves nothing pinned for
+     * the next one to inherit — which {@code setChunkForced} does, through the saved data.
+     */
     private static void forceChunks(ServerLevel level, BlockPos origin, int radius, boolean force) {
-        int cx = origin.getX() >> 4, cz = origin.getZ() >> 4;
-        int reach = forcedReach(radius);
-        for (int dx = -reach; dx <= reach; dx++)
-            for (int dz = -reach; dz <= reach; dz++)
-                level.setChunkForced(cx + dx, cz + dz, force);
+        ChunkPos centre = new ChunkPos(origin);
+        int reach = radius + ENTITY_TICKING_MARGIN;
+        if (force) {
+            level.getChunkSource().addRegionTicket(TicketType.FORCED, centre, reach, centre);
+        } else {
+            level.getChunkSource().removeRegionTicket(TicketType.FORCED, centre, reach, centre);
+        }
     }
 }

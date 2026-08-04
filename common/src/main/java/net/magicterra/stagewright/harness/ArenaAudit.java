@@ -48,21 +48,13 @@ final class ArenaAudit {
 
     private ArenaAudit() {}
 
-    /**
-     * Everything within the scene's arena, plus the level-wide state around it.
-     *
-     * <p>Two radii, and they are not interchangeable. {@code radius} is the scene's own arena — what
-     * the scene is responsible for and what the sweep is allowed to touch. {@code forcedReach} is
-     * the wider footprint the harness actually pins, which is larger so the arena can tick entities;
-     * measuring the chunk ledger against the narrow one reports the margin itself as a leak, in
-     * every scene, which is a false positive loud enough to bury a real one.
-     */
-    static Snapshot take(ServerLevel level, BlockPos origin, int radius, int forcedReach) {
+    /** Everything within the scene's arena, plus the level-wide state around it. */
+    static Snapshot take(ServerLevel level, BlockPos origin, int radius) {
         return new Snapshot(
                 idsIn(level, arena(origin, radius)),
                 level.isRaining(),
                 level.isThundering(),
-                forcedOutside(level, origin, forcedReach),
+                level.getForcedChunks().size(),
                 gameRuleFingerprint(level));
     }
 
@@ -123,9 +115,12 @@ final class ArenaAudit {
         if (after.thundering != before.thundering) {
             out.add("thunder left " + (after.thundering ? "on" : "off"));
         }
+        // Every forced chunk here is the scene's doing: the harness pins its own arena with a region
+        // ticket, which is not saved data and never appears in getForcedChunks. So the count needs no
+        // window carved out of it — it is only ever chunks a scene pinned somewhere else with
+        // /forceload and did not release.
         if (after.forcedChunks != before.forcedChunks) {
-            out.add("force-loaded chunks outside the arena: " + before.forcedChunks
-                    + " -> " + after.forcedChunks);
+            out.add("force-loaded chunks: " + before.forcedChunks + " -> " + after.forcedChunks);
         }
         if (after.gameRuleFingerprint != before.gameRuleFingerprint) out.add("a gamerule was changed");
         return out;
@@ -134,24 +129,6 @@ final class ArenaAudit {
     private static AABB arena(BlockPos origin, int radius) {
         int reach = (radius * 2 + 1) * 8;               // half-width of the forced-chunk window
         return new AABB(origin).inflate(reach, 128, reach);
-    }
-
-    /**
-     * Force-loaded chunks that are not the scene's own window.
-     *
-     * <p>The total would be useless here: the harness forces the arena open before the baseline is
-     * taken and releases it before the comparison, so a scene that leaked nothing would read as
-     * having gone from nine forced chunks to zero. Excluding the window measures the thing actually
-     * worth knowing — whether the scene pinned chunks somewhere else and left them pinned.
-     */
-    private static int forcedOutside(ServerLevel level, BlockPos origin, int forcedReach) {
-        int cx = origin.getX() >> 4, cz = origin.getZ() >> 4;
-        int n = 0;
-        for (long packed : level.getForcedChunks()) {
-            int fx = ChunkPos.getX(packed), fz = ChunkPos.getZ(packed);
-            if (Math.abs(fx - cx) > forcedReach || Math.abs(fz - cz) > forcedReach) n++;
-        }
-        return n;
     }
 
     private static Set<UUID> idsIn(ServerLevel level, AABB box) {
