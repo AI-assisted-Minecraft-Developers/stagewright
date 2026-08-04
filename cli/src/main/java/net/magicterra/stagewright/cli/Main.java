@@ -88,8 +88,19 @@ public final class Main {
         Consumer<String> log = line -> System.out.println("[stagewright] " + line);
         RunDirectory.provision(gameDir, resultsName, !"false".equals(opts.get("clean-world")),
                 scenes, log);
+
+        // Resolved once, before anything needs it. Detection is right for a server pack, which
+        // arrives with its loader already unpacked — but a client game dir on its first run holds
+        // nothing at all, and the loader that will be installed into it is only knowable from
+        // --loader. Asking twice let the install step answer null while the launch step, three
+        // lines later, knew the answer perfectly well.
+        String loader = opts.containsKey("loader") ? opts.get("loader") : GameLaunch.loader(gameDir);
         if (!opts.containsKey("no-install")) {
-            ModInstall.install(gameDir, GameLaunch.loader(gameDir), extraMods, log);
+            ModInstall.install(gameDir, loader, extraMods, log);
+        }
+
+        if (opts.containsKey("headlessmc")) {
+            return runClient(gameDir, results, opts, systemProps, timeoutMinutes, loader, log);
         }
 
         List<String> command = buildCommand(gameDir, opts, systemProps);
@@ -113,6 +124,80 @@ public final class Main {
         }
 
         return judge(gameDir, results, opts, runLog);
+    }
+
+    /**
+     * The client topologies: a real Minecraft client, headless, driven by HeadlessMC.
+     *
+     * <p>Waiting differs from the server path and cannot be borrowed from it. A dedicated server
+     * halts itself when the suite drains, so waiting for the process IS waiting for the run. A
+     * client sitting in a world does not necessarily end — and HeadlessMC outlives it either way,
+     * holding a command prompt open on the stdin we deliberately never closed. So the signal is the
+     * results file's own done footer, which is the same thing the verdict reads and the only
+     * statement the run makes about being finished.
+     */
+    private static int runClient(Path gameDir, Path results, Map<String, String> opts,
+                                 List<String> systemProps, int timeoutMinutes, String loader,
+                                 Consumer<String> log)
+            throws IOException, InterruptedException {
+        Path hmcJar = Path.of(require(opts, "headlessmc")).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(hmcJar)) {
+            throw new IllegalArgumentException("--headlessmc " + hmcJar + " is not a file — download"
+                    + " headlessmc-launcher-<version>.jar from"
+                    + " https://github.com/headlesshq/headlessmc/releases and point this at it");
+        }
+        String javaBinary = opts.getOrDefault("java",
+                Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        if (loader == null) {
+            throw new IllegalArgumentException("nothing in " + gameDir + " says which loader to"
+                    + " install — pass --loader neoforge|fabric (a fresh client game dir has no"
+                    + " loader in it yet, which is normal for a first run)");
+        }
+
+        List<String> props = new ArrayList<>(systemProps);
+        props.add("-Dstagewright.autorun=true");
+        if (opts.containsKey("connect")) {
+            props.add("-Dstagewright.client.connect=" + opts.get("connect"));
+        } else {
+            props.add("-Dstagewright.client.world=" + opts.getOrDefault("world", "stagewright"));
+        }
+        HeadlessClient.writeConfig(gameDir, gameDir, props, log);
+
+        String versionId = HeadlessClient.installLoader(hmcJar, gameDir, gameDir, javaBinary,
+                loader, require(opts, "mc-version"), log);
+        Process hmc = HeadlessClient.launch(hmcJar, gameDir, javaBinary, versionId, log);
+
+        Path hmcLog = gameDir.resolve("stagewright-headlessmc.log");
+        boolean finished = awaitDoneFooter(results, timeoutMinutes, hmc);
+        hmc.destroyForcibly();
+        hmc.waitFor(30, TimeUnit.SECONDS);
+        if (!finished) {
+            System.err.println("[stagewright] the client run did not finish within " + timeoutMinutes
+                    + " minutes — see " + hmcLog + " and " + gameDir.resolve("logs/latest.log"));
+        }
+        return judge(gameDir, results, opts, hmcLog);
+    }
+
+    /**
+     * Wait for the suite to write its done footer, or for HeadlessMC to die first.
+     *
+     * <p>Polled rather than watched: the file is appended to by another process on another
+     * filesystem path, and a second of latency on a run measured in minutes buys nothing worth the
+     * complication of a watch service.
+     */
+    private static boolean awaitDoneFooter(Path results, int timeoutMinutes, Process hmc)
+            throws IOException, InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(timeoutMinutes);
+        while (System.nanoTime() < deadline) {
+            if (Files.isRegularFile(results)) {
+                for (String line : Files.readAllLines(results, java.nio.charset.StandardCharsets.UTF_8)) {
+                    if (line.contains("\"type\":\"done\"")) return true;
+                }
+            }
+            if (!hmc.isAlive()) return false;
+            Thread.sleep(1000);
+        }
+        return false;
     }
 
     /**
@@ -202,6 +287,11 @@ public final class Main {
                   --mod <jar>         also install this mod (repeatable — e.g. the driver whose
                                       verbs your scenes call)
                   --no-install        do not touch mods/; the pack already has what it needs
+                  --headlessmc <jar>  run a CLIENT topology through this headlessmc-launcher jar
+                  --mc-version <ver>  Minecraft version to install a loader for (with --headlessmc)
+                  --loader <name>     neoforge|fabric to install; detected when the dir already says
+                  --world <name>      singleplayer world the client creates (default stagewright)
+                  --connect <h:port>  join this server instead of creating a world
                   --launch "<cmd>"    start the server this way instead of detecting it
                   --java <path>       java executable to launch with
                   -D<key>=<value>     extra system properties for the game

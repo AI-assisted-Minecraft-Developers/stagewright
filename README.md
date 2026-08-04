@@ -27,6 +27,35 @@ Scenes are plain JavaScript and register into the same registry, canaries, and r
 ones do — see [Writing a scene](#writing-a-scene) for the model and `--help` for the rest of the
 flags.
 
+### Client topologies without a display or an account
+
+A dedicated server cannot reach anything that only exists on a client — a GUI a mod adds, a screen a
+machine opens, the client half of a client/server split. Testing those needs a real client, and a
+real client on a build box needs assets, natives, a JVM, and a login. Point the CLI at
+[HeadlessMC](https://github.com/headlesshq/headlessmc) and it needs none of that from you:
+
+```
+java -jar stagewright.jar --game-dir <a client game dir> \
+     --headlessmc headlessmc-launcher-2.10.0.jar --loader neoforge --mc-version 1.21.1 \
+     --scenes <a folder of .js files>
+```
+
+The first run downloads Minecraft and the loader into that game dir — minutes, once. Later runs
+reuse them. The client is genuinely headless (HeadlessMC stubs out every LWJGL call, so there is no
+display and no Xvfb) and runs on an offline account, which needs no Minecraft login.
+
+By default the client creates and enters a singleplayer world (`--world <name>`), so the suite runs
+on its integrated server — pass `--connect host:port` to join a dedicated server instead.
+
+A run that ends GREEN still logs three `ERROR`s, and none of them is a problem. Two are an offline
+account being an offline account: authlib returns `401` fetching user properties, and Realms rejects
+the session. The third is `OpenAL 1.1 not supported`, after which vanilla turns sound off by itself.
+There is also a `Couldn't save auto screenshot` warning for the world's `icon.png` — a PNG write, on
+a client whose graphics calls are stubs. Do not chase any of the four.
+
+Anything that depends on rendering is meaningless here by construction. Screenshots and pixel
+assertions are not a client topology feature under `-lwjgl`; screen structure and input are.
+
 ## Writing a scene
 
 A scene is a static method taking a `SceneContext`. `@SceneSet` names the prefix; `@SceneDef` sets

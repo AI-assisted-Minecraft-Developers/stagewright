@@ -83,8 +83,9 @@ final class ModInstall {
     private static Path framework(Path mods, String loader) throws IOException {
         if (loader == null) {
             throw new IllegalArgumentException("cannot tell which loader this pack runs on, so there"
-                    + " is no way to pick the right StageWright build — pass --mod <jar> to name it,"
-                    + " or --no-install if the pack already has it");
+                    + " is no way to pick the right StageWright build — pass --loader"
+                    + " neoforge|fabric to say so, --mod <jar> to name the build yourself, or"
+                    + " --no-install if the pack already has it");
         }
         String resource = RESOURCE_DIR + FRAMEWORK_PREFIX + loader + ".jar";
         Path target = mods.resolve(FRAMEWORK_PREFIX + loader + ".jar");
