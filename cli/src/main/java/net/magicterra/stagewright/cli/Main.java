@@ -99,19 +99,16 @@ public final class Main {
             ModInstall.install(gameDir, loader, extraMods, log);
         }
 
+        if (opts.containsKey("with-client")) {
+            return runServerWithClient(gameDir, results, opts, systemProps, extraMods,
+                    timeoutMinutes, loader, log);
+        }
         if (opts.containsKey("headlessmc")) {
             return runClient(gameDir, results, opts, systemProps, timeoutMinutes, loader, log);
         }
 
-        List<String> command = buildCommand(gameDir, opts, systemProps);
-        System.out.println("[stagewright] " + String.join(" ", command));
-
         Path runLog = gameDir.resolve("stagewright-run.log");
-        Process game = new ProcessBuilder(command)
-                .directory(gameDir.toFile())
-                .redirectErrorStream(true)
-                .redirectOutput(ProcessBuilder.Redirect.to(runLog.toFile()))
-                .start();
+        Process game = startServer(gameDir, opts, systemProps, List.of(), runLog);
 
         if (!game.waitFor(timeoutMinutes, TimeUnit.MINUTES)) {
             game.destroyForcibly();
@@ -127,7 +124,163 @@ public final class Main {
     }
 
     /**
-     * The client topologies: a real Minecraft client, headless, driven by HeadlessMC.
+     * The production topology: the pack's dedicated server, with a real client joined to it.
+     *
+     * <p>The other two topologies are one JVM. This one is the only shape a player ever actually
+     * plays, and the only one where a mod's client half and server half have to agree over a wire —
+     * so it is where desync, a packet a mod forgot to register, and anything guarded by
+     * {@code isClientSide} show up. A pack that is green on the other two and red here is not an
+     * unlucky pack; it is a pack whose players would have hit this.
+     *
+     * <p>The server is the half that matters. It runs the scenes, it writes the results, and it
+     * halts itself when they drain — so waiting for it IS waiting for the run, exactly as in the
+     * plain server topology. The client's whole job is to be logged in while that happens, which is
+     * what {@code -Dstagewright.awaitPlayer} makes load-bearing: without a player the server sits
+     * armed and starts nothing, so a client that never arrives fails as a timeout rather than as a
+     * suite that quietly proved nothing.
+     *
+     * <p>Neither half is trusted to bring itself down. Both do — the server halts, and the client
+     * closes when the server drops it — but a run that ends with an orphaned headless Minecraft
+     * holding a port is a broken CI box for everybody afterwards, so both are killed in a finally.
+     */
+    private static int runServerWithClient(Path gameDir, Path results, Map<String, String> opts,
+                                           List<String> systemProps, List<Path> extraMods,
+                                           int timeoutMinutes, String loader, Consumer<String> log)
+            throws IOException, InterruptedException {
+        Path clientDir = Path.of(require(opts, "with-client")).toAbsolutePath().normalize();
+        if (clientDir.equals(gameDir)) {
+            throw new IllegalArgumentException("--with-client names the same directory as --game-dir"
+                    + " — the two halves run at the same time, so they cannot share a world, a log"
+                    + " or a results file");
+        }
+        Path hmcJar = headlessMcJar(opts);
+        String javaBinary = javaBinary(opts);
+        if (loader == null) {
+            throw new IllegalArgumentException("nothing in " + gameDir + " says which loader this"
+                    + " pack runs on, and the client half has to be built for the same one — pass"
+                    + " --loader neoforge|fabric");
+        }
+
+        // The client half gets what the server half got, minus the scenes. It never arms a harness,
+        // so a scene file there is dead weight at best; at worst it is a second suite nobody asked
+        // for, writing over the results this run is going to be judged on.
+        RunDirectory.provision(clientDir, results.getFileName().toString(),
+                !"false".equals(opts.get("clean-world")), null, log);
+        if (!opts.containsKey("no-install")) {
+            ModInstall.install(clientDir, loader, extraMods, log);
+        }
+
+        String address = "127.0.0.1:" + serverPort(gameDir);
+        HeadlessClient.writeConfig(clientDir, clientDir,
+                List.of("-Dstagewright.client.connect=" + address), log);
+        // Before the server starts, not after: a cold client directory downloads Minecraft here, and
+        // minutes of that with a server already up would be minutes of the run's own timeout spent
+        // on a server idling for a player that is still being installed.
+        String versionId = HeadlessClient.installLoader(hmcJar, clientDir, clientDir, javaBinary,
+                loader, require(opts, "mc-version"), log);
+
+        Path runLog = gameDir.resolve("stagewright-run.log");
+        Process server = startServer(gameDir, opts, systemProps,
+                List.of("-Dstagewright.awaitPlayer=true"), runLog);
+        Process client = null;
+        try {
+            log.accept("client half joining " + address);
+            client = HeadlessClient.launch(hmcJar, clientDir, javaBinary, versionId, log);
+            if (!server.waitFor(timeoutMinutes, TimeUnit.MINUTES)) {
+                System.err.println("[stagewright] the run exceeded " + timeoutMinutes
+                        + " minutes and was killed — see " + runLog + " for the server and "
+                        + clientDir.resolve("logs/latest.log") + " for the client. A server that"
+                        + " logged 'deferring the suite until a player joins' and nothing after it"
+                        + " never got its player.");
+            }
+        } finally {
+            if (client != null) kill(client);
+            kill(server);
+        }
+
+        return judge(gameDir, results, opts, runLog);
+    }
+
+    private static Path headlessMcJar(Map<String, String> opts) {
+        Path jar = Path.of(require(opts, "headlessmc")).toAbsolutePath().normalize();
+        if (!Files.isRegularFile(jar)) {
+            throw new IllegalArgumentException("--headlessmc " + jar + " is not a file — download"
+                    + " headlessmc-launcher-<version>.jar from"
+                    + " https://github.com/headlesshq/headlessmc/releases and point this at it");
+        }
+        return jar;
+    }
+
+    private static String javaBinary(Map<String, String> opts) {
+        return opts.getOrDefault("java",
+                Path.of(System.getProperty("java.home"), "bin", "java").toString());
+    }
+
+    /**
+     * Stop a half of a run, and everything it started.
+     *
+     * <p>The descendants are the point. HeadlessMC runs the game as a CHILD process and outlives it,
+     * so killing the launcher alone leaves a headless Minecraft still holding the port — and the
+     * next run on that box then fails to bind, which reads as a bug in the pack rather than as
+     * yesterday's run never having ended. They are collected before the parent dies, because once it
+     * does the tree is no longer walkable from here.
+     */
+    private static void kill(Process p) throws InterruptedException {
+        if (!p.isAlive()) return;
+        List<ProcessHandle> descendants = p.descendants().toList();
+        p.destroy();
+        if (!p.waitFor(10, TimeUnit.SECONDS)) p.destroyForcibly();
+        for (ProcessHandle child : descendants) {
+            if (child.isAlive()) child.destroyForcibly();
+        }
+        p.waitFor(20, TimeUnit.SECONDS);
+    }
+
+    /**
+     * The port the pack's server will listen on.
+     *
+     * <p>Read from {@code server.properties} rather than assumed, because a pack that moved off
+     * 25565 would otherwise produce a client dialling a port nothing answers — which looks from the
+     * outside exactly like the server failing to start.
+     */
+    private static int serverPort(Path gameDir) throws IOException {
+        Path properties = gameDir.resolve("server.properties");
+        if (Files.isRegularFile(properties)) {
+            for (String line : Files.readAllLines(properties, java.nio.charset.StandardCharsets.UTF_8)) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("server-port=")) {
+                    String value = trimmed.substring("server-port=".length()).trim();
+                    if (!value.isEmpty()) return Integer.parseInt(value);
+                }
+            }
+        }
+        return 25565;
+    }
+
+    /** Start the pack's server, with any topology-specific properties added to the author's. */
+    private static Process startServer(Path gameDir, Map<String, String> opts,
+                                       List<String> systemProps, List<String> topologyProps,
+                                       Path runLog) throws IOException {
+        List<String> props = new ArrayList<>(topologyProps);
+        props.addAll(systemProps);
+        List<String> command = buildCommand(gameDir, opts, props);
+        System.out.println("[stagewright] " + String.join(" ", command));
+        return new ProcessBuilder(command)
+                .directory(gameDir.toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.to(runLog.toFile()))
+                .start();
+    }
+
+    /**
+     * The integrated-server topology: a real Minecraft client, headless, in a world of its own.
+     *
+     * <p>A client joining someone else's server is deliberately NOT a mode here. It runs fine —
+     * {@code ClientDirector} takes {@code stagewright.client.connect} and the pair works — but the
+     * scenes then run on that server and write their results there, so this process could look at
+     * its own game directory forever and only ever report ENV. Running both halves is
+     * {@code --with-client}, and it is the only shape of that topology this CLI can hand back a
+     * verdict for. This exit code always means the run it could see.
      *
      * <p>Waiting differs from the server path and cannot be borrowed from it. A dedicated server
      * halts itself when the suite drains, so waiting for the process IS waiting for the run. A
@@ -140,14 +293,8 @@ public final class Main {
                                  List<String> systemProps, int timeoutMinutes, String loader,
                                  Consumer<String> log)
             throws IOException, InterruptedException {
-        Path hmcJar = Path.of(require(opts, "headlessmc")).toAbsolutePath().normalize();
-        if (!Files.isRegularFile(hmcJar)) {
-            throw new IllegalArgumentException("--headlessmc " + hmcJar + " is not a file — download"
-                    + " headlessmc-launcher-<version>.jar from"
-                    + " https://github.com/headlesshq/headlessmc/releases and point this at it");
-        }
-        String javaBinary = opts.getOrDefault("java",
-                Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        Path hmcJar = headlessMcJar(opts);
+        String javaBinary = javaBinary(opts);
         if (loader == null) {
             throw new IllegalArgumentException("nothing in " + gameDir + " says which loader to"
                     + " install — pass --loader neoforge|fabric (a fresh client game dir has no"
@@ -156,11 +303,7 @@ public final class Main {
 
         List<String> props = new ArrayList<>(systemProps);
         props.add("-Dstagewright.autorun=true");
-        if (opts.containsKey("connect")) {
-            props.add("-Dstagewright.client.connect=" + opts.get("connect"));
-        } else {
-            props.add("-Dstagewright.client.world=" + opts.getOrDefault("world", "stagewright"));
-        }
+        props.add("-Dstagewright.client.world=" + opts.getOrDefault("world", "stagewright"));
         HeadlessClient.writeConfig(gameDir, gameDir, props, log);
 
         String versionId = HeadlessClient.installLoader(hmcJar, gameDir, gameDir, javaBinary,
@@ -169,8 +312,7 @@ public final class Main {
 
         Path hmcLog = gameDir.resolve("stagewright-headlessmc.log");
         boolean finished = awaitDoneFooter(results, timeoutMinutes, hmc);
-        hmc.destroyForcibly();
-        hmc.waitFor(30, TimeUnit.SECONDS);
+        kill(hmc);
         if (!finished) {
             System.err.println("[stagewright] the client run did not finish within " + timeoutMinutes
                     + " minutes — see " + hmcLog + " and " + gameDir.resolve("logs/latest.log"));
@@ -291,7 +433,7 @@ public final class Main {
                   --mc-version <ver>  Minecraft version to install a loader for (with --headlessmc)
                   --loader <name>     neoforge|fabric to install; detected when the dir already says
                   --world <name>      singleplayer world the client creates (default stagewright)
-                  --connect <h:port>  join this server instead of creating a world
+                  --with-client <dir> also run a client, in this dir, joined to the pack's server
                   --launch "<cmd>"    start the server this way instead of detecting it
                   --java <path>       java executable to launch with
                   -D<key>=<value>     extra system properties for the game

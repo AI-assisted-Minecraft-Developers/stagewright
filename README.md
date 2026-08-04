@@ -44,8 +44,8 @@ The first run downloads Minecraft and the loader into that game dir — minutes,
 reuse them. The client is genuinely headless (HeadlessMC stubs out every LWJGL call, so there is no
 display and no Xvfb) and runs on an offline account, which needs no Minecraft login.
 
-By default the client creates and enters a singleplayer world (`--world <name>`), so the suite runs
-on its integrated server — pass `--connect host:port` to join a dedicated server instead.
+The client creates and enters a singleplayer world (`--world <name>`), so the suite runs on its
+integrated server. For the two-JVM shape, see the next section.
 
 A run that ends GREEN still logs three `ERROR`s, and none of them is a problem. Two are an offline
 account being an offline account: authlib returns `401` fetching user properties, and Realms rejects
@@ -55,6 +55,34 @@ a client whose graphics calls are stubs. Do not chase any of the four.
 
 Anything that depends on rendering is meaningless here by construction. Screenshots and pixel
 assertions are not a client topology feature under `-lwjgl`; screen structure and input are.
+
+### The shape a player actually plays
+
+The two topologies above are one JVM each. A real game is two, talking over a wire, and that seam is
+the only place a mod's halves can disagree — a packet nobody registered, state behind an
+`isClientSide`, plain desync. `--with-client` runs both halves from one command:
+
+```
+java -jar stagewright.jar --game-dir <the pack's server dir> --scenes <a folder of .js files> \
+     --with-client <a client game dir, not the server's> \
+     --headlessmc headlessmc-launcher-2.10.0.jar --loader neoforge --mc-version 1.21.1
+```
+
+The scenes run on the server — it writes the results, and its exit code is the verdict. The client's
+whole job is to be logged in while they do. It is installed with the same framework build and the
+same `--mod` jars as the server, because a loader that finds a different mod list on each end refuses
+the connection, and it dials `127.0.0.1` at whatever `server-port` the pack's `server.properties`
+names.
+
+The server does not start the suite until a player is actually on it. That is what makes a client
+which never arrives a timeout you can read, rather than a green run that quietly proved nothing.
+Both halves stop themselves — the server halts when the scenes drain, the client closes when the
+server drops it — and both are killed anyway on the way out, along with the game process HeadlessMC
+leaves behind it, so a failed run cannot strand a Minecraft on the port.
+
+Judging is always about the run this command can see, which is why "a client that joins a server you
+started yourself" is not a mode: those scenes run on that server and write their results there, so
+the only honest thing this process could report about them is that it cannot see them.
 
 ## Writing a scene
 
