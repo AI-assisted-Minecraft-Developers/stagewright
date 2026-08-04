@@ -36,6 +36,29 @@ final class GameLaunch {
     }
 
     /**
+     * Which loader this pack runs on, or {@code null} when nothing here says.
+     *
+     * <p>Same evidence {@link #detect} launches from, read for its other meaning: the argument files
+     * under {@code libraries/net/{neoforged,minecraftforge}} exist only because that installer ran,
+     * and a top-level fabric/quilt jar likewise. Deliberately NOT inferred from what is already in
+     * {@code mods/} — a pack mid-migration has both loaders' mods sitting there, and the answer has
+     * to be what will actually boot.
+     */
+    static String loader(Path gameDir) {
+        if (Files.isDirectory(gameDir.resolve("libraries/net/neoforged/neoforge"))) return "neoforge";
+        if (Files.isDirectory(gameDir.resolve("libraries/net/minecraftforge/forge"))) return "forge";
+        try (Stream<Path> top = Files.list(gameDir)) {
+            boolean fabric = top.map(p -> p.getFileName().toString().toLowerCase())
+                    .anyMatch(n -> n.endsWith(".jar") && !n.contains("installer")
+                            && (n.contains("fabric") || n.contains("quilt")));
+            if (fabric) return "fabric";
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot list " + gameDir, e);
+        }
+        return null;
+    }
+
+    /**
      * NeoForge and Forge: the installer leaves per-version argument files under {@code libraries/}
      * and a {@code user_jvm_args.txt} beside the run scripts.
      *

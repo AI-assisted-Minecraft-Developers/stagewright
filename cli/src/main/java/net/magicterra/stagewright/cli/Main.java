@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 import net.magicterra.stagewright.engine.Manifest;
 import net.magicterra.stagewright.engine.RunDirectory;
@@ -55,10 +56,16 @@ public final class Main {
 
         Map<String, String> opts = new LinkedHashMap<>();
         List<String> systemProps = new ArrayList<>();
+        List<Path> extraMods = new ArrayList<>();
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
             if (a.startsWith("-D")) {
                 systemProps.add(a);
+            } else if ("--no-install".equals(a)) {
+                opts.put("no-install", "true");
+            } else if ("--mod".equals(a)) {
+                if (i + 1 >= args.length) throw new IllegalArgumentException(a + " needs a value");
+                extraMods.add(Path.of(args[++i]).toAbsolutePath().normalize());
             } else if (a.startsWith("--")) {
                 if (i + 1 >= args.length) throw new IllegalArgumentException(a + " needs a value");
                 opts.put(a.substring(2), args[++i]);
@@ -78,30 +85,34 @@ public final class Main {
         int timeoutMinutes = Integer.parseInt(opts.getOrDefault("timeout",
                 String.valueOf(DEFAULT_TIMEOUT_MINUTES)));
 
+        Consumer<String> log = line -> System.out.println("[stagewright] " + line);
         RunDirectory.provision(gameDir, resultsName, !"false".equals(opts.get("clean-world")),
-                scenes, line -> System.out.println("[stagewright] " + line));
+                scenes, log);
+        if (!opts.containsKey("no-install")) {
+            ModInstall.install(gameDir, GameLaunch.loader(gameDir), extraMods, log);
+        }
 
         List<String> command = buildCommand(gameDir, opts, systemProps);
         System.out.println("[stagewright] " + String.join(" ", command));
 
-        Path log = gameDir.resolve("stagewright-run.log");
+        Path runLog = gameDir.resolve("stagewright-run.log");
         Process game = new ProcessBuilder(command)
                 .directory(gameDir.toFile())
                 .redirectErrorStream(true)
-                .redirectOutput(ProcessBuilder.Redirect.to(log.toFile()))
+                .redirectOutput(ProcessBuilder.Redirect.to(runLog.toFile()))
                 .start();
 
         if (!game.waitFor(timeoutMinutes, TimeUnit.MINUTES)) {
             game.destroyForcibly();
             game.waitFor(30, TimeUnit.SECONDS);
             System.err.println("[stagewright] the run exceeded " + timeoutMinutes
-                    + " minutes and was killed — see " + log);
+                    + " minutes and was killed — see " + runLog);
             // Deliberately NOT an early return: a killed run usually still wrote records, and the
             // missing done footer is what turns them into a RED that names how far it got. Judging
             // is strictly more informative than reporting the timeout alone.
         }
 
-        return judge(results, opts, log);
+        return judge(gameDir, results, opts, runLog);
     }
 
     /**
@@ -137,14 +148,23 @@ public final class Main {
         return command;
     }
 
-    private static int judge(Path results, Map<String, String> opts, Path log) throws IOException {
+    private static int judge(Path gameDir, Path results, Map<String, String> opts, Path log)
+            throws IOException {
         if (!Files.isRegularFile(results)) {
             System.err.println("stagewright: ENV — the run wrote no results");
             System.err.println("  expected: " + results);
-            System.err.println("  The game started and exited without arming the harness. Usual"
-                    + " causes: the StageWright mod jar is not in this pack's mods folder, it is"
-                    + " built for the other loader, or mod loading failed before the server reached"
-                    + " its first tick — " + log + " says which.");
+            // The one cause we can rule in or out ourselves, stated rather than listed. Offering a
+            // menu of three possibilities when we know the answer to one of them sends the reader
+            // to check something we already checked.
+            if (!ModInstall.frameworkPresent(gameDir)) {
+                System.err.println("  There is no StageWright jar in " + gameDir.resolve("mods")
+                        + ", so nothing in this pack could have armed. Drop --no-install to let"
+                        + " this CLI install it.");
+            } else {
+                System.err.println("  A StageWright jar IS in this pack's mods folder, so it either"
+                        + " failed to load or the server never reached its first tick — " + log
+                        + " says which. A jar built for the other loader looks like this too.");
+            }
             return 3;
         }
 
@@ -179,6 +199,9 @@ public final class Main {
                   --results <name>    results file name (default stagewright-results.jsonl)
                   --timeout <min>     kill the run after this long (default 45)
                   --clean-world false keep the existing world (default: delete it)
+                  --mod <jar>         also install this mod (repeatable — e.g. the driver whose
+                                      verbs your scenes call)
+                  --no-install        do not touch mods/; the pack already has what it needs
                   --launch "<cmd>"    start the server this way instead of detecting it
                   --java <path>       java executable to launch with
                   -D<key>=<value>     extra system properties for the game

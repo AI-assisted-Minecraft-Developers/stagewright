@@ -14,12 +14,31 @@ java {
 }
 
 repositories {
+    mavenLocal()          // the loader jars staged below are published here by the root build
     mavenCentral()
 }
 
+// The Minecraft-side jars this CLI installs into a pack, carried as resources rather than
+// downloaded. A pack author gets one file; making them also fetch a matching loader build for a
+// matching Minecraft version is the step that fails, and it fails looking exactly like the mod not
+// working. `frameworkVersion` must track the root build's — publishing the mods and rebuilding this
+// are one release, not two (see RELEASE ORDER in ../build.gradle).
+def frameworkVersion = '0.1.0+1.21.1'
+configurations { bundledMods { transitive = false } }
 dependencies {
     implementation 'net.magicterra:stagewright-engine:0.1.0'
+    bundledMods "net.magicterra:mc_stagewright-neoforge:${frameworkVersion}"
+    bundledMods "net.magicterra:mc_stagewright-fabric:${frameworkVersion}"
 }
+
+// Staged under /mods/mc_stagewright-<loader>.jar — version stripped on purpose, so the extraction
+// code never has to know which version it carries and an upgrade is a rebuild rather than an edit.
+def stageBundledMods = tasks.register('stageBundledMods', Copy) {
+    from configurations.bundledMods
+    into layout.buildDirectory.dir('bundled-mods')
+    rename(/^(mc_stagewright-(?:neoforge|fabric))-.*\.jar$/, '$1.jar')
+}
+tasks.named('processResources') { into('mods') { from stageBundledMods } }
 
 application {
     mainClass = 'net.magicterra.stagewright.cli.Main'
