@@ -4,6 +4,29 @@ Cross-loader (Fabric + NeoForge) Minecraft mod test framework. Spec:
 `../worlddriver/docs/superpowers/specs/2026-07-16-stagewright-design.md`. Orchestration
 contract: `docs/orchestration-contract-v0.md`.
 
+## Testing a modpack (no build tool)
+
+For someone who ships a pack rather than a mod: one jar, one command, no Gradle and no testmod.
+
+```
+java -jar stagewright.jar --game-dir <the pack's server dir> --scenes <a folder of .js files>
+```
+
+That installs the right StageWright build into the pack's `mods/`, installs the scene files into
+`config/stagewright/scenes/`, works out how the pack starts (NeoForge/Forge argument files, or a
+Fabric/Quilt server jar), runs it, and judges the results. Exit code is the verdict: `0` GREEN,
+`1` RED, `2` DEAD, `3` ENV.
+
+The framework's own jar for both loaders rides inside `stagewright.jar`, so there is no version to
+match by hand — the pairing of loader and Minecraft version is the step that fails, and it fails
+looking exactly like the mod not working. Other mods the scenes need (a driver whose verbs they
+call, the pack's own mod under test) come in through `--mod <jar>`, repeatable. Everything installed
+is recorded and removed again on the next run, so upgrading never leaves two copies behind.
+
+Scenes are plain JavaScript and register into the same registry, canaries, and results file the Java
+ones do — see [Writing a scene](#writing-a-scene) for the model and `--help` for the rest of the
+flags.
+
 ## Writing a scene
 
 A scene is a static method taking a `SceneContext`. `@SceneSet` names the prefix; `@SceneDef` sets
