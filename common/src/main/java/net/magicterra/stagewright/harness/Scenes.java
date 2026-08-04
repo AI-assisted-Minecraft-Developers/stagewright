@@ -199,6 +199,48 @@ public final class Scenes {
                     ctx.expect(ctx.players()).as("players on the server").isNotEmpty();
                     ctx.expect(player.connection).as("the player's network connection").isNotNull();
                 }),
+                /*
+                 * Commands are the widest thing a scene file can reach, so this pins the three
+                 * properties the rest of that reach depends on, in the order they can break.
+                 *
+                 * Relative first: the whole surface is worthless if `~ ~ ~` is not the arena, and it
+                 * would be wrong in a way that looks right — a scene writing at absolute 0,0,0 still
+                 * runs, still reports, and quietly tests a chunk nobody is watching.
+                 *
+                 * Then that output comes back at all, which is what turns commands from a way to
+                 * change the world into a way to read it — `data get` and every mod command that
+                 * answers with text.
+                 *
+                 * Then that a bad command throws. That one is the reason the other two are safe to
+                 * rely on: vanilla's own performPrefixedCommand reports errors to the source and
+                 * returns normally, so without this a typo in a pack's scene is a line that does
+                 * nothing and passes.
+                 */
+                Scene.of("commandsRunAtTheArena", 100, ctx -> {
+                    // Reverted by hand: setBlock records what it overwrote and puts it back, a
+                    // command does not, and nothing downstream of this line would notice a diamond
+                    // block left in an arena nobody visits again. Through the Java call rather than
+                    // another command, because cleanups also run on the failure path — where the
+                    // block may never have been placed, and `/setblock` refuses to set air on air.
+                    ctx.cleanup(() -> ctx.setBlock(0, 0, 0, Blocks.AIR));
+                    ctx.command("setblock ~ ~ ~ minecraft:diamond_block");
+                    ctx.expectBlock(0, 0, 0).as("a block placed by a relative command")
+                            .isEqualTo(Blocks.DIAMOND_BLOCK);
+
+                    // A query rather than a `time set`: the clock is server-wide, and a scene that
+                    // moved it would be changing the world every later scene runs in.
+                    var said = ctx.command("time query daytime");
+                    ctx.record("commandOutput", said.text());
+                    ctx.expect(said.text()).as("what the command said doing it").isNotEmpty();
+
+                    try {
+                        ctx.command("setblock ~ ~ ~ stagewright:no_such_block");
+                        ctx.fail("a command naming a block that does not exist was accepted");
+                    } catch (IllegalArgumentException expected) {
+                        ctx.record("badCommandThrew", true);
+                    }
+
+                }),
                 // -- canaries (spec §5): the framework must CATCH these, or the gate is dead --
                 Scene.canary("canaryMustFail", 100, Canary.MUST_FAIL,
                         ctx -> ctx.fail("canary: this scene must be reported as FAIL")),
@@ -208,4 +250,5 @@ public final class Scenes {
                         ctx -> { /* never executed by design; the harness skips it */ })
         );
     }
+
 }

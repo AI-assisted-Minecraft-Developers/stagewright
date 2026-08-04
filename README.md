@@ -120,6 +120,13 @@ public final class WaystoneScenes implements SceneProvider {
 - `perf().sampleFor(n, w -> …)` and `perf().afterLoading(load, n, w -> …)` measure TPS, mean and p99
   tick interval, peak heap, process CPU, and client FPS, all against a baseline taken moments earlier
   in the same world so the assertion is about the mod rather than the machine.
+- `command("setblock ~ ~ ~ …")` runs a command at the scene's origin — so `~ ~ ~` is this arena, not
+  the world origin. It returns the command's numeric result and the lines it printed, which makes
+  `data get` a way to read state no block lookup reaches, and it throws on any command the game
+  rejects, so a typo fails the scene instead of passing silently. It is the widest surface a scene
+  file has: everything is strings, so nothing goes through a method name that Fabric spells
+  differently. Note that entities in an arena are currently inert and invisible to every query —
+  assert about blocks and block entities.
 
 ## Three topologies, and why they are not three copies of one
 

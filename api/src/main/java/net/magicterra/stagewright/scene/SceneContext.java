@@ -1,11 +1,15 @@
 package net.magicterra.stagewright.scene;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import net.minecraft.commands.CommandSource;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -13,6 +17,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.Vec2;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Per-scene handle: origin-relative world ops, assertions, and tick-continuation
@@ -259,6 +265,80 @@ public final class SceneContext {
     public int surfaceY(int dx, int dz) {
         return level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                 origin.offset(dx, 0, dz)).getY();
+    }
+
+    /** What a command did: its numeric result, and everything it said doing it. */
+    public record CommandResult(int result, List<String> output) {
+        /** The feedback as one string — what an assertion usually wants to look at. */
+        public String text() { return String.join("\n", output); }
+    }
+
+    /**
+     * Run a command at the scene's origin.
+     *
+     * <p>This is the widest surface in the whole API for the smallest addition to it. A scene file
+     * cannot construct an ItemStack, summon a mob, grant an effect or set a gamerule without calling
+     * methods on Minecraft classes — whose names are remapped, so the same line passes on NeoForge
+     * and fails on an intermediary Fabric jar. Commands are strings. One binding therefore reaches
+     * items, entities, effects, time, weather, gamerules, advancements and every command any mod in
+     * the pack registers, in the vocabulary a pack author already has from playing the game.
+     *
+     * <p><b>Origin-relative.</b> The source stands at the scene's origin, so {@code ~ ~ ~} is the
+     * arena and a scene still never writes an absolute coordinate. That is the same discipline
+     * {@link #rel} enforces, and it is what lets the same command run in whichever grid slot the
+     * scheduler handed this scene.
+     *
+     * <p><b>Loud.</b> A misspelled command, an unknown id, a selector that matches nothing where the
+     * command requires a match — all of them throw. {@code Commands.performPrefixedCommand} would
+     * instead report the error to the source and return, which in a scene means a line that did
+     * nothing, asserted nothing, and passed. Same reasoning as the JS {@code block()} bridge
+     * answering AIR for a typo.
+     *
+     * <p><b>Silent.</b> Output is captured rather than broadcast: {@code shouldInformAdmins} is
+     * false, so a scene running {@code /kill} does not fill an operator's chat, and in the
+     * client topologies it does not put text on the screen of the player the scenes are observing.
+     *
+     * <p>Three caveats worth knowing.
+     *
+     * <ul>
+     *   <li><b>Entities do not work in an arena yet.</b> {@code summon} reports success, the entity
+     *       is real, alive and at the right position in this level — and no selector finds it,
+     *       {@link #level()}{@code .getEntities} does not return it, and twenty ticks later it has
+     *       not moved a block. Measured both through this method and through a direct
+     *       {@code EntityType.spawn}, so it is the arena's chunks rather than the command path.
+     *       Assert about blocks and block entities; a mob scene is not yet something this
+     *       harness can carry.</li>
+     *   <li><b>{@code @p} is rarely what you want.</b> The {@code dedicatedServer} topology has no
+     *       player at all, and in the client topologies the player is wherever the client left it,
+     *       not in this arena. Prefer {@code @e[…]} with a range, or {@link #playerHere()}.</li>
+     *   <li><b>Nothing a command does is reverted.</b> {@link #setBlock} records what it overwrote
+     *       and puts it back; a command goes through the game's own paths and leaves no such
+     *       record, so what it placed outlives the scene unless the scene {@link #cleanup}s it.</li>
+     * </ul>
+     *
+     * <p>Note that {@code execute if …} reports a false condition as a command error, so through
+     * this method it reads as an assertion: the line either holds or fails the scene.
+     */
+    public CommandResult command(String command) {
+        MinecraftServer server = server();
+        List<String> output = new java.util.ArrayList<>();
+        CommandSource sink = new CommandSource() {
+            @Override public void sendSystemMessage(Component message) { output.add(message.getString()); }
+            @Override public boolean acceptsSuccess() { return true; }
+            @Override public boolean acceptsFailure() { return true; }
+            @Override public boolean shouldInformAdmins() { return false; }
+        };
+        CommandSourceStack source = new CommandSourceStack(sink,
+                Vec3.atCenterOf(origin), Vec2.ZERO, level, 4, "StageWright",
+                Component.literal("StageWright"), server, null);
+        try {
+            int result = server.getCommands().getDispatcher()
+                    .execute(command, source);
+            return new CommandResult(result, List.copyOf(output));
+        } catch (CommandSyntaxException e) {
+            throw new IllegalArgumentException("command '" + command + "' failed: " + e.getMessage()
+                    + (output.isEmpty() ? "" : " — said: " + String.join(" / ", output)), e);
+        }
     }
 
     /**
