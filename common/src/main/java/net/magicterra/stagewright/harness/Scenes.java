@@ -8,7 +8,9 @@ import net.magicterra.stagewright.scene.Terrain;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ServiceLoader;
+import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.AABB;
 
 /**
  * The explicit scene registry — the single source both the harness executes from
@@ -239,7 +241,36 @@ public final class Scenes {
                     } catch (IllegalArgumentException expected) {
                         ctx.record("badCommandThrew", true);
                     }
+                }),
+                /*
+                 * The arena has to be a place where entities live, and for a long time it was not:
+                 * the chunk carried a FORCED ticket at the entity-ticking level, reported
+                 * ENTITY_TICKING when asked, and had still never been promoted — so every entity put
+                 * there landed in a HIDDEN section, never ticked, and was invisible to
+                 * getEntities and to every command selector.
+                 *
+                 * Nothing caught it, because blocks were unaffected: scenes placed, read back and
+                 * passed. Even the leak audit agreed the arena was clean, using the same query that
+                 * could not see anything. That is why this scene asserts the capability rather than
+                 * the fix — a margin constant can be tuned away by someone who does not know what it
+                 * was for, and this fails the moment it is.
+                 */
+                Scene.of("entitiesLiveInTheArena", 200, ctx -> {
+                    ctx.expect(ctx.level().isPositionEntityTicking(ctx.origin()))
+                            .as("the arena's chunk ticks entities").isEqualTo(true);
 
+                    ctx.command("summon minecraft:armor_stand ~ ~ ~");
+                    var stands = ctx.level().getEntitiesOfClass(ArmorStand.class,
+                            new AABB(ctx.origin()).inflate(4));
+                    ctx.expect(stands).as("a summoned entity, visible the tick it was made").hasSize(1);
+                    ctx.command("execute if entity @e[type=minecraft:armor_stand,distance=..4]");
+
+                    // And it has to actually run: an untickable entity is still queryable, so
+                    // visibility alone would have passed against the very bug this scene is for.
+                    // Empty sky at the arena, so gravity is the cheapest proof of a running tick.
+                    double startY = stands.get(0).getY();
+                    ctx.await(() -> stands.get(0).getY() < startY - 1).within(60).then(() ->
+                            ctx.record("fellBy", String.format("%.2f", startY - stands.get(0).getY())));
                 }),
                 // -- canaries (spec §5): the framework must CATCH these, or the gate is dead --
                 Scene.canary("canaryMustFail", 100, Canary.MUST_FAIL,

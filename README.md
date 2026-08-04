@@ -125,8 +125,7 @@ public final class WaystoneScenes implements SceneProvider {
   `data get` a way to read state no block lookup reaches, and it throws on any command the game
   rejects, so a typo fails the scene instead of passing silently. It is the widest surface a scene
   file has: everything is strings, so nothing goes through a method name that Fabric spells
-  differently. Note that entities in an arena are currently inert and invisible to every query —
-  assert about blocks and block entities.
+  differently.
 
 ## Three topologies, and why they are not three copies of one
 

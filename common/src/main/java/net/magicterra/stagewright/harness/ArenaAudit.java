@@ -48,13 +48,21 @@ final class ArenaAudit {
 
     private ArenaAudit() {}
 
-    /** Everything within the scene's forced-chunk window, plus the level-wide state around it. */
-    static Snapshot take(ServerLevel level, BlockPos origin, int radius) {
+    /**
+     * Everything within the scene's arena, plus the level-wide state around it.
+     *
+     * <p>Two radii, and they are not interchangeable. {@code radius} is the scene's own arena — what
+     * the scene is responsible for and what the sweep is allowed to touch. {@code forcedReach} is
+     * the wider footprint the harness actually pins, which is larger so the arena can tick entities;
+     * measuring the chunk ledger against the narrow one reports the margin itself as a leak, in
+     * every scene, which is a false positive loud enough to bury a real one.
+     */
+    static Snapshot take(ServerLevel level, BlockPos origin, int radius, int forcedReach) {
         return new Snapshot(
                 idsIn(level, arena(origin, radius)),
                 level.isRaining(),
                 level.isThundering(),
-                forcedOutside(level, origin, radius),
+                forcedOutside(level, origin, forcedReach),
                 gameRuleFingerprint(level));
     }
 
@@ -94,10 +102,20 @@ final class ArenaAudit {
      * <p>Entity counts are compared rather than identities: an arena that ends with the same number
      * of entities it started with has not leaked, and tracking which ones would mean holding
      * references to entities across a teardown that exists to let go of them.
+     *
+     * <p>None of this measured anything until 2026-08-05. Arena chunks were never promoted to
+     * entity-ticking, so every query behind these numbers returned nothing and the audit reported a
+     * spotless world it could not see. A metric that cannot fail is worse than no metric, so if this
+     * ever reads clean across a whole suite again, check that {@code entitiesLiveInTheArena} is
+     * still in the registry and still passing before believing it.
      */
     static List<String> diff(Snapshot before, Snapshot after) {
         List<String> out = new ArrayList<>();
-        if (after.arenaEntities() != before.arenaEntities()) {
+        // An INCREASE only. A drop is not a leak and reporting it produced exactly the wrong
+        // headline: a scene that ran for 119 ticks while two mobs that were already there wandered
+        // out of the box was named as the one scene that dirtied the world. Anything the scene
+        // itself added and left has been swept by this point, and the sweep counts it.
+        if (after.arenaEntities() > before.arenaEntities()) {
             out.add("entities left in the arena: " + before.arenaEntities()
                     + " -> " + after.arenaEntities());
         }
@@ -126,12 +144,12 @@ final class ArenaAudit {
      * having gone from nine forced chunks to zero. Excluding the window measures the thing actually
      * worth knowing — whether the scene pinned chunks somewhere else and left them pinned.
      */
-    private static int forcedOutside(ServerLevel level, BlockPos origin, int radius) {
+    private static int forcedOutside(ServerLevel level, BlockPos origin, int forcedReach) {
         int cx = origin.getX() >> 4, cz = origin.getZ() >> 4;
         int n = 0;
         for (long packed : level.getForcedChunks()) {
             int fx = ChunkPos.getX(packed), fz = ChunkPos.getZ(packed);
-            if (Math.abs(fx - cx) > radius || Math.abs(fz - cz) > radius) n++;
+            if (Math.abs(fx - cx) > forcedReach || Math.abs(fz - cz) > forcedReach) n++;
         }
         return n;
     }

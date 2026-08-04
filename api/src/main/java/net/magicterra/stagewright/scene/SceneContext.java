@@ -298,16 +298,9 @@ public final class SceneContext {
      * false, so a scene running {@code /kill} does not fill an operator's chat, and in the
      * client topologies it does not put text on the screen of the player the scenes are observing.
      *
-     * <p>Three caveats worth knowing.
+     * <p>Two caveats worth knowing.
      *
      * <ul>
-     *   <li><b>Entities do not work in an arena yet.</b> {@code summon} reports success, the entity
-     *       is real, alive and at the right position in this level — and no selector finds it,
-     *       {@link #level()}{@code .getEntities} does not return it, and twenty ticks later it has
-     *       not moved a block. Measured both through this method and through a direct
-     *       {@code EntityType.spawn}, so it is the arena's chunks rather than the command path.
-     *       Assert about blocks and block entities; a mob scene is not yet something this
-     *       harness can carry.</li>
      *   <li><b>{@code @p} is rarely what you want.</b> The {@code dedicatedServer} topology has no
      *       player at all, and in the client topologies the player is wherever the client left it,
      *       not in this arena. Prefer {@code @e[…]} with a range, or {@link #playerHere()}.</li>

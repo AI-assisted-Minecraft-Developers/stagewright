@@ -186,7 +186,7 @@ public final class StageWrightHarness {
                 ServerLevel level = sceneLevel;
                 if (allChunksLoaded(level, origin, radius)) {
                     ctx = new SceneContext(level, arenaOrigin(scene, level, origin), radius);
-                    arenaBefore = ArenaAudit.take(level, origin, radius);
+                    arenaBefore = ArenaAudit.take(level, origin, radius, forcedReach(radius));
                     phase = Phase.RUN;
                     phaseTicks = 0;
                 } else if (phaseTicks > PREP_BUDGET_TICKS) {
@@ -290,7 +290,7 @@ public final class StageWrightHarness {
      */
     private void auditLeaks(Scene scene, ServerLevel level, BlockPos origin, int radius) {
         if (arenaBefore == null) return;                // ENV_FAIL out of PREP: nothing ever ran
-        for (String leak : ArenaAudit.diff(arenaBefore, ArenaAudit.take(level, origin, radius))) {
+        for (String leak : ArenaAudit.diff(arenaBefore, ArenaAudit.take(level, origin, radius, forcedReach(radius)))) {
             leakedScenes.add(scene.name());
             StageWrightCommon.LOG.warn("[{}] LEAK after '{}': {}", StageWrightCommon.MOD_ID,
                     scene.name(), leak);
@@ -412,10 +412,28 @@ public final class StageWrightHarness {
         return new BlockPos(GRID_X0 + slot * GRID_STEP, GRID_Y, GRID_Z0);
     }
 
+    /**
+     * Chunks forced beyond the arena itself, so the arena can tick entities.
+     *
+     * <p>A chunk only becomes {@code ENTITY_TICKING} once the 5×5 around it is FULL — that is what
+     * {@code ChunkMap.prepareEntityTickingChunk} waits for. Forcing only the arena's own radius left
+     * the arena with a ticket that said entity-ticking and a promotion that never completed, and the
+     * failure was silent in the worst way: blocks worked, so scenes passed, while every entity placed
+     * in an arena sat in a HIDDEN section — never ticked, and invisible to {@code getEntities} and to
+     * every command selector.
+     */
+    private static final int ENTITY_TICKING_MARGIN = 2;
+
+    /** How far the harness actually pins, as opposed to how far the scene's arena reaches. */
+    static int forcedReach(int radius) {
+        return radius + ENTITY_TICKING_MARGIN;
+    }
+
     private static void forceChunks(ServerLevel level, BlockPos origin, int radius, boolean force) {
         int cx = origin.getX() >> 4, cz = origin.getZ() >> 4;
-        for (int dx = -radius; dx <= radius; dx++)
-            for (int dz = -radius; dz <= radius; dz++)
+        int reach = forcedReach(radius);
+        for (int dx = -reach; dx <= reach; dx++)
+            for (int dz = -reach; dz <= reach; dz++)
                 level.setChunkForced(cx + dx, cz + dz, force);
     }
 }
