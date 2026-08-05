@@ -1,5 +1,14 @@
 # 仪表契约 v0（T0 依赖面子集，冻结 2026-07-16）
 
+> **2026-08-05 补记 —— 本文是 v0 的冻结记录，不再逐条反映现状。**
+> `t1.py`、`t2.py`、`pool.py`、`guidrive.py`、`instrument_client.py` 已删除：两个客户端
+> 拓扑改由 Gradle 插件任务 `stagewright<Topology><Loader>` 驱动，判定逻辑是
+> `engine/Verdict`（`verdict.py` 的 Java 移植）。客户端面的断言现由两处承担 —— 能在
+> 集成服上跑的已迁为场景（`wd.client*`、`wd.hurtCarriesItsSource` 等），跨进程边界的那部分
+> 由客户端 JVM 内的 client probe 自行断言并写出自己的结果文件。契约本身（退出码、
+> JSONL 记录形状、TESTKIT_ENDPOINT schema）未变，仍然有效。
+> 下文保留原样，作为 v0 的历史记录。
+
 分支：`feature/executor-permove-ascend`。落地 commits：`a53d8dc`（verdict 抽取）、
 `a540771`（骨架+run 配置+金丝雀）、`ee95891`（batch A：路由/schema/脚本）、
 `11088a5`（batch B：world/obs/events/wait）、`a436c61`（fabric 就绪探针竞态修复，

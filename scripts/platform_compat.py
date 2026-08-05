@@ -339,7 +339,7 @@ def file_lock(path, timeout=120.0, poll=0.05):
 
     POSIX keeps the original blocking ``fcntl.flock(fd, LOCK_EX)``. Windows has no
     ``fcntl`` at all — importing it is an ImportError at module load, which is why
-    ``pool.py`` could not even start here — so it uses ``msvcrt.locking`` on a one-byte
+    the retired client pool could not even start here — so it uses ``msvcrt.locking`` on a one-byte
     region. That call has only two useful modes: ``LK_LOCK``, which retries for a fixed
     ten seconds and then raises, and ``LK_NBLCK``, which fails immediately. Neither maps
     onto "block until it is mine", so the wait loop is ours: poll ``LK_NBLCK`` until

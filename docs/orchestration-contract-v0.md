@@ -1,5 +1,14 @@
 # stagewright 编排契约 v0（冻结 2026-07-16）
 
+> **2026-08-05 补记 —— 本文是 v0 的冻结记录，不再逐条反映现状。**
+> `t1.py`、`t2.py`、`pool.py`、`guidrive.py`、`instrument_client.py` 已删除：两个客户端
+> 拓扑改由 Gradle 插件任务 `stagewright<Topology><Loader>` 驱动，判定逻辑是
+> `engine/Verdict`（`verdict.py` 的 Java 移植）。客户端面的断言现由两处承担 —— 能在
+> 集成服上跑的已迁为场景（`wd.client*`、`wd.hurtCarriesItsSource` 等），跨进程边界的那部分
+> 由客户端 JVM 内的 client probe 自行断言并写出自己的结果文件。契约本身（退出码、
+> JSONL 记录形状、TESTKIT_ENDPOINT schema）未变，仍然有效。
+> 下文保留原样，作为 v0 的历史记录。
+
 本契约是编排器（现 Python `scripts/t0.py`，将来 gradle-plugin）与游戏内
 harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 

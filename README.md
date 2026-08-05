@@ -460,64 +460,42 @@ the instrument face testkit itself depends on (spec §4). Green here is the
 precondition for trusting any scene's setup/assertions. Contract:
 `docs/instrument-contract-v0.md`.
 
-## T1: client topology (fabric, under Xvfb) — P2b
+## The client topologies, and what the client asserts for itself
 
-T1 proves the same `wd.*` scene suite runs on a **real Fabric client hosting an
-integrated (singleplayer) server**, not just the dedicated dogfood server T0
-drives. The orchestrator self-manages a headless client end-to-end:
+Two of the three topologies put a REAL game client in the run, and both are Gradle tasks — the
+`t1.py` / `t2.py` orchestrators that used to stand them up (and `guidrive.py`, which drove the title
+screen by label-matched widget clicks over RPC) are gone. `ClientDirector` does that from inside the
+client now: "open this world" and "join this server" are one vanilla call each, so the several
+hundred lines whose failure modes all lived in the seam between two processes went with them.
 
-    python3 scripts/t1.py
+    ./gradlew stagewrightIntegratedServerFabric            # a client hosting its own integrated server
+    ./gradlew stagewrightDedicatedServerWithClientFabric   # a headless server with a real client joined
 
-It probes a free X display, launches its own **Xvfb** on it (PID-tracked, killed
-by PID on exit — never `pkill`, never the live dev client's `:99`/`:97`), boots
-`:fabric:runStageWrightClient` (a **client** JVM, not a server), drives title →
-singleplayer → world by **label-matched widget clicks** (`guidrive.py`, RPC-driven,
-no window manager), lets world-entry start the integrated server which arms the
-harness, then judges the run through the **reused** `verdict.py` against
-`--expect-file`. The template world is copied in before launch and the copy is
-deleted after — the cached template archive is the only persistent artifact.
-Exit codes: **0 GREEN / 1 RED / 2 DEAD** (a canary landed on the wrong outcome —
-framework void) **/ 3 ENV** (client never came up / GUI drive failed / no footer).
+**Where a client-only assertion belongs.** Scene bodies run on the SERVER thread. On
+`integratedServer` that still reaches client-only state, because both ends share a JVM — a scene can
+route `mc.bot.setting` or `mc.test.reset` and read the answer. On `dedicatedServerWithClient` it
+cannot: the client is a different process. Anything whose subject is the BOUNDARY between the two
+therefore runs in the client's own JVM, as a **client probe**, and writes its own results file:
 
-`--hold` boots the shell with `-Pt1Autorun=false` (no scenes) and leaves the
-in-world client online for a second tool to attach; `--attach` reuses that
-already-online client instead of self-launching.
+    <client run dir>/stagewright-client-results.jsonl
 
-### Client instrument contract (`instrument_client.py`)
+The plugin's `companionResultsFile` points a topology's verdict at it, and the worse of the two
+verdicts wins — a green server with a red client is a red run, which is the whole point: the server
+cannot see what the client sees. A declared-but-missing file is ENV, never a pass.
 
-The T1 counterpart of `instrument.py`: bare-RPC contract checks that need a
-**real player in the integrated server's PlayerList** (so #41 full 36-slot
-inventory, #45 attack cooldown, #55 damage source — which a dedicated-server
-FakePlayer cannot exercise), plus the #280 unknown-key live E2E and
-`mc.test.reset` client-entry reset behavior.
+The probe that exists today is `client.damageSourceAcrossTheWire`. The driver emits `player.hurt`
+client-side, mirroring the server's DamageSource off `ClientboundDamageEventPacket`. An integrated
+server exchanges that packet through an in-memory connection which never serialises it, so the
+scene-side check proves the attribution logic and not the wire. In the client's JVM the packet is
+encoded, sent over a socket and decoded before anything reads it — the difference between "works in
+singleplayer" and "works on a server". It listens through the driver's own event fan-out, the same
+one live push subscribers get, so what it asserts is what an attached agent would have received.
 
-    python3 scripts/instrument_client.py              # self-launch (reuses the t1.py shell, autorun OFF)
-    python3 scripts/instrument_client.py --attach     # reuse an online `t1.py --hold` client
-    python3 scripts/instrument_client.py --rounds 3   # client-pool reuse: quit-to-title → re-enter → mc.test.reset, N rounds
-    python3 scripts/instrument_client.py --rounds 2 --fresh-process   # discard-and-relaunch fallback instead of in-place re-enter
-
-Cold client boot is the expensive step (~28-30s); `--rounds` reuse re-enters
-the same world (a `mc.test.reset` between rounds) at roughly **≈7× cheaper**
-per extra round, which is what proves the reset restores a clean per-round
-state. `--wall N` caps self-launch (default 900). Exit codes: **0/1/2/3** as
-above, plus **4 = BLOCKED** on multi-round runs when a CHECK's outcome drifts
-across rounds (per-check inter-round drift — the reuse contract is not
-deterministic). A reuse-transition exception (quit-to-title → re-enter)
-occurring AFTER at least one round has cleanly completed is also classified
-BLOCKED rather than ENV — a client that finished a round but can no longer
-re-enter is reuse-residue-suspect, not environment; a genuine environment
-cause would reproduce in single-round mode, which still reports ENV.
-First-entry failures (before any round completes) and `--fresh-process`
-transitions remain ENV. The full contract (checks, canaries, `--hold`
-autorun-OFF topology, reuse semantics) is the **client appendix** of
-`docs/instrument-contract-v0.md`
-（"P2b 附录 — 客户端仪表契约（T1 面）"）.
-
-**偏差声明（P2b）**：T1 目前 **仅 fabric**（唯一有成熟客户端工装的 loader —
-knot 客户端 + `into_world`/GUI 驱动先例）；neoforge 客户端对等延后。首批
-**in-game UI 授权场景**（场景体内直接断言客户端 UI）随 **P2c** 再议——理由是
-**场景体跨线程阻塞铁律**（场景体在服务器 tick 上 inline 跑，绝不可阻塞等客户端），
-因此 P2b 的客户端断言全部经 `instrument_client.py` 仪表面交付，而非 in-game 场景体。
+A probe causes its own stimulus rather than waiting on a server-side scene: two harnesses in two
+processes agreeing on when something should have happened is a synchronisation problem with no
+handshake to solve it. To make that possible the harness ops the player it was waiting for — on the
+await-player path the only player present is the companion client the harness itself launched, and a
+dev dedicated server ships an empty `ops.json` with `online-mode=false`.
 
 ## JUnit 5 attach (out-of-process) — P2c
 
@@ -530,7 +508,7 @@ P2b). It is the correct home for the first-batch UI scenes P2b deferred.
 
 **Attach contract.** The module discovers the live topology through the
 `TESTKIT_ENDPOINT` environment variable, which names an absolute path to a
-descriptor file written by `t1.py --hold`. The descriptor is a frozen schema-v1
+descriptor file. The descriptor is a frozen schema-v1
 JSON record — `{version, topology, loader, rpcHost, rpcPort, worldName, holdPid,
 writtenAtEpochMs}`, written atomically (`.tmp` → `os.replace`) so an attaching
 reader never sees a partial file. The authoritative schema and key-by-key
@@ -542,24 +520,23 @@ a truncated descriptor never attaches to a wrong port.
 
 **Fail-fast.** When no live endpoint is configured — `TESTKIT_ENDPOINT` unset (or
 empty) and no `stagewright.endpoint` property, or the named file is absent — `attach`
-throws `StageWrightAttachException` carrying the exact operator hint
+throws `StageWrightAttachException` rather than hanging or reporting a mystery connection
+refusal.
 
-    python3 scripts/t1.py --hold
-
-so a developer who runs a UI test with no topology up gets the one command that
-brings one up, never a silent hang or a mystery connection refusal.
+**No producer today.** `t1.py --hold` and `t2.py --hold` wrote that descriptor and are deleted; see
+"JUnit attach on T2" below. The attach machinery, the schema and the fail-fast path are all intact
+and tested by the pure self-tests — what is missing is something that stands a topology up and
+leaves it online. Until then the live UI tests are dormant.
 
 **Attach latency budget.** With an endpoint present, `attach()` is bounded at
 worst-case **~10s** — a 5s websocket connect window plus a 5s `mc.system.version`
-liveness probe — before it fails loudly. The far larger cost sits BEFORE attach:
-`t1.py --hold` cold-boots the client in ~28-30s prior to the endpoint file
-landing; budget for that in any wrapper that starts the topology itself.
+liveness probe — before it fails loudly. The far larger cost sits BEFORE attach: a cold client
+boot is ~28-30s; budget for that in any wrapper that starts the topology itself.
 
 **Serial lease.** One `--hold` topology serves **one** attach client. The
 extension attaches a single shared `StageWright` **singleton** once per JVM (guarded
 by a lock; a failed attach is re-thrown as a LOUD container-level error on every
-later use, never downgraded to a skip), matching the `t1.py` serial-lease rule —
-no second topology instance, no concurrent attach.
+later use, never downgraded to a skip) — no second topology instance, no concurrent attach.
 
 **Two-layer test structure.** The module's tests split into two layers that can
 never silently shrink each other:
@@ -579,21 +556,10 @@ tests skip; **env-on** ⇒ the 2 fail-fast self-tests skip + the 5 runnable live
 tests run. Every test runs in exactly one of the two modes and JUnit reports the
 skips honestly — a test can never fall through both gates and vanish.
 
-**Command walkthrough.**
-
-    python3 scripts/t1.py --hold          # boots the T1 client (autorun OFF), stays online,
-                                                  # prints:  export TESTKIT_ENDPOINT=<abs path>
-    export TESTKIT_ENDPOINT=<abs path>            # eval the printed line (fabric: fabric/run-t1/testkit-endpoint.json)
-    ./gradlew :stagewright-junit:test --rerun-tasks   # live UI tests attach and run; SIGINT the t1.py
-                                                  # PID when done — it deletes the descriptor on exit.
-                                                  # --rerun-tasks is MANDATORY: TESTKIT_ENDPOINT is an
-                                                  # env var, not a gradle task input, so a plain re-run
-                                                  # is UP-TO-DATE and silently skips every live test.
-
-`t1.py --hold --loader neoforge` writes the same schema-v1 descriptor for a
-**neoforge** client (P2c closed the P2b deviation-1: the client topology now
-generalizes across both loaders), so the identical JUnit module attaches to either
-loader with no code change.
+**When it runs again**, `--rerun-tasks` is MANDATORY: `TESTKIT_ENDPOINT` is an environment
+variable, not a gradle task input, so a plain re-run is UP-TO-DATE and silently skips every live
+test. The descriptor is loader-agnostic — the identical module attaches to a fabric or a neoforge
+client with no code change.
 
 **✅ containerFurnace — task#90 收案（D1）**：`ui.containerFurnace` 要**右键世界里的方块**
 打开方块实体容器屏（`FurnaceScreen`），而仪表面曾缺这一维——`mc.client.input.click` 只在
@@ -604,31 +570,24 @@ instrument 级 **`mc.test.input.useOnBlock`**（世界右键，合成 `BlockHitR
 因此从 `@Disabled` **转为启用**（`@EnabledIfEnvironmentVariable(TESTKIT_ENDPOINT)`），经 attach
 在 live 世界真开炉屏。完整证据见 `../.superpowers/sdd/task-2-report.md`（task#90 = D1-T2）。
 
-## T2: production topology (dedicated + client) — P3a
+## The production topology (dedicated + client)
 
-T2 is the **production-isomorphic** topology: a **dedicated server** JVM and a
-**real client** JVM, wired over a genuine multiplayer connection — the same shape
-a `SurvivalTest` run has (real client on a real dedicated server), not the
-integrated single-JVM server T1 hosts. Two worlddriver RPC sockets are live at
-once: one on the **client** face and one on the **dedicated server** face. This
-is the topology that closes P1b's headless gap for real — the server-side
-observation/assertion checks now run against a **dedicated** `PlayerList` holding
-a real `ServerPlayer` that arrived over the network, not a FakePlayer stand-in.
+The **production-isomorphic** shape: a **dedicated server** JVM and a **real client** JVM wired over
+a genuine multiplayer connection, rather than the integrated single-JVM server the other client
+topology hosts. Two worlddriver RPC sockets are live at once, one per face. This is what makes the
+server-side checks run against a **dedicated** `PlayerList` holding a real `ServerPlayer` that
+arrived over the network, not a FakePlayer stand-in.
 
-    python3 scripts/t2.py                     # scored, fabric (default)
-    python3 scripts/t2.py --loader neoforge   # scored, neoforge
-    python3 scripts/t2.py --hold              # stand the topology up, run NO scenes, stay online for attach
+    ./gradlew stagewrightDedicatedServerWithClientFabric
+    ./gradlew stagewrightDedicatedServerWithClientNeoforge
 
-The scored run boots `:<loader>:runT2Server` (a dedicated server on a pinned port
-— fabric 25597, neoforge 25596, dogfood's 25599 all distinct) and the T1
-`runStageWrightClient` under its own PID-tracked Xvfb, drives the client
-**title → Multiplayer → Direct Connection → 127.0.0.1:<port>** by label-matched
-widget clicks (`guidrive.py`), runs a **dual-end probe** (client `mc.client.player`
-AND server `mc.observe.player` must both see the same player at the same position),
-then triggers the scene suite and harvests the same `verdict.py` footer as T0/T1.
-The template world is copied in before launch and the copy deleted after; the
-cached per-loader template archive (`.t2-world-template-<loader>`) is the only
-persistent artifact. Exit codes: **0 GREEN / 1 RED / 2 DEAD / 3 ENV**, as T1.
+One command, both processes: the companion client is built from its own run task's resolved
+`JavaExec` spec and a build service owns it, so Gradle tears it down on every exit path. The server
+holds the suite back until a player has actually joined (`-Dstagewright.awaitPlayer`), which is what
+stops the run proving only what the single-JVM topology already proved.
+
+`remotePlayerIsPresent` is the built-in scene that asserts the topology really was two-ended, and
+the client's own probe file carries what the server cannot see — see "The client topologies" above.
 
 ### `mc.test.run` — on-demand scene trigger
 
@@ -650,46 +609,18 @@ is reachable on any dedicated server, not only the testkit run configuration; th
 is trust-model-consistent (the RPC surface is already a first-party capability
 face) and recorded as a testkit-wiring reclassification rather than a behavior change.
 
-### Dual-socket instrument (`instrument_client.py --topology t2`)
-
-The client instrument contract has a T2 face that speaks to **both** sockets. The
-#41/#45/#55 permanent assertions (full 36-slot inventory, attack cooldown, damage
-source) stage-and-observe on the **server** face — the dedicated `PlayerList`,
-which is exactly where P1b's headless gap lived; the #280 unknown-key live E2E
-and `mc.test.reset` land on the **client** face. **#55 crosses the real packet
-boundary** here: the damage is dealt server-side and its attribution is observed
-across the genuine network round-trip a production client sees, not the in-process
-shortcut a headless/integrated run takes — the headless gap is closed *in the
-production topology itself*, not merely simulated.
-
-    export TESTKIT_ENDPOINT=<abs>                                        # from `t2.py --hold`
-    python3 scripts/instrument_client.py --topology t2 --attach            # one pass
-    python3 scripts/instrument_client.py --topology t2 --attach --rounds 3 # resident-server reuse, N rounds
-
-`--rounds` on T2 **disconnects the client and re-connects it to the SAME resident
-dedicated server** (the server is **never restarted** — the per-round
-resident-server PID is recorded per round as reuse evidence — a change is printed
-loudly but the verdict itself keys on check outcomes), then `mc.test.reset`s;
-per-check outcomes must be identical across all rounds or the run is **BLOCKED**
-(a reset-completeness gap). T2 is **attach-only** — it **requires** `--attach` and
-has **no `--fresh-process`** mode: the reuse surface T2 exercises is precisely
-*resident-server reuse across a real reconnect*, which is the seed of P3b's client
-process pool. (T1's `--fresh-process` discard-restart fallback needs process
-ownership T2's attach-only face does not hold.)
-
 ### JUnit attach on T2
 
-The **same** `:stagewright-junit` UI tests attach to a T2 topology with **no code
-change**: `t2.py --hold` writes the same `TESTKIT_ENDPOINT` descriptor, tagged
-`topology: "dedicated_plus_client"` and carrying one extra key — **`serverRpcPort`**
-(the dedicated server's RPC port, alongside the client `rpcPort`). `serverRpcPort`
-is an **optional** key: the frozen schema-v1 required-8 set is unchanged, a T1
-descriptor omits it and still parses, and `Endpoint.parse` tolerates its absence —
-so backward compatibility with v1 T1 endpoints is preserved.
+The **same** `:stagewright-junit` UI tests attach to this topology with no code change, through a
+`TESTKIT_ENDPOINT` descriptor tagged `topology: "dedicated_plus_client"` and carrying one extra
+optional key, **`serverRpcPort`** (the dedicated server's RPC port beside the client `rpcPort`). The
+frozen schema-v1 required-8 set is unchanged and `Endpoint.parse` tolerates its absence.
 
-    python3 scripts/t2.py --hold          # prints: export TESTKIT_ENDPOINT=<abs path>
-    export TESTKIT_ENDPOINT=<abs path>            # fabric/run-t2/testkit-endpoint.json
-    ./gradlew :stagewright-junit:test --rerun-tasks   # same UI tests attach over the dedicated_plus_client endpoint
+**Nothing writes that descriptor today.** The only producers were `t1.py --hold` and `t2.py --hold`,
+deleted with the rest of the orchestrators. The UI tests are guarded by
+`@EnabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT")`, so they do not fail — they are simply
+never enabled, which is worse than a red because it is silent. Treat `junit/src/test/.../ui/*` as
+dormant, not as coverage, until a hold task writes the descriptor again.
 
 ### 世界模板两端一致性声明
 
@@ -741,46 +672,13 @@ policy, paired-registration semantics, #280 closure, and the four headless
 checks (18-21) that pin them — is in the P2a appendix of
 `docs/instrument-contract-v0.md`.
 
-## Gradle plugin: task entry points (P3b T1)
+## Gradle plugin: task entry points
 
-The `net.magicterra.stagewright` gradle plugin turns the frozen python
-orchestration contract into three first-class gradle tasks on the project it is
-applied to. This repo's **root project is the first dogfood consumer** (the
-plugin lives in a standalone included build wired through `settings.gradle`), so
-these tasks run from the repo root:
-
-| task | shells | topology |
-|---|---|---|
-| `stagewrightServer` | `scripts/stagewright/t0.py` | **T0: server-side scene suite** — dedicated-server dogfood |
-| `stagewrightClient` | `scripts/stagewright/t1.py` | **T1: client topology** — real client + integrated server |
-| `stagewrightE2E`    | `scripts/stagewright/t2.py` | **T2: production topology** — dedicated server + real client |
-
-(See the **T0**, **T1**, and **T2** sections above for what each orchestrator
-does.) Each task **shells** its orchestrator, streams its stdout/stderr live to
-the gradle console, and **propagates the exit code verbatim** — the plugin never
-parses JSONL nor re-judges; the orchestrator remains the sole verdict authority
-(exit legend `0 GREEN / 1 RED / 2 DEAD / 3 ENV / 4 BLOCKED-multiround`). A
-non-zero code becomes a `GradleException` carrying the full, copy-paste
-re-runnable command line.
-
-**Loader selection.** The plugin's convention is `fabric`; its only override
-mechanism is the `stagewright { loader }` extension (there is no built-in `-P`
-binding). This repo's root `build.gradle` adds a one-line bridge threading the
-`stagewright.loader` project property onto that extension, so the loader dimension is
-selectable per invocation while `fabric` stays the default:
-
-    ./gradlew stagewrightServer -Pstagewright.loader=neoforge   # neoforge T0 dogfood
-    ./gradlew stagewrightClient                             # fabric T1 (default)
-    ./gradlew stagewrightE2E -Pstagewright.loader=neoforge      # neoforge T2
-
-The `stagewright { }` extension also carries `pythonExecutable`, `scriptsDir`,
-`expectFile`, `extraArgs`, and the `testmodSourceSet` flag documented in the
-next section.
-
-To attach a second tool (`instrument_client.py --attach`, or the JUnit module)
-to a `--hold` topology **without** paying a cold boot per invocation, keep the
-topology alive with the **Client process pool** (below); the pool prints the same
-`export TESTKIT_ENDPOINT=…` line the **JUnit 5 attach** flow consumes.
+Superseded — see **Gates** above. The plugin no longer shells a Python orchestrator per topology and
+propagates its exit code; it provisions the run directory, runs the topology's own dev-run task,
+supervises the companion process, and judges the results itself through `engine/Verdict`. Task names
+are `stagewright<Topology><Loader>`, one per declared topology, and the exit legend is unchanged:
+`0 GREEN / 1 RED / 2 DEAD / 3 ENV`.
 
 ## Gradle plugin: testmod source-set convention (P3b T3)
 
@@ -958,47 +856,10 @@ per-twin provenance, the reframed legacy acceptance formula, and the P4-final
 machinery-retirement note live in the drift log:
 [`../worlddriver/docs/stagewright/migration-log.md`](../worlddriver/docs/stagewright/migration-log.md).
 
-## Client process pool (`pool.py`) — P3b T2
-
-`t1.py --hold` / `t2.py --hold` stand a topology up and idle so a second tool can
-attach (the **JUnit 5 attach** and **Instrument contract** flows above) — but
-every consumer otherwise pays a fresh cold boot (~30-90s T1, minutes T2). The
-pool amortizes that across invocations: it keeps a `--hold` topology alive and
-lets attachers **reuse** it in ~1s.
-
-    python3 scripts/pool.py ensure --topology t2   # reuse a live hold, else launch one DETACHED
-    python3 scripts/pool.py status                 # probe every topology×loader
-    python3 scripts/pool.py stop   --topology t2   # release the hold this pool started
-
-`ensure` probes the topology's `TESTKIT_ENDPOINT` descriptor (the same file the
-`--hold` shells publish — see the **JUnit 5 attach** section's attach contract)
-plus a `mc.system.version` liveness probe against its `rpcPort` (T2 also probes
-`serverRpcPort`). Live → it prints `export TESTKIT_ENDPOINT=<path>` + `reused` and
-exits 0 in ~1s. Otherwise it cleans stale residue, launches the topology's
-`--hold` **detached** (own session, log in the run dir), records
-`{pid, topology, loader, startedAtEpochMs, log}` in
-`scripts/stagewright/.pool-state.json` (flock-guarded), bounded-polls for the
-endpoint file (t1 240s / t2 360s), verifies liveness, and prints `started`. Feed
-the printed line straight into an attacher:
-
-    eval "$(python3 scripts/pool.py ensure --topology t2 | grep '^export')"
-    python3 scripts/instrument_client.py --topology t2 --attach   # or: ./gradlew :stagewright-junit:test --rerun-tasks
-
-`stop` SIGINTs the recorded hold PID (its `finally` deletes the endpoint file),
-bounded-waits for the descriptor to vanish (SIGKILL after grace), then drops the
-state entry. It **refuses loudly** to stop a live endpoint it did not start (a
-manual `--hold` orphan whose PID is not the pool's to guess) and only deletes a
-probe-dead orphan descriptor — never `pkill`; every process op targets an
-explicit recorded PID. The T2 resident-server reuse the pool builds on is the
-same surface `instrument_client.py --topology t2 --rounds N` exercises across a
-reconnect (see the **Dual-socket instrument** section under T2). This gradle-free
-pool is the process-lifecycle counterpart to the plugin task entry points above:
-the plugin *runs* a topology to a verdict, the pool *keeps one warm* for attach.
-
 ## Maven publishing (P3b T4)
 
-The **Client process pool** and **gradle plugin** sections above cover running
-and reusing topologies; this section covers shipping the framework itself. The
+The **Gates** and **gradle plugin** sections above cover running topologies; this
+section covers shipping the framework itself. The
 `mc_stagewright-junit` artifact below is what an out-of-process **JUnit 5 attach**
 consumer depends on.
 

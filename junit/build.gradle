@@ -3,7 +3,7 @@
 // This module is deliberately NOT a Minecraft/loader module: it carries no
 // architectury/loom plugins, no Minecraft classpath, no worlddriver classes.
 // It is the OUT-OF-PROCESS consumer of a live testkit endpoint (TESTKIT_ENDPOINT,
-// written by scripts/stagewright/t1.py --hold), talking to the driver purely over the
+// naming a live topology), talking to the driver purely over the
 // bare-RPC websocket. The root build's `subprojects {}` block applies loom to every
 // subproject unconditionally; this module is scoped OUT of that block by name in the
 // root build.gradle (`if (project.name == 'stagewright-junit') return`). group/version
