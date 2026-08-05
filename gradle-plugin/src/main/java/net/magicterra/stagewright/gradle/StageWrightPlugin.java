@@ -121,6 +121,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                 run.mustRunAfter(provision);
                 run.getTimeout().set(java.time.Duration.ofMinutes(
                         topology.getTimeoutMinutes().getOrElse(DEFAULT_TIMEOUT_MINUTES)));
+                applySceneFilter(project, run);
                 attachSideProcesses(project, topology, run, sideProcesses);
                 return run;
             }));
@@ -150,6 +151,37 @@ public class StageWrightPlugin implements Plugin<Project> {
      * configuration-cache friendly. Only the topologies that declare a companion are affected; the
      * plain server topology stays cacheable.
      */
+    /** The property the game reads to narrow a run; see {@code SceneFilter}. */
+    static final String SCENE_FILTER_PROPERTY = "stagewright.scenes";
+
+    /**
+     * Forward {@code -Pstagewright.scenes=<patterns>} onto the run JVM as a system property, so a
+     * developer iterating on one scene does not pay for the whole suite.
+     *
+     * <p>Only applied when the property is actually set, so an ordinary gate invocation produces a
+     * byte-identical command line to the one it produced before this existed. The run task belongs
+     * to the host build (loom / ModDevGradle), so this reaches in and sets a property on it — which
+     * is safe precisely because it is conditional: nothing is mutated on the normal path.
+     *
+     * <p>A run task that is not a {@code JavaExec} is left alone rather than failed. The filter is a
+     * convenience, and a host that models its run differently should lose the convenience, not the
+     * ability to run its gates.
+     */
+    private void applySceneFilter(Project project, Task run) {
+        Object raw = project.findProperty(SCENE_FILTER_PROPERTY);
+        String patterns = raw == null ? null : raw.toString().trim();
+        if (patterns == null || patterns.isEmpty()) return;
+        if (!(run instanceof JavaExec exec)) {
+            run.getLogger().warn("[stagewright] -P{}={} ignored: run task '{}' is a {}, not a"
+                    + " JavaExec, so there is no JVM to pass it to",
+                    SCENE_FILTER_PROPERTY, patterns, run.getName(), run.getClass().getSimpleName());
+            return;
+        }
+        exec.systemProperty(SCENE_FILTER_PROPERTY, patterns);
+        run.getLogger().lifecycle("[stagewright] FILTERED to '{}' — this run is NOT a gate result",
+                patterns);
+    }
+
     private void attachSideProcesses(Project project, StageWrightTopology topology, Task run,
                                      org.gradle.api.provider.Provider<StageWrightSideProcessService> sideProcesses) {
         String companionName = topology.getCompanionRunTask().getOrNull();

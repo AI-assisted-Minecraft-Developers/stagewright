@@ -38,9 +38,17 @@ public final class Verdict {
     private static final Map<String, String> CANARY_EXPECT =
             Map.of("MUST_FAIL", "FAIL", "MUST_TIMEOUT", "TIMEOUT");
 
-    public record Result(int code, List<String> report) {
+    public record Result(int code, List<String> report, boolean filtered) {
+        public Result(int code, List<String> report) {
+            this(code, report, false);
+        }
+
         public String label() {
-            return code >= 0 && code < LABELS.length ? LABELS[code] : "FAILED(" + code + ")";
+            String base = code >= 0 && code < LABELS.length ? LABELS[code] : "FAILED(" + code + ")";
+            // The suffix is the point: a filtered run's exit code is about the scenes it chose to
+            // run, so 0 here does NOT mean the suite passed. Anything reading only the code would
+            // be misled, and the label is what a human sees first.
+            return filtered ? base + " (FILTERED — not a gate result)" : base;
         }
     }
 
@@ -112,7 +120,25 @@ public final class Verdict {
         Set<String> registeredNames = new LinkedHashSet<>();
         for (Map<String, Object> r : registered) registeredNames.add(str(r.get("name")));
 
-        if (expected != null && !expected.isEmpty()) {
+        // A run narrowed by -Pstagewright.scenes. The header carries the pattern, so this is a fact
+        // about the run rather than a guess from a short registered list.
+        String filter = str(suite.get("filter"));
+        boolean filtered = filter != null && !filter.isBlank();
+        if (filtered) {
+            report.add("FILTERED to '" + filter + "' — " + registeredNames.size()
+                    + " scene(s) ran. Expected-scenes reconciliation is SKIPPED and most canaries"
+                    + " are filtered out with everything else, so this run judges only what it ran.");
+            if (registeredNames.isEmpty()) {
+                // The most dangerous typo in the system: a pattern matching nothing would otherwise
+                // be a green run of an empty suite, i.e. the failure that looks most like success.
+                return new Result(1, List.of("FILTERED to '" + filter + "' matched NO scenes —"
+                        + " nothing ran. Check the pattern against the registered scene names."), true);
+            }
+        }
+
+        // Reconciliation is meaningless under a filter: every unmatched scene is legitimately
+        // absent, so it would report the whole manifest as missing and bury the real outcome.
+        if (!filtered && expected != null && !expected.isEmpty()) {
             for (String want : expected) {
                 if (!registeredNames.contains(want)) {
                     code = Math.max(code, 1);
@@ -198,7 +224,7 @@ public final class Verdict {
                 report.add("TRUNCATED: done.scenes=" + n.intValue() + " but " + total + " scene records");
             }
         }
-        return new Result(code, report);
+        return new Result(code, report, filtered);
     }
 
     @SuppressWarnings("unchecked")

@@ -11,6 +11,7 @@ import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.verbs.TestInputVerbs;
 import net.magicterra.stagewright.verbs.TestResetVerb;
 import net.magicterra.stagewright.verbs.TestRunVerb;
+import net.magicterra.stagewright.harness.SceneFilter;
 import net.magicterra.stagewright.harness.Scenes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -86,6 +87,16 @@ public final class StageWrightCommon {
         // on-demand builds from the SAME list later, and needs its size synchronously to answer
         // {scenes:N} without re-running ServiceLoader off the server thread.
         resolvedScenes = Scenes.all();
+        // Narrowing happens HERE, before the harness exists, so the suite header's registered list
+        // is the filtered one and every downstream rule (SWALLOWED, DRIFTED, the canary gates) keeps
+        // working against what this run actually meant to do rather than against the full registry.
+        String filter = SceneFilter.pattern();
+        if (filter != null) {
+            int before = resolvedScenes.size();
+            resolvedScenes = SceneFilter.apply(resolvedScenes, filter);
+            LOG.warn("[{}] FILTERED to '{}' — {} of {} scenes. This run is NOT a gate result.",
+                    MOD_ID, filter, resolvedScenes.size(), before);
+        }
         // Register the mc.test.* verbs — BOTH autorun states, so the hidden-verb contract is
         // topology-uniform.
         installVerbHooks();

@@ -82,7 +82,7 @@ public final class StageWrightHarness {
         this.out = out;
         rejectDuplicateNames(scenes);
         this.slotByName = assignSlots(scenes);
-        out.writeSuiteHeader(loader, scenes);
+        out.writeSuiteHeader(loader, scenes, SceneFilter.pattern());
         // Started at arming, not at the first scene: a mod that wedges the tick does it during its
         // own setup as readily as inside a scene, and that stall has to be nameable too.
         this.stallWatchdog = new StallWatchdog(out, () -> ticksObserved, () -> runningScene);

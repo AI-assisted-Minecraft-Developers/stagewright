@@ -51,6 +51,15 @@ public final class ResultsJsonl {
     }
 
     public void writeSuiteHeader(String loader, List<Scene> scenes) {
+        writeSuiteHeader(loader, scenes, null);
+    }
+
+    /**
+     * @param filter the scene-name pattern this run was narrowed by, or null when it ran everything.
+     *               Recorded so a filtered run can never be read as a full one: {@code Verdict}
+     *               keys its FILTERED handling off this field rather than guessing from a count.
+     */
+    public void writeSuiteHeader(String loader, List<Scene> scenes, String filter) {
         StringBuilder sb = new StringBuilder();
         // Every string field goes through escape(), including the ones that happen to hold a
         // constrained vocabulary today (loader is "fabric"|"neoforge", canary is an enum-ish
@@ -66,7 +75,11 @@ public final class ResultsJsonl {
               .append("\",\"required\":").append(s.required())
               .append(",\"canary\":\"").append(escape(String.valueOf(s.canary()))).append("\"}");
         }
-        sb.append("]}\n");
+        sb.append(']');
+        if (filter != null && !filter.isBlank()) {
+            sb.append(",\"filter\":\"").append(escape(filter)).append('"');
+        }
+        sb.append("}\n");
         write(sb.toString(), true);
     }
 

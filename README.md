@@ -187,6 +187,26 @@ an ordinary task dependency, the companion is a process built from that run task
 `runTask` takes a task path (`':neoforge:runDogfoodServer'`) when the run lives on a loader
 subproject and the gate belongs on the root — which is every multi-loader build.
 
+### Running one scene while you write it
+
+    ./gradlew stagewrightDedicatedServerFabric -Pstagewright.scenes=wd.gearScope
+    ./gradlew stagewrightDedicatedServerFabric "-Pstagewright.scenes=wd.client*,pack.*"
+
+`*` is the only metacharacter and matches any run of characters; everything else is literal, so a
+name with a `.` in it needs no escaping. Entries are comma-separated and a scene runs if it matches
+any of them. On worlddriver's 191-scene suite, one scene takes ~47s against ~1m52s for the lot —
+which is the difference between iterating on a scene and batching guesses at it.
+
+**A filtered run is not a gate result, and everything says so.** The pattern is written into the
+results header, the game logs it, the plugin logs it, and the verdict label reads
+`GREEN (FILTERED — not a gate result)`. Expected-scenes reconciliation is skipped, because under a
+filter every unmatched scene is legitimately absent and reporting the whole manifest as missing would
+bury the outcome you asked for. Canaries are filtered like everything else, so a narrow run usually
+has no framework self-check left in it — the other half of why it must never stand in for a gate.
+
+A pattern that matches **nothing** is RED, not an empty green suite. That typo is the failure that
+would otherwise look most like success.
+
 See `../conformance-mods/README.md` for the six-step recipe for adding this to a mod that has never
 heard of StageWright, and for the three third-party mods it is exercised against.
 
