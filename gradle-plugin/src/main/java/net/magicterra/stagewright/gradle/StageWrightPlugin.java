@@ -96,6 +96,7 @@ public class StageWrightPlugin implements Plugin<Project> {
             task.getTopologyName().set(topology.getName());
             task.getResults().set(topology.getGameDirectory().file(topology.getResultsFile()));
             task.getExpectFile().set(topology.getExpectFile());
+            task.getCompanionResults().set(topology.getCompanionResultsFile());
             task.dependsOn(provision);
 
             // Resolved lazily. The host loader plugin normally registers its run tasks after this

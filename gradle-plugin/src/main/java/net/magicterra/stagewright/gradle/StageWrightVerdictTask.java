@@ -45,6 +45,21 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
     @Optional
     public abstract RegularFileProperty getExpectFile();
 
+    /**
+     * The results a companion CLIENT wrote, when this topology has one that probes.
+     *
+     * <p>Judged as its own self-contained suite rather than merged into the server's records: the
+     * two files are written by two processes with their own headers, footers and scene lists, and
+     * concatenating them would produce a stream with two headers that the contract has no meaning
+     * for. Reconciled against its own header instead of the expected-scenes manifest, which names
+     * the SERVER's scenes — the client's probes are not scenes and do not run on every topology.
+     *
+     * <p>{@code @Internal} for the same reason as {@link #getResults()}: a missing file is a
+     * verdict this task must be allowed to report, not an input-snapshotting error.
+     */
+    @org.gradle.api.tasks.Internal
+    public abstract RegularFileProperty getCompanionResults();
+
     /** Topology name, for the report header. */
     @org.gradle.api.tasks.Input
     public abstract Property<String> getTopologyName();
@@ -80,14 +95,56 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
         for (String line : verdict.report()) {
             getLogger().lifecycle("[stagewright:{}] {}", topology, line);
         }
+        Verdict.Result companion = judgeCompanion(topology);
+
         getLogger().lifecycle("[stagewright:{}] VERDICT: {}", topology, verdict.label());
 
-        if (verdict.code() != 0) {
-            throw new GradleException("stagewright " + topology + ": " + verdict.label()
+        // The worse of the two wins, and the codes are already ordered by severity: GREEN 0 < RED 1
+        // < DEAD 2 < ENV 3. A green server with a red client is a red run — the whole reason the
+        // client half asserts anything is that the server cannot see what it sees.
+        Verdict.Result worst = companion != null && companion.code() > verdict.code()
+                ? companion : verdict;
+        if (worst.code() != 0) {
+            throw new GradleException("stagewright " + topology + ": " + worst.label()
+                    + (worst == companion ? " (from the companion client)" : "")
                     + "\n  results: " + results.getAbsolutePath()
+                    + (companion == null ? ""
+                        : "\n  client results: " + getCompanionResults().get().getAsFile().getAbsolutePath())
                     + "\n  exit-code legend: 0 GREEN / 1 RED / 2 DEAD (the framework itself is broken;"
                     + " this run's results are void) / 3 ENV (the game never armed)");
         }
+    }
+
+    /**
+     * Judge the companion client's probe results, or null when this topology declares none.
+     *
+     * <p>A declared-but-absent file is reported rather than ignored: the client was launched to
+     * assert something, and silence from it is the one outcome that must never read as agreement.
+     */
+    private Verdict.Result judgeCompanion(String topology) {
+        if (!getCompanionResults().isPresent()) return null;
+        File file = getCompanionResults().get().getAsFile();
+        if (!file.isFile()) {
+            getLogger().lifecycle("[stagewright:{}] client: ENV — the companion client wrote no"
+                    + " results at {}", topology, file.getAbsolutePath());
+            return new Verdict.Result(3, List.of());
+        }
+        List<String> warnings = new ArrayList<>();
+        List<Map<String, Object>> records;
+        try {
+            records = Verdict.parse(file.toPath(), warnings);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read " + file, e);
+        }
+        for (String w : warnings) {
+            getLogger().warn("[stagewright:{}] client: {}", topology, w);
+        }
+        Verdict.Result result = Verdict.judge(records, null);
+        for (String line : result.report()) {
+            getLogger().lifecycle("[stagewright:{}] client: {}", topology, line);
+        }
+        getLogger().lifecycle("[stagewright:{}] CLIENT VERDICT: {}", topology, result.label());
+        return result;
     }
 
     private List<String> readExpected() {

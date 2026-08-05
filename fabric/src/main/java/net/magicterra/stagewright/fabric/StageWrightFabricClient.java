@@ -16,7 +16,7 @@ public final class StageWrightFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        if (!ClientDirector.arm()) {
+        if (!ClientDirector.arm("fabric")) {
             return;
         }
         ClientTickEvents.END_CLIENT_TICK.register(mc -> ClientDirector.tick());

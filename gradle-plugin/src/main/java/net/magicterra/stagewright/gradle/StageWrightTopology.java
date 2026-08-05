@@ -73,6 +73,20 @@ public abstract class StageWrightTopology implements Named {
     public abstract RegularFileProperty getExpectFile();
 
     /**
+     * Optional results file written by the companion CLIENT, judged alongside the server's.
+     *
+     * <p>Set it on a topology whose client half asserts something in its own JVM — anything about
+     * the BOUNDARY between the two processes, which no scene can reach because every scene body
+     * runs on the server thread. Absent (the convention) the client is a passive player and only
+     * the server's results decide the run.
+     *
+     * <p>Once set, an ABSENT file is an ENV verdict rather than a pass. A client that was launched
+     * to assert something and said nothing is indistinguishable from one that never started, and
+     * the run must not be green either way.
+     */
+    public abstract RegularFileProperty getCompanionResultsFile();
+
+    /**
      * Delete the world and any stale results before the run. Convention: true.
      *
      * <p>Reusing a world across runs is the single most expensive false signal this framework can

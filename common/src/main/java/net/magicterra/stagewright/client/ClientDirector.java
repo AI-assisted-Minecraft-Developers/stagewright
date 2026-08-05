@@ -83,6 +83,9 @@ public final class ClientDirector {
     private static int waitingTicks;
     private static int driveTicks;
     private static int exitCountdown = -1;
+    /** Which loader this client is, for the probe results header. There is no server here to
+     *  have recorded it, so the entrypoint that knows hands it over. */
+    private static String loader = "unknown";
 
     private ClientDirector() {}
 
@@ -90,9 +93,10 @@ public final class ClientDirector {
      * True when a directive was given and the caller should start feeding {@link #tick()} from its
      * loader's client-tick event.
      */
-    public static boolean arm() {
+    public static boolean arm(String loaderName) {
         String directive = directive();
         if (directive == null) return false;
+        loader = loaderName;
         StageWrightCommon.LOG.info("[{}] client director armed: {}", StageWrightCommon.MOD_ID, directive);
         return true;
     }
@@ -141,6 +145,12 @@ public final class ClientDirector {
                     StageWrightCommon.LOG.info("[{}] client is in world after {} ticks",
                             StageWrightCommon.MOD_ID, driveTicks);
                     phase = Phase.IN_WORLD;
+                    // Only where a scene cannot reach: joined to a dedicated server, the suite runs
+                    // in the other JVM. In world mode the equivalent scene runs in THIS one.
+                    String connect = System.getProperty(P_CONNECT);
+                    if (connect != null && !connect.isBlank()) {
+                        ClientProbes.arm(loader);
+                    }
                 } else if (++driveTicks > DRIVE_TIMEOUT_TICKS) {
                     StageWrightCommon.LOG.error("[{}] client never reached a world within {} ticks ({})",
                             StageWrightCommon.MOD_ID, DRIVE_TIMEOUT_TICKS, directive());
@@ -157,6 +167,7 @@ public final class ClientDirector {
                 }
             }
             case IN_WORLD -> {
+                ClientProbes.tick();
                 // Two different endings, one per topology. Integrated: the suite runs in THIS JVM,
                 // so the harness's own finished flag is authoritative. Connected: the suite runs on
                 // the dedicated server, which halts itself when done and drops us — so losing the
@@ -164,6 +175,9 @@ public final class ClientDirector {
                 if (StageWrightCommon.suiteFinished() || mc.level == null) {
                     StageWrightCommon.LOG.info("[{}] suite over (finished={}, connected={}) — closing client",
                             StageWrightCommon.MOD_ID, StageWrightCommon.suiteFinished(), mc.level != null);
+                    // Before finish(), so a probe still in flight when the server drops us writes a
+                    // verdict rather than leaving a file the judge has to interpret as absence.
+                    ClientProbes.finishIfUnresolved();
                     finish();
                 }
             }

@@ -13,6 +13,7 @@ import net.magicterra.stagewright.verbs.TestResetVerb;
 import net.magicterra.stagewright.verbs.TestRunVerb;
 import net.magicterra.stagewright.harness.Scenes;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 
 /** Common core of stagewright. Loader entries forward server lifecycle + tick here. */
@@ -292,7 +293,31 @@ public final class StageWrightCommon {
         if (harness != null) return;
         LOG.info("[{}] a player joined — starting the deferred suite ({} scenes)",
                 MOD_ID, resolvedScenes.size());
+        opTestPlayers(server);
         harness = new StageWrightHarness(server, armedLoader, resolvedScenes,
                 new ResultsJsonl(Path.of(OUT_FILE)));
+    }
+
+    /**
+     * Give every player on this server operator rights.
+     *
+     * <p>Only ever reached on the await-player path, which is the multiplayer TEST topology: this
+     * server was launched by the harness, generates a throwaway world, and the sole player on it is
+     * the companion client the harness started. That client is a test actor, not a guest — the half
+     * of the suite that runs in its JVM has to be able to drive the game, and a dev-launched
+     * dedicated server ships an empty {@code ops.json} with {@code online-mode=false}, so without
+     * this every command it tries is refused for permissions.
+     *
+     * <p>Deliberately not done by writing {@code ops.json} at provision time: an offline-mode UUID
+     * is derived from the player's NAME, and the name a loader's dev client picks is generated per
+     * launch, so there is nothing to write until the player is actually here.
+     */
+    private static void opTestPlayers(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (server.getPlayerList().isOp(player.getGameProfile())) continue;
+            server.getPlayerList().op(player.getGameProfile());
+            LOG.info("[{}] op'd the test client '{}' so client-side probes can run commands",
+                    MOD_ID, player.getGameProfile().getName());
+        }
     }
 }

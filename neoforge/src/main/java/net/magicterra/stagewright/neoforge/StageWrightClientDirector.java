@@ -16,7 +16,7 @@ public final class StageWrightClientDirector {
 
     /** Install the director if a directive was given. Called from the mod entry on the client only. */
     public static void install() {
-        if (!ClientDirector.arm()) {
+        if (!ClientDirector.arm("neoforge")) {
             return;
         }
         // Explicit event class. The single-argument overload infers the event type from the lambda,
