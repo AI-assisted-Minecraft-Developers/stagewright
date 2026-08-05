@@ -42,6 +42,11 @@ public final class EndpointDescriptor {
     /** worlddriver's record of the RPC port it actually bound, relative to this JVM's run dir. */
     static final String PORT_FILE = "worlddriver-rpc.port";
 
+    /** The same, for the MCP HTTP face. Bare RPC does not carry the schema catalog: schemas are
+     *  advertised through MCP's {@code tools/list}, so anything asserting about a tool's declared
+     *  shape has to reach that port instead. */
+    static final String MCP_PORT_FILE = "worlddriver-mcp.port";
+
     /** The frozen schema the junit module parses. */
     private static final int SCHEMA_VERSION = 1;
 
@@ -64,7 +69,7 @@ public final class EndpointDescriptor {
         written = true;
 
         Path out = Path.of(target.trim());
-        Integer port = readPort();
+        Integer port = readPort(PORT_FILE);
         if (port == null) {
             StageWrightCommon.LOG.error("[{}] -D{} asked for an endpoint descriptor, but {} does not"
                     + " exist in {} — is worlddriver on this runtime's classpath?",
@@ -73,6 +78,7 @@ public final class EndpointDescriptor {
         }
 
         String host = System.getProperty("worlddriver.rpcHost", "127.0.0.1");
+        Integer mcpPort = readPort(MCP_PORT_FILE);
         String json = "{\"version\":" + SCHEMA_VERSION
                 + ",\"topology\":\"" + ResultsJsonl.escape(System.getProperty(TOPOLOGY_PROPERTY, "unknown")) + '"'
                 + ",\"loader\":\"" + ResultsJsonl.escape(loader == null ? "unknown" : loader) + '"'
@@ -81,6 +87,7 @@ public final class EndpointDescriptor {
                 + ",\"worldName\":\"" + ResultsJsonl.escape(worldName == null ? "" : worldName) + '"'
                 + ",\"holdPid\":" + ProcessHandle.current().pid()
                 + ",\"writtenAtEpochMs\":" + System.currentTimeMillis()
+                + (mcpPort == null ? "" : ",\"mcpPort\":" + mcpPort)
                 + "}\n";
         try {
             Path parent = out.toAbsolutePath().getParent();
@@ -95,9 +102,9 @@ public final class EndpointDescriptor {
         }
     }
 
-    /** The port worlddriver recorded, or null when the file is absent or not a number. */
-    private static Integer readPort() {
-        Path p = Path.of(PORT_FILE);
+    /** A port worlddriver recorded, or null when the file is absent or not a number. */
+    private static Integer readPort(String file) {
+        Path p = Path.of(file);
         if (!Files.isRegularFile(p)) return null;
         try {
             return Integer.valueOf(Files.readString(p, StandardCharsets.UTF_8).trim());

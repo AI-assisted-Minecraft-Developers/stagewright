@@ -13,7 +13,7 @@ import java.nio.file.Path;
 /**
  * The TESTKIT_ENDPOINT descriptor (schema v1), written by a held game — see
  * {@code EndpointDescriptor} on the mod side and the {@code stagewright<Topology>Hold} tasks that
- * ask for one. Immutable; carries all eight frozen required keys plus one optional extension.
+ * ask for one. Immutable; carries all eight frozen required keys plus two optional extensions.
  *
  * <p><b>Required (frozen v1, all eight):</b> {@code version}, {@code topology},
  * {@code loader}, {@code rpcHost}, {@code rpcPort}, {@code worldName},
@@ -26,10 +26,17 @@ import java.nio.file.Path;
  * own, which is what a bare-server contract suite wants and what a UI test would find empty. The
  * two-process topology holds both halves and writes one descriptor per run directory.
  *
- * <p><b>Optional (v1-compatible extension):</b> {@code serverRpcPort} — a client-face descriptor's
- * pointer at the dedicated server it is joined to. {@link #serverRpcPort()} is {@code null} when
- * the key is absent, which it is for every descriptor the current holds write; it survives because
- * removing a tolerated optional key from a frozen schema buys nothing.
+ * <p><b>Optional (v1-compatible extensions):</b>
+ * <ul>
+ *   <li>{@code mcpPort} — the same JVM's MCP HTTP port. Bare RPC does not carry the schema catalog:
+ *       schemas are advertised through MCP's {@code tools/list}, so anything asserting about a
+ *       tool's declared shape needs this instead of {@code rpcPort}. {@link #mcpUri()} builds the
+ *       endpoint; {@link #mcpPort()} is {@code null} when the MCP server did not come up.</li>
+ *   <li>{@code serverRpcPort} — a client-face descriptor's pointer at the dedicated server it is
+ *       joined to. {@link #serverRpcPort()} is {@code null} when the key is absent, which it is for
+ *       every descriptor the current holds write; it survives because removing a tolerated optional
+ *       key from a frozen schema buys nothing.</li>
+ * </ul>
  *
  * <p><b>Unknown keys are TOLERATED</b> (forward compatibility): the parser reads only the
  * keys it knows, so a future schema addition never breaks an older reader.
@@ -43,12 +50,13 @@ public record Endpoint(
         String worldName,
         long holdPid,
         long writtenAtEpochMs,
-        Integer serverRpcPort) {
+        Integer serverRpcPort,
+        Integer mcpPort) {
 
     /**
      * Parse a descriptor from its JSON text. Requires all eight frozen keys; parses the
-     * optional {@code serverRpcPort} when present ({@code null} when absent); tolerates any
-     * unknown keys (they are simply not read).
+     * optional {@code serverRpcPort} and {@code mcpPort} when present ({@code null} when absent);
+     * tolerates any unknown keys (they are simply not read).
      */
     public static Endpoint parse(String json) {
         JsonElement root;
@@ -70,7 +78,8 @@ public record Endpoint(
                 reqString(o, "worldName"),
                 reqLong(o, "holdPid"),
                 reqLong(o, "writtenAtEpochMs"),
-                optInt(o, "serverRpcPort"));
+                optInt(o, "serverRpcPort"),
+                optInt(o, "mcpPort"));
     }
 
     /** Read and parse a descriptor from a file. */
@@ -87,6 +96,21 @@ public record Endpoint(
     /** The bare-RPC websocket URI this endpoint listens on: {@code ws://host:port/rpc}. */
     public String wsUri() {
         return "ws://" + rpcHost + ":" + rpcPort + "/rpc";
+    }
+
+    /**
+     * The MCP HTTP URI this endpoint serves {@code tools/list} on: {@code http://host:port/mcp}.
+     *
+     * @throws IllegalStateException when the descriptor carries no {@code mcpPort} — a caller that
+     *         needs the schema catalog cannot fall back to anything, and a null here would surface
+     *         as a connection refusal to port 0 several frames later.
+     */
+    public String mcpUri() {
+        if (mcpPort == null) {
+            throw new IllegalStateException("endpoint " + topology + " carries no mcpPort — the MCP"
+                    + " server did not come up in that JVM, so its schema catalog is unreachable");
+        }
+        return "http://" + rpcHost + ":" + mcpPort + "/mcp";
     }
 
     private static JsonElement req(JsonObject o, String key) {

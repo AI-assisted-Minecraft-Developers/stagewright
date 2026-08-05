@@ -224,25 +224,28 @@ See **JUnit 5 attach** below.
 See `../conformance-mods/README.md` for the six-step recipe for adding this to a mod that has never
 heard of StageWright, and for the three third-party mods it is exercised against.
 
-## Which repo the orchestrators drive
+## Which repo the gates run in
 
-StageWright does not test itself. Every orchestrator under `scripts/` drives a **consumer**
-project — its `gradlew`, its run tasks, its results file, its `expected-scenes-*.txt`. The
-consumer is resolved as `--project-root` > `$STAGEWRIGHT_PROJECT_ROOT` >
-`$TESTKIT_PROJECT_ROOT` > the current directory. So both of these are correct:
+StageWright does not test itself. A gate belongs to the **consumer**: it is a task in that
+project's build, declared by that project's `stagewright {}` block, driving that project's run task
+and judging that project's results against that project's `expected-scenes-*.txt`. You run it from
+there.
 
-    cd ../worlddriver && python3 scripts/stagewright/t0.py --loader fabric   # via the consumer's shim
-    python3 scripts/t0.py --loader fabric --project-root ../worlddriver      # from here
+    cd ../worlddriver && ./gradlew stagewrightDedicatedServerFabric
 
-Every path in the command examples below — `--results`, `--expect-file`, the run dirs — is
-relative to the CONSUMER, not to this repo. `scripts/` paths are relative to this repo.
+There is nothing to run from this repo. That used to be a real question — the orchestrators were
+Python living here and driving someone else's `gradlew`, with a three-deep fallback chain
+(`--project-root` > `$STAGEWRIGHT_PROJECT_ROOT` > `$TESTKIT_PROJECT_ROOT` > cwd) to work out which
+build they had been pointed at. Making the gate a task in the consumer's own build deleted the
+question along with the chain.
 
-## T0: server-side scene suite
+## The scene suite
 
-    python3 scripts/t0.py --loader neoforge   # or fabric
+    ./gradlew stagewright<Topology><Loader>          # 0 GREEN / 1 RED / 2 DEAD / 3 ENV
 
-Exit codes: 0 GREEN / 1 RED / 2 DEAD (canary mis-judged — framework broken,
-results void) / 3 ENV. The orchestrator is the only verdict authority.
+DEAD means a canary was mis-judged: the framework is broken and the results are void, which is a
+different thing from a failing scene and must never be read as one. The verdict task is the sole
+verdict authority.
 
 Scenes live in `common/src/main/java/net/magicterra/stagewright/scene/Scenes.java`
 (explicit registry = single source for execution AND reconciliation). A scene
@@ -271,23 +274,18 @@ The dogfood suite runs on **both loaders** — the canonical acceptance commands
 are identical apart from loader name, run task, results path, and manifest
 (P1.6 made fabric a first-class dogfood target alongside neoforge):
 
-**NeoForge:**
+    cd ../worlddriver
+    ./gradlew stagewrightDedicatedServerNeoforge
+    ./gradlew stagewrightDedicatedServerFabric
 
-    python3 scripts/t0.py --loader neoforge \
-        --run-task :neoforge:runDogfoodServer \
-        --results neoforge/run-dogfood/stagewright-results.jsonl \
-        --expect-file scripts/stagewright/expected-scenes-neoforge.txt
-
-**Fabric:**
-
-    python3 scripts/t0.py --loader fabric \
-        --run-task :fabric:runDogfoodServer \
-        --results fabric/run-dogfood/stagewright-results.jsonl \
-        --expect-file scripts/stagewright/expected-scenes-fabric.txt
+Run task, results path and manifest are no longer arguments — they are the topology's
+declaration in the consumer's `stagewright {}` block, which is also what stops a gate from being
+pointed at the wrong results file. That failure did not fail fast: every scene ran while the
+orchestrator polled a path nothing was writing.
 
 Each boots a full dedicated server with **both** worlddriver and stagewright
 loaded (the loader's `build.gradle` run config `dogfoodServer`, `stagewright.autorun`
-armed) — this is what proves the T0 orchestrator generalizes beyond its own
+armed) — this is what proves the gate generalizes beyond its own
 bare-bones testkit-`<loader>` module to a real, feature-loaded mod. Same exit
 codes as plain T0 above; the suite header's `registered[]` carries the
 built-in scenes plus every downstream `wd.*` scene.
@@ -309,18 +307,19 @@ retained as a pure liveness guard after `within(120)` was falsified by a wild
 runs land at **~80 s neoforge / ~75 s fabric** per full-suite run (measured 83.6/81.6 s
 neoforge ×2, 73.6/79.6 s fabric ×2), and are byte-identical `(name, outcome)` within each
 loader and cross-loader. The T1 integrated-client run pays a one-time client cold boot
-(~28-30 s) on top of the suite. `instrument.py`'s bare-RPC contract suite is ~43 s per loader.
+(~28-30 s) on top of the suite. The bare-RPC instrument contract is seconds once a hold is up:
+it attaches to a server someone already started rather than booting one of its own.
 
 `--expect-file scripts/stagewright/expected-scenes-neoforge.txt` is the **canonical
 external-expectation gate** (the fabric manifest `expected-scenes-fabric.txt`
 carries the identical governance): a checked-in manifest (one scene name per line,
 `#` comments and comma-separated names allowed) naming every `wd.*` scene the
-orchestrator expects to see in `registered[]`. Each migrated `wd.*` scene MUST
+gate expects to see in `registered[]`. Each migrated `wd.*` scene MUST
 be added to this file **in the same commit** that adds the scene — the manifest
 lives beside the code and reviews with it, so a scene missing from *both* the
 file and `registered[]` is exactly the silent-composition hole the gate exists
 to close. If the resolved expectation set is empty (file missing, or present but
-containing no names after stripping comments/blanks) the orchestrator **fails
+containing no names after stripping comments/blanks) the gate **fails
 loudly** — `--expect-file not found` / `expectation source given but contains no
 scene names`, argparse exit 2 — rather than silently degrading to "expect
 nothing". See `docs/orchestration-contract-v0.md`'s appendix for why
@@ -487,12 +486,39 @@ self-consistent false-green.
 
 ## Instrument contract (trust chain)
 
-    python3 scripts/instrument.py --loader neoforge   # or fabric
+```bash
+# terminal 1 — in the consumer repo
+./gradlew stagewrightDedicatedServerFabricHold
 
-Bare-RPC contract checks against a plain worlddriver dedicated server —
-the instrument face testkit itself depends on (spec §4). Green here is the
-precondition for trusting any scene's setup/assertions. Contract:
+# terminal 2 — here
+TESTKIT_ENDPOINT=<abs>/stagewright-endpoint.json ./gradlew :stagewright-junit:test --rerun-tasks
+```
+
+26 bare-RPC checks against a live dedicated server: what `DriverApi.route` answers, what it
+refuses, whether a world write is visible to the driver's own read, whether a tool's advertised
+schema is the one the validator enforces. This is the instrument face the scene harness sits on —
+green here is the precondition for trusting any scene's setup or assertions. Contract:
 `docs/instrument-contract-v0.md`.
+
+**They are out-of-process because that is the whole point.** A scene body runs inside the harness,
+on the server thread, through the assertion stack the harness uses to judge itself — so a scene
+asserting these would be asking the thing under test to vouch for itself. Here the process is
+different, the transport is bare RPC, and the assertion stack is JUnit's, which is three
+independent things that all have to break at once to produce a false green. That property is why
+this suite could not simply become scenes when the Python that used to run it was deleted.
+
+**Face-gated, not env-gated.** These carry `@RequiresFace(Face.SERVER)` and the UI tests carry
+`@RequiresFace(Face.CLIENT)`; the extension probes the live endpoint once (does `mc.client.*`
+answer?) and skips the other set with a reason naming both faces. So one command runs whichever
+half the hold you started can actually support, and half the instrument contract — that a
+client-only verb is refused, that an empty player list reads as `{present:false}` — keeps being
+observable, which it is not on any topology that has a client.
+
+**One test ends the endpoint's usefulness.** `ArmedSuiteContractTest` proves the on-demand trigger
+refuses a second `mc.test.run`, which requires accepting a first one — and that starts the real
+suite. It carries the highest `@Order` and `junit-platform.properties` turns class ordering on, so
+it lands after everything else; re-running against the same hold fails with a message telling you
+to restart it, rather than looking like a driver regression.
 
 ## The client topologies, and what the client asserts for itself
 
@@ -648,7 +674,7 @@ the client's own probe file carries what the server cannot see — see "The clie
 ### `mc.test.run` — on-demand scene trigger
 
 T2 does not autorun the scene suite at world-load the way the dogfood/T1 servers
-do. Instead the orchestrator, once the dual-end probe passes, calls **`mc.test.run`**
+do. Instead the harness, once the dual-end probe passes, calls **`mc.test.run`**
 on the **server** face: an on-demand trigger that runs the registered scene suite
 and appends its footer to `stagewright-results.jsonl`. It is **idempotent** — a
 second call while a run is in flight is rejected by an in-flight latch rather than

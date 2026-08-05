@@ -85,6 +85,20 @@ public final class StageWright implements AutoCloseable {
         return new StageWright(rpc, endpoint);
     }
 
+    /**
+     * Whether either endpoint source is set at all — the cheap question, answerable without
+     * attaching.
+     *
+     * <p>Exists for {@link StageWrightExtension}'s face gate, which must not attach in order to
+     * decide whether a class runs: with no endpoint configured the class is already being disabled
+     * by its {@code @EnabledIfEnvironmentVariable}, and attaching there turns "this suite needs a
+     * hold" into a container initialisation ERROR on every live class at once.
+     */
+    public static boolean endpointConfigured() {
+        return !isBlank(System.getenv("TESTKIT_ENDPOINT"))
+                || !isBlank(System.getProperty("stagewright.endpoint"));
+    }
+
     /** The descriptor this instance attached to. */
     public Endpoint endpoint() {
         return endpoint;
@@ -98,6 +112,47 @@ public final class StageWright implements AutoCloseable {
     /** Raw call at the default per-call timeout. */
     public JsonObject call(String method, JsonObject params) {
         return rpc.call(method, params, DEFAULT_TIMEOUT_MS);
+    }
+
+    /** Raw no-params call at the default per-call timeout. */
+    public JsonObject call(String method) {
+        return call(method, new JsonObject());
+    }
+
+    /**
+     * The driver's error string for a call that is SUPPOSED to fail, or {@code null} when it
+     * unexpectedly succeeded.
+     *
+     * <p>Half the instrument contract is negative — unknown method, missing key, wrong type,
+     * unexpected key, client-only verb — and every one of those assertions is about the error's
+     * <i>text</i>, because that text is the contract: "must be integer", "unexpected key",
+     * "client only". Returning it instead of throwing lets a test say what it means
+     * ({@code assertContains(err, "unexpected key")}) and lets the "it did not fail at all" case be
+     * a null check rather than a missing exception.
+     */
+    public String errorOf(String method, JsonObject params) {
+        try {
+            call(method, params);
+            return null;
+        } catch (StageWrightRpcException e) {
+            return e.error();
+        }
+    }
+
+    /** {@link #errorOf(String, JsonObject)} with no params. */
+    public String errorOf(String method) {
+        return errorOf(method, new JsonObject());
+    }
+
+    /**
+     * Unwrap a call whose result is not a JSON object. The transport wraps a bare result — a
+     * {@code long} cursor, an array of events — as {@code {"result": <value>}}; this hands back
+     * the value itself.
+     */
+    public JsonElement callBare(String method, JsonObject params) {
+        JsonObject o = call(method, params);
+        JsonElement wrapped = o.get("result");
+        return wrapped != null && o.size() == 1 ? wrapped : o;
     }
 
     // ------------------------------------------------------------- verbs -------

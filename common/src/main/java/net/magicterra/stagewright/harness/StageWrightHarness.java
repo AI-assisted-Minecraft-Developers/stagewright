@@ -350,6 +350,15 @@ public final class StageWrightHarness {
                     StageWrightCommon.MOD_ID, leakedScenes.size(), executed, leakedScenes);
         }
         out.writeDone((int) executed);
+        if (StageWrightCommon.holding()) {
+            // A hold outlives its suite. Halting here would take the endpoint down underneath
+            // whatever attached to it — and the one thing you cannot do without triggering a run is
+            // prove that a SECOND mc.test.run is refused, so an attached test that exercises the
+            // idempotency guard would be destroying the server it is talking to.
+            StageWrightCommon.LOG.info("[{}] suite complete ({} scenes executed) — held, so the"
+                    + " server stays up", StageWrightCommon.MOD_ID, executed);
+            return;
+        }
         StageWrightCommon.LOG.info("[{}] suite complete ({} scenes executed) — halting server",
                 StageWrightCommon.MOD_ID, executed);
         server.halt(false);
