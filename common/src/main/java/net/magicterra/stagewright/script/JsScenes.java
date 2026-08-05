@@ -18,6 +18,7 @@ import dev.latvian.mods.rhino.Scriptable;
 import dev.latvian.mods.rhino.ScriptableObject;
 import dev.latvian.mods.rhino.Undefined;
 import net.magicterra.stagewright.StageWrightCommon;
+import net.magicterra.stagewright.scene.Clock;
 import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.scene.SceneContext;
 import net.magicterra.stagewright.scene.Terrain;
@@ -144,7 +145,8 @@ public final class JsScenes {
                 throw new IllegalStateException("scene '" + name + "' in " + file + " has no body");
             }
             Scene scene = Scene.of(name, budget, ctx -> invoke(scope, fn, ctx, name))
-                    .withTerrain(terrainOf(cx, s, name, file));
+                    .withTerrain(terrainOf(cx, s, name, file))
+                    .withClock(clockOf(cx, s, name, file));
             out.add(optional ? scene.withRequired(false) : scene);
         }
         return out;
@@ -160,6 +162,20 @@ public final class JsScenes {
         }
         try {
             return Terrain.parse(String.valueOf(raw));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("scene '" + name + "' in " + file + ": " + e.getMessage(), e);
+        }
+    }
+
+    /** Read {@code options.clock}. Same absent-means-default rule as {@link #terrainOf}: the prelude
+     *  always sets it, so a missing property is a hand-built registration, not a mistake. */
+    private static Clock clockOf(Context cx, Scriptable s, String name, String file) {
+        Object raw = ScriptableObject.getProperty(s, "clock", cx);
+        if (raw == null || raw == Scriptable.NOT_FOUND || Undefined.isUndefined(raw)) {
+            return Clock.MIDNIGHT;
+        }
+        try {
+            return Clock.parse(String.valueOf(raw));
         } catch (IllegalArgumentException e) {
             throw new IllegalStateException("scene '" + name + "' in " + file + ": " + e.getMessage(), e);
         }

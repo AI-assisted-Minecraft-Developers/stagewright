@@ -37,6 +37,11 @@ public @interface SceneDef {
      *  actual terrain instead. */
     Terrain terrain() default Terrain.RUN_WORLD;
 
+    /** The time of day the scene runs at. Defaults to the frozen midnight the whole run is pinned
+     *  to — ask for {@link Clock#NOON} when daylight is the subject, {@link Clock#RUNNING} when the
+     *  passage of time is. */
+    Clock clock() default Clock.MIDNIGHT;
+
     /** Free-form labels for {@code -Dstagewright.filter}. Not part of the name, not reconciled. */
     String[] tags() default {};
 }

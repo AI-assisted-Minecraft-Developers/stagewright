@@ -51,15 +51,20 @@ public final class ResultsJsonl {
     }
 
     public void writeSuiteHeader(String loader, List<Scene> scenes) {
-        writeSuiteHeader(loader, scenes, null);
+        writeSuiteHeader(loader, scenes, null, null);
     }
 
     /**
      * @param filter the scene-name pattern this run was narrowed by, or null when it ran everything.
      *               Recorded so a filtered run can never be read as a full one: {@code Verdict}
      *               keys its FILTERED handling off this field rather than guessing from a count.
+     * @param worldPin one line naming the world state this run held still ({@code WorldPin}), or null
+     *               for a stream that does not pin (the client probe file). Recorded because a suite
+     *               that freezes the clock and three gamerules and then reports a bare GREEN is
+     *               claiming more than it proved.
      */
-    public void writeSuiteHeader(String loader, List<Scene> scenes, String filter) {
+    public void writeSuiteHeader(String loader, List<Scene> scenes, String filter,
+                                 String worldPin) {
         StringBuilder sb = new StringBuilder();
         // Every string field goes through escape(), including the ones that happen to hold a
         // constrained vocabulary today (loader is "fabric"|"neoforge", canary is an enum-ish
@@ -78,6 +83,12 @@ public final class ResultsJsonl {
         sb.append(']');
         if (filter != null && !filter.isBlank()) {
             sb.append(",\"filter\":\"").append(escape(filter)).append('"');
+        }
+        // What world these results were produced in. A suite that pins the clock and three gamerules
+        // and then reports a bare GREEN is claiming more than it proved; this is where the claim gets
+        // qualified, next to the results rather than in a log someone would have to still have.
+        if (worldPin != null && !worldPin.isBlank()) {
+            sb.append(",\"worldPin\":\"").append(escape(worldPin)).append('"');
         }
         sb.append("}\n");
         write(sb.toString(), true);

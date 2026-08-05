@@ -120,6 +120,14 @@ public final class Verdict {
         Set<String> registeredNames = new LinkedHashSet<>();
         for (Map<String, Object> r : registered) registeredNames.add(str(r.get("name")));
 
+        // The world the run held still. Reported even when everything passed: a GREEN that does not
+        // say the clock was frozen and mob spawning off is claiming more than the run proved, and the
+        // log line that says so is gone by the time anyone reads a verdict out of CI.
+        String worldPin = str(suite.get("worldPin"));
+        if (worldPin != null && !worldPin.isBlank()) {
+            report.add("WORLD: " + worldPin);
+        }
+
         // A run narrowed by -Pstagewright.scenes. The header carries the pattern, so this is a fact
         // about the run rather than a guess from a short registered list.
         String filter = str(suite.get("filter"));

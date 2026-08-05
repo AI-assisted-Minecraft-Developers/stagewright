@@ -127,6 +127,41 @@ public final class WaystoneScenes implements SceneProvider {
   file has: everything is strings, so nothing goes through a method name that Fabric spells
   differently.
 
+### The world a scene runs in
+
+Every scene in a run shares one world, and left alone that world moves — so what a scene sees would
+depend on how long the scenes before it took, which is a property of the machine rather than of the
+test. A run therefore holds four things still, announces the list in the log at suite start, and
+writes it into the results header and the verdict (`WORLD: clock=frozen@midnight …`), because a
+GREEN that does not say what world it was green in is claiming more than it proved:
+
+| Pinned | Why it is on the list |
+|---|---|
+| `dayTime` = the scene's clock, default **midnight** | The whole worlddriver suite finishes inside `dayTime`≈130 — sunrise, exactly where sky brightness crosses the threshold vanilla dice-rolls against to decide whether a sun-sensitive mob ignites. Midnight is the only value that is *decided* rather than merely fixed: `isDay()` is false, so the roll never happens. Noon would not buy that. |
+| `doDaylightCycle=false` | Setting the time is not enough on its own — a long scene drifts back into the sunrise band it was moved out of. |
+| `doMobSpawning=false` | Required *by* the choice of night, not independent of it. Arenas tick entities and the arena audit reports an entity increase inside the box as a leak, so natural hostile spawning would become a fresh source of false REDs. |
+| `doWeatherCycle=false` + clear | The audit already treats a rain or thunder flip as a leak, so weather straddling a scene would accuse it. |
+
+`randomTickSpeed`, `doFireTick` and `mobGriefing` are deliberately **not** pinned: a crop that grows,
+a fire that spreads, a creeper that craters are things a pack's own scenes legitimately test, and
+nothing changes them unless a scene does.
+
+A scene whose subject *is* the time of day says so, and the harness applies it per scene — so one
+scene's clock is never a function of the scene before it:
+
+```java
+@SceneDef(budget = 200, clock = Clock.NOON)          // daylight is the point of this one
+static void phantomsBurnAtDawn(SceneContext s) { … }
+```
+
+```javascript
+scene('cropGrowsOvernight', 400, function (s) { … }, { clock: 'running' });
+```
+
+`Clock.RUNNING` starts at midnight with the daylight cycle actually advancing, for a scene whose
+subject is the passage of time; the harness restores the frozen default before the arena audit's
+closing snapshot, so the scene is not reported for a gamerule the harness changed on its behalf.
+
 ## Three topologies, and why they are not three copies of one
 
 All three run scenes on a **server**. What differs is which server, and whether a real client is

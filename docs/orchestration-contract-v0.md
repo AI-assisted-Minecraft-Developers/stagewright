@@ -28,7 +28,10 @@ harness 之间的接口。**变更需升 v1 并保持 v0 解析兼容。**
 
 ## 结果文件
 `<runDir>/stagewright-results.jsonl`，UTF-8，一行一个 JSON 对象：
-- 头 `{"type":"suite","loader":"neoforge|fabric","registered":[{"name","required","canary"}...]}`
+- 头 `{"type":"suite","loader":"neoforge|fabric","registered":[{"name","required","canary"}...]}`，
+  可选 `"filter"`（本轮的场景名过滤式）与 `"worldPin"`（本轮定住的世界状态，一行文本）。
+  两个键都**只在有值时出现**，所以旧结果文件逐字节不变；`worldPin` 由 `verdict` 原样
+  转成报告首行 `WORLD: …`——绿而不说自己绿在哪个世界，等于多报了没证明的东西。
 - 场景 `{"type":"scene","name","outcome":"PASS|FAIL|TIMEOUT|ENV_FAIL","ticks","wallMs","reason"}`
 - 尾 `{"type":"done","scenes":N}`（缺尾 = harness 中途死亡 = RED）
 - `canary` ∈ NONE | MUST_FAIL | MUST_TIMEOUT | MUST_SWALLOW；

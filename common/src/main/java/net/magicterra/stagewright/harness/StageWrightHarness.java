@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.scene.Canary;
+import net.magicterra.stagewright.scene.Clock;
 import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.scene.SceneContext;
 import net.magicterra.stagewright.scene.SceneFailure;
@@ -82,7 +83,11 @@ public final class StageWrightHarness {
         this.out = out;
         rejectDuplicateNames(scenes);
         this.slotByName = assignSlots(scenes);
-        out.writeSuiteHeader(loader, scenes, SceneFilter.pattern());
+        // Before the header, so the header can state the world these results were produced in — and
+        // before the first scene's arena audit takes its baseline, or that scene is reported as the
+        // one that changed a gamerule.
+        WorldPin.applySuite(server);
+        out.writeSuiteHeader(loader, scenes, SceneFilter.pattern(), WorldPin.description());
         // Started at arming, not at the first scene: a mod that wedges the tick does it during its
         // own setup as readily as inside a scene, and that stall has to be nameable too.
         this.stallWatchdog = new StallWatchdog(out, () -> ticksObserved, () -> runningScene);
@@ -189,6 +194,13 @@ public final class StageWrightHarness {
                 if (arenaReady(level, origin, radius)) {
                     ctx = new SceneContext(level, arenaOrigin(scene, level, origin), radius);
                     arenaBefore = ArenaAudit.take(level, origin, radius);
+                    // Per scene, not per suite: this is what stops one scene's clock from being a
+                    // function of how long its predecessors took — or of a predecessor having asked
+                    // for Clock.RUNNING. AFTER the audit baseline, so a Clock.RUNNING scene's
+                    // borrowed doDaylightCycle is not in the baseline that teardown's restore is
+                    // compared against; and at the RUN edge rather than at PREP's first tick, so
+                    // however many ticks chunk loading took are not ticks of a RUNNING scene's day.
+                    WorldPin.applyClock(server, scene.clock());
                     phase = Phase.RUN;
                     phaseTicks = 0;
                 } else if (phaseTicks > PREP_BUDGET_TICKS) {
@@ -258,6 +270,10 @@ public final class StageWrightHarness {
         }
         sweepArena(scene, level, origin, radius);
         forceChunks(level, origin, radius, false);
+        // Back to the suite's frozen night BEFORE the audit's closing snapshot. A Clock.RUNNING
+        // scene was GRANTED doDaylightCycle by the harness; leaving it set here would have the audit
+        // report the scene for a gamerule the harness itself changed on its behalf.
+        WorldPin.applyClock(server, Clock.MIDNIGHT);
         auditLeaks(scene, level, origin, radius);
     }
 
@@ -350,6 +366,9 @@ public final class StageWrightHarness {
                     StageWrightCommon.MOD_ID, leakedScenes.size(), executed, leakedScenes);
         }
         out.writeDone((int) executed);
+        // After the footer, so the results file is complete before anything else can go wrong, and
+        // before the hold returns: a held server hands the world back to whoever is using it.
+        WorldPin.release(server);
         if (StageWrightCommon.holding()) {
             // A hold outlives its suite. Halting here would take the endpoint down underneath
             // whatever attached to it — and the one thing you cannot do without triggering a run is

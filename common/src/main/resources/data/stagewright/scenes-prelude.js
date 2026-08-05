@@ -21,6 +21,13 @@ var __scenes = [];
 // The last two are separate dimensions StageWright ships, so they are the same whatever world type
 // the run itself was launched with, and 'generated' uses a fixed seed so the landscape under a
 // given scene is the same every run.
+//
+// options.clock picks the time of day. Every scene runs in a world the run holds still — see the
+// pin line the run logs and writes into its results header — and the default is night:
+//   'midnight'   (default) frozen at 18000; nothing sun-sensitive can ignite
+//   'noon'       frozen at 6000, for a scene whose subject IS daylight
+//   'running'    starts at midnight with the daylight cycle actually advancing, for a scene whose
+//                subject is the passage of time
 function scene(name, budgetTicks, body, options) {
     if (typeof name !== 'string' || !name) throw new Error('scene() needs a name');
     if (typeof budgetTicks !== 'number') throw new Error("scene '" + name + "' needs a tick budget");
@@ -28,7 +35,8 @@ function scene(name, budgetTicks, body, options) {
     var opts = options || {};
     __scenes.push({
         name: name, budgetTicks: budgetTicks | 0, body: body, optional: false,
-        terrain: opts.terrain ? String(opts.terrain) : 'run_world'
+        terrain: opts.terrain ? String(opts.terrain) : 'run_world',
+        clock: opts.clock ? String(opts.clock) : 'midnight'
     });
 }
 
