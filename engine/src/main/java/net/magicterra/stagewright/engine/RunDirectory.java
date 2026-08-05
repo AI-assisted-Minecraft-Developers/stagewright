@@ -24,6 +24,10 @@ import java.util.stream.Stream;
  */
 public final class RunDirectory {
 
+    /** The TESTKIT_ENDPOINT descriptor a held run publishes, relative to the run directory. Matched
+     *  by the plugin's hold task and by the game's {@code EndpointDescriptor}. */
+    public static final String ENDPOINT_FILE = "stagewright-endpoint.json";
+
     private RunDirectory() {}
 
     /**
@@ -69,6 +73,18 @@ public final class RunDirectory {
             }
         } catch (IOException e) {
             throw new UncheckedIOException("cannot delete the stale results file " + results, e);
+        }
+
+        // Same argument, one step worse: a stale endpoint descriptor names a port. Left behind, an
+        // out-of-process test attaches to whatever now answers there — nothing, or somebody else's
+        // game — instead of failing fast on a descriptor that is not there yet.
+        Path endpoint = gameDir.resolve(ENDPOINT_FILE);
+        try {
+            if (Files.deleteIfExists(endpoint)) {
+                log.accept("removed the previous endpoint descriptor at " + endpoint);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot delete the stale endpoint descriptor " + endpoint, e);
         }
 
         seedClientOptions(gameDir.resolve("options.txt"));

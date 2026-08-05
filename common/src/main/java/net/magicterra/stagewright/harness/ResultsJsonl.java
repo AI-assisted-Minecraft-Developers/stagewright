@@ -156,7 +156,8 @@ public final class ResultsJsonl {
         }
     }
 
-    private static String escape(String s) {
+    /** Package-private so {@link EndpointDescriptor} hand-rolls its JSON against the same escaping. */
+    static String escape(String s) {
         if (s == null) return "";
         StringBuilder sb = new StringBuilder(s.length());
         for (int i = 0; i < s.length(); i++) {

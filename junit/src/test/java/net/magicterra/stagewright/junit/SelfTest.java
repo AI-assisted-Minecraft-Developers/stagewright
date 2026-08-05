@@ -118,7 +118,9 @@ class SelfTest {
         System.clearProperty("stagewright.endpoint");
         try {
             StageWrightAttachException ex = assertThrows(StageWrightAttachException.class, StageWright::attach);
-            assertTrue(ex.getMessage().contains("python3 scripts/stagewright/t1.py --hold"),
+            // Spelled out rather than referencing the constant, so changing the hint has to be a
+            // deliberate two-file edit: this string is what a stranded developer actually reads.
+            assertTrue(ex.getMessage().contains("./gradlew stagewright<Topology>Hold"),
                     "attach failure must carry the operator hint, got: " + ex.getMessage());
         } finally {
             if (saved != null) {

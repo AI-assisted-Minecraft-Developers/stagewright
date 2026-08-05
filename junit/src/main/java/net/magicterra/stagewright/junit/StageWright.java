@@ -39,10 +39,13 @@ public final class StageWright implements AutoCloseable {
      * Attach to the live endpoint named by the {@code TESTKIT_ENDPOINT} environment
      * variable, else the {@code stagewright.endpoint} system property.
      *
-     * <p>Fails fast with {@link StageWrightAttachException} (whose message contains the
-     * hint {@code python3 scripts/stagewright/t1.py --hold}) when: neither source is set,
-     * the descriptor file is missing/unreadable/corrupt, or the liveness probe (one
-     * {@code mc.system.version} call, 5s timeout) does not answer.
+     * <p>Descriptors are published by {@code ./gradlew stagewright<Topology>Hold} — the game
+     * writes its own, once it is in a world, from the port it actually bound.
+     *
+     * <p>Fails fast with {@link StageWrightAttachException} (whose message carries
+     * {@link StageWrightAttachException#HINT}) when: neither source is set, the descriptor file
+     * is missing/unreadable/corrupt, or the liveness probe (one {@code mc.system.version} call,
+     * 5s timeout) does not answer.
      */
     public static StageWright attach() {
         String pathStr = System.getenv("TESTKIT_ENDPOINT");

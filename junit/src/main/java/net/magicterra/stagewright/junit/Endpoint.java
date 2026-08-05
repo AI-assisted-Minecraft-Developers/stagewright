@@ -11,21 +11,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * The TESTKIT_ENDPOINT descriptor (schema v1) written by
- * {@code scripts/stagewright/t1.py --hold} (T1, {@code integrated_plus_client}) and
- * {@code scripts/stagewright/t2.py --hold} (T2, {@code dedicated_plus_client}). Immutable;
- * carries all eight frozen required keys plus an optional T2-only extension.
+ * The TESTKIT_ENDPOINT descriptor (schema v1), written by a held game — see
+ * {@code EndpointDescriptor} on the mod side and the {@code stagewright<Topology>Hold} tasks that
+ * ask for one. Immutable; carries all eight frozen required keys plus one optional extension.
  *
  * <p><b>Required (frozen v1, all eight):</b> {@code version}, {@code topology},
  * {@code loader}, {@code rpcHost}, {@code rpcPort}, {@code worldName},
  * {@code holdPid}, {@code writtenAtEpochMs}. A missing REQUIRED key is a corrupt/stale
  * descriptor and fails fast rather than defaulting silently.
  *
- * <p><b>Optional (v1-compatible extension):</b> {@code serverRpcPort} — the dedicated
- * server's RPC port. Present on T2 ({@code dedicated_plus_client}) endpoints, ABSENT on
- * T1 ({@code integrated_plus_client}) endpoints; {@link #serverRpcPort()} is {@code null}
- * when the key is absent. {@code rpcPort} is always the CLIENT-face RPC port (the JUnit UI
- * scenes only touch the client), so {@link #wsUri()} is topology-agnostic.
+ * <p><b>{@code rpcPort} is the face of the JVM that wrote this descriptor</b>, and {@code topology}
+ * says which face that is. A client run publishes the client face — the only one a UI test can
+ * assert against, since {@code mc.client.*} exists nowhere else. A dedicated server publishes its
+ * own, which is what a bare-server contract suite wants and what a UI test would find empty. The
+ * two-process topology holds both halves and writes one descriptor per run directory.
+ *
+ * <p><b>Optional (v1-compatible extension):</b> {@code serverRpcPort} — a client-face descriptor's
+ * pointer at the dedicated server it is joined to. {@link #serverRpcPort()} is {@code null} when
+ * the key is absent, which it is for every descriptor the current holds write; it survives because
+ * removing a tolerated optional key from a frozen schema buys nothing.
  *
  * <p><b>Unknown keys are TOLERATED</b> (forward compatibility): the parser reads only the
  * keys it knows, so a future schema addition never breaks an older reader.

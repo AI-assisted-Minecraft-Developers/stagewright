@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.client;
 
 import net.magicterra.stagewright.StageWrightCommon;
+import net.magicterra.stagewright.harness.EndpointDescriptor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.ConnectScreen;
@@ -148,9 +149,15 @@ public final class ClientDirector {
                     // Only where a scene cannot reach: joined to a dedicated server, the suite runs
                     // in the other JVM. In world mode the equivalent scene runs in THIS one.
                     String connect = System.getProperty(P_CONNECT);
-                    if (connect != null && !connect.isBlank()) {
+                    if (connect != null && !connect.isBlank() && !StageWrightCommon.holding()) {
+                        // Not under a hold: the probe would drive the player it is holding still for,
+                        // and write a results file no gate is going to read.
                         ClientProbes.arm(loader);
                     }
+                    // Published here rather than at client init because "in a world" is what an
+                    // attaching test needs — mc.client.screen.tree answers at the title screen too,
+                    // and every UI test would then race the world it assumes it is standing in.
+                    EndpointDescriptor.writeIfRequested(loader, worldLabel(connect));
                 } else if (++driveTicks > DRIVE_TIMEOUT_TICKS) {
                     StageWrightCommon.LOG.error("[{}] client never reached a world within {} ticks ({})",
                             StageWrightCommon.MOD_ID, DRIVE_TIMEOUT_TICKS, directive());
@@ -213,7 +220,14 @@ public final class ClientDirector {
                 || mc.screen instanceof JoinMultiplayerScreen;
     }
 
+    /** What to record as the endpoint's world: the singleplayer level, or the address we joined. */
+    private static String worldLabel(String connect) {
+        if (connect != null && !connect.isBlank()) return connect.trim();
+        return System.getProperty(P_WORLD, "").trim();
+    }
+
     private static boolean exitWhenDone() {
+        if (StageWrightCommon.holding()) return false;
         return !"false".equalsIgnoreCase(System.getProperty(P_EXIT, "true"));
     }
 

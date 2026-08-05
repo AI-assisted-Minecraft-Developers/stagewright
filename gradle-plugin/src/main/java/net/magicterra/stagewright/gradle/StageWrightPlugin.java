@@ -15,6 +15,8 @@ import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskProvider;
 
+import net.magicterra.stagewright.engine.RunDirectory;
+
 /**
  * Registers the {@code stagewright { ... }} block and, per declared topology, a
  * {@code stagewright<Name>} task that provisions a clean run directory, runs the host build's own
@@ -131,6 +133,91 @@ public class StageWrightPlugin implements Plugin<Project> {
             // happened.
             task.getOutputs().upToDateWhen(t -> false);
         });
+
+        registerHoldTask(project, topology, suffix, provision, sideProcesses);
+    }
+
+    /** The property the game reads to know where to publish it; see {@code EndpointDescriptor}. */
+    static final String ENDPOINT_PROPERTY = "stagewright.endpoint";
+
+    /**
+     * The property that puts a run into hold mode: arm everything, run nothing, close nothing.
+     *
+     * <p>Deliberately not {@code -Dstagewright.autorun=false}. Autorun and exitWhenDone are set by
+     * the host build's run configuration, so overriding them here puts two {@code -D}s for one key
+     * on one command line and makes the outcome depend on which the JVM reads last. That is not a
+     * theoretical risk: the first version of this task did exactly that, and the held game ran all
+     * 190 scenes underneath the tests that had attached to it.
+     */
+    static final String HOLD_PROPERTY = "stagewright.hold";
+
+    /** Recorded in the descriptor so an attached test knows which face it is holding. */
+    static final String TOPOLOGY_PROPERTY = "stagewright.topology";
+
+    /**
+     * Register {@code stagewright<Name>Hold} — the same topology, standing still.
+     *
+     * <p>A hold is this topology's run with three properties flipped: the suite does not autorun,
+     * the client does not close itself when it has nothing left to do, and the game publishes a
+     * {@code TESTKIT_ENDPOINT} descriptor once it is genuinely attachable. What it exists for is
+     * everything that has to assert from OUTSIDE the game — {@code stagewright-junit}'s UI tests,
+     * an interactive session, a bare-RPC contract suite that must not run through the harness it is
+     * checking. Those cannot be scenes: a scene body runs inside the very runtime under test.
+     *
+     * <p>It ends when you stop it (Ctrl-C), which is not how a gate behaves and is the point — a
+     * gate's verdict is "the suite finished"; a hold's verdict belongs to whatever attached to it.
+     * So this task has no results file, no judging, and never appears in a gate's dependency graph.
+     */
+    private void registerHoldTask(Project project, StageWrightTopology topology, String suffix,
+                                  TaskProvider<StageWrightProvisionTask> provision,
+                                  org.gradle.api.provider.Provider<StageWrightSideProcessService> sideProcesses) {
+        project.getTasks().register("stagewright" + suffix + "Hold", task -> {
+            task.setGroup(TASK_GROUP);
+            task.setDescription("Stands the " + topology.getName() + " topology up and holds it open,"
+                    + " publishing a TESTKIT_ENDPOINT descriptor for out-of-process tests to attach to.");
+            task.dependsOn(provision);
+            task.getOutputs().upToDateWhen(t -> false);
+
+            // Same lazy-resolution shape as the gate above, and for the same reason: the run task
+            // belongs to the host's loader plugin and does not exist while this one is being
+            // registered. Configuring it in here rather than at registration also means an ordinary
+            // gate invocation never sees these properties — the run task is only rewritten when a
+            // hold is actually in the graph.
+            task.dependsOn(project.provider(() -> {
+                String runTaskName = topology.getRunTask().getOrNull();
+                if (runTaskName == null) {
+                    throw new GradleException("stagewright topology '" + topology.getName()
+                            + "' declares no runTask");
+                }
+                Task run = resolveRunTask(project, runTaskName);
+                if (run == null) {
+                    throw new GradleException("stagewright topology '" + topology.getName()
+                            + "' points at run task '" + runTaskName + "', which "
+                            + project.getPath() + " does not declare");
+                }
+                if (!(run instanceof JavaExec exec)) {
+                    throw new GradleException("stagewright topology '" + topology.getName()
+                            + "' cannot be held: run task '" + runTaskName + "' is a "
+                            + run.getClass().getSimpleName() + " rather than a JavaExec, so there is"
+                            + " no JVM to pass the hold properties to");
+                }
+                run.mustRunAfter(provision);
+                // No timeout. The gate's exists because a suite that never drains has to be killed
+                // by something; a hold is supposed to outlast the build's patience.
+                exec.systemProperty(HOLD_PROPERTY, "true");
+                exec.systemProperty(TOPOLOGY_PROPERTY, topology.getName());
+                File endpoint = new File(topology.getGameDirectory().get().getAsFile(),
+                        RunDirectory.ENDPOINT_FILE);
+                exec.systemProperty(ENDPOINT_PROPERTY, endpoint.getAbsolutePath());
+                holdCompanion(project, topology);
+                attachSideProcesses(project, topology, run, sideProcesses);
+                run.doFirst(t -> t.getLogger().lifecycle(
+                        "[stagewright] holding '{}' — attach with TESTKIT_ENDPOINT={}\n"
+                        + "[stagewright] the descriptor appears once the game is in a world; Ctrl-C ends the hold",
+                        topology.getName(), endpoint.getAbsolutePath()));
+                return run;
+            }));
+        });
     }
 
     /**
@@ -180,6 +267,32 @@ public class StageWrightPlugin implements Plugin<Project> {
         exec.systemProperty(SCENE_FILTER_PROPERTY, patterns);
         run.getLogger().lifecycle("[stagewright] FILTERED to '{}' — this run is NOT a gate result",
                 patterns);
+    }
+
+    /**
+     * Hold the companion too, and give it its own descriptor.
+     *
+     * <p>On the two-process topology the halves face opposite ways: the run task is the dedicated
+     * server, so its descriptor is the server face, and the client — the only place a UI test can
+     * assert anything — is the companion. Without this the companion would close itself the moment
+     * the server it joined stopped having a suite to run, which under a hold is immediately.
+     *
+     * <p>The companion's descriptor lands beside its results file, the one piece of the companion's
+     * run directory this plugin is told about. A topology that declares no companion results has no
+     * second endpoint; that is a topology whose client is not addressable, not a failure.
+     */
+    private void holdCompanion(Project project, StageWrightTopology topology) {
+        String companionName = topology.getCompanionRunTask().getOrNull();
+        if (companionName == null) return;
+        if (!(resolveRunTask(project, companionName) instanceof JavaExec companion)) return;
+        companion.systemProperty(HOLD_PROPERTY, "true");
+        companion.systemProperty(TOPOLOGY_PROPERTY, topology.getName() + "-client");
+        File results = topology.getCompanionResultsFile().map(f -> f.getAsFile()).getOrNull();
+        if (results == null || results.getParentFile() == null) return;
+        File endpoint = new File(results.getParentFile(), RunDirectory.ENDPOINT_FILE);
+        companion.systemProperty(ENDPOINT_PROPERTY, endpoint.getAbsolutePath());
+        project.getLogger().lifecycle("[stagewright] companion held — client face at TESTKIT_ENDPOINT={}",
+                endpoint.getAbsolutePath());
     }
 
     private void attachSideProcesses(Project project, StageWrightTopology topology, Task run,

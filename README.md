@@ -207,6 +207,20 @@ has no framework self-check left in it — the other half of why it must never s
 A pattern that matches **nothing** is RED, not an empty green suite. That typo is the failure that
 would otherwise look most like success.
 
+### Holding a topology open
+
+Every topology also gets a `Hold` task: same run, `-Dstagewright.hold=true`, suite armed but not
+started, client never closing itself, and a `TESTKIT_ENDPOINT` descriptor published into the run
+directory once the game is genuinely in a world.
+
+    ./gradlew stagewrightIntegratedServerFabricHold      # Ctrl-C ends it
+
+It exists for everything that has to assert from OUTSIDE the game — `:stagewright-junit`'s UI tests,
+an interactive session, a bare-RPC suite that must not run through the harness it is checking. Those
+cannot be scenes, because a scene body runs inside the runtime under test. A hold has no results
+file and no verdict: what it produces is an endpoint, and the verdict belongs to whatever attaches.
+See **JUnit 5 attach** below.
+
 See `../conformance-mods/README.md` for the six-step recipe for adding this to a mod that has never
 heard of StageWright, and for the three third-party mods it is exercised against.
 
@@ -521,7 +535,7 @@ dev dedicated server ships an empty `ops.json` with `online-mode=false`.
 
 `stagewright/junit` (`:stagewright-junit`) is a **pure-JVM** JUnit 5 module: no game
 classes, no Minecraft on its classpath. Its live UI tests **attach** to an
-already-online T1 topology over RPC, so a UI scene body runs on the JUnit test
+already-online held topology over RPC, so a UI scene body runs on the JUnit test
 thread — free to `await` an asynchronous client screen — instead of inline on a
 server tick (the cross-thread blocking rule that kept in-game UI scenes out of
 P2b). It is the correct home for the first-batch UI scenes P2b deferred.
@@ -530,8 +544,8 @@ P2b). It is the correct home for the first-batch UI scenes P2b deferred.
 `TESTKIT_ENDPOINT` environment variable, which names an absolute path to a
 descriptor file. The descriptor is a frozen schema-v1
 JSON record — `{version, topology, loader, rpcHost, rpcPort, worldName, holdPid,
-writtenAtEpochMs}`, written atomically (`.tmp` → `os.replace`) so an attaching
-reader never sees a partial file. The authoritative schema and key-by-key
+writtenAtEpochMs}`. `holdPid` is the game's own pid, not the launcher's; `rpcPort` is the face of
+the JVM that wrote the file, and `topology` says which face that is. The authoritative key-by-key
 semantics live in the **attach appendix** of
 `docs/orchestration-contract-v0.md`
 （`## TESTKIT_ENDPOINT attach 契约（v0 附录，P2c T1）`）. `Endpoint.parse` rejects
@@ -543,17 +557,39 @@ empty) and no `stagewright.endpoint` property, or the named file is absent — `
 throws `StageWrightAttachException` rather than hanging or reporting a mystery connection
 refusal.
 
-**No producer today.** `t1.py --hold` and `t2.py --hold` wrote that descriptor and are deleted; see
-"JUnit attach on T2" below. The attach machinery, the schema and the fail-fast path are all intact
-and tested by the pure self-tests — what is missing is something that stands a topology up and
-leaves it online. Until then the live UI tests are dormant.
+**The producer is the game.** `./gradlew stagewright<Topology>Hold` stands a topology up with
+`-Dstagewright.hold=true` and a path to write to; the game publishes the descriptor itself, once it
+is in a world, from the port it actually bound. Only that JVM knows both of those things, which is
+why the deleted Python holds — which polled a log from outside for the same moment — needed a retry
+loop and this does not.
+
+`stagewright.hold` is a property of its own rather than `-Dstagewright.autorun=false`, because
+autorun belongs to the host build's run config: overriding it means two `-D`s for one key on one
+command line and a silent dependence on which the JVM reads last. When that was the design, the held
+game ran all 190 scenes underneath the tests that had attached to it — every UI test then failed
+intermittently, on the game moving under them.
+
+**Running them.** Two terminals: one holds the game, one runs the tests against it. The hold ends
+when you stop it.
+
+```bash
+# terminal 1 — in the consumer repo (worlddriver), any topology
+./gradlew stagewrightIntegratedServerFabricHold
+# ... [mc_testkit] endpoint descriptor written to <abs>/stagewright-endpoint.json
+
+# terminal 2 — in stagewright
+TESTKIT_ENDPOINT=<abs>/stagewright-endpoint.json ./gradlew :stagewright-junit:test --rerun-tasks
+```
+
+`--rerun-tasks` because the test task's inputs do not change between runs against a live game, so
+Gradle would otherwise report the previous verdict for a run it never made.
 
 **Attach latency budget.** With an endpoint present, `attach()` is bounded at
 worst-case **~10s** — a 5s websocket connect window plus a 5s `mc.system.version`
 liveness probe — before it fails loudly. The far larger cost sits BEFORE attach: a cold client
 boot is ~28-30s; budget for that in any wrapper that starts the topology itself.
 
-**Serial lease.** One `--hold` topology serves **one** attach client. The
+**Serial lease.** One held topology serves **one** attach client. The
 extension attaches a single shared `StageWright` **singleton** once per JVM (guarded
 by a lock; a failed attach is re-thrown as a LOUD container-level error on every
 later use, never downgraded to a skip) — no second topology instance, no concurrent attach.
@@ -572,7 +608,7 @@ The two attach **fail-fast** self-tests are the symmetric counterpart: they are
 configured" branch they assert is only reachable when the env is **absent** (with
 it present, `attach` succeeds and defeats the `assertThrows`). So the gating is a
 mirror, not a hole: **env-off** ⇒ the 2 fail-fast self-tests run + the 6 live UI
-tests skip; **env-on** ⇒ the 2 fail-fast self-tests skip + the 5 runnable live UI
+tests skip; **env-on** ⇒ the 2 fail-fast self-tests skip + all 6 live UI
 tests run. Every test runs in exactly one of the two modes and JUnit reports the
 skips honestly — a test can never fall through both gates and vanish.
 
@@ -636,11 +672,15 @@ The **same** `:stagewright-junit` UI tests attach to this topology with no code 
 optional key, **`serverRpcPort`** (the dedicated server's RPC port beside the client `rpcPort`). The
 frozen schema-v1 required-8 set is unchanged and `Endpoint.parse` tolerates its absence.
 
-**Nothing writes that descriptor today.** The only producers were `t1.py --hold` and `t2.py --hold`,
-deleted with the rest of the orchestrators. The UI tests are guarded by
-`@EnabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT")`, so they do not fail — they are simply
-never enabled, which is worse than a red because it is silent. Treat `junit/src/test/.../ui/*` as
-dormant, not as coverage, until a hold task writes the descriptor again.
+`stagewrightDedicatedServerWithClient<Loader>Hold` holds **both** halves and writes one descriptor
+per run directory: the server's beside its results, the client's beside the companion's. A UI test
+wants the client one — `mc.client.*` exists nowhere else — and a bare-server contract suite wants the
+server one, so which file you point `TESTKIT_ENDPOINT` at is the whole choice.
+
+The UI tests remain guarded by `@EnabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT")`: with no
+endpoint they skip rather than fail, so a run with the env unset reports coverage it did not have.
+Read a green `:stagewright-junit:test` as covering the UI only when the command that produced it set
+that variable.
 
 ### 世界模板两端一致性声明
 

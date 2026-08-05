@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.magicterra.stagewright.harness.EndpointDescriptor;
 import net.magicterra.stagewright.harness.ResultsJsonl;
 import net.magicterra.stagewright.harness.StageWrightHarness;
 import net.magicterra.stagewright.scene.Scene;
@@ -61,6 +62,22 @@ public final class StageWrightCommon {
     private StageWrightCommon() {}
 
     /**
+     * True when this run is a HOLD: stand the topology up and leave it standing, for whatever
+     * attaches from outside.
+     *
+     * <p>A separate property rather than {@code -Dstagewright.autorun=false}, because the two are
+     * set by different people. Autorun belongs to the host build's run configuration — a checked-in
+     * line in someone's {@code build.gradle} — and a hold is a thing you decide at the command line,
+     * about a run config you are not editing. Overriding the first from the second means two
+     * {@code -D}s for one key on one command line and a silent dependence on which the JVM reads
+     * last; getting that wrong does not fail, it runs the whole suite underneath whatever attached,
+     * which is how this was found.
+     */
+    public static boolean holding() {
+        return Boolean.getBoolean("stagewright.hold");
+    }
+
+    /**
      * Arm the runtime when the server reaches STARTED. Two confluent paths meet here:
      * <ul>
      *   <li><b>autorun</b> ({@code -Dstagewright.autorun=true}) — build the harness immediately, exactly
@@ -101,7 +118,10 @@ public final class StageWrightCommon {
         // topology-uniform.
         installVerbHooks();
 
-        if (Boolean.getBoolean("stagewright.autorun")) {
+        if (holding()) {
+            LOG.info("[{}] HELD — the suite will not run itself ({} scenes registered, mc.test.run"
+                    + " still works). Stop the run to end the hold.", MOD_ID, resolvedScenes.size());
+        } else if (Boolean.getBoolean("stagewright.autorun")) {
             if (Boolean.getBoolean(AWAIT_PLAYER)) {
                 // Production topology: a dedicated server with a real client connected to it. The
                 // scenes must not start before that client is actually in — otherwise the run
@@ -115,6 +135,12 @@ public final class StageWrightCommon {
         } else {
             LOG.info("[{}] armed, awaiting mc.test.run ({} scenes) — stagewright.autorun not set",
                     MOD_ID, resolvedScenes.size());
+        }
+
+        // Only where no client shares this JVM. An integrated server has one, and its ClientDirector
+        // publishes the same port later, once there is a world to attach to.
+        if (server.isDedicatedServer()) {
+            EndpointDescriptor.writeIfRequested(loader, server.getWorldData().getLevelName());
         }
     }
 
@@ -287,7 +313,7 @@ public final class StageWrightCommon {
             }
             if (!settled) return;
         }
-        if (harness == null && armed && Boolean.getBoolean("stagewright.autorun")
+        if (harness == null && armed && !holding() && Boolean.getBoolean("stagewright.autorun")
                 && Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() > 0) {
             armDeferredSuite(server);
         }
