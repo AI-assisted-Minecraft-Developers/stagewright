@@ -1,6 +1,8 @@
 package net.magicterra.stagewright.junit.ui;
 
 import net.magicterra.stagewright.junit.StageWright;
+import net.magicterra.stagewright.junit.Face;
+import net.magicterra.stagewright.junit.RequiresFace;
 import net.magicterra.stagewright.junit.StageWrightExtension;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -36,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @ExtendWith(StageWrightExtension.class)
 @EnabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT", matches = ".+")
+@RequiresFace(Face.CLIENT)
 class InventoryScreenTest {
 
     private static final Duration UI = Duration.ofSeconds(5);

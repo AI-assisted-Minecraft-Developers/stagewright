@@ -2,6 +2,8 @@ package net.magicterra.stagewright.junit.ui;
 
 import com.google.gson.JsonObject;
 import net.magicterra.stagewright.junit.StageWright;
+import net.magicterra.stagewright.junit.Face;
+import net.magicterra.stagewright.junit.RequiresFace;
 import net.magicterra.stagewright.junit.StageWrightExtension;
 import net.magicterra.stagewright.junit.StageWrightTimeoutException;
 import org.junit.jupiter.api.Test;
@@ -30,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @ExtendWith(StageWrightExtension.class)
 @EnabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT", matches = ".+")
+@RequiresFace(Face.CLIENT)
 class CanaryTest {
 
     @Test
