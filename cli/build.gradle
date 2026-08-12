@@ -16,6 +16,15 @@ java {
 repositories {
     mavenLocal()          // the loader jars staged below are published here by the root build
     mavenCentral()
+    maven {
+        // Rhino, for out-of-process scenes. Not on Maven Central, and FENCED to its own group.
+        // The fence is not tidiness: conformance-mods hit a repository whose domain had expired and
+        // whose parking page answered 200 to every path — Gradle takes the first repository that
+        // answers, so it black-holed the nine healthy ones declared after it and reported the damage
+        // as nine unparseable POMs.
+        url "https://maven.latvian.dev/releases"
+        content { includeGroup 'dev.latvian.mods' }
+    }
 }
 
 // The Minecraft-side jars this CLI installs into a pack, carried as resources rather than
@@ -26,9 +35,35 @@ repositories {
 def frameworkVersion = '0.1.0+1.21.1'
 configurations { bundledMods { transitive = false } }
 dependencies {
+    // A PUBLISHED artifact, and engine/ is its own standalone build — so the root
+    // `./gradlew publishToMavenLocal` does NOT rebuild it, and neither does building this jar.
+    // Change anything under engine/ and the release is three steps, in order:
+    //
+    //     cd engine && ../gradlew publishToMavenLocal
+    //     cd ../     && ./gradlew publishToMavenLocal      # the Minecraft-side jars
+    //     cd cli     && ../gradlew jar
+    //
+    // Skip the first and this jar keeps shipping the engine it was built against, silently. It cost
+    // a full ATM10 run: the provisioning step had learned to install capability descriptors, the
+    // rebuilt CLI still had the version that did not, and the pack ran perfectly while the scenes
+    // depending on those descriptors failed as though the pack were missing them.
     implementation 'net.magicterra:stagewright-engine:0.1.0'
     bundledMods "net.magicterra:mc_stagewright-neoforge:${frameworkVersion}"
     bundledMods "net.magicterra:mc_stagewright-fabric:${frameworkVersion}"
+
+    // Out-of-process scenes. The SAME artifact and the SAME version the bundled mod jars shadow —
+    // which is the whole guarantee that one `.js` file behaves identically in both homes, and the
+    // reason `frameworkVersion` is used here rather than a second literal. A skew between this and
+    // the mods staged above would not fail loudly; it would make a scene mean two things.
+    implementation "net.magicterra:mc_stagewright-attached:${frameworkVersion}"
+
+    // Rhino and gson are compileOnly in that module, on purpose: inside the game both are already
+    // present (worlddriver embeds Rhino, Minecraft ships gson), and bundling either into a mod jar
+    // would put a second copy on the game's classpath. Out here nothing provides them, so this is
+    // where they become real. Same Rhino coordinate as the mod side — the KubeJS fork, not Mozilla's:
+    // two homes on two interpreters would not be running the same language.
+    implementation "dev.latvian.mods:rhino:2101.2.7-build.81"
+    implementation 'com.google.code.gson:gson:2.11.0'
 }
 
 // Staged under /mods/mc_stagewright-<loader>.jar — version stripped on purpose, so the extraction

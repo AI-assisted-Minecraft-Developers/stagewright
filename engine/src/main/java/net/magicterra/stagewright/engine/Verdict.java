@@ -181,13 +181,34 @@ public final class Verdict {
             }
         }
 
+        List<String> didNotRun = new ArrayList<>();
+        int executed = 0;
+
         for (Map<String, Object> reg : registered) {
             String name = str(reg.get("name"));
             String canary = str(reg.get("canary"));
             Map<String, Object> rec = scenes.get(name);
             boolean required = !Boolean.FALSE.equals(reg.get("required"));
 
-            if ("MUST_SWALLOW".equals(canary)) {
+            if ("MUST_SKIP".equals(canary)) {
+                if (rec == null) {
+                    code = Math.max(code, 1);
+                    report.add("SWALLOWED: must-skip '" + name + "' is registered but was never"
+                            + " recorded — a skip is a RECORD, so no record means it never ran at all");
+                } else if (!skipped(rec)) {
+                    // DEAD rather than RED, on the MUST_SWALLOW argument: this scene exists because
+                    // some absence — a capability, a dimension — must produce a skip, and a skip
+                    // resolves as PASS. If it executed, absence detection is answering "present" for
+                    // something that is not there, and every OTHER suite's skips were trusted through
+                    // that same machinery. The measurement is broken, not the code under it.
+                    return new Result(2, List.of("DEAD: must-skip '" + name + "' EXECUTED instead of"
+                            + " skipping — the absence it asks about was answered as present, so no"
+                            + " skip anywhere in this run can be believed"));
+                } else {
+                    report.add("must-skip '" + name + "': correctly skipped — "
+                            + str(rec.getOrDefault("reason", "")));
+                }
+            } else if ("MUST_SWALLOW".equals(canary)) {
                 if (rec != null) {
                     return new Result(2, List.of("DEAD: swallow-canary '" + name
                             + "' was executed — the skip gate is broken"));
@@ -211,10 +232,27 @@ public final class Verdict {
                 if (required) code = Math.max(code, 1);
                 report.add((required ? "FAIL" : "fail(optional)") + ": '" + name + "' -> "
                         + str(rec.get("outcome")) + " — " + str(rec.getOrDefault("reason", "")));
+            } else if (skipped(rec)) {
+                // Not "pass:". A skip resolves as PASS because it is not a failure, but it is also
+                // not evidence, and rendering it identically to a scene that ran was how two of this
+                // pack's six declared subjects came to be reported as covered by a suite that had
+                // never once executed them.
+                didNotRun.add(name);
+                report.add("skip: '" + name + "' — " + str(rec.getOrDefault("reason", "")));
             } else {
+                executed++;
                 report.add("pass: '" + name + "' (" + num(rec.get("ticks")) + " ticks, "
                         + num(rec.get("wallMs")) + " ms)" + data(rec));
             }
+        }
+
+        // What this run actually covered, stated next to the verdict rather than left to be counted
+        // out of the lines above. GREEN is unaffected — a skip is not a failure, and a topology that
+        // cannot host a scene is not a defect in the scene. What is a defect is a suite where some
+        // scene skips on EVERY topology it is run on, and that is one file up: see Coverage.
+        if (!didNotRun.isEmpty()) {
+            report.add("COVERAGE: " + executed + " scene(s) executed, " + didNotRun.size()
+                    + " skipped on this topology and tested nothing — " + didNotRun);
         }
 
         Set<String> drifted = new TreeSet<>(scenes.keySet());
@@ -235,8 +273,24 @@ public final class Verdict {
         return new Result(code, report, filtered);
     }
 
+    /**
+     * Did this scene resolve without testing its subject?
+     *
+     * <p>Two signals, OR-ed, because each alone fails toward a FALSE GREEN and they fail that way in
+     * different situations. The {@code "skipped"} field is what the writers state outright, but it is
+     * omitted when false, so a results file produced before the field existed is indistinguishable
+     * from one where nothing skipped — and reading only the field would report every skip in it as a
+     * scene that ran. The {@code "skipped: "} reason prefix is the older contract and survives that,
+     * but it is prose: reword the message and every consumer silently starts counting skips as
+     * coverage. Neither is dropped, and this is the only place either is read.
+     */
+    static boolean skipped(Map<String, Object> rec) {
+        if (Boolean.TRUE.equals(rec.get("skipped")) || "true".equals(rec.get("skipped"))) return true;
+        return str(rec.get("reason")).startsWith("skipped: ");
+    }
+
     @SuppressWarnings("unchecked")
-    private static List<Map<String, Object>> registered(Map<String, Object> suite) {
+    static List<Map<String, Object>> registered(Map<String, Object> suite) {
         Object raw = suite.get("registered");
         List<Map<String, Object>> out = new ArrayList<>();
         if (raw instanceof List<?> list) {
@@ -262,7 +316,7 @@ public final class Verdict {
         return sb.append(']').toString();
     }
 
-    private static String str(Object o) {
+    static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
     }
 

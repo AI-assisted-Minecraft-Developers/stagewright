@@ -5,6 +5,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -28,18 +29,26 @@ public final class RunDirectory {
      *  by the plugin's hold task and by the game's {@code EndpointDescriptor}. */
     public static final String ENDPOINT_FILE = "stagewright-endpoint.json";
 
+    /** Where the run says it has got to, beside each results file. Written in-game by the stall
+     *  watchdog's {@code Heartbeat}; the name is repeated there because the game module and this one
+     *  share no code — they are different processes and, deliberately, different dependency graphs. */
+    public static final String PROGRESS_FILE = "stagewright-progress.json";
+
     private RunDirectory() {}
 
     /**
      * Make {@code gameDir} fit to run in.
      *
      * @param gameDir      the run's working directory; created if absent
-     * @param resultsFile  results file name relative to {@code gameDir}, deleted if stale
+     * @param staleResults every results file this run will be judged on, deleted if present. Full
+     *                     paths rather than names under {@code gameDir}, and a list rather than one:
+     *                     a topology with a companion client is judged on a second file in the
+     *                     companion's own run directory, which is not under this one
      * @param cleanWorld   delete the world before running
      * @param sceneScripts a directory of {@code .js} scene files to install, or null
      * @param log          receives one line per action worth reporting
      */
-    public static void provision(Path gameDir, String resultsFile, boolean cleanWorld,
+    public static void provision(Path gameDir, List<Path> staleResults, boolean cleanWorld,
                                  Path sceneScripts, Consumer<String> log) {
         if (!Files.isDirectory(gameDir)) {
             try {
@@ -62,17 +71,38 @@ public final class RunDirectory {
             deleteTree(gameDir.resolve("saves"));
         }
 
-        // Deleting the stale results file matters for a different reason than the world: if a run
+        // Deleting the stale results files matters for a different reason than the world: if a run
         // dies before writing anything, a leftover file from the last run is still sitting there,
         // and the verdict would be passed a complete, valid, GREEN results file describing a run
         // that did not happen.
-        Path results = gameDir.resolve(resultsFile);
-        try {
-            if (Files.deleteIfExists(results)) {
-                log.accept("removed the previous results at " + results);
+        //
+        // Every file the verdict reads, not just the one in this directory. The companion client's
+        // results live in the companion's own run directory, so while this took a single name under
+        // gameDir it was structurally unable to clear them — and a companion that started and then
+        // died before writing its header left yesterday's complete GREEN in place to be judged.
+        // The narrow signature was the bug; a caller cannot pass what the parameter cannot express.
+        for (Path results : staleResults) {
+            try {
+                if (Files.deleteIfExists(results)) {
+                    log.accept("removed the previous results at " + results);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException("cannot delete the stale results file " + results, e);
             }
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot delete the stale results file " + results, e);
+            // And the heartbeat beside it, which lies in a way the results file cannot: a run that
+            // dies before writing a header leaves no results to mislead anyone, but a leftover
+            // heartbeat still names a scene, and the verdict would report the previous run's
+            // position as this one's last known place. Derived from the results path rather than
+            // listed separately so the companion's directory is covered by the same widening that
+            // brought its results here.
+            Path progress = results.toAbsolutePath().resolveSibling(PROGRESS_FILE);
+            try {
+                Files.deleteIfExists(progress);
+            } catch (IOException e) {
+                // Not fatal: this file is only ever read to add detail to a failure. Refusing to
+                // start a run over it would be a worse trade than losing that detail.
+                log.accept("could not remove the stale heartbeat at " + progress + ": " + e);
+            }
         }
 
         // Same argument, one step worse: a stale endpoint descriptor names a port. Left behind, an
@@ -90,23 +120,35 @@ public final class RunDirectory {
         seedClientOptions(gameDir.resolve("options.txt"));
         seedServerEula(gameDir.resolve("eula.txt"));
         seedOfflineMode(gameDir.resolve("server.properties"));
-        installSceneScripts(gameDir.resolve("config/stagewright/scenes"), sceneScripts, log);
+        installAuthoredContent(gameDir, sceneScripts, log);
     }
 
     /**
-     * Copy scene scripts into the run directory's {@code config/stagewright/scenes}.
+     * Copy a pack's authored StageWright content into the run directory, by extension:
+     * {@code .js} to {@code config/stagewright/scenes}, {@code .json} to
+     * {@code config/stagewright/capabilities}.
      *
-     * <p>The run directory is generated and gitignored, so a scene file authored there is not a
-     * committable artifact — but it is where the harness must find one, because that is where a
-     * modpack keeps it. Naming a checked-in source directory keeps both true: the file lives in the
-     * repo and arrives at the path a real pack would use.
+     * <p>One source directory for both, deliberately. A pack author has a folder — the whole premise
+     * of the CLI is that they have nothing else — and a capability descriptor is authored in the same
+     * sitting as the scene that needs it, usually to make that scene work at all. Splitting them into
+     * two flags and two directories would put a build-tool's filing system on somebody who does not
+     * have a build tool. Extension is unambiguous and needs no explaining; {@code expected-scenes.txt}
+     * already sits in the same folder and is likewise picked out by its own.
      *
-     * <p>The target is cleared first, for the same reason the world is: a scene file deleted from
-     * the source but left in the run directory keeps running, and it is reconciled against the
+     * <p>The run directory is generated and gitignored, so a file authored there is not a committable
+     * artifact — but it is where the harness must find one, because that is where a modpack keeps it.
+     * Naming a checked-in source directory keeps both true: the file lives in the repo and arrives at
+     * the path a real pack would use.
+     *
+     * <p>Both targets are cleared first, for the same reason the world is: a file deleted from the
+     * source but left in the run directory keeps being loaded, and scenes are reconciled against the
      * manifest like any other, so the suite stays green while testing a file nobody can find.
      */
-    private static void installSceneScripts(Path target, Path source, Consumer<String> log) {
-        deleteTree(target);
+    private static void installAuthoredContent(Path gameDir, Path source, Consumer<String> log) {
+        Path scenes = gameDir.resolve("config/stagewright/scenes");
+        Path capabilities = gameDir.resolve("config/stagewright/capabilities");
+        deleteTree(scenes);
+        deleteTree(capabilities);
         if (source == null) return;
 
         if (!Files.isDirectory(source)) {
@@ -115,16 +157,24 @@ public final class RunDirectory {
             throw new UncheckedIOException(new IOException(
                     "sceneScripts points at " + source + ", which is not a directory"));
         }
+        int copiedScenes = copyByExtension(source, scenes, ".js");
+        int copiedCaps = copyByExtension(source, capabilities, ".json");
+        log.accept("installed " + copiedScenes + " scene script(s) and " + copiedCaps
+                + " capability descriptor(s) from " + source);
+    }
+
+    private static int copyByExtension(Path source, Path target, String extension) {
         try (Stream<Path> files = Files.list(source)) {
+            List<Path> matching =
+                    files.filter(p -> p.getFileName().toString().endsWith(extension)).toList();
+            if (matching.isEmpty()) return 0;
             Files.createDirectories(target);
-            int copied = 0;
-            for (Path file : files.filter(p -> p.getFileName().toString().endsWith(".js")).toList()) {
+            for (Path file : matching) {
                 Files.copy(file, target.resolve(file.getFileName()));
-                copied++;
             }
-            log.accept("installed " + copied + " scene script(s) from " + source);
+            return matching.size();
         } catch (IOException e) {
-            throw new UncheckedIOException("cannot install the scene scripts from " + source, e);
+            throw new UncheckedIOException("cannot install the " + extension + " files from " + source, e);
         }
     }
 

@@ -1,5 +1,7 @@
 package net.magicterra.stagewright.scene;
 
+import net.magicterra.stagewright.contract.SceneFailure;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

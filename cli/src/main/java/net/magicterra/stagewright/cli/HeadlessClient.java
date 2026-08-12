@@ -31,6 +31,10 @@ import java.util.function.Consumer;
  */
 final class HeadlessClient {
 
+    /** The offline profile both client launch paths use, so a scene asserting on the player's name
+     *  reads the same in either — and so a results file says which player it ran as. */
+    static final String USERNAME = "StageWright";
+
     /** Where HeadlessMC keeps config, relative to the directory it is run from. */
     private static final String CONFIG_DIR = "HeadlessMC";
 
@@ -50,14 +54,20 @@ final class HeadlessClient {
      * real {@code .minecraft} — measured, and on a developer's box that is their actual game.
      */
     static void writeConfig(Path workDir, Path gameDir, List<String> systemProps,
-                            Consumer<String> log) {
+                            boolean offline, Consumer<String> log) {
         Path config = workDir.resolve(CONFIG_DIR).resolve("config.properties");
         StringBuilder sb = new StringBuilder();
         sb.append("# Written by stagewright before every client run. Edits here do not survive.\n");
         sb.append("hmc.mcdir=").append(forProperties(gameDir)).append('\n');
         sb.append("hmc.gamedir=").append(forProperties(gameDir)).append('\n');
-        sb.append("hmc.offline=true\n");
-        sb.append("hmc.offline.username=StageWright\n");
+        // hmc.offline is not only "no account" — it FORCES the LWJGL stub, and says so on the way
+        // past: "You are offline, game will start in headless mode!". So an account is not a nicety
+        // here; it is the only way to get a rendering client out of this launcher, and a modpack
+        // needs one because a 450-mod resource reload does real work through those entry points.
+        if (offline) {
+            sb.append("hmc.offline=true\n");
+            sb.append("hmc.offline.username=").append(USERNAME).append('\n');
+        }
         if (!systemProps.isEmpty()) {
             sb.append("hmc.jvmargs=").append(String.join(" ", systemProps)).append('\n');
         }
@@ -83,14 +93,25 @@ final class HeadlessClient {
      *   <li>stdin has to STAY open. Following the launch with {@code exit}, or passing
      *       {@code -quit}, tears the game down before it has started.</li>
      *   <li>{@code -lwjgl} is what makes it headless — every LWJGL entry point becomes a stub, so no
-     *       display and no Xvfb. {@code -offline} is what lets it run without a Minecraft account,
-     *       and it is the only tier that can: a rendering client requires a real login.</li>
+     *       display and no Xvfb. {@code -offline} is what lets it run without a Minecraft account.
+     *       The two are not independent: offline <b>implies</b> the stub, so the only rendering
+     *       client this launcher will produce is one launched with a real account.</li>
      * </ul>
+     *
+     * @param account the account id to make primary first, {@code ""} to use whichever HeadlessMC
+     *                already has selected, or null for an offline run. Logging in is the user's job
+     *                and stays the user's job: it is an interactive password or webview prompt, and
+     *                a test runner has no business standing between somebody and their own login.
      */
     static Process launch(Path hmcJar, Path workDir, String javaBinary, String versionId,
-                          Consumer<String> log) {
-        List<String> command = List.of(javaBinary, "-jar", hmcJar.toString(), "--command");
-        log.accept(String.join(" ", command) + "  <<< launch " + versionId + " -lwjgl -offline");
+                          String account, List<String> launcherJvm, Consumer<String> log) {
+        List<String> command = new ArrayList<>(List.of(javaBinary));
+        command.addAll(launcherJvm);
+        command.addAll(List.of("-jar", hmcJar.toString(), "--command"));
+        String launch = account == null
+                ? "launch " + versionId + " -lwjgl -offline"
+                : "launch " + versionId;
+        log.accept(String.join(" ", command) + "  <<< " + launch);
         try {
             Process p = new ProcessBuilder(command)
                     .directory(workDir.toFile())
@@ -100,7 +121,10 @@ final class HeadlessClient {
                     .start();
             // Deliberately not closed: see above.
             Writer in = new OutputStreamWriter(p.getOutputStream(), StandardCharsets.UTF_8);
-            in.write("launch " + versionId + " -lwjgl -offline\n");
+            if (account != null && !account.isBlank()) {
+                in.write("account " + account + "\n");
+            }
+            in.write(launch + "\n");
             in.flush();
             return p;
         } catch (IOException e) {
@@ -116,7 +140,8 @@ final class HeadlessClient {
      * read back off disk rather than guessed.
      */
     static String installLoader(Path hmcJar, Path workDir, Path gameDir, String javaBinary,
-                                String loader, String mcVersion, Consumer<String> log) {
+                                String loader, String mcVersion, List<String> launcherJvm,
+                                Consumer<String> log) {
         String existing = installedVersion(gameDir, loader);
         if (existing != null) {
             log.accept("using the " + loader + " already installed in this game dir: " + existing);
@@ -124,7 +149,7 @@ final class HeadlessClient {
         }
         log.accept("installing " + loader + " " + mcVersion + " (this downloads the game — minutes,"
                 + " once per game dir)");
-        run(hmcJar, workDir, javaBinary, loader + " " + mcVersion);
+        run(hmcJar, workDir, javaBinary, launcherJvm, loader + " " + mcVersion);
         String installed = installedVersion(gameDir, loader);
         if (installed == null) {
             throw new IllegalStateException("HeadlessMC did not install " + loader + " " + mcVersion
@@ -150,8 +175,11 @@ final class HeadlessClient {
     }
 
     /** One command, run to completion — for installs, which end on their own. */
-    private static void run(Path hmcJar, Path workDir, String javaBinary, String command) {
-        List<String> argv = new ArrayList<>(List.of(javaBinary, "-jar", hmcJar.toString(), "--command"));
+    private static void run(Path hmcJar, Path workDir, String javaBinary, List<String> launcherJvm,
+                            String command) {
+        List<String> argv = new ArrayList<>(List.of(javaBinary));
+        argv.addAll(launcherJvm);
+        argv.addAll(List.of("-jar", hmcJar.toString(), "--command"));
         try {
             Process p = new ProcessBuilder(argv)
                     .directory(workDir.toFile())

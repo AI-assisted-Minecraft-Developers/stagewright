@@ -1,5 +1,7 @@
 package net.magicterra.stagewright.junit;
 
+import net.magicterra.stagewright.contract.StageWrightRpcException;
+
 import com.google.gson.JsonObject;
 
 /**

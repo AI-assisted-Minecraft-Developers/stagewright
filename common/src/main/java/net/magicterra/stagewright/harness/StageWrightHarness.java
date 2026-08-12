@@ -6,14 +6,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.magicterra.stagewright.StageWrightCommon;
-import net.magicterra.stagewright.scene.Canary;
-import net.magicterra.stagewright.scene.Clock;
+import net.magicterra.stagewright.contract.Canary;
+import net.magicterra.stagewright.contract.Clock;
 import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.scene.SceneContext;
-import net.magicterra.stagewright.scene.SceneFailure;
-import net.magicterra.stagewright.scene.SceneOutcome;
-import net.magicterra.stagewright.scene.SceneSkipped;
-import net.magicterra.stagewright.scene.Terrain;
+import net.magicterra.stagewright.contract.SceneFailure;
+import net.magicterra.stagewright.contract.SceneOutcome;
+import net.magicterra.stagewright.contract.SceneSkipped;
+import net.magicterra.stagewright.contract.Terrain;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -40,9 +40,25 @@ public final class StageWrightHarness {
     private static final int GRID_Z0 = 100_000;
     private static final int GRID_Y = 200;
     private static final int GRID_STEP = 512;
-    private static final int PREP_BUDGET_TICKS = 200;
+    /**
+     * How long PREP tolerates NO new arena chunk becoming ready before calling it stuck.
+     *
+     * <p>Progress, not elapsed time. How long an arena takes to generate is a property of the pack —
+     * fifty structure mods 100k blocks out is not vanilla — so a fixed total budget is a statement
+     * about somebody else's mod list. While chunks keep arriving, waiting costs only wall clock;
+     * once the count stops moving, more waiting cannot help.
+     */
+    private static final int PREP_STALL_TICKS = 200;
+
+    /** Backstop for a chunk system that dribbles one chunk at a time forever, which would defeat the
+     *  stall test. Deliberately far above any real arena so it is never the thing that fires. */
+    private static final int PREP_CEILING_TICKS = 6_000;
 
     private enum Phase { PREP, RUN, ADVANCE_DONE }
+
+    /** Arena chunks ready as of the last PREP tick, and how long that number has stood still. */
+    private int prepReadyChunks;
+    private int prepStalledTicks;
 
     private final MinecraftServer server;
     private final List<Scene> scenes;
@@ -77,6 +93,20 @@ public final class StageWrightHarness {
 
     private final StallWatchdog stallWatchdog;
 
+    /**
+     * The one budget that is not denominated in the thing it is measuring.
+     *
+     * <p>Every other budget here counts ticks, which is right for everything a scene asserts about
+     * and wrong for the one failure a scene cannot survive: a world whose ticks stopped. A tick
+     * budget in a stopped world never expires, so the scene never ends, so no row is written, and
+     * the run dies as a wall-clock kill with no verdict and no name — which is exactly how three
+     * playthrough runs died before this existed.
+     *
+     * <p>Re-opened at every scene boundary, so the verdict is always about the scene it names and no
+     * scene inherits its predecessor's partial window.
+     */
+    private final TickStarvation starvation;
+
     public StageWrightHarness(MinecraftServer server, String loader, List<Scene> scenes, ResultsJsonl out) {
         this.server = server;
         this.scenes = scenes;
@@ -90,6 +120,7 @@ public final class StageWrightHarness {
         out.writeSuiteHeader(loader, scenes, SceneFilter.pattern(), WorldPin.description());
         // Started at arming, not at the first scene: a mod that wedges the tick does it during its
         // own setup as readily as inside a scene, and that stall has to be nameable too.
+        this.starvation = TickStarvation.forScene(ticksObserved);
         this.stallWatchdog = new StallWatchdog(out, () -> ticksObserved, () -> runningScene);
         this.stallWatchdog.start();
         StageWrightCommon.LOG.info("[{}] harness armed: {} scenes", StageWrightCommon.MOD_ID, scenes.size());
@@ -176,22 +207,67 @@ public final class StageWrightHarness {
         BlockPos origin = originFor(slotByName.get(scene.name()));
         int radius = scene.chunkRadius();
 
+        // Before the phase work, and applying to PREP as much as to RUN: PREP gives up on chunk
+        // PROGRESS, which is a tick-counted judgement too, so a world that stops delivering ticks
+        // hangs there just as readily. Whatever this scene was doing, it cannot finish in a world
+        // that is not running, and saying so now is what keeps the remaining scenes reachable.
+        String starved = starvation.starved(ticksObserved);
+        if (starved != null) {
+            record(scene, SceneOutcome.TIMEOUT, ctx == null ? 0 : ctx.ticks(), starved
+                    + " — this scene's budget is counted in ticks and cannot expire in a world that"
+                    + " is not delivering them, so the harness is ending it on wall clock instead."
+                    + " The run continues; if the world does not recover, every scene after this one"
+                    + " reports the same thing and the suite still produces a verdict.");
+            // sceneLevel is null when the very first PREP tick has not resolved a level yet — the
+            // same state the dimension/ENV_FAIL branches below return from, and with the same reason
+            // there is nothing to tear down: no chunks were forced and no context exists.
+            if (sceneLevel != null) teardown(scene, sceneLevel, origin, radius);
+            starvation.reset(ticksObserved);
+            return;
+        }
+
         switch (phase) {
             case PREP -> {
                 if (phaseTicks == 0) {
                     sceneStartMs = System.currentTimeMillis();
                     sceneLevel = levelFor(scene);
                     if (sceneLevel == null) {
+                        // Two different absences, deliberately reported differently.
+                        //
+                        // A scene-NAMED dimension belongs to some other mod, and this runtime simply
+                        // not having that mod is not anybody's bug — it is the same situation as a
+                        // scene needing a player on a bare dedicated server, and gets the same
+                        // answer: a recorded PASS carrying the reason. Reporting it as a failure
+                        // would make every conformance suite RED in every runtime but one.
+                        //
+                        // A missing TERRAIN dimension is the opposite: those ship with StageWright,
+                        // so their absence means our own datapack did not load, and letting that
+                        // read as "the mod isn't here" would hide a broken framework.
+                        if (scene.dimension() != null) {
+                            record(scene, SceneOutcome.PASS, 0, "skipped: dimension '"
+                                    + scene.dimension() + "' is not loaded in this runtime — the mod"
+                                    + " that registers it is not here. Loaded: " + loadedDimensions(),
+                                    true);
+                            // Nothing to tear down: this branch is reached before forceChunks and
+                            // before any SceneContext exists, exactly like the ENV_FAIL below.
+                            return;
+                        }
                         record(scene, SceneOutcome.ENV_FAIL, 0, "terrain " + scene.terrain()
                                 + " needs dimension '" + scene.terrain().dimension() + "', which this"
-                                + " server does not have — StageWright's datapack did not load");
+                                + " server does not have — StageWright's datapack did not load."
+                                + " Loaded: " + loadedDimensions());
                         return;
                     }
                     forceChunks(sceneLevel, origin, radius, true);
                 }
                 phaseTicks++;
                 ServerLevel level = sceneLevel;
-                if (arenaReady(level, origin, radius)) {
+                // `!scene.arena()` short-circuits the WAIT, not the arena: the plot is still
+                // force-loaded above and still audited below, so only the blocking changes. For a
+                // scene that plays in the live world and never enters its plot, that wait is pure
+                // inherited risk — a stall in worldgen a hundred thousand blocks away fails a scene
+                // whose claim has nothing to do with that ground.
+                if (!scene.arena() || arenaReady(level, origin, radius)) {
                     ctx = new SceneContext(level, arenaOrigin(scene, level, origin), radius);
                     arenaBefore = ArenaAudit.take(level, origin, radius);
                     // Per scene, not per suite: this is what stops one scene's clock from being a
@@ -203,10 +279,43 @@ public final class StageWrightHarness {
                     WorldPin.applyClock(server, scene.clock());
                     phase = Phase.RUN;
                     phaseTicks = 0;
-                } else if (phaseTicks > PREP_BUDGET_TICKS) {
-                    record(scene, SceneOutcome.ENV_FAIL, 0, "arena chunks were not loaded and"
-                            + " entity-ticking within " + PREP_BUDGET_TICKS + " ticks");
-                    teardown(scene, level, origin, radius);
+                    prepReadyChunks = 0;
+                    prepStalledTicks = 0;
+                } else {
+                    // Give up on STALL, not on elapsed time. A fixed tick budget is really a
+                    // statement about how fast chunks generate, and that is a property of the pack:
+                    // 200 ticks is generous in vanilla and marginal in a 450-mod pack, where an
+                    // arena 100k blocks out is worldgen through fifty structure mods. All the Mods
+                    // 10 ENV_FAILed one run at ~10s and passed the next at ~9s, which is the
+                    // signature of a budget that is measuring the wrong thing — and the scene it
+                    // lands on is whichever one drew the slow arena, so it reads as a different bug
+                    // every time.
+                    //
+                    // Progress is the honest test. While chunks keep arriving, the pack is working
+                    // and waiting costs nothing but wall clock; once nothing has changed for
+                    // PREP_STALL_TICKS, something is actually wrong and no amount of further waiting
+                    // will fix it. The hard ceiling stays as a backstop for a chunk system that
+                    // dribbles forever.
+                    int ready = readyChunks(level, origin, radius);
+                    if (ready > prepReadyChunks) {
+                        prepReadyChunks = ready;
+                        prepStalledTicks = 0;
+                    } else {
+                        prepStalledTicks++;
+                    }
+                    if (prepStalledTicks > PREP_STALL_TICKS || phaseTicks > PREP_CEILING_TICKS) {
+                        int total = (2 * radius + 1) * (2 * radius + 1);
+                        String what = ready < total
+                                ? "only " + ready + " of " + total + " arena chunks ever loaded"
+                                : "all " + total + " arena chunks loaded but never all reported"
+                                        + " entity-ticking";
+                        record(scene, SceneOutcome.ENV_FAIL, 0, "the arena never became usable: "
+                                + what + " after " + phaseTicks + " ticks, and that stopped changing "
+                                + prepStalledTicks + " ticks ago. Dimension "
+                                + level.dimension().location() + " at " + origin.getX() + ","
+                                + origin.getZ() + ".");
+                        teardown(scene, level, origin, radius);
+                    }
                 }
             }
             case RUN -> {
@@ -230,7 +339,7 @@ public final class StageWrightHarness {
                     // Entered, resolved, and carrying its reason into the results — the scene is
                     // accounted for, so coverage reconciliation still sees it, and the one thing
                     // it must not do is look like a scene that quietly did its job.
-                    record(scene, SceneOutcome.PASS, ctx.ticks(), "skipped: " + s.getMessage());
+                    record(scene, SceneOutcome.PASS, ctx.ticks(), "skipped: " + s.getMessage(), true);
                     teardown(scene, level, origin, radius);
                 } catch (SceneFailure f) {
                     record(scene, SceneOutcome.FAIL, ctx.ticks(), f.getMessage());
@@ -246,6 +355,13 @@ public final class StageWrightHarness {
     }
 
     private void record(Scene scene, SceneOutcome outcome, int ticks, String reason) {
+        record(scene, outcome, ticks, reason, false);
+    }
+
+    /** @param skipped the scene never reached its subject. Stated by the two call sites that know
+     *                 it rather than inferred downstream from the reason's prefix, so that a reworded
+     *                 message cannot quietly turn a skip into a pass in every consumer at once. */
+    private void record(Scene scene, SceneOutcome outcome, int ticks, String reason, boolean skipped) {
         long wallMs = System.currentTimeMillis() - sceneStartMs;
         StageWrightCommon.LOG.info("[{}] scene '{}' -> {} ({} ticks, {} ms){}", StageWrightCommon.MOD_ID,
                 scene.name(), outcome, ticks, wallMs, reason == null ? "" : " — " + reason);
@@ -255,7 +371,7 @@ public final class StageWrightHarness {
         // in a failure message is unavailable exactly when the run is healthy.
         // ctx is null when a scene ENV_FAILs out of PREP, before any context exists.
         out.writeScene(scene.name(), outcome, ticks, wallMs, reason,
-                ctx == null ? java.util.Map.of() : ctx.records());
+                ctx == null ? java.util.Map.of() : ctx.records(), skipped);
         phase = Phase.ADVANCE_DONE;
     }
 
@@ -333,21 +449,34 @@ public final class StageWrightHarness {
      * passing while testing nothing.
      */
     private boolean arenaReady(ServerLevel level, BlockPos origin, int radius) {
+        int total = (2 * radius + 1) * (2 * radius + 1);
+        return readyChunks(level, origin, radius) == total;
+    }
+
+    /** How many of the arena's chunks are loaded AND entity-ticking. Counted rather than short-
+     *  circuited so PREP can tell "still arriving" from "stuck", which is the difference between a
+     *  slow pack and a broken one. */
+    private int readyChunks(ServerLevel level, BlockPos origin, int radius) {
+        int ready = 0;
         for (int dx = -radius; dx <= radius; dx++)
             for (int dz = -radius; dz <= radius; dz++) {
                 BlockPos p = origin.offset(dx * 16, 0, dz * 16);
-                if (!level.hasChunkAt(p)) return false;
-                if (!level.isPositionEntityTicking(p)) return false;
+                if (level.hasChunkAt(p) && level.isPositionEntityTicking(p)) ready++;
             }
-        return true;
+        return ready;
     }
 
     private void nextScene() {
         index++;
         phase = Phase.PREP;
         phaseTicks = 0;
+        prepReadyChunks = 0;
+        prepStalledTicks = 0;
         ctx = null;
         sceneLevel = null;
+        // A fresh starvation window per scene, for the same reason the clock is applied per scene:
+        // one scene's verdict must not be a function of how long its predecessor took.
+        starvation.reset(ticksObserved);
         if (index >= scenes.size()) finish();
     }
 
@@ -430,10 +559,28 @@ public final class StageWrightHarness {
      * the run looking for a bug in the scene rather than for the datapack that did not load.
      */
     private ServerLevel levelFor(Scene scene) {
+        String named = scene.dimension();
+        if (named != null) return levelNamed(named);
         Terrain terrain = scene.terrain();
         if (terrain.dimension() == null) return server.overworld();
-        return server.getLevel(ResourceKey.create(Registries.DIMENSION,
-                ResourceLocation.parse(terrain.dimension())));
+        return levelNamed(terrain.dimension());
+    }
+
+    /** A loaded level by id, or null. Parsing is guarded because a scene's dimension string comes
+     *  from an author rather than from {@link Terrain}'s fixed set, so it can be malformed. */
+    private ServerLevel levelNamed(String id) {
+        ResourceLocation parsed = ResourceLocation.tryParse(id);
+        if (parsed == null) return null;
+        return server.getLevel(ResourceKey.create(Registries.DIMENSION, parsed));
+    }
+
+    /** Every dimension this server actually loaded, sorted — the only useful thing to say to
+     *  somebody whose scene asked for one that is not here. */
+    private String loadedDimensions() {
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (ServerLevel level : server.getAllLevels()) names.add(level.dimension().location().toString());
+        names.sort(String::compareTo);
+        return String.join(", ", names);
     }
 
     /**
@@ -450,8 +597,37 @@ public final class StageWrightHarness {
      * answers for terrain that does not exist yet.
      */
     private static BlockPos arenaOrigin(Scene scene, ServerLevel level, BlockPos gridOrigin) {
+        if (scene.dimension() != null) return withinBuildHeight(level, gridOrigin);
         if (!scene.terrain().onSurface()) return gridOrigin;
         return level.getHeightmapPos(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, gridOrigin);
+    }
+
+    /** Headroom kept between the arena origin and either build limit, so a scene that clears four
+     *  blocks up and replaces the ground one down still lands inside the world. */
+    private static final int BUILD_HEIGHT_MARGIN = 16;
+
+    /**
+     * The grid altitude, pulled inside a dimension's build limits.
+     *
+     * <p>{@code GRID_Y = 200} is an overworld number. The Nether's build limit is 127, and a mod
+     * dimension may declare anything at all — so a scene running in one would have its arena placed
+     * outside the world, where every {@code setBlock} is silently dropped and the scene then fails
+     * asserting about blocks it "placed". Nothing throws on an out-of-range write, which is what
+     * makes this worth a clamp rather than a check.
+     *
+     * <p>Clamped rather than surface-resolved on purpose: a named dimension is somebody else's, and
+     * its heightmap under a bedrock ceiling (the Nether's is exactly this) answers with the ceiling.
+     * Empty space at a predictable altitude is the same deal {@link Terrain#RUN_WORLD} offers, and
+     * it is the one a scene can reason about without knowing the dimension's worldgen.
+     */
+    private static BlockPos withinBuildHeight(ServerLevel level, BlockPos gridOrigin) {
+        int min = level.getMinBuildHeight() + BUILD_HEIGHT_MARGIN;
+        int max = level.getMaxBuildHeight() - BUILD_HEIGHT_MARGIN;
+        int y = Math.max(min, Math.min(gridOrigin.getY(), max));
+        if (y == gridOrigin.getY()) return gridOrigin;
+        StageWrightCommon.LOG.info("[{}] arena altitude {} is outside {}'s build range — using {}",
+                StageWrightCommon.MOD_ID, gridOrigin.getY(), level.dimension().location(), y);
+        return new BlockPos(gridOrigin.getX(), y, gridOrigin.getZ());
     }
 
     private static BlockPos originFor(int slot) {

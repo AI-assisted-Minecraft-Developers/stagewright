@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import net.magicterra.stagewright.engine.Progress;
 import net.magicterra.stagewright.engine.Verdict;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
@@ -95,6 +96,14 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
         for (String line : verdict.report()) {
             getLogger().lifecycle("[stagewright:{}] {}", topology, line);
         }
+        // Only ever non-empty when nothing wrote a footer — see Progress. Logged as well as attached
+        // to the failure below, because the two are read in different situations: the log line is
+        // what a human scrolling the run sees, the exception is what CI quotes.
+        String position = Progress.lastKnownPosition(results.toPath(), records).orElse(null);
+        if (position != null) {
+            getLogger().lifecycle("[stagewright:{}] {}", topology, position);
+        }
+
         Verdict.Result companion = judgeCompanion(topology);
 
         getLogger().lifecycle("[stagewright:{}] VERDICT: {}", topology, verdict.label());
@@ -108,6 +117,7 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
             throw new GradleException("stagewright " + topology + ": " + worst.label()
                     + (worst == companion ? " (from the companion client)" : "")
                     + "\n  results: " + results.getAbsolutePath()
+                    + (position == null ? "" : "\n  " + position)
                     + (companion == null ? ""
                         : "\n  client results: " + getCompanionResults().get().getAsFile().getAbsolutePath())
                     + "\n  exit-code legend: 0 GREEN / 1 RED / 2 DEAD (the framework itself is broken;"

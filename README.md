@@ -56,6 +56,57 @@ a client whose graphics calls are stubs. Do not chase any of the four.
 Anything that depends on rendering is meaningless here by construction. Screenshots and pixel
 assertions are not a client topology feature under `-lwjgl`; screen structure and input are.
 
+#### …and when the stub is not enough: `--display-client`
+
+The stub scales to a mod. It does not scale to a modpack. Under `-lwjgl` every LWJGL entry point is
+replaced, so a mod that reads image pixels while loading gets an all-zero image and throws —
+Supplementaries reading a palette strip through Moonlight, measured on All the Mods 10. NeoForge then
+dispatches setup a second time trying to recover and the run dies in twenty "already registered"
+errors that name nothing relevant; removing that mod surfaces the next one. And the stub cannot be
+turned off from the outside: `hmc.offline=true` **forces** it, and says so on the way past — *"You
+are offline, game will start in headless mode!"*. So the choice is a real account (next section) or
+not going through HeadlessMC's launch at all, which is this one.
+
+Split the two jobs. HeadlessMC installs — that part is genuinely hard and needs no login. Then
+launch what it installed yourself, on a real display:
+
+```
+java -jar stagewright.jar --game-dir <the same client game dir> \
+     --display-client neoforge-21.1.248 \
+     --scenes <a folder of .js files> --expect <manifest>
+```
+
+The version id is the directory name under `<game dir>/versions`. This is a real GL context with no
+stubs, so it needs a display — a desktop, or Xvfb on a build box, which is the same trade the Gradle
+plugin's `virtualDisplay` makes. In exchange the pack runs the way a player runs it, and the scenes
+that need a connected player finally execute: All the Mods 10's 进度解锁 and 任务领取 had skipped in
+every run that ever existed before this.
+
+#### …or give HeadlessMC an account: `--account` / `--online`
+
+Offline is what forces the stub, so an account is what removes it — and then HeadlessMC's launch is
+fine for a pack, with a real GL context and a real profile. `--account <id>` makes that account
+primary before launching; `--online` uses whichever one HeadlessMC already has selected:
+
+```
+java -jar stagewright.jar --game-dir <a client game dir> \
+     --headlessmc headlessmc-launcher-2.10.0.jar --loader neoforge --mc-version 1.21.1 \
+     --account 0 --scenes <a folder of .js files> --expect <manifest>
+```
+
+**Logging in is yours and stays yours.** StageWright never prompts for credentials, never stores a
+token, and never writes one to a results file or a log — an interactive login has no business going
+through a test runner. Use HeadlessMC's own `login` (a Microsoft device-code flow: it prints a URL
+and a code, you approve it in a browser) and `account` to list what it kept. Run those **from the
+game dir**, so the credentials land in that dir's `HeadlessMC/auth/.accounts.json` and not in your
+real `.minecraft`.
+
+One trap that costs an hour: **Java ignores `HTTPS_PROXY`**. Behind a proxy, both the login and the
+run need `-Dhttps.proxyHost` / `-Dhttps.proxyPort` — pass them with `--launcher-jvm "…"`, which puts
+them on the launcher JVM (the CLI warns if the environment variable is set and no proxy property is).
+
+Measured on All the Mods 10, launcher-installed: 480 mod jars, 520 in the loader's list, GREEN.
+
 ### The shape a player actually plays
 
 The two topologies above are one JVM each. A real game is two, talking over a wire, and that seam is
@@ -126,6 +177,169 @@ public final class WaystoneScenes implements SceneProvider {
   rejects, so a typo fails the scene instead of passing silently. It is the widest surface a scene
   file has: everything is strings, so nothing goes through a method name that Fabric spells
   differently.
+
+### Capabilities Minecraft does not have
+
+The facets above cover the vanilla server API. Everything a modpack is actually about lives outside
+it, so there is a seam. Four ways in, in ascending order of what they cost you.
+
+#### 0. What is installed: `s.mods()`
+
+The ground floor of everything conditional, and the one thing a registry census cannot answer (a mod
+that adds no content has no namespace):
+
+```js
+s.mods().loaded('mekanism')       s.mods().version('create')      s.mods().count()
+s.mods().require('ae2')           // or record a skip that names the mod
+s.mods().any('a', 'b')            // a fork, a rename, a compat shim — one assertion holds them
+```
+
+A run where the list never arrived **fails** rather than reporting an empty one: an empty list makes
+every mod look uninstalled, so a pack's scenes would all skip citing a mod that is plainly there.
+
+#### 1. Already there: shipped descriptors and generic block capabilities
+
+A pack configures nothing and gets the big ecosystems detected, plus — on NeoForge — the three
+platform capabilities every tech mod is built on:
+
+```js
+s.capability('itemhandler').insert(0, 0, 0, 0, 'minecraft:diamond', 3);
+s.capability('energy').fill(0, 0, 0);
+s.capability('fluids').fill(0, 0, 0, 'minecraft:water', 1000);
+s.capability('mekanism').probe().callStatic('…');
+```
+
+`itemhandler` / `energy` / `fluids` are written against the **capability**, not against a mod.
+Mekanism, Thermal, Powah and Industrial Foregoing share no API — they share the interface a hopper
+talks to them through, so one facet covers all of them, including mods written after it. Vanilla
+containers implement `itemhandler` too, which is what lets the mechanism be proved with no mod
+installed at all.
+
+#### 2. Declare one: a `.json` beside your scenes
+
+For a mod nobody wrote an adapter for, when you have a `config/` folder and no build tool:
+
+```json
+{ "name": "mymod:rituals", "mods": ["mymod"], "probe": "com.mymod.RitualApi" }
+```
+
+```js
+s.capability('mymod:rituals').probe().callStatic('lookup');
+```
+
+Conditions may be any of `mods` / `anyMods` / `classes` / `items` / `blocks` — the registry ones
+being the only way to catch a mod that loaded with its content switched off in config. **At least one
+is required**: a descriptor stating none would report itself available everywhere, so scenes gated on
+it would run against packs without the thing and fail for a reason that has nothing to do with the
+pack. Declaring a name StageWright ships **replaces** ours, which is how a pack whose fork moved a
+class fixes it without waiting for a release.
+
+#### 3. Ship an adapter: `CapabilityProvider`
+
+A mod that wants its own machinery testable ships one in its own jar:
+
+```java
+public final class RitualsCapability implements CapabilityProvider {
+    public String name()                        { return "mymod:rituals"; }
+    public boolean availableIn(SceneContext ctx) { return true; }
+    public Object facet(SceneContext ctx)        { return new Rituals(ctx); }
+}
+```
+
+Registered like scenes are, through
+`META-INF/services/net.magicterra.stagewright.scene.CapabilityProvider`. Any scene can then reach it,
+including a `.js` file in a pack's config folder — no prelude change, no new verb, nothing to import:
+
+```js
+if (!s.hasCapability('mymod:rituals')) return;      // or just call it, and let it skip
+s.capability('mymod:rituals').consecrate(0, 1, 0);
+s.record('capabilities', String(s.capabilities()));  // what this runtime offered
+```
+
+**Absent is a skip, not a failure** — the same rule as a scene needing a player on a bare dedicated
+server. A mod that is not installed is not the pack's defect, and must not read as a pass either.
+The skip message names what the runtime *did* offer, so the results explain themselves a week later.
+
+Write adapters typed, against your mod's real classes. Discovery instantiates each provider inside
+its own try/catch, so one that cannot load — because its mod is not in this runtime — is recorded as
+absent with the reason and its neighbours are unaffected. That is also why the two adapters
+StageWright itself ships (`curios`, `ftbquests`) are reflective and yours should not be: they ride in
+the harness jar, which is in every run whether or not those mods are.
+
+#### 4. When you want none of the above: `probe`
+
+A pack author with `.js` files and no build still needs a way in. `s.probe(className)` is guarded
+reflection into a **mod's** API:
+
+```js
+var api = s.probe('com.some.mod.Api');                  // absent class => skip
+s.expect(api.callStatic('lookup', s.player()).asInt()).isAtLeast(1);
+```
+
+`net.minecraft.*` is refused — and this is correctness, not caution. A production Fabric jar carries
+intermediary names, so `getX` is `method_10263` there and a by-name call would pass on NeoForge and
+throw on Fabric. **A mod's own class names are never remapped**, which is exactly what makes the same
+technique sound for them. Passing a Minecraft object as an *argument* is fine; that is holding, not
+calling. Everything non-primitive comes back wrapped in another `Probe`, so a scene never ends up
+holding a bare Minecraft object it might then call a method on, and leaving the wrapper is explicit
+(`asString`, `asInt`, `asDouble`, `asBoolean`, `asList`, `isNull`).
+
+A miss names the alternatives on the class, because reflection that only says "no such method" sends
+you to a decompiler. The same reflection appearing three times in a pack is a `CapabilityProvider`
+waiting to be written — this is a hatch, not an API.
+
+### The pack's own content: recipes, menus, quests, advancements, structures, loot
+
+Capabilities reach a mod's *code*. Most of what a modpack actually is, though, is **data** — 93,834
+recipes, 2,490 advancements, 4,712 quests, 888 structures, 41,810 loot tables, in the pack these
+numbers were measured on. Six facets read and drive it, and every one is on `SceneContext`:
+
+| facet | reads | drives |
+|---|---|---|
+| `s.recipes()` | `producing`, `ingredientsOf`, `ingredientSlotsOf`, `uncraftable`, `closureOf` | **`crafts(id)`**, `craftAudit()` |
+| `s.menu()` | `hasMenuAt`, `title`, `slotCount`, `item`, `contents` | `openAt`, `put`, `click`, `shiftClick`, `close` |
+| `s.advancements()` | `registered`, `has`, `parentOf`, `remaining`, `all`, `allIn` | `grant`, `revoke`, `awaitEarned` |
+| `s.quests()` | `loaded`, `chapters`, `allQuests`, `dependenciesOf`, `isComplete`, `canStart` | `complete` |
+| `s.structures()` | `registered`, `all`, `allIn`, `at`, `generatedAt`, `locate`, `distanceTo` | — (worldgen places them) |
+| `s.loot()` | `exists`, `all` | `roll`, `rollCounts`, `rollTotals`, `distinct` |
+
+**The split down the middle of that table is the point.** Reading data proves the road is
+*connected*; running it proves the road can be *walked*, and the two fail apart. A recipe whose
+`matches()` rejects its own declared ingredients is registered, has resolvable ingredients, and
+`closureOf` walks straight through it — every static check passes and the item is craftable by
+nobody. So `crafts(recipeId)` fills a recipe's grid from its own declaration and runs it, and
+`craftAudit()` does that to the whole pack.
+
+What `craftAudit()` returns needs its own line, because "failures" is not a bug list. Three
+categories of "does not craft" are correct behaviour: a recipe that is **not a crafting grid** (only
+`CraftingInput` is constructible from a declaration, so smelting and every tech-mod type is
+*skipped*); one that **declares nothing** and computes itself from whatever is in the grid (vanilla
+map cloning, armour dyeing, fireworks — auditing those reported five vanilla recipes as broken on a
+clean install); and one that **declares everything and never matches on purpose** (ComputerCraft
+ships 40 `impostor_*` recipes so JEI can display something the real crafting does elsewhere).
+
+The assertable subset is therefore keyed on the **serializer**, not the type:
+`failuresInVanillaTypes()` — a `minecraft:crafting_shaped` recipe is run by vanilla's own matcher and
+has no room for "I meant it not to work". Keying it on `RecipeType` instead is vacuous, and was:
+every crafting-grid recipe in the game shares the single type `minecraft:crafting`, so the filter
+matched nothing and read exactly like a clean pack while 60 recipes failed. `failuresByType()` exists
+so that contradiction is visible. Measured: vanilla 887/887; All the Mods 10 45,115 attempted, 45,055
+succeeded, 60 failures, **0 in vanilla serializers**.
+
+`s.menu()` has the same honesty problem and the same answer. `openAt` throws, so it cannot be used to
+ask *whether* a block is reachable — which is a pack author's first question — hence `hasMenuAt`. Be
+ready for the answer: of 14 surveyed blocks in All the Mods 10, **5 expose a menu and 9 do not**, and
+3 of the 5 are vanilla. `BlockBehaviour#getMenuProvider` returns null by default and vanilla blocks
+only get one from `BaseEntityBlock`; a mod with its own hierarchy usually never overrides it. The
+facet asks the block, then falls through to the block entity, and that is as far as a generic opener
+can go — Mekanism's `TileEntityMekanism` implements seventeen interfaces and `MenuProvider` is not
+one of them, while its capabilities stay perfectly readable. The two seams are independent.
+
+Opening builds the menu **server-side** — the mod's own `createMenu`, its real slots, its real click
+handler — and sends no open packet. Sending one asks the client to rebuild the menu from a data
+buffer only the opener knows the shape of; a generic caller cannot know, and Actually Additions' coal
+generator read a `BlockPos` out of a null buffer and took the client's packet listener down
+mid-suite. Nine scenes of thirty-three ran and the verdict blamed coverage.
 
 ### The world a scene runs in
 
@@ -200,6 +414,7 @@ stagewright {
         dedicatedServer {
             runTask = 'runStagewrightDedicatedServer'
             expectFile = file('src/testmod/expected-scenes.txt')
+            installMods.from configurations.stagewrightRuntime   // see below — not optional on MDG
         }
         integratedServer {
             runTask = 'runStagewrightIntegratedServer'
@@ -208,6 +423,8 @@ stagewright {
         dedicatedServerWithClient {
             runTask          = 'runStagewrightDedicatedServerWithClient'
             companionRunTask = 'runStagewrightJoiningClient'   // stood up beside it, killed after
+            // Judge the companion's own verdict. Not optional in practice — see below.
+            companionResultsFile = file('run-stagewright-joining-client/stagewright-client-results.jsonl')
         }
     }
 }
@@ -222,6 +439,79 @@ an ordinary task dependency, the companion is a process built from that run task
 `runTask` takes a task path (`':neoforge:runDogfoodServer'`) when the run lives on a loader
 subproject and the gate belongs on the root — which is every multi-loader build.
 
+**`companionResultsFile` reads like an option and behaves like a requirement.** Omitting it is
+tempting whenever the companion has nothing of its own to assert — in a third-party mod's client
+there is no worlddriver for the built-in probe to read, so the file can only ever say `skipped:`.
+That reasoning is correct about the file's *contents* and wrong about its *absence*. Unread, a
+missing file is also unread: a companion that dies before joining leaves this topology running
+exactly the scenes `dedicatedServer` already runs, and the gate reports GREEN over a run that lost
+its whole reason to exist. `stagewrightCoverage` does not catch it either, whenever some other
+topology also has a player — which is the normal case, since `integratedServer` has one.
+
+Declared, a missing file is ENV and names itself, and a skip is printed into the gate output where
+someone will see it. Both failure modes have now been paid for once: a NeoForge companion that
+started and never constructed the driver, and a Twilight Forest client that died on the tick after
+joining and turned twelve server-side scenes into skips three log files away from the cause.
+
+A companion also gets `installMods` applied to **its own** run directory, not just the server's.
+Before that it launched with an empty `mods/`, which is not an error anywhere: the client boots,
+joins, arms nothing, and the run hangs until the server's budget ends it.
+
+### `stagewrightCoverage`: the question one run cannot be asked
+
+    ./gradlew stagewrightCoverage       # after the topologies have run
+
+A scene that needs a player records a **skip** on a dedicated server, and a skip resolves as PASS —
+correctly, because a topology without a player is not a defect in the scene. But that also makes it
+invisible, and a suite whose player scenes skip on *every* topology it runs reports GREEN over
+subjects it has never once executed. All the Mods 10 shipped exactly that: two of the six subjects it
+exists to test, registered, reconciled, counted in the footer, and skipped in every run that has ever
+existed.
+
+So each verdict now prints `skip:` rather than `pass:` and closes with a `COVERAGE:` census of what
+this topology tested nothing about, and this task reconciles the topologies against each other:
+**every scene any run registers must have executed in at least one of them.** It is not a list of
+what must run where — that list would be maintained by whoever just forgot to update it. Add a scene
+and the check covers it the moment it exists.
+
+It deliberately does not `dependsOn` the run tasks: a topology whose verdict is RED aborts the build,
+and this report has the most to say precisely then. Run the topologies, then run this. A declared
+results file that is not there is reported, not skipped — dropping it would shrink the union of
+executed scenes and blame the runs that did happen.
+
+The one exception is declared at the scene, and it is an assertion rather than an excuse:
+
+```java
+@SceneDef(budget = 100, mustSkip = true)          // its subject IS the skip
+static void absentCapabilityIsARecordedSkip(SceneContext s) { … }
+```
+
+The verdict then *requires* the skip and calls the run DEAD if the scene executes — because what
+broke in that case is the absence detection every other suite's skips are trusted through.
+
+The CLI has the same check for packs that have no build tool:
+
+    java -jar stagewright.jar --coverage run-a/stagewright-results.jsonl,run-b/stagewright-results.jsonl
+
+### `installMods`: how the harness reaches the game
+
+`installMods` copies jars into the run directory's `mods/` before the game starts — normally just
+this framework's loader jar, resolved from a configuration so its version comes from the dependency
+block like everything else.
+
+Under **architectury-loom** you do not need it: `modLocalRuntime` already puts a mod jar in front of
+FML. Under **ModDevGradle** you do, and leaving it out does not look like a mistake. MDG's dev run
+assumes the only mod is yours and offers no equivalent; putting the harness on the runtime classpath
+instead — the obvious alternative — gets it *discovered* and then claimed as a plain game library.
+FML logs the jar by name, the mod never enters the mod list, and the run boots, ticks, writes no
+results and reports **ENV, "the game never armed"**, over a log containing no error and no mention of
+StageWright at all.
+
+`mods/` is where `ModsFolderLocator` looks in every run, dev or production, so this is also the only
+delivery that puts the exact artifact a player would install into the run. Jars a previous install
+left are swept first: the filenames carry versions, so an upgrade otherwise lands *beside* its
+predecessor and FML arms one of the two — reporting the old code's behaviour as the new code's.
+
 ### Running one scene while you write it
 
     ./gradlew stagewrightDedicatedServerFabric -Pstagewright.scenes=wd.gearScope
@@ -229,8 +519,10 @@ subproject and the gate belongs on the root — which is every multi-loader buil
 
 `*` is the only metacharacter and matches any run of characters; everything else is literal, so a
 name with a `.` in it needs no escaping. Entries are comma-separated and a scene runs if it matches
-any of them. On worlddriver's 191-scene suite, one scene takes ~47s against ~1m52s for the lot —
-which is the difference between iterating on a scene and batching guesses at it.
+any of them. The cost of a run is a game boot you pay either way plus roughly a second per scene, so
+on worlddriver's 222-scene suite a filter is the difference between a boot and a boot plus five
+minutes (231 scenes executed in 4m55s, measured on this box) — which is the difference between
+iterating on a scene and batching guesses at it.
 
 **A filtered run is not a gate result, and everything says so.** The pattern is written into the
 results header, the game logs it, the plugin logs it, and the verdict label reads
@@ -390,36 +682,44 @@ Keep exactly one service file per provider across all source sets — a copy in
 a loader module alongside the common one double-registers the provider on that
 loader's dev classpath and trips the duplicate-scene-name gate (RED by design).
 
-### Scene library structure (dogfood suite: 131 `wd.*` scenes, by family)
+### Scene library structure (dogfood suite: 171 `wd.*` scenes, by family)
 
 As of P4c the **entire** legacy `@GameTest` suite has been migrated to `wd.*`
 dogfood scenes and deleted (`migrate-then-delete`; the drift log
 [`../worlddriver/docs/stagewright/migration-log.md`](../worlddriver/docs/stagewright/migration-log.md) records
 every retirement). `grep -rn "@GameTest(" common/src neoforge/src fabric/src`
 now returns **zero** test-method call sites. The dogfood suite is
-**131 `wd.*` scenes** across **13 `SceneProvider` classes** — the original seed
-provider plus one per migrated family — all in
+**171 `wd.*` scenes** across **15 `SceneProvider` classes** — the original seed
+provider, one per migrated family, and two families that never had a legacy twin — all in
 `common/src/testmod/java/net/magicterra/worlddriver/bot/stagewright/scene/`, all listed
 (one line each) in the single common service file
 `common/src/testmod/resources/META-INF/services/net.magicterra.stagewright.scene.SceneProvider`:
 
 | provider class | family | scenes | migrated from (legacy class) |
 |---|---|---:|---|
-| `WorldDriverScenes` | core seed (dogfood wave-1/2a/2b + `wd.entityLeashLowY` task#87 D2) | 10 | (seeded, P1c–P2a; +1 D2) |
-| `WorldDriverTerrainScenes` | Terrain | 12 | `AgentGameTestTerrain` (deleted) |
+| `WorldDriverCoreScenes` | Core (main `AgentGameTest`) | 20 | `AgentGameTest` (deleted) |
+| `WorldDriverBridgeScenes` | Bridging / pillaring | 19 | — (net-new, no legacy twin) |
+| `WorldDriverProcessScenes` | Process core (driver / process / combat) | 16 | `AgentGameTestServer` (deleted) |
+| `WorldDriverStationScenes` | Station (craft / smelt / recipe / observe) | 15 | `AgentGameTestServer` (deleted) |
+| `WorldDriverSurvivalScenes` | Survival (reflex / autos) | 14 | `AgentGameTestServer` (deleted) |
 | `WorldDriverBiasScenes` | Bias (planner cost/constraint) | 13 | `AgentGameTestBias` (deleted) |
+| `WorldDriverTerrainScenes` | Terrain | 12 | `AgentGameTestTerrain` (deleted) |
 | `WorldDriverWaterBankScenes` | WaterBank | 11 | `AgentGameTestWaterBank` (deleted) |
+| `WorldDriverSchedulerScenes` | Scheduler semantics (matrices) | 11 | `AgentGameTestServer` (deleted) |
+| `WorldDriverCoverageScenes` | Coverage / instrumentation of the harness itself | 11 | — (net-new, no legacy twin) |
 | `WorldDriverWaterCrossScenes` | WaterCross | 10 | `AgentGameTestWaterCross` (deleted) |
-| `WorldDriverCoreScenes` | Core (main `AgentGameTest`) | 12 | `AgentGameTest` (deleted) |
+| `WorldDriverScenes` | core seed (dogfood wave-1/2a/2b + `wd.entityLeashLowY` task#87 D2) | 10 | (seeded, P1c–P2a; +1 D2) |
+| `WorldDriverAvatarScenes` | Avatar (server-body capability) | 5 | `AgentGameTestServer` (deleted) |
 | `WorldDriverCombatScenes` | CombatSense | 2 | `AgentGameTestCombatSense` (deleted) |
 | `WorldDriverBuildScenes` | BuildBlock | 2 | `AgentGameTestBuildBlock` (deleted) |
-| `WorldDriverStationScenes` | Station (craft / smelt / recipe / observe) | 15 | `AgentGameTestServer` (deleted) |
-| `WorldDriverSchedulerScenes` | Scheduler semantics (matrices) | 11 | `AgentGameTestServer` (deleted) |
-| `WorldDriverSurvivalScenes` | Survival (reflex / autos) | 13 | `AgentGameTestServer` (deleted) |
-| `WorldDriverAvatarScenes` | Avatar (server-body capability) | 5 | `AgentGameTestServer` (deleted) |
-| `WorldDriverProcessScenes` | Process core (driver / process / combat) | 15 | `AgentGameTestServer` (deleted) |
 
-**Total 131** (10 seed + 121 migrated 1:1). One legacy arena, `descentDriftArena`,
+**Total 171 `wd.*`.** The migration itself accounted for 131 (10 seed + 121 mapped 1:1); the other 40
+were written after it, most of them in the two families with no legacy twin. The whole gate manifest
+is larger again — **222 scenes**: these 171 plus **38 `cap.*`** (StageWright's own capability-seam
+suite, in `StageWrightCapabilityScenes`) and **13 `pack.*`**. A run registers 232, the difference
+being the framework's ten built-ins and canaries.
+
+One legacy arena, `descentDriftArena`,
 was retired-without-scene (controller-adjudicated, P4b wave 2 — see migration-log)
 and two scenes are net-new (0 legacy twin): `wd.settingRegistryClosed` (P2a) and
 `wd.entityLeashLowY` (the task#87 D2 low-Y leash probe, promoted to `required` after
@@ -592,6 +892,20 @@ handshake to solve it. To make that possible the harness ops the player it was w
 await-player path the only player present is the companion client the harness itself launched, and a
 dev dedicated server ships an empty `ops.json` with `online-mode=false`.
 
+**That probe's subject is worlddriver, and most clients running StageWright do not have one.** A
+third-party mod's client has no driver and never should, so the probe reports a **skip** there — a
+PASS carrying the `skipped:` prefix and the flag, judged by the same contract as any other, which
+makes it count as untested rather than as tested-and-fine. Where the driver IS present it executes
+and asserts for real.
+
+Getting that guard right is subtler than it reads. `if (WorldDriverCommon.api() == null)` cannot
+answer the question, because naming the class is what makes the JVM load it — the check throws
+`NoClassDefFoundError` instead of returning false. So does a field typed `Consumer<DriverEvent>`.
+Every worlddriver reference now lives in one class, `DriverFeed`, which tests presence with
+`Class.forName(<string>)` and is never loaded at all by a runtime that answers no. The measured cost
+of not doing this: a conformance fork's client died on the tick after joining, so the server's suite
+ran with no player and skipped twelve scenes, and no log said the two facts were the same fact.
+
 ## JUnit 5 attach (out-of-process) — P2c
 
 `stagewright/junit` (`:stagewright-junit`) is a **pure-JVM** JUnit 5 module: no game
@@ -705,6 +1019,17 @@ stops the run proving only what the single-JVM topology already proved.
 
 `remotePlayerIsPresent` is the built-in scene that asserts the topology really was two-ended, and
 the client's own probe file carries what the server cannot see — see "The client topologies" above.
+
+Both loaders are green here as of 2026-08-08; NeoForge was the last, and what it was RED on is worth
+keeping, because nothing in the run said it. The two loaders' dev launchers stage part of the child
+environment in a Gradle property rather than on the spec, merged in the first line of their own task
+action — which a companion never reaches, being launched *from* the spec. loom's carries
+`MOD_CLASSES`, which is how FML in dev learns whose classes are whose. Without it FML still finds the
+mod file (its `neoforge.mods.toml` is on the classpath), reads the manifest, prints the mod in the
+mod list, attaches no classes, finds no `@Mod` to construct, and carries on: **a mod with no code is
+a legal mod, so nothing warns.** The driver was absent from a JVM that listed it. Fabric was green
+throughout on identical code, because fabric-loom passes the same information as a `-D` on the
+command line, where copying the spec preserves it.
 
 ### `mc.test.run` — on-demand scene trigger
 

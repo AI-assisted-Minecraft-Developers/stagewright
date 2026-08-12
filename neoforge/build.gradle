@@ -36,6 +36,12 @@ repositories {
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
 
+    // Plain project dependency — :stagewright-attached is not a loom module, so it has no
+    // `namedElements` / `transformProduction*` configurations to ask for (nothing Minecraft to
+    // remap). Bundled all the same: its classes are on the api's public surface.
+    compileOnly project(':stagewright-attached')
+    shadowBundle project(':stagewright-attached')
+
     common(project(path: ':stagewright-api', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':stagewright-api', configuration: 'transformProductionNeoForge')
 
@@ -54,6 +60,12 @@ processResources {
 shadowJar {
     configurations = [project.configurations.shadowBundle]
     archiveClassifier = 'dev-shadow'
+    // Load-bearing. Capability providers arrive through META-INF/services, and that path now exists
+    // in BOTH :stagewright-api (the shipped Curios/FTB Quests adapters) and this module. Shadow's
+    // default is last-writer-wins per path, so without this the jar ships one file and every
+    // provider in the other reports itself absent — which is indistinguishable from an uninstalled
+    // mod, and would be found by a scene skipping for a reason that is not true.
+    mergeServiceFiles()
 }
 
 remapJar {

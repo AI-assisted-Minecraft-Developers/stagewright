@@ -1,5 +1,8 @@
 package net.magicterra.stagewright.scene;
 
+import net.magicterra.stagewright.contract.Canary;
+import net.magicterra.stagewright.contract.SceneFailure;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -56,8 +59,10 @@ public final class Stages {
             m.setAccessible(true);                 // scene methods are an implementation detail: let them be private
             SceneDef def = m.getAnnotation(SceneDef.class);
             String name = prefix + m.getName();
-            out.add(new Scene(name, def.budget(), def.required(), Canary.NONE,
-                    invoker(name, m), def.originSlot(), def.chunkRadius(), def.terrain(), def.clock()));
+            out.add(new Scene(name, def.budget(), def.required(),
+                    def.mustSkip() ? Canary.MUST_SKIP : Canary.NONE,
+                    invoker(name, m), def.originSlot(), def.chunkRadius(), def.terrain(), def.clock(),
+                    def.dimension().isBlank() ? null : def.dimension(), true));
         }
         return out;
     }

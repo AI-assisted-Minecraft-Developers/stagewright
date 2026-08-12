@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.scene;
+package net.magicterra.stagewright.contract;
 
 /**
  * Thrown by a scene body to stop early on a topology it does not apply to. The harness resolves the

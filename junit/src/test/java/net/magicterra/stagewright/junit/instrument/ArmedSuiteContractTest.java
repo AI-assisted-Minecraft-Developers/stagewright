@@ -1,11 +1,13 @@
 package net.magicterra.stagewright.junit.instrument;
 
+import net.magicterra.stagewright.contract.StageWrightRpcException;
+
 import com.google.gson.JsonObject;
 import net.magicterra.stagewright.junit.StageWright;
 import net.magicterra.stagewright.junit.Face;
 import net.magicterra.stagewright.junit.RequiresFace;
 import net.magicterra.stagewright.junit.StageWrightExtension;
-import net.magicterra.stagewright.junit.StageWrightRpcException;
+import net.magicterra.stagewright.contract.StageWrightRpcException;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;

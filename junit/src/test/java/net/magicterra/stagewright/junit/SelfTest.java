@@ -1,5 +1,9 @@
 package net.magicterra.stagewright.junit;
 
+import net.magicterra.stagewright.contract.StageWrightRpc;
+import net.magicterra.stagewright.contract.StageWrightRpcException;
+import net.magicterra.stagewright.contract.StageWrightTimeoutException;
+
 import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;

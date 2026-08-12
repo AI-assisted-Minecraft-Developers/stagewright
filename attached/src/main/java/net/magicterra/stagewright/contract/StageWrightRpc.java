@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.junit;
+package net.magicterra.stagewright.contract;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
@@ -125,7 +125,13 @@ public final class StageWrightRpc implements AutoCloseable {
     // format without opening a socket.
 
     /** Build a request envelope {@code {"id":id,"method":method,"params":params}}. */
-    static JsonObject encodeRequest(long id, String method, JsonObject params) {
+    /** The three helpers below are the hand-rolled envelope itself — {@code {id, method, params}} out,
+     *  {@code {id, result|error}} back, with notifications distinguished by the ABSENCE of an "id"
+     *  key rather than by its value. They are public because that envelope is the contract two
+     *  independent clients already speak (this one and {@code scripts/rpc.py}), so encoding it is a
+     *  legitimate thing to ask this class for, and because the tests that pin the format must be able
+     *  to reach it from wherever they live. */
+    public static JsonObject encodeRequest(long id, String method, JsonObject params) {
         JsonObject req = new JsonObject();
         req.addProperty("id", id);
         req.addProperty("method", method);
@@ -134,7 +140,7 @@ public final class StageWrightRpc implements AutoCloseable {
     }
 
     /** Parse a reply envelope from its JSON text. */
-    static JsonObject decodeEnvelope(String text) {
+    public static JsonObject decodeEnvelope(String text) {
         JsonElement e = JsonParser.parseString(text);
         if (e == null || !e.isJsonObject()) {
             throw new StageWrightRpcException("<decode>", "reply is not a JSON object: " + text);
@@ -149,7 +155,7 @@ public final class StageWrightRpc implements AutoCloseable {
      * {@code {"result": <value>}} so the frozen {@code JsonObject} return type holds
      * for methods that reply with a bare primitive or array.
      */
-    static JsonObject resultOf(String method, JsonObject envelope) {
+    public static JsonObject resultOf(String method, JsonObject envelope) {
         JsonElement err = envelope.get("error");
         if (err != null && !err.isJsonNull()) {
             throw new StageWrightRpcException(method, err.isJsonPrimitive() ? err.getAsString() : err.toString());

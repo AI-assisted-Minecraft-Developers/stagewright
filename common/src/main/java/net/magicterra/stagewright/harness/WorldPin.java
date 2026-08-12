@@ -1,7 +1,7 @@
 package net.magicterra.stagewright.harness;
 
 import net.magicterra.stagewright.StageWrightCommon;
-import net.magicterra.stagewright.scene.Clock;
+import net.magicterra.stagewright.contract.Clock;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.GameRules;

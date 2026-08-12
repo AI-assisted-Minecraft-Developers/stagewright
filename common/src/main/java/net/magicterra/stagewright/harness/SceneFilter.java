@@ -25,6 +25,14 @@ import net.magicterra.stagewright.scene.Scene;
  * <p>Canaries are filtered like anything else. A narrow run therefore usually has no framework
  * self-check left in it, which is the other half of why it must never be read as a gate.
  *
+ * <p><b>A filtered run does not reproduce an unfiltered run's arena.</b> Arena slots are assigned
+ * from the scene list AFTER filtering, so slot == index in whatever survived: a scene that sits at
+ * slot 6 in the full suite runs at slot 0 alone, 512 blocks × 6 away, on different ground in a
+ * different chunk. That makes this the wrong tool for "does scene X fail on its own?" — it passing
+ * alone is not evidence about the run it failed in, and reading it that way sends the investigation
+ * after cross-scene interference that was never there. It cost exactly that once. Reproduce with the
+ * full suite; use the filter for iterating on a scene you are writing.
+ *
  * <h2>Patterns</h2>
  * A comma-separated list; a scene runs if it matches ANY entry. {@code *} is the only metacharacter
  * and matches any run of characters; everything else is literal, so a name containing {@code .}

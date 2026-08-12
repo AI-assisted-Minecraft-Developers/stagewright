@@ -33,4 +33,15 @@ base {
 dependencies {
     // Provides the @Environment annotation; do NOT use other Fabric Loader classes from common
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+
+    // The vocabulary that is true wherever a scene runs — Expect, SceneFailure, SceneSkipped,
+    // SceneOutcome, Clock, Terrain, Canary. `api`, not `implementation`: those types are all over
+    // this module's PUBLIC surface (SceneContext.expect returns Expect; Scene carries Canary and
+    // Terrain), so a consumer compiling a scene needs them on its own compile classpath, and a
+    // published POM that omitted them would fail to compile for everyone who does not already
+    // happen to have the module.
+    //
+    // It carries its OWN package (net.magicterra.stagewright.contract) rather than a slice of this
+    // one — see the package-ownership note above, which is about exactly this and is load-bearing.
+    api project(':stagewright-attached')
 }

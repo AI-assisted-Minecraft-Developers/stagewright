@@ -1,5 +1,9 @@
 package net.magicterra.stagewright.junit;
 
+import net.magicterra.stagewright.contract.StageWrightRpc;
+import net.magicterra.stagewright.contract.StageWrightRpcException;
+import net.magicterra.stagewright.contract.StageWrightTimeoutException;
+
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 

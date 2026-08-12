@@ -4,14 +4,13 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.function.Consumer;
 
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.harness.ResultsJsonl;
 import net.magicterra.stagewright.scene.Scene;
-import net.magicterra.stagewright.scene.SceneOutcome;
-import net.magicterra.worlddriver.WorldDriverCommon;
-import net.magicterra.worlddriver.model.DriverEvent;
+import net.magicterra.stagewright.contract.SceneOutcome;
+
+
 import net.minecraft.client.Minecraft;
 
 /**
@@ -76,9 +75,10 @@ public final class ClientProbes {
     private static long startedMs;
     private static String loader = "unknown";
 
-    /** Events arrive on the driver's dispatch thread, so this crosses threads. */
+    /** Events arrive on the driver's dispatch thread, so this crosses threads. The listener that
+     *  fills it lives in {@link DriverFeed}, because its type names a worlddriver class and a field
+     *  is enough of a reference to make a driver-less runtime fail to link this one. */
     private static final ConcurrentLinkedQueue<Map<?, ?>> hurts = new ConcurrentLinkedQueue<>();
-    private static Consumer<DriverEvent> listener;
 
     private ClientProbes() {}
 
@@ -93,10 +93,23 @@ public final class ClientProbes {
         phase = Phase.SETTLING;
         ticks = 0;
         startedMs = System.currentTimeMillis();
-        listener = e -> {
-            if ("player.hurt".equals(e.type) && e.data instanceof Map<?, ?> m) hurts.add(m);
-        };
-        WorldDriverCommon.api().addEventListener(listener);
+        // The driver has to be up in THIS process — the probe's whole point is that it reads the
+        // client's own event stream rather than asking the server. Asked through DriverFeed, which
+        // is the only place in StageWright that names worlddriver, so a runtime without it answers
+        // here instead of dying on a class it cannot link. Both outcomes were paid for: a NeoForge
+        // joining client that listed the driver and never constructed it wrote NO results file, and
+        // the gate could only report "the companion wrote no results"; a Twilight Forest client,
+        // which has no driver at all and never should, crashed on the tick after joining, so the
+        // server's suite ran with no player and skipped twelve scenes.
+        if (!DriverFeed.isPresent()) {
+            report(SceneOutcome.PASS, "skipped: no worlddriver in this client process — this probe"
+                    + " reads the driver's own client event stream and has nothing to read. Absent"
+                    + " by design in a pack that does not ship it; if it should be here, check this"
+                    + " run's log for the driver's boot lines, because FML lists a mod whose classes"
+                    + " it never attached and constructs nothing.", Map.of(), true);
+            return;
+        }
+        DriverFeed.listenForHurts(hurts);
         StageWrightCommon.LOG.info("[{}] client probes armed ({})", StageWrightCommon.MOD_ID, PROBE);
     }
 
@@ -113,8 +126,7 @@ public final class ClientProbes {
                 }
                 // Through the driver's own client verb rather than the connection directly: it is
                 // the surface a pack author has, and it is what the retired python check drove.
-                WorldDriverCommon.api().route("mc.client.chat.send",
-                        Map.of("text", "/damage @s 2 minecraft:out_of_world"));
+                DriverFeed.damageSelf();
                 phase = Phase.WAITING;
             }
             case WAITING -> {
@@ -151,18 +163,30 @@ public final class ClientProbes {
     }
 
     private static void report(SceneOutcome outcome, String reason, Map<String, Object> data) {
+        report(outcome, reason, data, false);
+    }
+
+    /**
+     * Write this probe's one-scene results file and stop.
+     *
+     * <p>A skip is a PASS carrying the {@code skipped:} reason prefix and the {@code skipped} flag,
+     * exactly as the server harness records one — there is no SKIP outcome, deliberately, and this
+     * file is judged by the same contract as the server's. Reporting a skip as FAIL instead would
+     * turn "this pack ships no worlddriver" into a red run, and reporting it as a plain PASS would
+     * be the false green the cross-run coverage gate exists to catch.
+     */
+    private static void report(SceneOutcome outcome, String reason, Map<String, Object> data,
+                               boolean skipped) {
         phase = Phase.DONE;
-        if (listener != null) {
-            WorldDriverCommon.api().removeEventListener(listener);
-            listener = null;
-        }
+        DriverFeed.stopListening();
         ResultsJsonl out = new ResultsJsonl(Path.of(OUT_FILE));
         // A header/footer pair so this file is judged by the same contract as the server's, rather
         // than being a bespoke format some second parser has to learn.
         out.writeSuiteHeader(loader, List.of(Scene.of(PROBE, BUDGET_TICKS, ctx -> { })));
-        out.writeScene(PROBE, outcome, ticks, System.currentTimeMillis() - startedMs, reason, data);
+        out.writeScene(PROBE, outcome, ticks, System.currentTimeMillis() - startedMs,
+                reason, data, skipped);
         out.writeDone(1);
-        StageWrightCommon.LOG.info("[{}] client probe {} -> {} {}",
-                StageWrightCommon.MOD_ID, PROBE, outcome, reason);
+        StageWrightCommon.LOG.info("[{}] client probe {} -> {}{} {}", StageWrightCommon.MOD_ID,
+                PROBE, outcome, skipped ? " (skipped)" : "", reason);
     }
 }

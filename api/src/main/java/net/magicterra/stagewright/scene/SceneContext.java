@@ -1,5 +1,9 @@
 package net.magicterra.stagewright.scene;
 
+import net.magicterra.stagewright.contract.Expect;
+import net.magicterra.stagewright.contract.SceneFailure;
+import net.magicterra.stagewright.contract.SceneSkipped;
+
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -27,7 +31,7 @@ import net.minecraft.world.phys.Vec3;
  * calls advance() every tick until DONE / STEP_TIMEOUT / budget exhaustion.
  * Bodies must never block or sleep (same rule as every in-game test in this repo).
  */
-public final class SceneContext {
+public final class SceneContext implements net.magicterra.stagewright.contract.SceneReport {
     /** One pending continuation: wait for cond (within N ticks of becoming current), then run. */
     private record Step(BooleanSupplier cond, int withinTicks, Runnable then) {}
 
@@ -71,6 +75,16 @@ public final class SceneContext {
 
     /** The backing server level — for scenes that drive entities/avatars directly. */
     public ServerLevel level() { return level; }
+
+    /**
+     * The id of the dimension this scene's arena is in, as {@code "minecraft:overworld"}.
+     *
+     * <p>A string rather than the {@code ResourceKey} {@link #level()} would give, so a JavaScript
+     * scene can read it: the rule stated on {@link #originX()} is that a scene file may hold a
+     * Minecraft object but must never call a method on one, and {@code level().dimension().location()}
+     * is three such calls.
+     */
+    public String dimension() { return level.dimension().location().toString(); }
 
     /** The server running this suite. */
     public MinecraftServer server() { return level.getServer(); }
@@ -233,6 +247,211 @@ public final class SceneContext {
         return new Perf(this);
     }
 
+    /**
+     * The player's inventory, hunger and status effects. See {@link Items}.
+     *
+     * <p>Held rather than rebuilt per call, because the facet remembers whether it has already
+     * snapshotted the inventory for restoration — a fresh instance each time would register one
+     * cleanup per {@code give}.
+     */
+    public Items items() {
+        if (items == null) items = new Items(this);
+        return items;
+    }
+
+    private Items items;
+
+    /**
+     * The player's advancement progress. See {@link Advancements}.
+     *
+     * <p>Held for the same reason as {@link #items()}: the facet remembers which advancements it has
+     * already arranged to revoke at teardown.
+     */
+    public Advancements advancements() {
+        if (advancements == null) advancements = new Advancements(this);
+        return advancements;
+    }
+
+    private Advancements advancements;
+
+    /**
+     * The run's recipe graph. See {@link Recipes}.
+     *
+     * <p>Held because the facet indexes the whole {@code RecipeManager} on first use — a pack with
+     * tens of thousands of recipes would otherwise pay for that index on every call, on the tick
+     * thread.
+     */
+    public Recipes recipes() {
+        if (recipes == null) recipes = new Recipes(this);
+        return recipes;
+    }
+
+    private Recipes recipes;
+
+    /**
+     * Container menus, driven server-side. See {@link Menus}.
+     *
+     * <p>Held because the facet owns the menu it opened: a fresh instance per call would lose track
+     * of what to close at teardown, and would re-register a close cleanup on every question asked.
+     */
+    public Menus menu() {
+        if (menu == null) menu = new Menus(this);
+        return menu;
+    }
+
+    private Menus menu;
+
+    /** Loot tables — rolled, counted, checked. See {@link Loot}. */
+    public Loot loot() {
+        if (loot == null) loot = new Loot(this);
+        return loot;
+    }
+
+    private Loot loot;
+
+    /** Worldgen structures — registered, generated here, or nearest. See {@link Structures}. */
+    public Structures structures() {
+        if (structures == null) structures = new Structures(this);
+        return structures;
+    }
+
+    private Structures structures;
+
+    /** Equipment slots — vanilla armour always, Curios accessory slots when the pack has Curios.
+     *  See {@link Equip}. */
+    public Equip equip() {
+        if (equip == null) equip = new Equip(this);
+        return equip;
+    }
+
+    private Equip equip;
+
+    /** The FTB Quests book, when the pack has one. See {@link Quests}. */
+    public Quests quests() {
+        if (quests == null) quests = new Quests(this);
+        return quests;
+    }
+
+    private Quests quests;
+
+    /** What is installed in this run. See {@link Mods} — the thing every conditional scene starts
+     *  from, and the one number worth recording in a pack suite. */
+    public Mods mods() {
+        if (mods == null) mods = new Mods(this);
+        return mods;
+    }
+
+    private Mods mods;
+
+    // ---- capabilities Minecraft does not have ----
+
+    /**
+     * A capability some mod in this run contributed, or a recorded skip naming what is missing.
+     *
+     * <p>The facets above cover the vanilla server API. This is how everything else arrives —
+     * Curios' slots, a quest graph, a mod's own machines — without StageWright having to ship code
+     * for it. See {@link CapabilityProvider} for writing one.
+     *
+     * <pre>{@code
+     * s.capability("mymod:rituals")          // Java, when the scene will cast or only chain
+     * }</pre>
+     * <pre>{@code
+     * s.capability('mymod:rituals').cast()   // JS — the same object, straight through Rhino
+     * }</pre>
+     *
+     * <p>Absent is a skip, not a failure, matching {@link #player()}: a mod that is not installed is
+     * not the pack's defect, and must not read as a pass either. Use {@link #hasCapability} to
+     * branch instead of skipping.
+     */
+    public Object capability(String name) {
+        return capabilities.get(name);
+    }
+
+    /**
+     * {@link #capability(String)} with the type checked, for a Java scene that owns both sides.
+     *
+     * <p>The check earns its keep across a version bump: an adapter whose facet type changed
+     * otherwise surfaces as a {@code ClassCastException} in the scene, which names the scene rather
+     * than the adapter.
+     */
+    public <T> T capability(String name, Class<T> type) {
+        Object facet = capabilities.get(name);
+        if (!type.isInstance(facet)) {
+            throw new SceneFailure("the '" + name + "' capability is a " + facet.getClass().getName()
+                    + ", not a " + type.getName() + " — its provider and this scene disagree about"
+                    + " what that name means");
+        }
+        return type.cast(facet);
+    }
+
+    /** Whether this runtime offers a capability, for a scene that wants to branch rather than skip. */
+    public boolean hasCapability(String name) {
+        return capabilities.has(name);
+    }
+
+    /** Every capability this runtime offers, sorted. Worth recording in a suite that skips: it turns
+     *  "this scene skipped" into "this scene skipped, and here is what was actually installed". */
+    public List<String> capabilities() {
+        return capabilities.available();
+    }
+
+    /**
+     * Every capability provider that LOADED, whether or not its mod is here, sorted.
+     *
+     * <p>Not the same question as {@link #capabilities()}, and the difference is the one worth
+     * asserting on. A runtime where discovery found nothing and a runtime where it found providers
+     * whose mods are absent answer identically to every {@link #hasCapability} call — so a suite
+     * that only asks that stays green through a dropped service file or a shadow merge that ate the
+     * {@code META-INF/services} entry. Registered-but-unavailable is a working framework reporting
+     * an absent mod; nothing registered is a broken framework reporting the same thing.
+     */
+    public List<String> capabilityProviders() {
+        return capabilities.registered();
+    }
+
+    private final Capabilities capabilities = new Capabilities(this);
+
+    /**
+     * Reflection into a mod's own API, for a scene that cannot compile against it.
+     *
+     * <p>The hatch behind {@link CapabilityProvider}, for a modpack author with {@code .js} files and
+     * no build. Absent class is a skip, like an absent capability.
+     *
+     * <p><b>{@code net.minecraft.*} is refused.</b> Not caution — correctness. A production Fabric
+     * jar carries intermediary names, so a by-name call on a Minecraft class works on NeoForge and
+     * throws on Fabric. A mod's own classes are not remapped, which is what makes the same technique
+     * sound for them. See {@link Probe}.
+     */
+    public Probe probe(String className) {
+        if (className.startsWith("net.minecraft.")) {
+            throw new SceneFailure("probe('" + className + "') — reflection into net.minecraft is"
+                    + " refused, and would not have worked: a production Fabric jar carries"
+                    + " intermediary names, so getX is method_10263 there and this call would pass"
+                    + " on NeoForge and throw on Fabric. The facets (items, recipes, loot, menu,"
+                    + " structures, advancements) exist so a scene never has to. Probe is for a"
+                    + " MOD's classes, which are not remapped.");
+        }
+        Class<?> type = classOrNull(className);
+        if (type == null) {
+            skip("this scene needs the class '" + className + "', which is not in this runtime —"
+                    + " the mod that ships it is not installed here");
+        }
+        return new Probe(type, null);
+    }
+
+    /** Whether a class is in this runtime, so a scene can branch rather than skip. */
+    public boolean hasClass(String className) {
+        return classOrNull(className) != null;
+    }
+
+    private static Class<?> classOrNull(String className) {
+        try {
+            return Class.forName(className, false, SceneContext.class.getClassLoader());
+        } catch (ClassNotFoundException | LinkageError e) {
+            return null;
+        }
+    }
+
     /** The block currently at an origin-relative position. */
     public Block blockAt(int dx, int dy, int dz) {
         return level.getBlockState(rel(dx, dy, dz)).getBlock();
@@ -385,8 +604,11 @@ public final class SceneContext {
         return java.util.Collections.unmodifiableMap(records);
     }
 
-    /** Expect-internal: report one violation, hard or soft. */
-    void violation(String message, boolean soft) {
+    /** Expect-internal: report one violation, hard or soft. Public because {@code Expect} now lives
+     *  in {@code :stagewright-attached} so that BOTH homes share one implementation of it — see
+     *  {@link net.magicterra.stagewright.contract.SceneReport}. */
+    @Override
+    public void violation(String message, boolean soft) {
         if (soft) {
             softViolations.add(message);
             return;

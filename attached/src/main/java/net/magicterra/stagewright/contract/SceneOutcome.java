@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.scene;
+package net.magicterra.stagewright.contract;
 
 /** Terminal result of one scene. Wire values match the orchestration contract v0. */
 public enum SceneOutcome {

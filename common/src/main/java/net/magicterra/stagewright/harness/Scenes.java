@@ -1,9 +1,9 @@
 package net.magicterra.stagewright.harness;
 
-import net.magicterra.stagewright.scene.Canary;
+import net.magicterra.stagewright.contract.Canary;
 import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.scene.SceneProvider;
-import net.magicterra.stagewright.scene.Terrain;
+import net.magicterra.stagewright.contract.Terrain;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -268,8 +268,38 @@ public final class Scenes {
                     // And it has to actually run: an untickable entity is still queryable, so
                     // visibility alone would have passed against the very bug this scene is for.
                     // Empty sky at the arena, so gravity is the cheapest proof of a running tick.
+                    //
+                    // The state going in is recorded BEFORE the wait, not inside the then(). A
+                    // timeout has no continuation to record from, so a scene that only reports on
+                    // success reports "it did not fall" and nothing else — which is the same line
+                    // whether the entity never ticked, or ticked perfectly well while resting on a
+                    // block. Those need opposite fixes, and telling them apart cost a full gate run
+                    // in a third-party pack before these three lines existed.
                     double startY = stands.get(0).getY();
-                    ctx.await(() -> stands.get(0).getY() < startY - 1).within(60).then(() ->
+                    ctx.record("startY", String.format("%.2f", startY));
+                    ctx.record("onGroundAtSummon", stands.get(0).onGround());
+                    ctx.record("underfoot", ctx.blockAt(0, -1, 0).toString());
+                    // The poll writes the record, so a TIMEOUT carries the entity's LAST state and
+                    // not just its first. An await has no failure hook — but its condition runs every
+                    // tick, and records are attached to the scene whatever the outcome. Without this
+                    // a timeout says only "it did not fall 1 block", which cannot distinguish an
+                    // entity that never ticked from one that ticked, drifted, and was removed and
+                    // replaced by some mod's cleanup while this held a stale reference.
+                    ctx.await(() -> {
+                        var stand = stands.get(0);
+                        ctx.record("lastY", String.format("%.2f", stand.getY()));
+                        ctx.record("lastRemoved", stand.isRemoved());
+                        // tickCount is THE discriminator, and everything else here is only context
+                        // for it. It increments in Entity.baseTick, so it separates the two failures
+                        // that look identical from the outside: not ticked at all (the arena is not
+                        // really entity-ticking, and the readiness test is lying) versus ticked but
+                        // not falling (something suppressed gravity — NoGravity, or a mod's mixin).
+                        // Those need opposite fixes, and no amount of position data distinguishes
+                        // them.
+                        ctx.record("lastTickCount", stand.tickCount);
+                        ctx.record("noGravity", stand.isNoGravity());
+                        return stand.getY() < startY - 1;
+                    }).within(60).then(() ->
                             ctx.record("fellBy", String.format("%.2f", startY - stands.get(0).getY())));
                 }),
                 // -- canaries (spec §5): the framework must CATCH these, or the gate is dead --

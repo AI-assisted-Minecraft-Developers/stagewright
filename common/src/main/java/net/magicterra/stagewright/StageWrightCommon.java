@@ -282,7 +282,51 @@ public final class StageWrightCommon {
         return h != null && h.isFinished();
     }
 
+    /**
+     * Tell every level it is not empty, every tick, for as long as this mod is loaded.
+     *
+     * <p>Vanilla stops ticking a {@code ServerLevel} that nobody is in. {@code ServerLevel.tick}
+     * computes {@code !players.isEmpty() || !getForcedChunks().isEmpty()} and, when that has been
+     * false for 300 consecutive ticks, jumps <b>over both the entity loop and
+     * {@code tickBlockEntities()}</b>. The level keeps ticking in every other respect — the server
+     * loop runs, chunks stay loaded, commands work, blocks can be placed and read back — so nothing
+     * about such a level looks stopped.
+     *
+     * <p>A dedicated topology has no player by definition, and the arena's chunks are pinned with a
+     * runtime {@code TicketType.FORCED} region ticket — which is NOT what {@code getForcedChunks()}
+     * returns. That reads the {@code /forceload} saved data, so the pin that keeps the arena loaded
+     * contributes nothing to the emptiness test. Fifteen seconds in, nothing moves on its own.
+     *
+     * <p>Everything that made this look like several unrelated bugs follows from WHEN a scene runs
+     * rather than from what it does: worlddriver's entity scene is seventh and passed inside the
+     * window, its block-entity probe is around the hundred-and-ninetieth and never ticked; a heavy
+     * modpack boots slowly enough that even the entity scene lands outside, so there the ENTITY half
+     * failed too and the two halves were investigated as different problems. Every chunk assertion
+     * answers true throughout, correctly — chunk status is not what is being tested.
+     *
+     * <p><b>Here rather than on the harness, and that placement is the whole point.</b> The first fix
+     * called this from {@code StageWrightHarness.observeServerTick}, which is only reached once a
+     * harness exists — and under {@code holding()} no harness is built at all until {@code mc.test.run}
+     * asks for one. A hold takes far longer than fifteen seconds to boot, publish its descriptor and
+     * be attached to, so everything that attaches to a hold before triggering a suite — today
+     * {@code :stagewright-junit}, tomorrow attached scripts — would have driven a world where nothing
+     * moved. Keeping a level awake is a property of "StageWright is loaded", not of "a suite is
+     * mid-run", and this mod is only ever present in a test run.
+     *
+     * <p>{@code resetEmptyTime()} is public and is exactly vanilla's own escape hatch: it is what
+     * {@code ServerChunkCache} calls when a chunk is force-loaded through the supported path. All
+     * levels rather than the arena's, because PREP generates terrain before a scene's level is
+     * chosen and a scene may name any dimension — and because the cost is one field write each.
+     */
+    private static void keepLevelsAwake(MinecraftServer server) {
+        for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
+            level.resetEmptyTime();
+        }
+    }
+
     public static void onServerTick(MinecraftServer server) {
+        keepLevelsAwake(server);
+
         // Liveness for the stall watchdog, ABOVE the settle barrier: this must count every server
         // tick, including the catch-up ticks the barrier below deliberately swallows. A watchdog fed
         // from the other side of that `return` would see a draining tick debt as a wedged server.

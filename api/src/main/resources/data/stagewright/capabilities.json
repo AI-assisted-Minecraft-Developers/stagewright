@@ -1,0 +1,40 @@
+[
+  {
+    "_comment": "Descriptors StageWright ships, so a pack that has one of these mods gets a handle on it having configured nothing. Each is gated on the CLASS, not the mod id: the class is exactly the condition under which its probe works, and every entry here was read out of the mod's own jar rather than remembered. A pack whose fork moved a class overrides any of these by name from config/stagewright/capabilities/. Deliberately short — this list is not an ecosystem census, and s.mods() already answers 'is X here'. An entry earns its place by naming a stable API root a scene would otherwise hardcode.",
+
+    "name": "mekanism",
+    "classes": ["mekanism.api.MekanismAPI"],
+    "probe": "mekanism.api.MekanismAPI",
+    "absent": "Mekanism is not in this pack"
+  },
+  {
+    "name": "ae2",
+    "classes": ["appeng.api.networking.IGrid"],
+    "probe": "appeng.api.networking.IGrid",
+    "absent": "Applied Energistics 2 is not in this pack"
+  },
+  {
+    "name": "create",
+    "classes": ["com.simibubi.create.AllBlocks"],
+    "probe": "com.simibubi.create.AllBlocks",
+    "absent": "Create is not in this pack"
+  },
+  {
+    "name": "ars_nouveau",
+    "classes": ["com.hollingsworth.arsnouveau.api.ArsNouveauAPI"],
+    "probe": "com.hollingsworth.arsnouveau.api.ArsNouveauAPI",
+    "absent": "Ars Nouveau is not in this pack"
+  },
+  {
+    "name": "apotheosis",
+    "classes": ["dev.shadowsoffire.apotheosis.Apotheosis"],
+    "probe": "dev.shadowsoffire.apotheosis.Apotheosis",
+    "absent": "Apotheosis is not in this pack"
+  },
+  {
+    "name": "mysticalagriculture",
+    "classes": ["com.blakebr0.mysticalagriculture.api.MysticalAgricultureAPI"],
+    "probe": "com.blakebr0.mysticalagriculture.api.MysticalAgricultureAPI",
+    "absent": "Mystical Agriculture is not in this pack"
+  }
+]

@@ -65,6 +65,17 @@ public class StageWrightPlugin implements Plugin<Project> {
         var sideProcesses = project.getGradle().getSharedServices().registerIfAbsent(
                 "stagewrightSideProcesses", StageWrightSideProcessService.class, spec -> {});
 
+        // Registered once and fed by every topology below. It has to exist before the container is
+        // iterated so that a topology added later still lands in it — the alternative, building the
+        // map in afterEvaluate, would silently reconcile fewer runs than the build declares, which is
+        // the exact failure this task exists to catch.
+        TaskProvider<StageWrightCoverageTask> coverage = project.getTasks().register(
+                "stagewrightCoverage", StageWrightCoverageTask.class, task -> {
+                    task.setGroup(TASK_GROUP);
+                    task.setDescription("Reconciles every topology's results: RED if a scene this"
+                            + " suite registers executed in none of them. Run the topologies first.");
+                });
+
         topologies.all(topology -> {
             topology.getResultsFile().convention(DEFAULT_RESULTS);
             topology.getCleanWorld().convention(true);
@@ -73,6 +84,8 @@ public class StageWrightPlugin implements Plugin<Project> {
             topology.getGameDirectory().convention(project.getLayout().getProjectDirectory()
                     .dir("run-stagewright-" + topology.getName()));
             registerTopologyTasks(project, topology, sideProcesses);
+            coverage.configure(task -> task.getResultsByTopology().put(topology.getName(),
+                    topology.getGameDirectory().file(topology.getResultsFile())));
         });
     }
 
@@ -89,7 +102,20 @@ public class StageWrightPlugin implements Plugin<Project> {
                     task.getResultsFile().set(topology.getResultsFile());
                     task.getCleanWorld().set(topology.getCleanWorld());
                     task.getSceneScripts().set(topology.getSceneScripts());
+                    task.getInstallMods().from(topology.getInstallMods());
+                    task.getCompanionResultsFile().set(topology.getCompanionResultsFile());
                 });
+
+        // Resolved after evaluation and stored as a plain File, not read lazily from the companion
+        // task. The lazy version worked and then failed the configuration cache: a provider that
+        // calls back into the task graph captures a Task, and Gradle refuses to serialize one. The
+        // directory is a value; the task is not.
+        project.afterEvaluate(evaluated -> {
+            File companionDir = companionRunDirectory(evaluated, topology);
+            if (companionDir != null) {
+                provision.configure(task -> task.getCompanionGameDirectory().set(companionDir));
+            }
+        });
 
         project.getTasks().register("stagewright" + suffix, StageWrightVerdictTask.class, task -> {
             task.setGroup(TASK_GROUP);
@@ -281,6 +307,16 @@ public class StageWrightPlugin implements Plugin<Project> {
      * run directory this plugin is told about. A topology that declares no companion results has no
      * second endpoint; that is a topology whose client is not addressable, not a failure.
      */
+    /** Where a topology's companion client runs, or null if it has none — see the provision task's
+     *  {@code getCompanionGameDirectory} for why this is derived rather than declared. */
+    private File companionRunDirectory(Project project, StageWrightTopology topology) {
+        String companionName = topology.getCompanionRunTask().getOrNull();
+        if (companionName == null) return null;
+        return resolveRunTask(project, companionName) instanceof JavaExec companion
+                ? SideProcesses.runDirectoryOf(companion)
+                : null;
+    }
+
     private void holdCompanion(Project project, StageWrightTopology topology) {
         String companionName = topology.getCompanionRunTask().getOrNull();
         if (companionName == null) return;
@@ -319,6 +355,20 @@ public class StageWrightPlugin implements Plugin<Project> {
             // launched without this can be handed a path to a jar nothing has built yet.
             run.dependsOn(companion.getInputs().getFiles());
         }
+
+        // Declared, not discovered. Starting a companion means reading another run task's command
+        // line at execution time, so this task action holds a Task — which the configuration cache
+        // cannot serialize. Left undeclared, a project that enables the cache fails with Gradle's
+        // own message naming the LOADER's run task class and nothing about companions, on a build
+        // that is otherwise correct and whose verdict already printed GREEN. Saying so here costs
+        // that one task its caching and keeps the failure from being someone else's mystery.
+        //
+        // The alternative is to capture the whole command as values at configuration time and start
+        // the companion from those. That is the right end state and a bigger change than declaring
+        // this, because several of the pieces are staged by the loader plugin and only final once
+        // its own task action has run — which is the same fact that makes MOD_CLASSES late-bound.
+        run.notCompatibleWithConfigurationCache("stagewright starts a companion run from another"
+                + " task's JavaExec spec, which cannot be serialized into the configuration cache");
 
         JavaExec companionSpec = companion;
         File companionLog = new File(topology.getGameDirectory().get().getAsFile(),

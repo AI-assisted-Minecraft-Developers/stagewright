@@ -235,18 +235,36 @@ final class SideProcesses {
     }
 
     /**
-     * Environment entries staged the same late way as the classpath above — ModDevGradle's
-     * {@code getEnvironmentProperty()}, merged in the first line of its task action.
+     * Environment entries staged the same late way as the classpath above, from either build system.
+     *
+     * <p>Both stage them and neither exposes them through {@code getEnvironment()}: ModDevGradle in
+     * {@code getEnvironmentProperty()}, loom in {@code getInternalEnvironmentVars()}. Each is merged
+     * into the real environment by the first line of that task's own action — which a companion
+     * never reaches, because it is launched FROM the spec rather than by running the task.
+     *
+     * <p>Missing loom's cost a topology. Loom stages {@code MOD_CLASSES} there, and that is how
+     * NeoForge in dev learns which classes belong to which mod. Without it FML still finds the mod
+     * file — the {@code neoforge.mods.toml} is in the resources output, which IS on the classpath —
+     * so it reads the manifest, prints <i>"WorldDriver 0.1.0+1.21.1 (worlddriver)"</i> in the mod
+     * list, attaches no classes to it, finds no {@code @Mod} to construct, and carries on. A mod
+     * with no code is a legal mod. Nothing warns. The driver was simply absent from a JVM that
+     * listed it, its client probe found no API to probe, and
+     * {@code stagewrightDedicatedServerWithClientNeoforge} reported ENV with nothing to point at.
+     * The Fabric twin was unaffected throughout: fabric-loom passes the same information as a
+     * {@code -D} system property, which is on the command line and survives being copied.
+     *
+     * <p>Read both and merge rather than picking one, so a task that somehow has both is not
+     * silently half-configured.
      */
     @SuppressWarnings("unchecked")
     private static java.util.Map<String, String> lateBoundEnvironment(JavaExec spec) {
-        Object staged = readProperty(spec, "getEnvironmentProperty");
-        if (!(staged instanceof org.gradle.api.provider.MapProperty<?, ?> property)) {
-            return java.util.Map.of();
-        }
         java.util.Map<String, String> result = new java.util.LinkedHashMap<>();
-        ((java.util.Map<Object, Object>) property.get())
-                .forEach((k, v) -> result.put(String.valueOf(k), String.valueOf(v)));
+        for (String getter : new String[] {"getEnvironmentProperty", "getInternalEnvironmentVars"}) {
+            if (readProperty(spec, getter) instanceof org.gradle.api.provider.MapProperty<?, ?> p) {
+                ((java.util.Map<Object, Object>) p.get())
+                        .forEach((k, v) -> result.put(String.valueOf(k), String.valueOf(v)));
+            }
+        }
         return result;
     }
 
@@ -260,6 +278,12 @@ final class SideProcesses {
      * {@code options.txt} and {@code servers.dat} into the repository. The run is green and the
      * working tree is dirty, which is the kind of wrong that only shows up in {@code git status}.
      */
+    /** {@link #resolveWorkingDir} for callers outside the launch path — the provision task needs the
+     *  companion's run directory before anything is started, to install into it. */
+    static File runDirectoryOf(JavaExec spec) {
+        return resolveWorkingDir(spec);
+    }
+
     private static File resolveWorkingDir(JavaExec spec) {
         // ModDevGradle: a DirectoryProperty naming the game directory.
         Object gameDirectory = readProperty(spec, "getGameDirectory");

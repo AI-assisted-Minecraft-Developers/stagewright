@@ -21,11 +21,13 @@ pluginManagement {
 
 rootProject.name = 'stagewright'
 
+include 'stagewright-attached'
 include 'stagewright-api'
 include 'stagewright-common'
 include 'stagewright-fabric'
 include 'stagewright-neoforge'
 include 'stagewright-junit'
+project(':stagewright-attached').projectDir = file('attached')
 project(':stagewright-api').projectDir = file('api')
 project(':stagewright-common').projectDir = file('common')
 project(':stagewright-fabric').projectDir = file('fabric')

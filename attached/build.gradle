@@ -1,0 +1,85 @@
+// stagewright/attached — the vocabulary BOTH homes share (project name: stagewright-attached).
+//
+// A scene file's promise is that the SAME `.js` runs in-process (server thread, inline on the
+// tick) and out-of-process (its own JVM, everything over RPC). That promise is only as good as
+// the sameness, and sameness maintained by two hand-written copies is sameness that rots — the
+// design doc's own §4 example called `.isAbove(60)`, a method `Expect` has never had. So the
+// half that can be shared is shared as ONE COMPILED ARTIFACT, and drift dies at javac rather
+// than at run time in one home only.
+//
+// What lives here is exactly what is true regardless of where the code runs: the assertion
+// vocabulary, the outcome/skip/failure types, the scene options, and the Rhino plumbing that
+// turns a `.js` file into a list of scenes. What does NOT live here is anything that needs a
+// world — that is `:stagewright-api`'s SceneContext, and it stays there.
+//
+// NO MINECRAFT, NO LOADER, NO LOOM. Scoped out of the root `subprojects {}` block by name (see
+// the comment there). The CLI is a SEPARATE Gradle build with no Minecraft anywhere; if a
+// Minecraft classpath ever leaks in here, the out-of-process home simply cannot consume it.
+//
+// PACKAGE: net.magicterra.stagewright.contract — a NEW package, not a slice of
+// net.magicterra.stagewright.scene. api/build.gradle owns that package OUTRIGHT and explains
+// why: a package split across two jars is a hard java.lang.module.ResolutionException at FML
+// boot. Moving seven classes out of it while api keeps the rest would be exactly that split.
+// The cost is ~20 import lines across the workspace, paid once; the alternative is a class of
+// failure that only shows up as a dead game.
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+repositories {
+    // Non-loom module: loom is not here to auto-inject the essential repos.
+    mavenCentral()
+    maven {
+        // Rhino is not on Maven Central. Fenced to its own group for the reason the root build
+        // fences it: conformance-mods hit a repository whose domain had expired and whose parking
+        // page answered 200 to any path, and Gradle takes the first repo that answers — it black
+        // holed the nine healthy repositories declared after it and reported nine unparseable POMs.
+        url "https://maven.latvian.dev/releases"
+        content { includeGroup 'dev.latvian.mods' }
+    }
+}
+
+dependencies {
+    // compileOnly, exactly as :stagewright-common declares it, and for the same reason: inside
+    // the game Rhino is already present (worlddriver embeds it for its own script transport), so
+    // bundling a second copy into the mod jar would put two Rhino class trees on one classpath.
+    // The out-of-process home has no such provider and declares a real dependency — see
+    // cli/build.gradle. Both compile against this one coordinate, which is what keeps the two
+    // homes on the SAME interpreter; the fork matters (see the note in the design doc: DriverAccess
+    // relies on this fork's NativeObject implementing Map).
+    compileOnly "dev.latvian.mods:rhino:${rootProject.rhino_version}"
+
+    // gson, for StageWrightRpc — compileOnly for a DIFFERENT reason than Rhino, and the reason is
+    // the one that bites. This module is shadowBundled into both mod jars, and a shadowBundle of a
+    // project drags its runtime deps along; Minecraft already ships gson, so a real dependency here
+    // would put a second gson class tree inside the mod jar and let it win over the game's. Both
+    // consumers that actually TALK RPC declare their own (junit, and the CLI's fat jar), and inside
+    // the game the class is present without anybody shipping it.
+    compileOnly 'com.google.code.gson:gson:2.11.0'
+}
+
+// A thin plain-JVM library: it shades nothing and nests nothing, so the POM must declare what a
+// consumer has to resolve. Same reasoning as junit/build.gradle, and DELIBERATELY the opposite of
+// the mod-jar publications in the root build, which strip <dependency> because they Jar-in-Jar.
+// Nothing to declare today (Rhino is compileOnly and therefore correctly absent from the POM —
+// each home supplies its own).
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifactId = 'mc_stagewright-attached'
+            from components.java
+        }
+    }
+    repositories { mavenLocal() }
+}

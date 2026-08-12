@@ -1,0 +1,12 @@
+# The three NeoForge block capabilities every tech mod is built on. Shipped from the loader module
+# rather than from :stagewright-api because the api compiles against neither loader — which is also
+# why Fabric has no counterpart file: it has no platform energy standard to wrap, and a scene asking
+# for 'energy' there gets a skip that says so.
+#
+# This file and the api's must MERGE into the shadow jar, not replace one another. Shadow's default
+# is last-writer-wins per path, so `mergeServiceFiles()` in neoforge/build.gradle is load-bearing:
+# without it the jar ships one of the two and every capability in the other reports itself absent,
+# which reads exactly like an uninstalled mod.
+net.magicterra.stagewright.neoforge.caps.BlockEnergy$Provider
+net.magicterra.stagewright.neoforge.caps.BlockFluids$Provider
+net.magicterra.stagewright.neoforge.caps.BlockItems$Provider

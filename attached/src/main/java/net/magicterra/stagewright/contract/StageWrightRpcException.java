@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.junit;
+package net.magicterra.stagewright.contract;
 
 /**
  * Thrown when an RPC call returns an error envelope

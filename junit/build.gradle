@@ -34,6 +34,13 @@ dependencies {
     // the StageWright facade return types), so it is `api`, not `implementation`.
     api 'com.google.code.gson:gson:2.11.0'
 
+    // StageWrightRpc moved here from this module's own package. It is the ONE websocket client both
+    // out-of-process homes use: this one, and the CLI's attached scenes. It had already paid for
+    // fragmented frames, discarding id-less event pushes, and failing in-flight calls on close —
+    // writing a second client would mean paying for all three again, differently, and then having
+    // two clients whose behaviour under a flaky socket has to be compared by hand.
+    api project(':stagewright-attached')
+
     // StageWrightExtension implements JUnit 5 BeforeAllCallback + ParameterResolver in the
     // MAIN source set, and third-party tests @ExtendWith(StageWrightExtension.class) against
     // it, so junit-jupiter-api must be a MAIN (api) dependency — not test-only. The

@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.junit;
+package net.magicterra.stagewright.contract;
 
 /**
  * Thrown when a bounded wait elapses: an RPC {@code call} exceeds its timeout, or

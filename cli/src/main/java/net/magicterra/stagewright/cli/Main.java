@@ -11,6 +11,12 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import net.magicterra.stagewright.contract.AttachedRun;
+import net.magicterra.stagewright.contract.DriverBinding;
+import net.magicterra.stagewright.contract.RpcDriverBinding;
+import net.magicterra.stagewright.contract.SceneSpec;
+import net.magicterra.stagewright.contract.Scripts;
+import net.magicterra.stagewright.contract.StageWrightRpc;
 import net.magicterra.stagewright.engine.Manifest;
 import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.Verdict;
@@ -63,6 +69,8 @@ public final class Main {
                 systemProps.add(a);
             } else if ("--no-install".equals(a)) {
                 opts.put("no-install", "true");
+            } else if ("--online".equals(a)) {
+                opts.put("online", "true");
             } else if ("--mod".equals(a)) {
                 if (i + 1 >= args.length) throw new IllegalArgumentException(a + " needs a value");
                 extraMods.add(Path.of(args[++i]).toAbsolutePath().normalize());
@@ -73,6 +81,13 @@ public final class Main {
                 throw new IllegalArgumentException("unexpected argument '" + a + "'");
             }
         }
+
+        // Judged from files alone, so it runs no game and needs no --game-dir. It is a separate
+        // invocation rather than a step of a run because the runs it reconciles are separate
+        // invocations: a dedicated server and a headless client are two processes that cannot see
+        // each other, and the question "did anything ever execute this scene" only has an answer
+        // once both have finished.
+        if (opts.containsKey("coverage")) return coverage(opts.get("coverage"));
 
         Path gameDir = Path.of(require(opts, "game-dir")).toAbsolutePath().normalize();
         if (!Files.isDirectory(gameDir)) {
@@ -86,7 +101,7 @@ public final class Main {
                 String.valueOf(DEFAULT_TIMEOUT_MINUTES)));
 
         Consumer<String> log = line -> System.out.println("[stagewright] " + line);
-        RunDirectory.provision(gameDir, resultsName, !"false".equals(opts.get("clean-world")),
+        RunDirectory.provision(gameDir, List.of(results), !"false".equals(opts.get("clean-world")),
                 scenes, log);
 
         // Resolved once, before anything needs it. Detection is right for a server pack, which
@@ -103,8 +118,12 @@ public final class Main {
             return runServerWithClient(gameDir, results, opts, systemProps, extraMods,
                     timeoutMinutes, loader, log);
         }
-        if (opts.containsKey("headlessmc")) {
+        if (opts.containsKey("headlessmc") || opts.containsKey("display-client")) {
             return runClient(gameDir, results, opts, systemProps, timeoutMinutes, loader, log);
+        }
+
+        if (opts.containsKey("attached")) {
+            return runAttached(gameDir, results, opts, systemProps, timeoutMinutes, loader);
         }
 
         Path runLog = gameDir.resolve("stagewright-run.log");
@@ -164,20 +183,23 @@ public final class Main {
         // The client half gets what the server half got, minus the scenes. It never arms a harness,
         // so a scene file there is dead weight at best; at worst it is a second suite nobody asked
         // for, writing over the results this run is going to be judged on.
-        RunDirectory.provision(clientDir, results.getFileName().toString(),
+        RunDirectory.provision(clientDir, List.of(clientDir.resolve(results.getFileName())),
                 !"false".equals(opts.get("clean-world")), null, log);
         if (!opts.containsKey("no-install")) {
             ModInstall.install(clientDir, loader, extraMods, log);
         }
 
         String address = "127.0.0.1:" + serverPort(gameDir);
+        // The joining client stays offline: it only has to be a second process on the wire, and an
+        // account would make this topology need one on every box that runs the gate.
         HeadlessClient.writeConfig(clientDir, clientDir,
-                List.of("-Dstagewright.client.connect=" + address), log);
+                List.of("-Dstagewright.client.connect=" + address), true, log);
         // Before the server starts, not after: a cold client directory downloads Minecraft here, and
         // minutes of that with a server already up would be minutes of the run's own timeout spent
         // on a server idling for a player that is still being installed.
+        List<String> launcherJvm = launcherJvm(opts, log);
         String versionId = HeadlessClient.installLoader(hmcJar, clientDir, clientDir, javaBinary,
-                loader, require(opts, "mc-version"), log);
+                loader, require(opts, "mc-version"), launcherJvm, log);
 
         Path runLog = gameDir.resolve("stagewright-run.log");
         Process server = startServer(gameDir, opts, systemProps,
@@ -185,7 +207,8 @@ public final class Main {
         Process client = null;
         try {
             log.accept("client half joining " + address);
-            client = HeadlessClient.launch(hmcJar, clientDir, javaBinary, versionId, log);
+            client = HeadlessClient.launch(hmcJar, clientDir, javaBinary, versionId, null,
+                    launcherJvm, log);
             if (!server.waitFor(timeoutMinutes, TimeUnit.MINUTES)) {
                 System.err.println("[stagewright] the run exceeded " + timeoutMinutes
                         + " minutes and was killed — see " + runLog + " for the server and "
@@ -293,32 +316,70 @@ public final class Main {
                                  List<String> systemProps, int timeoutMinutes, String loader,
                                  Consumer<String> log)
             throws IOException, InterruptedException {
-        Path hmcJar = headlessMcJar(opts);
         String javaBinary = javaBinary(opts);
-        if (loader == null) {
-            throw new IllegalArgumentException("nothing in " + gameDir + " says which loader to"
-                    + " install — pass --loader neoforge|fabric (a fresh client game dir has no"
-                    + " loader in it yet, which is normal for a first run)");
-        }
-
         List<String> props = new ArrayList<>(systemProps);
         props.add("-Dstagewright.autorun=true");
         props.add("-Dstagewright.client.world=" + opts.getOrDefault("world", "stagewright"));
-        HeadlessClient.writeConfig(gameDir, gameDir, props, log);
-
-        String versionId = HeadlessClient.installLoader(hmcJar, gameDir, gameDir, javaBinary,
-                loader, require(opts, "mc-version"), log);
-        Process hmc = HeadlessClient.launch(hmcJar, gameDir, javaBinary, versionId, log);
 
         Path hmcLog = gameDir.resolve("stagewright-headlessmc.log");
-        boolean finished = awaitDoneFooter(results, timeoutMinutes, hmc);
+        Process hmc;
+        if (opts.containsKey("display-client")) {
+            // Launch the installed client ourselves, on the real display. HeadlessMC's own launch is
+            // always -lwjgl (its offline account forces it), and a modpack's resource reload does not
+            // survive that — see ClientLaunch. Installing is still its job; this only takes over the
+            // launch, reading the version JSON it wrote.
+            List<String> command = ClientLaunch.command(gameDir, opts.get("display-client"),
+                    javaBinary, props);
+            log.accept("launching the installed client " + opts.get("display-client")
+                    + " on the real display");
+            hmc = new ProcessBuilder(command)
+                    .directory(gameDir.toFile())
+                    .redirectErrorStream(true)
+                    .redirectOutput(hmcLog.toFile())
+                    .start();
+        } else {
+            Path hmcJar = headlessMcJar(opts);
+            if (loader == null) {
+                throw new IllegalArgumentException("nothing in " + gameDir + " says which loader to"
+                        + " install — pass --loader neoforge|fabric (a fresh client game dir has no"
+                        + " loader in it yet, which is normal for a first run)");
+            }
+            // "" means "whatever account HeadlessMC has selected"; null means run offline.
+            String account = opts.containsKey("account") ? opts.get("account")
+                    : opts.containsKey("online") ? "" : null;
+            HeadlessClient.writeConfig(gameDir, gameDir, props, account == null, log);
+            List<String> launcherJvm = launcherJvm(opts, log);
+            String versionId = HeadlessClient.installLoader(hmcJar, gameDir, gameDir, javaBinary,
+                    loader, require(opts, "mc-version"), launcherJvm, log);
+            hmc = HeadlessClient.launch(hmcJar, gameDir, javaBinary, versionId, account,
+                    launcherJvm, log);
+        }
+
+        Waited waited = awaitDoneFooter(results, timeoutMinutes, hmc);
         kill(hmc);
-        if (!finished) {
+        if (waited == Waited.TIMED_OUT) {
             System.err.println("[stagewright] the client run did not finish within " + timeoutMinutes
-                    + " minutes — see " + hmcLog + " and " + gameDir.resolve("logs/latest.log"));
+                    + " minutes and was still alive — see " + hmcLog + " and "
+                    + gameDir.resolve("logs/latest.log"));
+        } else if (waited == Waited.PROCESS_DIED) {
+            System.err.println("[stagewright] the client process exited before the suite finished."
+                    + " This is a crash, not a slow run: look for a report under "
+                    + gameDir.resolve("crash-reports") + " first, then " + hmcLog + ".");
+            // A 450-mod pack found this within three minutes, so it is named rather than left to be
+            // rediscovered: -lwjgl stubs every LWJGL call, so a mod that reads actual pixels while
+            // loading (Supplementaries reading a palette strip through Moonlight, for one) sees an
+            // all-zero image and throws. Nothing on our side can fix that — it is the price of a
+            // client with no display, and the choice is to drop the mod from the client topology or
+            // to run the client somewhere with a real GL context.
+            System.err.println("[stagewright] under -lwjgl every LWJGL call is a stub, so a mod that"
+                    + " reads image pixels during load crashes on an all-zero image. If the report"
+                    + " names one, that mod cannot be in a headless client run.");
         }
         return judge(gameDir, results, opts, hmcLog);
     }
+
+    /** How a wait for the client's done footer ended. The three are not interchangeable. */
+    private enum Waited { DONE, PROCESS_DIED, TIMED_OUT }
 
     /**
      * Wait for the suite to write its done footer, or for HeadlessMC to die first.
@@ -326,20 +387,28 @@ public final class Main {
      * <p>Polled rather than watched: the file is appended to by another process on another
      * filesystem path, and a second of latency on a run measured in minutes buys nothing worth the
      * complication of a watch service.
+     *
+     * <p><b>Which of the two failures happened is reported, because they send you to different
+     * places.</b> This returned a bare boolean once, and the caller printed "did not finish within 90
+     * minutes" for a client that had crashed in three — a confident, well-phrased sentence pointing
+     * at a budget that was never the problem, and sending the reader to look for a slow run instead
+     * of a crash report sitting right there.
      */
-    private static boolean awaitDoneFooter(Path results, int timeoutMinutes, Process hmc)
+    private static Waited awaitDoneFooter(Path results, int timeoutMinutes, Process hmc)
             throws IOException, InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(timeoutMinutes);
         while (System.nanoTime() < deadline) {
             if (Files.isRegularFile(results)) {
                 for (String line : Files.readAllLines(results, java.nio.charset.StandardCharsets.UTF_8)) {
-                    if (line.contains("\"type\":\"done\"")) return true;
+                    if (line.contains("\"type\":\"done\"")) return Waited.DONE;
                 }
             }
-            if (!hmc.isAlive()) return false;
+            // Checked AFTER the file, not before: a client that writes its footer and exits in the
+            // same second would otherwise be reported as having died with nothing to show.
+            if (!hmc.isAlive()) return Waited.PROCESS_DIED;
             Thread.sleep(1000);
         }
-        return false;
+        return Waited.TIMED_OUT;
     }
 
     /**
@@ -369,10 +438,194 @@ public final class Main {
 
         List<String> command = new ArrayList<>();
         command.add(base.get(0));
-        command.add("-Dstagewright.autorun=true");
+        command.addAll(armingProps(opts, gameDir));
         command.addAll(systemProps);
         command.addAll(base.subList(1, base.size()));
         return command;
+    }
+
+    /**
+     * How this run arms the harness: autorun, or hold.
+     *
+     * <p>They are mutually exclusive and the reason is not a policy choice. An autorun suite calls
+     * {@code server.halt(false)} the moment its scenes drain — which takes the endpoint down
+     * underneath anything attached to it, mid-call. So a run with out-of-process scenes must hold:
+     * the server arms, publishes its endpoint descriptor, and waits to be told to run.
+     */
+    private static List<String> armingProps(Map<String, String> opts, Path gameDir) {
+        if (!opts.containsKey("attached")) return List.of("-Dstagewright.autorun=true");
+        return List.of("-Dstagewright.hold=true",
+                "-Dstagewright.endpoint=" + gameDir.resolve(RunDirectory.ENDPOINT_FILE).toAbsolutePath());
+    }
+
+    /**
+     * The out-of-process topology: hold the server open and drive it from this JVM.
+     *
+     * <p>The order is the whole design and it is not interchangeable. Attached scenes run FIRST,
+     * before {@code mc.test.run}, because the in-process suite pins the world for its own duration
+     * ({@code WorldPin.applySuite} … {@code release}) — an attached scene sandwiched inside that
+     * would be asserting against a world that is being changed around it, and the failure would
+     * point at the scene rather than at the ordering.
+     *
+     * <p>Then the in-process suite is triggered and this JVM waits for the done footer, exactly as
+     * the plain topology waits for the process to exit. And then the server is KILLED rather than
+     * asked to leave: a hold has no self-terminating path (its whole contract is outliving its
+     * suite), and unlike the Gradle chain — where nobody owns the process and a hidden
+     * {@code mc.test.end} verb would be needed — this CLI started it and owns the process tree.
+     * Killing what you launched is not a workaround here; it is the same shutdown path a timeout
+     * already uses, and it cannot leave an orphan holding the port.
+     */
+    private static int runAttached(Path gameDir, Path results, Map<String, String> opts,
+                                   List<String> systemProps, int timeoutMinutes, String loader)
+            throws IOException, InterruptedException {
+        Path attachedDir = Path.of(opts.get("attached")).toAbsolutePath().normalize();
+        Path attachedResults = gameDir.resolve("stagewright-attached-results.jsonl");
+        Path endpoint = gameDir.resolve(RunDirectory.ENDPOINT_FILE);
+        Path runLog = gameDir.resolve("stagewright-run.log");
+        Files.deleteIfExists(attachedResults);
+
+        Process game = startServer(gameDir, opts, systemProps, List.of(), runLog);
+        int attachedCode;
+        try {
+            EndpointDescriptor descriptor = awaitEndpoint(endpoint, game, runLog, timeoutMinutes);
+            if (descriptor == null) {
+                System.err.println("[stagewright] ENV — the held server never published "
+                        + endpoint + ", so there was nothing to attach to. See " + runLog);
+                return 3;
+            }
+            System.out.println("[stagewright] attached to " + descriptor.wsUri()
+                    + " (topology " + descriptor.topology() + ", loader " + descriptor.loader() + ")");
+
+            try (StageWrightRpc rpc = attach(descriptor.wsUri())) {
+                DriverBinding binding = new RpcDriverBinding(rpc, 60_000);
+                List<SceneSpec> specs = Scripts.load(attachedDir,
+                        // No extra globals: out here `driver` is the ONLY door to the game, and it is
+                        // installed as a plain Java object below rather than as a script-visible
+                        // reflection surface. A second door would be a verb one home has.
+                        (cx, scope, fileName) -> { },
+                        line -> System.out.println("[stagewright] " + line));
+                AttachedRun run = new AttachedRun(specs, binding,
+                        descriptor.loader() != null ? descriptor.loader() : loader,
+                        line -> System.out.println("[stagewright] " + line),
+                        System::currentTimeMillis);
+                attachedCode = run.run(attachedResults) ? 0 : 1;
+
+                // Now the in-process half, on the same live server.
+                System.out.println("[stagewright] triggering the in-process suite (mc.test.run)");
+                binding.route("mc.test.run", java.util.Map.of());
+                Waited waited = awaitDoneFooter(results, timeoutMinutes, game);
+                if (waited == Waited.TIMED_OUT) {
+                    System.err.println("[stagewright] the in-process suite did not finish within "
+                            + timeoutMinutes + " minutes and the server was still alive — see " + runLog);
+                } else if (waited == Waited.PROCESS_DIED) {
+                    System.err.println("[stagewright] the server exited before the in-process suite"
+                            + " finished — see " + runLog);
+                }
+            }
+        } finally {
+            game.destroyForcibly();
+            game.waitFor(30, TimeUnit.SECONDS);
+        }
+
+        int inProcess = judge(gameDir, results, opts, runLog);
+        // Worst-wins across the two files, the same rule the companion client already gets:
+        // GREEN 0 < RED 1 < DEAD 2 < ENV 3. Reporting only the in-process verdict would let a red
+        // attached half ride home on a green suite.
+        int worst = Math.max(inProcess, attachedCode);
+        System.out.println("[stagewright] ATTACHED VERDICT: " + (attachedCode == 0 ? "GREEN" : "RED")
+                + "  (" + attachedResults + ")");
+        System.out.println("[stagewright] VERDICT: " + (worst == 0 ? "GREEN" : "RED"));
+        return worst;
+    }
+
+    /**
+     * Connect to the driver's socket, retrying until it answers.
+     *
+     * <p>The descriptor appearing means the port is KNOWN, not that the socket is ready to complete a
+     * handshake. The two are the same instant on a small pack and minutes apart on a large one: on
+     * All the Mods 10 the first attempt timed out after thirty seconds while the server was still
+     * working through 450 mods' worth of start-up, and a single-shot connect turned "the pack is
+     * slow" into "the attach contract is broken".
+     *
+     * <p>Retried rather than given a longer single timeout because the two failures need different
+     * answers. A refused connection means nothing is listening yet — try again shortly. A handshake
+     * that hangs means something IS listening and is too busy to answer, which is also worth trying
+     * again. Neither is worth a five-minute stall inside one attempt.
+     */
+    private static StageWrightRpc attach(String wsUri) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + ATTACH_BUDGET_MS;
+        RuntimeException last = null;
+        int attempt = 0;
+        while (System.currentTimeMillis() < deadline) {
+            attempt++;
+            try {
+                return StageWrightRpc.connect(wsUri, ATTACH_ATTEMPT_MS);
+            } catch (RuntimeException e) {
+                last = e;
+                System.out.println("[stagewright] attach attempt " + attempt + " did not take ("
+                        + e.getMessage() + ") — the pack is probably still starting; retrying");
+                Thread.sleep(5_000);
+            }
+        }
+        throw last != null ? last : new IllegalStateException("could not attach to " + wsUri);
+    }
+
+    /** Total time to keep trying to attach, and how long any one attempt may hang. */
+    private static final long ATTACH_BUDGET_MS = 5 * 60_000L;
+    private static final long ATTACH_ATTEMPT_MS = 20_000L;
+
+    /**
+     * The string the game logs when it was asked for an endpoint and cannot produce one.
+     *
+     * <p>Log-scraping, which is usually a bad idea — but this is OUR line, emitted by OUR mod, and it
+     * is the difference between failing in thirty seconds with the cause and failing in an hour with
+     * "never published". The alternative was waiting out {@code --timeout}: on the first real
+     * {@code --attached} run against a pack with no driver, the game printed the exact diagnosis at
+     * second thirty and the CLI would have sat there for the remaining fifty-nine and a half minutes
+     * before reporting something vaguer.
+     */
+    private static final String NO_DRIVER_MARKER = "-Dstagewright.endpoint asked for an endpoint";
+
+    /**
+     * Poll for the held server's endpoint descriptor.
+     *
+     * <p>Gives up early on either of the two things that mean it will never arrive: the process died,
+     * or the game said it cannot publish one. Everything else is just a slow pack booting.
+     */
+    private static EndpointDescriptor awaitEndpoint(Path endpoint, Process game, Path runLog,
+                                                    int timeoutMinutes)
+            throws InterruptedException, IOException {
+        long deadline = System.currentTimeMillis() + timeoutMinutes * 60_000L;
+        while (System.currentTimeMillis() < deadline) {
+            if (Files.isRegularFile(endpoint)) {
+                EndpointDescriptor d = EndpointDescriptor.read(endpoint);
+                if (d != null) return d;
+            }
+            if (!game.isAlive()) return null;
+            if (saidItCannotPublish(runLog)) {
+                System.err.println("[stagewright] ENV — this pack has no driver, so there is no RPC"
+                        + " socket to attach to and --attached cannot run here. The game said so"
+                        + " itself: it armed, held, and then reported that worlddriver-rpc.port does"
+                        + " not exist.");
+                System.err.println("  --scenes needs no driver (in-process scenes use StageWright's"
+                        + " own SceneContext); --attached does, because out of process the driver's"
+                        + " RPC surface is the ONLY way into the game.");
+                System.err.println("  Add one with --mod <worlddriver jar>, or drop --attached.");
+                return null;
+            }
+            Thread.sleep(1000);
+        }
+        return null;
+    }
+
+    private static boolean saidItCannotPublish(Path runLog) {
+        if (!Files.isRegularFile(runLog)) return false;
+        try (java.util.stream.Stream<String> lines =
+                     Files.lines(runLog, java.nio.charset.StandardCharsets.ISO_8859_1)) {
+            return lines.anyMatch(l -> l.contains(NO_DRIVER_MARKER));
+        } catch (IOException e) {
+            return false;   // the log is being written to; try again next second
+        }
     }
 
     private static int judge(Path gameDir, Path results, Map<String, String> opts, Path log)
@@ -408,6 +661,75 @@ public final class Main {
         return verdict.code();
     }
 
+    /**
+     * Reconcile several finished runs against each other and report what nothing ever executed.
+     *
+     * <p>A missing input is ENV (3) rather than RED (1), on the same rule the rest of this CLI holds
+     * to: "the run whose results I was told to read did not happen" must not be reported as "your
+     * scenes are broken". It also cannot be quietly tolerated — dropping an unreadable file would
+     * narrow the union of executed scenes and turn a missing run into extra UNCOVERED findings
+     * against runs that were fine.
+     */
+    private static int coverage(String spec) throws IOException {
+        List<net.magicterra.stagewright.engine.Coverage.Run> runs = new ArrayList<>();
+        for (String part : spec.split(",")) {
+            String trimmed = part.trim();
+            if (trimmed.isEmpty()) continue;
+            Path file = Path.of(trimmed).toAbsolutePath().normalize();
+            if (!Files.isRegularFile(file)) {
+                System.err.println("stagewright: --coverage names " + file + ", which does not exist."
+                        + " Every run being reconciled must have finished and written its results.");
+                return 3;
+            }
+            List<String> warnings = new ArrayList<>();
+            List<Map<String, Object>> records = Verdict.parse(file, warnings);
+            warnings.forEach(w -> System.out.println("[stagewright] " + w));
+            // The whole path from wherever this was invoked, not the last two segments: two loaders'
+            // run directories are named identically by design, so a short label prints
+            // 'run-dogfood/stagewright-results.jsonl' twice and the report cannot say which of them
+            // is missing the scene.
+            Path here = Path.of("").toAbsolutePath();
+            String label = file.startsWith(here)
+                    ? here.relativize(file).toString().replace(File.separatorChar, '/')
+                    : file.toString();
+            runs.add(new net.magicterra.stagewright.engine.Coverage.Run(label, records));
+        }
+        net.magicterra.stagewright.engine.Coverage.Result result =
+                net.magicterra.stagewright.engine.Coverage.judge(runs);
+        result.report().forEach(line -> System.out.println("[stagewright] " + line));
+        System.out.println("[stagewright] COVERAGE VERDICT: " + (result.code() == 0 ? "GREEN" : "RED"));
+        return result.code();
+    }
+
+    /**
+     * JVM arguments for the HeadlessMC process itself — not for the game.
+     *
+     * <p>It exists for one reason so far, and the reason is worth stating: <b>Java does not read
+     * {@code HTTPS_PROXY}.</b> On a box where every other tool works through a proxy set in the
+     * environment, the launcher alone goes direct, and what comes back eight minutes later is
+     * "Failed to login with device code: HTTP connect timed out" — a message about Microsoft that is
+     * really a message about this JVM. So an environment proxy with no {@code -D} to match is
+     * warned about by name rather than left to be rediscovered.
+     */
+    private static List<String> launcherJvm(Map<String, String> opts, Consumer<String> log) {
+        List<String> out = new ArrayList<>();
+        if (opts.containsKey("launcher-jvm")) {
+            for (String arg : opts.get("launcher-jvm").split("\s+")) {
+                if (!arg.isBlank()) out.add(arg);
+            }
+        }
+        boolean declared = out.stream().anyMatch(a -> a.startsWith("-Dhttps.proxy")
+                || a.startsWith("-Dhttp.proxy") || a.contains("useSystemProxies"));
+        String env = System.getenv("HTTPS_PROXY");
+        if (env == null) env = System.getenv("https_proxy");
+        if (!declared && env != null && !env.isBlank()) {
+            log.accept("WARNING: HTTPS_PROXY=" + env + " is set, and Java ignores it. HeadlessMC will"
+                    + " connect directly and time out on Microsoft's endpoints. Pass"
+                    + " --launcher-jvm \"-Dhttps.proxyHost=<host> -Dhttps.proxyPort=<port>\".");
+        }
+        return out;
+    }
+
     private static String require(Map<String, String> opts, String key) {
         String value = opts.get(key);
         if (value == null) throw new IllegalArgumentException("--" + key + " is required");
@@ -422,6 +744,19 @@ public final class Main {
 
                   --game-dir <dir>    the pack's server directory (holds mods/ and config/)
                   --scenes <dir>      .js scene files to install into config/stagewright/scenes
+                  --attached <dir>    .js scene files run OUT of process, from this JVM over RPC.
+                                      Needs a driver in the pack (worlddriver provides the RPC
+                                      socket); --scenes does not, because in-process scenes talk to
+                                      StageWright's own SceneContext. Switches the run to a HOLD:
+                                      an autorun suite halts the server when it drains, which would
+                                      take the socket down underneath the attached half mid-call.
+                                      Attached scenes run first, then the in-process suite; both
+                                      results are judged, worst wins.
+                  --coverage <files>  judge nothing but coverage: comma-separated results files from
+                                      runs that have already finished, RED if any scene they register
+                                      executed in none of them. Runs no game and takes no --game-dir.
+                                      A scene skipping is fine in one run and a hole across all of
+                                      them, which is a question no single run can be asked.
                   --expect <file>     expected-scenes manifest to reconcile against
                   --results <name>    results file name (default stagewright-results.jsonl)
                   --timeout <min>     kill the run after this long (default 45)
@@ -429,7 +764,31 @@ public final class Main {
                   --mod <jar>         also install this mod (repeatable — e.g. the driver whose
                                       verbs your scenes call)
                   --no-install        do not touch mods/; the pack already has what it needs
-                  --headlessmc <jar>  run a CLIENT topology through this headlessmc-launcher jar
+                  --headlessmc <jar>  run a CLIENT topology through this headlessmc-launcher jar.
+                                      It installs the loader and the assets itself. Without an
+                                      account it launches -lwjgl, which stubs every LWJGL call:
+                                      fine for a mod, NOT fine for a modpack, where a mod that reads
+                                      image pixels while loading crashes on the all-zero image and
+                                      takes mod loading down with it.
+                  --online            launch with the account you logged into HeadlessMC with,
+                                      instead of an offline one. This is also what gets you a
+                                      RENDERING client: offline forces the LWJGL stub, so a real
+                                      account is the only way that launcher produces a real GL
+                                      context. Log in yourself, once, in the game dir:
+                                        java -jar headlessmc-launcher.jar --command
+                                        > login <your-email>      (or: login -webview)
+                                        > account                 (lists them; account <id> picks)
+                  --account <id>      as --online, but make this account primary first
+                  --launcher-jvm "<args>"
+                                      JVM args for the HeadlessMC process itself, not the game.
+                                      Java ignores HTTPS_PROXY, so behind a proxy this is how the
+                                      launcher reaches Microsoft:
+                                        --launcher-jvm "-Dhttps.proxyHost=10.0.0.1 -Dhttps.proxyPort=7873"
+                  --display-client <version>
+                                      the other way to a rendering client: launch what is ALREADY
+                                      installed in --game-dir under this version id, ourselves, with
+                                      no launcher and no account. Needs a display — Xvfb on a
+                                      headless box.
                   --mc-version <ver>  Minecraft version to install a loader for (with --headlessmc)
                   --loader <name>     neoforge|fabric to install; detected when the dir already says
                   --world <name>      singleplayer world the client creates (default stagewright)

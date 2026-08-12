@@ -30,6 +30,16 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
     modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
 
+    // A PLAIN project dependency, not the `namedElements` / `transformProduction*` pair the other
+    // two use: those are loom configurations, and :stagewright-attached is deliberately not a loom
+    // module (no Minecraft to remap, so nothing to name or transform). Asking a non-loom project for
+    // a loom configuration fails at configuration time.
+    //
+    // It must still be BUNDLED. Its classes are on the api's public surface, so a mod jar shipping
+    // without them boots and then dies the first time a scene calls expect().
+    compileOnly project(':stagewright-attached')
+    shadowBundle project(':stagewright-attached')
+
     common(project(path: ':stagewright-api', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':stagewright-api', configuration: 'transformProductionFabric')
 
@@ -48,6 +58,12 @@ processResources {
 shadowJar {
     configurations = [project.configurations.shadowBundle]
     archiveClassifier = 'dev-shadow'
+    // Load-bearing. Capability providers arrive through META-INF/services, and that path now exists
+    // in BOTH :stagewright-api (the shipped Curios/FTB Quests adapters) and this module. Shadow's
+    // default is last-writer-wins per path, so without this the jar ships one file and every
+    // provider in the other reports itself absent — which is indistinguishable from an uninstalled
+    // mod, and would be found by a scene skipping for a reason that is not true.
+    mergeServiceFiles()
 }
 
 remapJar {

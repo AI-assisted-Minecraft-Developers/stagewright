@@ -1,5 +1,8 @@
 package net.magicterra.stagewright.scene;
 
+import net.magicterra.stagewright.contract.Clock;
+import net.magicterra.stagewright.contract.Terrain;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -41,6 +44,32 @@ public @interface SceneDef {
      *  to — ask for {@link Clock#NOON} when daylight is the subject, {@link Clock#RUNNING} when the
      *  passage of time is. */
     Clock clock() default Clock.MIDNIGHT;
+
+    /**
+     * Run this scene's arena in a dimension another mod registers, e.g.
+     * {@code "twilightforest:twilight_forest"}. Empty (the default) means the run's own world.
+     *
+     * <p>Mutually exclusive with {@link #terrain()} — a terrain IS a dimension StageWright ships, so
+     * asking for both asks for the arena to be in two places, and {@link Scene} rejects it at
+     * construction rather than silently honouring one.
+     *
+     * <p>A dimension that is not present reports a recorded SKIP naming it, not a failure: the mod
+     * that owns it is simply not in this runtime. That is the opposite of a missing {@code terrain}
+     * dimension, which means StageWright's own datapack failed to load and is an ENV_FAIL.
+     */
+    String dimension() default "";
+
+    /**
+     * This scene's subject IS the skip: it asks for something this runtime does not have and the
+     * recorded SKIP is the assertion. The verdict then requires it, and calls the run DEAD if the
+     * scene executes instead.
+     *
+     * <p>Only for scenes that can never be satisfied where they live — a {@code nosuchmod:} id, a
+     * facet whose mod the suite's own runtime deliberately excludes. <b>Not</b> a way to excuse a
+     * scene that skips because the topology is thin: that scene should execute somewhere, and
+     * marking it here would suppress exactly the coverage report that would have said so.
+     */
+    boolean mustSkip() default false;
 
     /** Free-form labels for {@code -Dstagewright.filter}. Not part of the name, not reconciled. */
     String[] tags() default {};

@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.scene;
+package net.magicterra.stagewright.contract;
 
 /**
  * The ground a scene's arena stands on.

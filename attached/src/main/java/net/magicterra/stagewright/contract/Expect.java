@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.scene;
+package net.magicterra.stagewright.contract;
 
 import java.util.Collection;
 import java.util.Map;
@@ -7,8 +7,8 @@ import java.util.function.Predicate;
 /**
  * One assertion, in hard or soft mode.
  *
- * <p>Hard ({@link SceneContext#expect}) throws {@link SceneFailure} on the first violation, ending
- * the scene. Soft ({@link SceneContext#check}) records the violation and returns, so a body that
+ * <p>Hard ({@code SceneContext.expect}) throws {@link SceneFailure} on the first violation, ending
+ * the scene. Soft ({@code SceneContext.check}) records the violation and returns, so a body that
  * probes twenty blocks reports all twenty offenders instead of the first — and the scene still
  * fails, at the end, with every violation in one message.
  *
@@ -16,15 +16,23 @@ import java.util.function.Predicate;
  * failure {@code reason} is the only diagnostic channel that reliably survives, because the async
  * logger drops bursts exactly when a long suite is finishing. An assertion that says "expected true"
  * has thrown away the evidence.
+ *
+ * <p><b>This is the only copy.</b> It reports through {@link SceneReport}, which both the in-process
+ * {@code SceneContext} and the out-of-process runner implement, so the same assertion means the same
+ * thing in both homes and a method that exists in one exists in the other by construction. The
+ * alternative — one implementation per home — was tried on paper and produced a design document
+ * whose own example called {@code .isAbove(60)}, which has never existed.
  */
 public final class Expect {
 
-    private final SceneContext ctx;
+    private final SceneReport ctx;
     private final boolean soft;
     private final Object actual;
     private String label;
 
-    Expect(SceneContext ctx, boolean soft, Object actual) {
+    /** Public because the two homes construct it from their own packages. Scene authors never do —
+     *  they arrive here through {@code expect(...)} / {@code check(...)}. */
+    public Expect(SceneReport ctx, boolean soft, Object actual) {
         this.ctx = ctx;
         this.soft = soft;
         this.actual = actual;

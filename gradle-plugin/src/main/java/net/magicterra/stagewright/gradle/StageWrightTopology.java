@@ -123,6 +123,32 @@ public abstract class StageWrightTopology implements Named {
     public abstract Property<Boolean> getVirtualDisplay();
 
     /**
+     * Jars to install into the run directory's {@code mods/} folder before the game starts.
+     * Optional.
+     *
+     * <p>Point this at the StageWright loader jar — normally a configuration, so the version comes
+     * from the dependency block like everything else:
+     *
+     * <pre>{@code
+     * dependencies { stagewrightRuntime "net.magicterra:mc_stagewright-neoforge:0.1.0+1.21.1" }
+     * stagewright { topologies { dedicatedServer { installMods.from configurations.stagewrightRuntime } } }
+     * }</pre>
+     *
+     * <p><b>Not optional in practice for ModDevGradle consumers.</b> Under architectury-loom,
+     * {@code modLocalRuntime} already puts a mod jar in front of FML and this can stay empty. MDG has
+     * no equivalent — its dev run assumes the only mod is yours — and adding the harness to the
+     * runtime classpath instead does NOT work: FML claims it as a plain game library, the mod never
+     * appears in the mod list, and the run boots, ticks, writes no results and reports "the game
+     * never armed" over a log with no error in it.
+     *
+     * <p>{@link net.magicterra.stagewright.engine.ModInstall} does the work, so these are the same
+     * rules the CLI applies to a modpack: a previous install's jars are swept first, because the
+     * versioned filenames mean an upgrade otherwise lands beside its predecessor and the loader arms
+     * the stale one.
+     */
+    public abstract org.gradle.api.file.ConfigurableFileCollection getInstallMods();
+
+    /**
      * A checked-in directory of {@code .js} scene files, installed into the run directory's
      * {@code config/stagewright/scenes} before the game starts. Optional.
      *

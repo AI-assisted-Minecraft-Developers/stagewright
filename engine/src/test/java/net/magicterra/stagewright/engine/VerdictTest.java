@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -58,6 +59,21 @@ class VerdictTest {
         rec.put("outcome", outcome);
         rec.put("ticks", 1);
         rec.put("wallMs", 10);
+        return rec;
+    }
+
+    /** A scene that resolved without testing its subject. PASS, like the writers produce. */
+    private static Map<String, Object> skipped(String name, String why) {
+        Map<String, Object> rec = scene(name, "PASS");
+        rec.put("skipped", true);
+        rec.put("reason", "skipped: " + why);
+        return rec;
+    }
+
+    /** The same, written by a harness predating the {@code skipped} field — the prose prefix only. */
+    private static Map<String, Object> legacySkip(String name, String why) {
+        Map<String, Object> rec = scene(name, "PASS");
+        rec.put("reason", "skipped: " + why);
         return rec;
     }
 
@@ -159,6 +175,68 @@ class VerdictTest {
     void anOmittedSwallowCanaryIsGreen() {
         Verdict.Result result = Verdict.judge(records(suite(reg("cs", "MUST_SWALLOW")), done(0)), null);
         assertEquals(0, result.code());
+    }
+
+    // ---- skips: green, but never evidence ------------------------------------------------------
+
+    @Test
+    void aSkipIsGreenButIsNotReportedAsAPass() {
+        Verdict.Result result = Verdict.judge(
+                records(suite(reg("a"), reg("b")), scene("a", "PASS"),
+                        skipped("b", "no connected player"), done(2)), null);
+        assertEquals(0, result.code());
+        assertTrue(reports(result, "skip: 'b'"));
+        assertFalse(reports(result, "pass: 'b'"));
+        assertTrue(reports(result, "COVERAGE: 1 scene(s) executed, 1 skipped"));
+    }
+
+    @Test
+    void aSkipFromBeforeTheFieldExistedIsStillASkip() {
+        // The results files on disk when the field was added carry only the reason prefix. Reading
+        // just the field would report every skip in them as a scene that ran, and the direction that
+        // error moves in is toward a green that claims coverage it never had.
+        Verdict.Result result = Verdict.judge(
+                records(suite(reg("b")), legacySkip("b", "no connected player"), done(1)), null);
+        assertEquals(0, result.code());
+        assertTrue(reports(result, "skip: 'b'"));
+    }
+
+    @Test
+    void aRunWithNoSkipsSaysNothingAboutCoverage() {
+        Verdict.Result result = Verdict.judge(
+                records(suite(reg("a")), scene("a", "PASS"), done(1)), null);
+        assertEquals(0, result.code());
+        assertFalse(reports(result, "COVERAGE"));
+    }
+
+    @Test
+    void aMustSkipSceneThatSkipsIsGreen() {
+        Verdict.Result result = Verdict.judge(
+                records(suite(reg("cap.absent", "MUST_SKIP")),
+                        skipped("cap.absent", "nothing offers it"), done(1)), null);
+        assertEquals(0, result.code());
+        assertTrue(reports(result, "correctly skipped"));
+    }
+
+    @Test
+    void aMustSkipSceneThatExecutesIsDeadNotRed() {
+        // Not RED: what broke is the absence detection every other suite's skips are trusted through,
+        // so this run's greens stop being evidence — the MUST_SWALLOW argument exactly.
+        Verdict.Result result = Verdict.judge(
+                records(suite(reg("cap.absent", "MUST_SKIP")), scene("cap.absent", "PASS"), done(1)),
+                null);
+        assertEquals(2, result.code());
+        assertEquals("DEAD", result.label());
+    }
+
+    @Test
+    void aMustSkipSceneWithNoRecordIsRed() {
+        // A skip is a RECORD. No record means the scene never reached the harness at all, which is
+        // the ordinary SWALLOWED hole and not evidence that the skip gate broke.
+        Verdict.Result result = Verdict.judge(
+                records(suite(reg("cap.absent", "MUST_SKIP")), done(0)), null);
+        assertEquals(1, result.code());
+        assertTrue(reports(result, "SWALLOWED: must-skip"));
     }
 
     // ---- the holes that produce a false GREEN --------------------------------------------------

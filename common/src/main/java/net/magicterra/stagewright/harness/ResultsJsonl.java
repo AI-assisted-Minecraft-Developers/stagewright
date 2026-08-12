@@ -8,7 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
 import net.magicterra.stagewright.scene.Scene;
-import net.magicterra.stagewright.scene.SceneOutcome;
+import net.magicterra.stagewright.contract.SceneOutcome;
 
 /**
  * Orchestration-contract-v0 results stream, one JSON object per line, written into
@@ -108,14 +108,32 @@ public final class ResultsJsonl {
      *             plotted downstream without every consumer re-parsing it, which is the whole reason
      *             a scene bothers to record it.
      */
-    public synchronized void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs,
+    public void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs,
                            String reason, java.util.Map<String, Object> data) {
+        writeScene(name, outcome, ticks, wallMs, reason, data, false);
+    }
+
+    /**
+     * @param skipped the scene resolved without executing its subject. Emitted as a {@code "skipped"}
+     *                boolean, and OMITTED when false so a run of scenes that all executed produces a
+     *                byte-identical line to before this existed.
+     *
+     *                <p>A skip resolves the scene as PASS, so the outcome alone cannot tell the two
+     *                apart, and the only signal used to be the {@code "skipped: "} prefix on the
+     *                reason string — a contract two independent writers had to remember and any
+     *                reader had to reconstruct by parsing prose. It is a field now because the
+     *                verdict has to be able to say what a run actually covered, and a suite whose
+     *                skips are invisible reports a GREEN that reads as coverage it does not have.
+     */
+    public synchronized void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs,
+                           String reason, java.util.Map<String, Object> data, boolean skipped) {
         sceneRecords++;
         StringBuilder sb = new StringBuilder();
         sb.append("{\"type\":\"scene\",\"name\":\"").append(escape(name))
           .append("\",\"outcome\":\"").append(escape(String.valueOf(outcome)))
           .append("\",\"ticks\":").append(ticks).append(",\"wallMs\":").append(wallMs)
           .append(",\"reason\":\"").append(escape(reason == null ? "" : reason)).append('"');
+        if (skipped) sb.append(",\"skipped\":true");
         if (data != null && !data.isEmpty()) {
             sb.append(",\"data\":{");
             boolean first = true;
@@ -141,6 +159,14 @@ public final class ResultsJsonl {
             return n.toString();
         }
         return '"' + escape(String.valueOf(v)) + '"';
+    }
+
+    /** The heartbeat's path, derived from this file's rather than named independently: if the
+     *  results ever move — a companion run's own directory already moves them — the thing that says
+     *  where the run got to has to move with them, or the verdict reads one run's position while
+     *  judging another's records. */
+    Path progressFile() {
+        return file.toAbsolutePath().resolveSibling(Heartbeat.FILE);
     }
 
     public synchronized void writeDone(int scenes) {
