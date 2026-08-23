@@ -269,6 +269,16 @@ public final class StageWrightHarness {
                 // whose claim has nothing to do with that ground.
                 if (!scene.arena() || arenaReady(level, origin, radius)) {
                     ctx = new SceneContext(level, arenaOrigin(scene, level, origin), radius);
+                    // HOW LONG THE ARENA TOOK, on every scene and every outcome — the number PREP
+                    // spends its whole phase producing and then throws away. Until this line the
+                    // only scene that ever reported it was one that FAILED to get an arena, which
+                    // is a criterion success cannot satisfy: a run where every scene is one tick
+                    // from the stall ceiling and a run where every scene is ready immediately both
+                    // print GREEN and nothing else. It is what decides whether an ENV_FAIL(10001ms)
+                    // that later PASSes at 3336ms was fixed or merely got lucky — a question two
+                    // published commits could not answer because neither run had the distribution.
+                    ctx.record("prep.ticks", phaseTicks);
+                    ctx.record("prep.ms", System.currentTimeMillis() - sceneStartMs);
                     arenaBefore = ArenaAudit.take(level, origin, radius);
                     // Per scene, not per suite: this is what stops one scene's clock from being a
                     // function of how long its predecessors took — or of a predecessor having asked
