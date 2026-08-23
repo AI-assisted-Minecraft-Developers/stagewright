@@ -305,10 +305,14 @@ public final class StageWrightHarness {
                     }
                     if (prepStalledTicks > PREP_STALL_TICKS || phaseTicks > PREP_CEILING_TICKS) {
                         int total = (2 * radius + 1) * (2 * radius + 1);
-                        String what = ready < total
-                                ? "only " + ready + " of " + total + " arena chunks ever loaded"
-                                : "all " + total + " arena chunks loaded but never all reported"
-                                        + " entity-ticking";
+                        // Both halves of the AND, separately — see loadedChunks. "0 of 9 ready" is
+                        // two different failures depending on whether the chunks are there.
+                        int present = loadedChunks(level, origin, radius);
+                        String what = present < total
+                                ? "only " + present + " of " + total + " arena chunks ever loaded"
+                                        + " (of those, " + ready + " reached entity-ticking)"
+                                : "all " + total + " arena chunks loaded but only " + ready
+                                        + " reached entity-ticking";
                         record(scene, SceneOutcome.ENV_FAIL, 0, "the arena never became usable: "
                                 + what + " after " + phaseTicks + " ticks, and that stopped changing "
                                 + prepStalledTicks + " ticks ago. Dimension "
@@ -457,13 +461,42 @@ public final class StageWrightHarness {
      *  circuited so PREP can tell "still arriving" from "stuck", which is the difference between a
      *  slow pack and a broken one. */
     private int readyChunks(ServerLevel level, BlockPos origin, int radius) {
-        int ready = 0;
+        return countChunks(level, origin, radius, true);
+    }
+
+    /**
+     * How many are merely PRESENT — {@code hasChunkAt} alone, without the entity-ticking half.
+     *
+     * <p>Only ever used in the failure message, and it is the difference between two diagnoses that
+     * were printing as one. {@link #readyChunks} ANDs two conditions, so a count of zero has two
+     * causes that want opposite investigations: no chunk arrived at all (worldgen, or the ticket
+     * never took), or all nine arrived and none was promoted to ENTITY_TICKING (the async step
+     * {@code ChunkMap.prepareEntityTickingChunk} performs, which is a different mechanism with
+     * different owners on each loader). The old message said "only 0 of 9 arena chunks ever loaded"
+     * for both — and its alternative phrasing about entity-ticking sat on the {@code ready == total}
+     * branch, which is unreachable while {@code ready < total}. So the entity-ticking case could not
+     * be reported at all.
+     *
+     * <p>Measured 2026-08-23 in worlddriver: {@code pack.placesAndReadsBack} ENV_FAILs on
+     * <b>integrated NeoForge only</b> — it passes on dedicated NeoForge and on integrated Fabric,
+     * with {@code tps=20} on all three, so neither slow ticking nor the arena coordinate explains
+     * it. Which of the two causes it is decides where to look next, and until this split the run
+     * could not say.
+     */
+    private int loadedChunks(ServerLevel level, BlockPos origin, int radius) {
+        return countChunks(level, origin, radius, false);
+    }
+
+    private int countChunks(ServerLevel level, BlockPos origin, int radius, boolean requireTicking) {
+        int n = 0;
         for (int dx = -radius; dx <= radius; dx++)
             for (int dz = -radius; dz <= radius; dz++) {
                 BlockPos p = origin.offset(dx * 16, 0, dz * 16);
-                if (level.hasChunkAt(p) && level.isPositionEntityTicking(p)) ready++;
+                if (!level.hasChunkAt(p)) continue;
+                if (requireTicking && !level.isPositionEntityTicking(p)) continue;
+                n++;
             }
-        return ready;
+        return n;
     }
 
     private void nextScene() {
