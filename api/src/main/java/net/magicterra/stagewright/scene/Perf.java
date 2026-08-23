@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.scene;
 
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -217,18 +218,52 @@ public final class Perf {
      * would put a client-only class on the dedicated server's link path. The read is one {@code int}
      * from another thread, which is exactly as coherent as the F3 overlay's own read of it — a stale
      * sample either side of a window boundary moves a mean over sixty samples by nothing.
+     *
+     * <p><b>The lookup is memoized, and that is not an optimization.</b> A ClassLoader does not
+     * cache failures, so the un-memoized version re-ran the whole ModLauncher load-and-transform of
+     * a class that cannot exist, once per sample, on a dedicated server: measured 2026-08-23 in
+     * worlddriver's {@code stagewrightDedicatedServerNeoforge} log as <b>120 lines</b> of
+     * {@code RuntimeDistCleaner: Attempted to load class net/minecraft/client/Minecraft for invalid
+     * dist DEDICATED_SERVER} — exactly the 60+60 samples of {@code pack.measuresItsOwnTickCost}'s
+     * two windows. That contradicts this class's own promise that nothing is added to the server's
+     * tick path, and it did it <i>inside the very window whose tick cost it reports</i>. Fabric
+     * pays the same cost and prints nothing (its Knot loader throws without logging), so a clean
+     * log there was never evidence of a clean tick path.
+     *
+     * <p>Failure is permanent by construction: a JVM does not grow a client half way through a run.
+     * Unsynchronized on purpose — a racing second resolve reaches the same answer.
      */
     private static int clientFps() {
+        if (fpsProbe == FPS_ABSENT) return -1;
+        if (fpsProbe == FPS_UNRESOLVED) {
+            try {
+                Class<?> mc = Class.forName("net.minecraft.client.Minecraft");
+                fpsGetInstance = mc.getMethod("getInstance");
+                fpsGetFps = mc.getMethod("getFps");
+                fpsProbe = FPS_READY;
+            } catch (Throwable t) {
+                fpsProbe = FPS_ABSENT;
+                return -1;
+            }
+        }
         try {
-            Class<?> mc = Class.forName("net.minecraft.client.Minecraft");
-            Object instance = mc.getMethod("getInstance").invoke(null);
+            Object instance = fpsGetInstance.invoke(null);
             if (instance == null) return -1;
-            Object v = mc.getMethod("getFps").invoke(instance);
+            Object v = fpsGetFps.invoke(instance);
             return v instanceof Number n ? n.intValue() : -1;
         } catch (Throwable t) {
             return -1;
         }
     }
+
+    private static final int FPS_UNRESOLVED = 0;
+    private static final int FPS_READY = 1;
+    private static final int FPS_ABSENT = -1;
+
+    /** {@link #FPS_UNRESOLVED} / {@link #FPS_READY} / {@link #FPS_ABSENT} — see {@link #clientFps()}. */
+    private static int fpsProbe = FPS_UNRESOLVED;
+    private static Method fpsGetInstance;
+    private static Method fpsGetFps;
 
     /**
      * Cumulative process CPU time, via the JDK-specific MXBean, reflectively so a JVM without it
