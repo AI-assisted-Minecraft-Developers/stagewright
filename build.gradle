@@ -6,13 +6,17 @@
 // RELEASE ORDER. The two repos depend on each other, in opposite directions and at different
 // points, so a from-scratch bootstrap has exactly one working sequence:
 //
-//   1. worlddriver:  ./gradlew :common:publishToMavenLocal
-//        -> net.magicterra:worlddriver-common:<ver>:dev, which stagewright-common compiles
-//           against. Runs before StageWright exists as an artifact, because worlddriver's
-//           MAIN source set has never needed StageWright.
-//   2. here:         ./gradlew publishToMavenLocal
-//                    ./gradlew -p engine publishToMavenLocal
+//   0. here:         ./gradlew -p engine publishToMavenLocal
 //                    ./gradlew -p gradle-plugin publishToMavenLocal
+//                    ./gradlew :stagewright-api:publishToMavenLocal :stagewright-attached:publishToMavenLocal
+//        -> worlddriver's root build applies the plugin, so nothing there configures before
+//           the marker exists, and its testmod compiles against api + attached. None of the
+//           four touches worlddriver.
+//   1. worlddriver:  ./gradlew -PworlddriverBootstrap :common:publishToMavenLocal
+//        -> net.magicterra:worlddriver-common:<ver>:dev, which stagewright-common compiles
+//           against. The property drops the loaders' `modLocalRuntime mc_stagewright-*`, which
+//           loom resolves at CONFIGURATION time; without it a clean box cannot get this far.
+//   2. here:         ./gradlew publishToMavenLocal
 //        -> mc_stagewright-{api,common,fabric,neoforge,junit}, stagewright-engine, and the
 //           plugin marker. The engine comes BEFORE the plugin: the plugin declares it as an
 //           `api` dependency, so a consumer resolving the plugin from a repository resolves the
