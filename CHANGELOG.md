@@ -33,6 +33,22 @@ conditionally: a topology on the convention produces a byte-identical command li
 StageWright jar older than the property ignores it and writes the convention, which is exactly the
 old failure again — so the ENV verdict now names that possibility when the run was renamed.
 
+### Loader detection reads the pack's own launch script · green against a third party
+
+A pack directory holds every loader it has ever had installed — fourteen, in the one that found
+this — and detection picked the newest by STRING compare. Two ways that is wrong, both live in a
+real directory: `21.1.9` sorts above `21.1.117` because `'9' > '1'`, and a `21.5.34-beta` installed
+beside the `21.1.248` a pack actually boots wins on every ordering rule there is. The failure is not
+reported as a wrong loader; it comes back as a mod's dependency check — *"jei requires neoforge >=
+21.1.248, current 21.5.34"* — which reads like an incompatible mod list.
+
+Ordering was the wrong question. A NeoForge or Forge installer writes `run.sh` and `run.bat` naming
+one argument file, and that version is by construction the one the pack boots. Detection reads them
+first, on either platform (they differ only in path separator), and says so. Only when no script
+names one does it guess at the newest, now by numeric segments with pre-release suffixes sorting
+below the release they precede — and it says that it is guessing, and names the version it picked,
+because "which one did you just launch" is the first question the resulting error raises.
+
 ## 2026-09-06
 
 ### Provisioning forces `sync-chunk-writes=false` · green in the self-test suite

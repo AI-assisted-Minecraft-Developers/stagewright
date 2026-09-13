@@ -432,7 +432,7 @@ public final class Main {
         if (opts.containsKey("launch")) {
             base = new ArrayList<>(List.of(opts.get("launch").split("\\s+")));
         } else {
-            base = GameLaunch.detect(gameDir, javaBinary);
+            base = GameLaunch.detect(gameDir, javaBinary, log);
             if (base == null) {
                 throw new IllegalArgumentException("cannot tell how to start the server in " + gameDir
                         + " — no NeoForge/Forge argument files under libraries/ and no server jar at"
