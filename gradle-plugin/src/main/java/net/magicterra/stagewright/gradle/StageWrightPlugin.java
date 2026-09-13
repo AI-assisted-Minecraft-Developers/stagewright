@@ -37,7 +37,7 @@ import net.magicterra.stagewright.engine.RunDirectory;
 public class StageWrightPlugin implements Plugin<Project> {
 
     static final String TASK_GROUP = "verification";
-    static final String DEFAULT_RESULTS = "stagewright-results.jsonl";
+    static final String DEFAULT_RESULTS = RunDirectory.DEFAULT_RESULTS_FILE;
     static final int DEFAULT_TIMEOUT_MINUTES = 20;
 
     @Override
@@ -149,6 +149,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                 run.mustRunAfter(provision);
                 run.getTimeout().set(java.time.Duration.ofMinutes(
                         topology.getTimeoutMinutes().getOrElse(DEFAULT_TIMEOUT_MINUTES)));
+                applyResultsName(topology, run);
                 applySceneFilter(project, run);
                 attachSideProcesses(project, topology, run, sideProcesses);
                 return run;
@@ -280,6 +281,31 @@ public class StageWrightPlugin implements Plugin<Project> {
      * convenience, and a host that models its run differently should lose the convenience, not the
      * ability to run its gates.
      */
+    /**
+     * Tell the game which results file to WRITE, when a topology asked for a name that is not the
+     * convention.
+     *
+     * <p>{@code resultsFile} used to rename only what the verdict OPENED — the harness went on
+     * writing {@code stagewright-results.jsonl} because nothing carried the name into the game — so
+     * a renamed topology produced a complete green run and a verdict of "no results", pointed at a
+     * path nothing was ever going to write.
+     *
+     * <p>Conditional, so a topology on the convention produces a byte-identical command line to the
+     * one it produced before this existed, and a run task that is not a {@code JavaExec} keeps
+     * running rather than failing over a property it has nowhere to put.
+     */
+    private void applyResultsName(StageWrightTopology topology, Task run) {
+        String name = topology.getResultsFile().getOrElse(DEFAULT_RESULTS);
+        if (DEFAULT_RESULTS.equals(name)) return;
+        if (!(run instanceof JavaExec exec)) {
+            run.getLogger().warn("[stagewright] resultsFile '{}' cannot reach the game: run task"
+                    + " '{}' is a {}, not a JavaExec, so the harness will write {} instead",
+                    name, run.getName(), run.getClass().getSimpleName(), DEFAULT_RESULTS);
+            return;
+        }
+        exec.systemProperty(RunDirectory.RESULTS_PROPERTY, name);
+    }
+
     private void applySceneFilter(Project project, Task run) {
         Object raw = project.findProperty(SCENE_FILTER_PROPERTY);
         String patterns = raw == null ? null : raw.toString().trim();

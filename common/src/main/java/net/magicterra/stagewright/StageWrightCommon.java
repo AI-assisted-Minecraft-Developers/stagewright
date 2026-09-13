@@ -23,8 +23,31 @@ public final class StageWrightCommon {
     public static final String MOD_ID = "mc_testkit";
     public static final Logger LOG = LogUtils.getLogger();
 
-    /** Results file, relative to the server's working directory (the loom runDir). */
-    private static final String OUT_FILE = "stagewright-results.jsonl";
+    /** Results file, relative to the server's working directory (the loom runDir). Repeated in the
+     *  engine's {@code RunDirectory.DEFAULT_RESULTS_FILE}: that module judges runs and never sees a
+     *  Minecraft classpath, so the two processes agree on the literal rather than on a class. */
+    private static final String DEFAULT_OUT_FILE = "stagewright-results.jsonl";
+
+    /** The property a supervisor renames the results file with; see {@link #outFile()}. */
+    private static final String RESULTS_PROPERTY = "stagewright.results";
+
+    /**
+     * Where this run writes its results.
+     *
+     * <p>Renaming has to reach the WRITER, which is the half that used to be missing. The CLI's
+     * {@code --results} and the plugin's {@code resultsFile} only ever changed which file the
+     * verdict opened; the harness kept writing the default name, so a renamed run produced a
+     * complete green results file and a verdict of "the run wrote no results" pointing at a path
+     * nothing had written.
+     *
+     * <p>Read at the moment the harness is built rather than cached in a static, because this class
+     * initialises during mod construction — before a loader that sets the property later has set it.
+     * The cost is one property read per suite.
+     */
+    private static String outFile() {
+        String named = System.getProperty(RESULTS_PROPERTY, "").trim();
+        return named.isEmpty() ? DEFAULT_OUT_FILE : named;
+    }
 
     // Suite lifecycle state. All mutation is under this class's monitor (the static-synchronized
     // methods); `harness` is volatile so onServerTick reads it lock-free every tick.
@@ -130,7 +153,7 @@ public final class StageWrightCommon {
                 LOG.info("[{}] armed, deferring the suite until a player joins (-D{}) — {} scenes",
                         MOD_ID, AWAIT_PLAYER, resolvedScenes.size());
             } else {
-                harness = new StageWrightHarness(server, loader, resolvedScenes, new ResultsJsonl(Path.of(OUT_FILE)));
+                harness = new StageWrightHarness(server, loader, resolvedScenes, new ResultsJsonl(Path.of(outFile())));
             }
         } else {
             LOG.info("[{}] armed, awaiting mc.test.run ({} scenes) — stagewright.autorun not set",
@@ -251,7 +274,7 @@ public final class StageWrightCommon {
             synchronized (StageWrightCommon.class) {
                 if (harness != null) return;
                 try {
-                    harness = new StageWrightHarness(server, loader, scenes, new ResultsJsonl(Path.of(OUT_FILE)));
+                    harness = new StageWrightHarness(server, loader, scenes, new ResultsJsonl(Path.of(outFile())));
                 } catch (Throwable t) {
                     // Hardening (Task-1 review Minor 1): the harness ctor can throw (duplicate scene
                     // name / origin-slot collision — see StageWrightHarness). If it does, RELEASE the
@@ -376,7 +399,7 @@ public final class StageWrightCommon {
                 MOD_ID, resolvedScenes.size());
         opTestPlayers(server);
         harness = new StageWrightHarness(server, armedLoader, resolvedScenes,
-                new ResultsJsonl(Path.of(OUT_FILE)));
+                new ResultsJsonl(Path.of(outFile())));
     }
 
     /**

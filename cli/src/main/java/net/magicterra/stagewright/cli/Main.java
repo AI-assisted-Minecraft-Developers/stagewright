@@ -37,7 +37,6 @@ import net.magicterra.stagewright.engine.Verdict;
  */
 public final class Main {
 
-    private static final String DEFAULT_RESULTS = "stagewright-results.jsonl";
     private static final int DEFAULT_TIMEOUT_MINUTES = 45;
 
     public static void main(String[] args) {
@@ -93,8 +92,7 @@ public final class Main {
         if (!Files.isDirectory(gameDir)) {
             throw new IllegalArgumentException("--game-dir " + gameDir + " is not a directory");
         }
-        String resultsName = opts.getOrDefault("results", DEFAULT_RESULTS);
-        Path results = gameDir.resolve(resultsName);
+        Path results = gameDir.resolve(resultsName(opts));
         Path scenes = opts.containsKey("scenes")
                 ? Path.of(opts.get("scenes")).toAbsolutePath().normalize() : null;
         int timeoutMinutes = Integer.parseInt(opts.getOrDefault("timeout",
@@ -320,8 +318,14 @@ public final class Main {
         List<String> props = new ArrayList<>(systemProps);
         props.add("-Dstagewright.autorun=true");
         props.add("-Dstagewright.client.world=" + opts.getOrDefault("world", "stagewright"));
+        props.addAll(resultsProps(resultsName(opts)));
 
-        Path hmcLog = gameDir.resolve("stagewright-headlessmc.log");
+        // The launcher's own output. A --display-client run never goes through HeadlessMC, and a
+        // pointer at "headlessmc.log" for it read as the wrong file; the name says which launch it was.
+        Path hmcLog = gameDir.resolve(opts.containsKey("display-client")
+                ? "stagewright-client-launch.log" : "stagewright-headlessmc.log");
+        // Snapshotted before the launch, so only THIS run's report can be reported as this run's.
+        CrashWatch crashes = CrashWatch.on(gameDir);
         Process hmc;
         if (opts.containsKey("display-client")) {
             // Launch the installed client ourselves, on the real display. HeadlessMC's own launch is
@@ -453,9 +457,38 @@ public final class Main {
      * the server arms, publishes its endpoint descriptor, and waits to be told to run.
      */
     private static List<String> armingProps(Map<String, String> opts, Path gameDir) {
-        if (!opts.containsKey("attached")) return List.of("-Dstagewright.autorun=true");
-        return List.of("-Dstagewright.hold=true",
-                "-Dstagewright.endpoint=" + gameDir.resolve(RunDirectory.ENDPOINT_FILE).toAbsolutePath());
+        List<String> props = new ArrayList<>(resultsProps(resultsName(opts)));
+        if (!opts.containsKey("attached")) {
+            props.add("-Dstagewright.autorun=true");
+        } else {
+            props.add("-Dstagewright.hold=true");
+            props.add("-Dstagewright.endpoint="
+                    + gameDir.resolve(RunDirectory.ENDPOINT_FILE).toAbsolutePath());
+        }
+        return props;
+    }
+
+    /** The results file this run is judged on, relative to the game directory. */
+    static String resultsName(Map<String, String> opts) {
+        String named = opts.getOrDefault("results", RunDirectory.DEFAULT_RESULTS_FILE).trim();
+        if (named.isEmpty()) throw new IllegalArgumentException("--results needs a file name");
+        return named;
+    }
+
+    /**
+     * Tell the game which file to WRITE — the half of {@code --results} that was missing.
+     *
+     * <p>The flag used to rename only what this CLI opened. The harness went on writing
+     * {@code stagewright-results.jsonl}, because nothing carried the name across the process
+     * boundary, so a renamed run finished green and was judged "ENV — the run wrote no results"
+     * against a path nothing was ever going to write. That verdict is the one a pack also gets when
+     * the framework jar failed to load, which is where it sent every reader.
+     *
+     * <p>Passed on every run, including the default one, so the game's own command line records the
+     * name a reader is going to go looking for.
+     */
+    static List<String> resultsProps(String resultsName) {
+        return List.of("-D" + RunDirectory.RESULTS_PROPERTY + "=" + resultsName);
     }
 
     /**
@@ -662,6 +695,53 @@ public final class Main {
     }
 
     /**
+     * Why the run wrote no results: ONE explanation, chosen — not a menu.
+     *
+     * <p><b>A crash report ends the question.</b> It is the game's own account of what happened, it
+     * names the mod and the exception, and every other line this method can produce is a guess about
+     * a run whose cause is already sitting on disk. Printing the guesses anyway is not harmless:
+     * measured on a 262-mod pack, the CLI correctly reported the crash and named the report, and
+     * then followed it with three paragraphs — the framework jar may have failed to load, an
+     * {@code -lwjgl} stub may have handed a mod an all-zero image, you renamed the results file —
+     * none of which had anything to do with the mod that actually threw. The last thing a reader
+     * sees is the thing they act on, so the true cause has to be the last thing said, which here
+     * means being the only thing said.
+     *
+     * <p>The guesses are still right when there is no report. A game that never got far enough to
+     * write one leaves nothing else to go on, and which of them applies IS decidable from the run
+     * directory rather than left to the reader.
+     */
+    static List<String> noResultsCause(Path gameDir, Path results, Path crashReport,
+                                       boolean frameworkPresent, Path log) {
+        if (crashReport != null) {
+            return List.of("  The game crashed before it could write them, and said why itself: "
+                    + crashReport + ". Read that; nothing else here is more than a guess.");
+        }
+
+        List<String> out = new ArrayList<>();
+        if (!frameworkPresent) {
+            out.add("  There is no StageWright jar in " + gameDir.resolve("mods")
+                    + ", so nothing in this pack could have armed. Drop --no-install to let"
+                    + " this CLI install it.");
+        } else {
+            out.add("  A StageWright jar IS in this pack's mods folder, so it either"
+                    + " failed to load or the server never reached its first tick — " + log
+                    + " says which. A jar built for the other loader looks like this too.");
+        }
+        // Named separately because it is the one cause that produces this verdict over a run that
+        // went perfectly: the game writes wherever -Dstagewright.results tells it to, and a
+        // framework jar older than that property ignores it and writes the default name.
+        if (!RunDirectory.DEFAULT_RESULTS_FILE.equals(results.getFileName().toString())) {
+            out.add("  This run renamed the results file. The game is told the new"
+                    + " name with -D" + RunDirectory.RESULTS_PROPERTY + "; a StageWright jar"
+                    + " older than that property ignores it and writes "
+                    + gameDir.resolve(RunDirectory.DEFAULT_RESULTS_FILE)
+                    + " — check whether that file is sitting there.");
+        }
+        return out;
+    }
+
+    /**
      * Reconcile several finished runs against each other and report what nothing ever executed.
      *
      * <p>A missing input is ENV (3) rather than RED (1), on the same rule the rest of this CLI holds
@@ -758,8 +838,14 @@ public final class Main {
                                       A scene skipping is fine in one run and a hole across all of
                                       them, which is a question no single run can be asked.
                   --expect <file>     expected-scenes manifest to reconcile against
-                  --results <name>    results file name (default stagewright-results.jsonl)
-                  --timeout <min>     kill the run after this long (default 45)
+                  --results <name>    results file name, relative to --game-dir (default
+                                      stagewright-results.jsonl). Passed into the game as
+                                      -Dstagewright.results, so the run writes the name this CLI
+                                      then judges — a StageWright older than that property ignores
+                                      it and keeps writing the default.
+                  --timeout <min>     kill the run after this long (default 45). A ceiling, not a
+                                      duration: the run ends when the results file carries its done
+                                      footer, whether or not the game's JVM manages to exit.
                   --clean-world false keep the existing world (default: delete it)
                   --mod <jar>         also install this mod (repeatable — e.g. the driver whose
                                       verbs your scenes call)

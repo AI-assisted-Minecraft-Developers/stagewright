@@ -64,8 +64,9 @@ public abstract class StageWrightTopology implements Named {
     public abstract DirectoryProperty getGameDirectory();
 
     /** Results file name relative to {@link #getGameDirectory()}. Convention:
-     *  {@code stagewright-results.jsonl}, which is what the harness writes and is not configurable
-     *  on that side. */
+     *  {@code stagewright-results.jsonl}. A name other than the convention is passed into the game
+     *  as {@code -Dstagewright.results}, so the harness writes the file this topology is judged on;
+     *  a StageWright older than that property ignores it and writes the convention. */
     public abstract Property<String> getResultsFile();
 
     /** Optional expected-scenes manifest. Present: reconciliation runs in both directions and a

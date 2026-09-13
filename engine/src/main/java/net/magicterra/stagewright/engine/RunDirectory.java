@@ -34,6 +34,22 @@ public final class RunDirectory {
      *  share no code — they are different processes and, deliberately, different dependency graphs. */
     public static final String PROGRESS_FILE = "stagewright-progress.json";
 
+    /** The file a run is judged on unless its supervisor renames it. Repeated on the game side
+     *  ({@code StageWrightCommon}) for the same reason {@link #PROGRESS_FILE} is. */
+    public static final String DEFAULT_RESULTS_FILE = "stagewright-results.jsonl";
+
+    /**
+     * The system property that carries a renamed results file INTO the game.
+     *
+     * <p>Renaming was a read-side-only setting until this existed: the CLI's {@code --results} and
+     * the plugin's {@code resultsFile} both changed which file the verdict opened, while the harness
+     * went on writing the default name because nothing ever told it otherwise. The run then finished
+     * green, wrote a complete results file, and was judged as "the run wrote no results" against a
+     * path nothing was ever going to write — which is the same ENV verdict a pack gets when the
+     * framework jar failed to load, and sends the reader to check mod loading.
+     */
+    public static final String RESULTS_PROPERTY = "stagewright.results";
+
     private RunDirectory() {}
 
     /**

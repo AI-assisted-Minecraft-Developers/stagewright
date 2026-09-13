@@ -10,6 +10,29 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ---
 
+## 2026-09-11
+
+Everything below marked **green against a third party** was verified on a 262-mod NeoForge 21.1.248
+pack nobody here maintains: server topology GREEN, a crashed client ending its run in about a minute
+instead of forty-five, `--results` landing where the CLI then read it, and detection naming 21.1.248
+out of the fourteen loaders installed beside it.
+
+### `--results` renames the file the game WRITES, not only the one the verdict opens · green against a third party
+
+The flag renamed the reader and nothing else. The harness kept writing
+`stagewright-results.jsonl`, because no property, argument or file carried the name across the
+process boundary — so `--results stagewright-server.jsonl` produced a run that executed every scene,
+finished green, wrote a complete results file, and was judged `ENV — the run wrote no results`
+against a path nothing was ever going to write. That is the same verdict a pack gets when the
+framework jar failed to load, which is where it sent the reader.
+
+The name now travels as `-Dstagewright.results`, passed on every run including the default one so
+the game's command line records the file a reader will go looking for, and honoured by
+`StageWrightCommon` when it builds the harness. The plugin's `resultsFile` gets the same treatment,
+conditionally: a topology on the convention produces a byte-identical command line to before. A
+StageWright jar older than the property ignores it and writes the convention, which is exactly the
+old failure again — so the ENV verdict now names that possibility when the run was renamed.
+
 ## 2026-09-06
 
 ### Provisioning forces `sync-chunk-writes=false` · green in the self-test suite
