@@ -10,6 +10,24 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ---
 
+## 2026-09-06
+
+### Provisioning forces `sync-chunk-writes=false` · green in the self-test suite
+
+A dedicated-server gate could run out of heap a third of the way through the suite and die as a run
+of `ENV_FAIL … only 0 reached entity-ticking` with an `OutOfMemoryError` above it — on NeoForge
+every time, on Fabric only when the suite was long enough. Nothing in the scenes leaked. Every arena
+is staged in fresh chunks, so a run generates a few hundred chunks per scene and hands each to the
+level's single `IOWorker` thread; with vanilla's default `sync-chunk-writes=true` every region write
+is an fsync, the thread never catches up, and the backlog sits on the heap as queued tasks and
+unwritten chunk NBT. Sampled with `jcmd GC.class_histogram`: 170,000 queued writes and 9,000
+unwritten chunks by scene 53, 460,000 and 29,000 by scene 125, on both loaders.
+
+`provision` now forces the key off next to `online-mode` and `level-seed`. The same NeoForge suite
+that died at scene 120 finishes GREEN with the live set under 1 GB at every sample and an empty
+write queue. The world is deleted before the next run, so the durability the flag buys was never
+worth anything here.
+
 ## 2026-08-10
 
 ### A run that dies without a verdict now says where it was · green in the self-test suite

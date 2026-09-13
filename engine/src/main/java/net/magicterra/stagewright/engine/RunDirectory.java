@@ -189,10 +189,24 @@ public final class RunDirectory {
      *
      * <p>Forced rather than defaulted, because a scene run cannot work any other way and this is the
      * gate's own directory. Every other key the file carries is left exactly as it was.
+     *
+     * <p>{@code sync-chunk-writes=false} is the third forced key, and it is about heap, not speed.
+     * A suite stages every arena in fresh chunks, so a run generates a few hundred chunks per scene,
+     * and each one is handed to the level's single {@code IOWorker} thread to write. With the
+     * vanilla default of {@code true} every region write is an fsync, the thread falls behind from
+     * the first scene, and the backlog is held on the heap: the queued task, the chunk's NBT, and the
+     * region file it belongs to. Measured on both loaders in one afternoon — 170,000 queued writes
+     * and 9,000 unwritten chunks by scene 53, 460,000 and 29,000 by scene 125 — until the 2 GB
+     * server heap ran out around scene 120 on NeoForge, whose baseline is the larger. The symptom is
+     * a run of {@code ENV_FAIL … only 0 reached entity-ticking} followed by an
+     * {@code OutOfMemoryError} above it, which reads like a scene bug and is not. With the flag off
+     * the same runs hold under 1 GB throughout and the queue is empty at every sample. Durability is
+     * what the flag buys, and a gate's world is deleted before the next run.
      */
     private static void seedOfflineMode(Path properties) {
         force(properties, "online-mode", "false");
         force(properties, "level-seed", FIXED_SEED);
+        force(properties, "sync-chunk-writes", "false");
     }
 
     /**
