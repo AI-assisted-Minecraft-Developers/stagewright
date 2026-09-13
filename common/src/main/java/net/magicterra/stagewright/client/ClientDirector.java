@@ -84,6 +84,8 @@ public final class ClientDirector {
     private static int waitingTicks;
     private static int driveTicks;
     private static int exitCountdown = -1;
+    /** Set once the loading window has closed, so the log says so exactly once. */
+    private static boolean loadReported;
     /** Which loader this client is, for the probe results header. There is no server here to
      *  have recorded it, so the entrypoint that knows hands it over. */
     private static String loader = "unknown";
@@ -113,6 +115,17 @@ public final class ClientDirector {
     /** One client tick. Safe to call before the client has a screen or a level. */
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
+        // Nothing before the game has finished loading itself — not driving, not counting, not even
+        // reporting. See stillLoading: these ticks arrive from inside the loading window and are
+        // about a game that does not exist yet.
+        if (phase == Phase.WAITING_FOR_TITLE) {
+            if (stillLoading(mc)) return;
+            if (!loadReported) {
+                loadReported = true;
+                StageWrightCommon.LOG.info("[{}] the initial resource reload is complete — the"
+                        + " director takes over from here", StageWrightCommon.MOD_ID);
+            }
+        }
         switch (phase) {
             case WAITING_FOR_TITLE -> {
                 // Report what we ARE looking at every few seconds. A director that waits forever for
@@ -199,6 +212,31 @@ public final class ClientDirector {
     private static void finish() {
         phase = Phase.FINISHING;
         exitCountdown = EXIT_DELAY_TICKS;
+    }
+
+    /**
+     * True while the client is still assembling itself: the initial resource reload, which is also
+     * where each loader finishes mod loading and loads its CLIENT-side mod configs.
+     *
+     * <p><b>A client ticks throughout that window.</b> {@code Minecraft.run} calls {@code runTick}
+     * from the first frame and {@code runTick} calls {@code tick} on the timer, so client-tick
+     * events fire while the loading overlay is still up and mods are still being constructed. Every
+     * number this director keeps is about the game AFTER that — {@link #TITLE_SETTLE_TICKS} is a
+     * settling allowance for a title screen, not a loading budget — so counting from tick one
+     * measured how long a 262-mod pack takes to load and spent the settle window inside it.
+     *
+     * <p>{@code isGameLoadFinished} is vanilla's own answer, flipped in
+     * {@code Minecraft.onResourceLoadFinished} immediately before the initial screens are built; the
+     * overlay check covers the fade that follows it and any later reload, because a title screen
+     * with a reload running over it is not a title screen worth driving.
+     *
+     * <p>This is a guard on what the DIRECTOR does, and deliberately not a claim to fix what other
+     * mods do in that window. A mod whose own client-tick handler reads a config value before its
+     * config is loaded crashes on the first tick of any launcher, with no StageWright frame on the
+     * stack; nothing here can reach that, and the CLI reports it as the crash it is.
+     */
+    private static boolean stillLoading(Minecraft mc) {
+        return !mc.isGameLoadFinished() || mc.getOverlay() != null;
     }
 
     /**

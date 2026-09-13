@@ -87,6 +87,23 @@ names one does it guess at the newest, now by numeric segments with pre-release 
 below the release they precede — and it says that it is guessing, and names the version it picked,
 because "which one did you just launch" is the first question the resulting error raises.
 
+### The client director waits for the first resource reload before it counts anything · compiled
+
+A client ticks throughout its own loading: `Minecraft.run` calls `runTick` from the first frame and
+`runTick` calls `tick` on the timer, so client-tick events fire while the loading overlay is up and
+mods are still being constructed. The director was fed from tick one, which meant its title-screen
+settle window — 40 ticks, an allowance for a screen to settle — was being spent inside a 262-mod
+pack's load, and its "waiting for the title screen, currently on …" line was reporting on a game
+that did not exist yet. It now returns until `Minecraft.isGameLoadFinished()` is true and no overlay
+is up, and logs the transition once so a slow load is distinguishable from a hang.
+
+This is a guard on what the DIRECTOR does and explicitly not a fix for what other mods do in that
+window. A mod whose own client-tick handler reads a config value before its config is loaded crashes
+on the first tick under any launcher, with no StageWright frame on the stack; the CLI now reports
+that as the crash it is instead of waiting for it to become a timeout. Confirmed by re-running the
+pack that raised it: the third-party handler still throws, from the loader's own game bus, where the
+director has nothing to gate.
+
 ## 2026-09-06
 
 ### Provisioning forces `sync-chunk-writes=false` · green in the self-test suite
