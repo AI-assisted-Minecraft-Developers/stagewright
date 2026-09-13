@@ -64,6 +64,18 @@ dependencies {
     // two homes on two interpreters would not be running the same language.
     implementation "dev.latvian.mods:rhino:2101.2.7-build.81"
     implementation 'com.google.code.gson:gson:2.11.0'
+
+    // The parts of this CLI that can be tested without a modpack: which loader version a pack
+    // directory says it boots, and whether the name a run is judged on reaches the game. Both were
+    // wrong in a way no compiler catches and only a real pack revealed.
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
 }
 
 // Staged under /mods/mc_stagewright-<loader>.jar — version stripped on purpose, so the extraction
