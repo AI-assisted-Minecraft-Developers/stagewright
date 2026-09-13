@@ -39,6 +39,17 @@ public final class Main {
 
     private static final int DEFAULT_TIMEOUT_MINUTES = 45;
 
+    /**
+     * How long a finished game may take to close itself before this CLI kills it.
+     *
+     * <p>Longer than the harness's own 30-second exit watchdog on purpose: a JVM that can go down by
+     * itself always gets the chance to, and only one that cannot is killed. That the harness's
+     * {@code Runtime.halt} sometimes cannot is measured rather than assumed — on a 262-mod pack the
+     * warning it prints before halting is the last line in the log and the process is still there
+     * afterwards, wedged where nothing inside it can act.
+     */
+    private static final int DRAIN_GRACE_SECONDS = 45;
+
     public static void main(String[] args) {
         try {
             System.exit(run(args));
@@ -121,23 +132,33 @@ public final class Main {
         }
 
         if (opts.containsKey("attached")) {
-            return runAttached(gameDir, results, opts, systemProps, timeoutMinutes, loader);
+            return runAttached(gameDir, results, opts, systemProps, timeoutMinutes, loader, log);
         }
 
         Path runLog = gameDir.resolve("stagewright-run.log");
-        Process game = startServer(gameDir, opts, systemProps, List.of(), runLog);
+        CrashWatch crashes = CrashWatch.on(gameDir);
+        Process game = startServer(gameDir, opts, systemProps, List.of(), runLog, log);
 
-        if (!game.waitFor(timeoutMinutes, TimeUnit.MINUTES)) {
-            game.destroyForcibly();
-            game.waitFor(30, TimeUnit.SECONDS);
+        // The results file, not the process, says when the run is over. Those used to be the same
+        // statement — a dedicated server halts itself when the suite drains — and they stop being
+        // one on any pack whose mods leave non-daemon threads behind: the suite finishes, the footer
+        // lands, the harness halts, and the JVM stays in the process table anyway. Waiting on the
+        // process there spends the whole --timeout on a verdict that has been sitting complete on
+        // disk since minute three.
+        Waited waited = awaitDoneFooter(results, timeoutMinutes, game, crashes);
+        if (waited == Waited.DONE) drain(game, runLog);
+        if (waited == Waited.CRASHED) {
+            System.err.println("[stagewright] the server crashed before the suite finished — "
+                    + crashes.describe() + ", then " + runLog);
+        } else if (waited == Waited.TIMED_OUT) {
             System.err.println("[stagewright] the run exceeded " + timeoutMinutes
                     + " minutes and was killed — see " + runLog);
-            // Deliberately NOT an early return: a killed run usually still wrote records, and the
-            // missing done footer is what turns them into a RED that names how far it got. Judging
-            // is strictly more informative than reporting the timeout alone.
         }
-
-        return judge(gameDir, results, opts, runLog);
+        kill(game);
+        // Deliberately NOT an early return on any of them: a killed or crashed run usually still
+        // wrote records, and the missing done footer is what turns them into a RED that names how
+        // far it got. Judging is strictly more informative than reporting the ending alone.
+        return judge(gameDir, results, opts, runLog, crashes);
     }
 
     /**
@@ -200,14 +221,23 @@ public final class Main {
                 loader, require(opts, "mc-version"), launcherJvm, log);
 
         Path runLog = gameDir.resolve("stagewright-run.log");
+        CrashWatch crashes = CrashWatch.on(gameDir);
         Process server = startServer(gameDir, opts, systemProps,
-                List.of("-Dstagewright.awaitPlayer=true"), runLog);
+                List.of("-Dstagewright.awaitPlayer=true"), runLog, log);
         Process client = null;
         try {
             log.accept("client half joining " + address);
             client = HeadlessClient.launch(hmcJar, clientDir, javaBinary, versionId, null,
                     launcherJvm, log);
-            if (!server.waitFor(timeoutMinutes, TimeUnit.MINUTES)) {
+            // The server half is the one that writes the results, so its footer ends the wait here
+            // exactly as it does in the plain topology — and for the same reason: a pack that cannot
+            // close its own JVM must not cost the whole --timeout after it has finished.
+            Waited waited = awaitDoneFooter(results, timeoutMinutes, server, crashes);
+            if (waited == Waited.DONE) drain(server, runLog);
+            if (waited == Waited.CRASHED) {
+                System.err.println("[stagewright] the server crashed before the suite finished — "
+                        + crashes.describe() + ", then " + runLog);
+            } else if (waited == Waited.TIMED_OUT) {
                 System.err.println("[stagewright] the run exceeded " + timeoutMinutes
                         + " minutes and was killed — see " + runLog + " for the server and "
                         + clientDir.resolve("logs/latest.log") + " for the client. A server that"
@@ -219,7 +249,7 @@ public final class Main {
             kill(server);
         }
 
-        return judge(gameDir, results, opts, runLog);
+        return judge(gameDir, results, opts, runLog, crashes);
     }
 
     private static Path headlessMcJar(Map<String, String> opts) {
@@ -281,10 +311,10 @@ public final class Main {
     /** Start the pack's server, with any topology-specific properties added to the author's. */
     private static Process startServer(Path gameDir, Map<String, String> opts,
                                        List<String> systemProps, List<String> topologyProps,
-                                       Path runLog) throws IOException {
+                                       Path runLog, Consumer<String> log) throws IOException {
         List<String> props = new ArrayList<>(topologyProps);
         props.addAll(systemProps);
-        List<String> command = buildCommand(gameDir, opts, props);
+        List<String> command = buildCommand(gameDir, opts, props, log);
         System.out.println("[stagewright] " + String.join(" ", command));
         return new ProcessBuilder(command)
                 .directory(gameDir.toFile())
@@ -359,46 +389,63 @@ public final class Main {
                     launcherJvm, log);
         }
 
-        Waited waited = awaitDoneFooter(results, timeoutMinutes, hmc);
+        // Killed rather than drained, unlike the server topologies. HeadlessMC deliberately outlives
+        // the game it launched — it is holding a command prompt open on the stdin this never closes
+        // — so waiting for it to leave is waiting for something that never happens.
+        Waited waited = awaitDoneFooter(results, timeoutMinutes, hmc, crashes);
         kill(hmc);
         if (waited == Waited.TIMED_OUT) {
             System.err.println("[stagewright] the client run did not finish within " + timeoutMinutes
-                    + " minutes and was still alive — see " + hmcLog + " and "
+                    + " minutes and was still alive — see the launcher log " + hmcLog + " and "
                     + gameDir.resolve("logs/latest.log"));
-        } else if (waited == Waited.PROCESS_DIED) {
-            System.err.println("[stagewright] the client process exited before the suite finished."
-                    + " This is a crash, not a slow run: look for a report under "
-                    + gameDir.resolve("crash-reports") + " first, then " + hmcLog + ".");
+        } else if (waited == Waited.CRASHED || waited == Waited.PROCESS_DIED) {
+            System.err.println("[stagewright] the client crashed before the suite finished. This is"
+                    + " not a slow run: " + crashes.describe() + ", then the launcher log " + hmcLog + ".");
             // A 450-mod pack found this within three minutes, so it is named rather than left to be
             // rediscovered: -lwjgl stubs every LWJGL call, so a mod that reads actual pixels while
             // loading (Supplementaries reading a palette strip through Moonlight, for one) sees an
             // all-zero image and throws. Nothing on our side can fix that — it is the price of a
             // client with no display, and the choice is to drop the mod from the client topology or
             // to run the client somewhere with a real GL context.
-            System.err.println("[stagewright] under -lwjgl every LWJGL call is a stub, so a mod that"
-                    + " reads image pixels during load crashes on an all-zero image. If the report"
-                    + " names one, that mod cannot be in a headless client run.");
+            //
+            // Said only when it can be the answer. A crash report names the mod and the exception
+            // outright, so this becomes one more thing to rule out after the reader already has the
+            // truth; and --display-client runs on a real GL context, where the stub was never in
+            // play and this paragraph is about a mechanism that does not exist in that run.
+            if (crashes.fresh() == null && !opts.containsKey("display-client")) {
+                System.err.println("[stagewright] under -lwjgl every LWJGL call is a stub, so a mod"
+                        + " that reads image pixels during load crashes on an all-zero image. No"
+                        + " crash report was written, which is what that failure usually looks"
+                        + " like: mod loading goes down before the game can produce one.");
+            }
         }
-        return judge(gameDir, results, opts, hmcLog);
+        return judge(gameDir, results, opts, hmcLog, crashes);
     }
 
-    /** How a wait for the client's done footer ended. The three are not interchangeable. */
-    private enum Waited { DONE, PROCESS_DIED, TIMED_OUT }
+    /** How a wait for the run's done footer ended. The four are not interchangeable. */
+    private enum Waited { DONE, CRASHED, PROCESS_DIED, TIMED_OUT }
 
     /**
-     * Wait for the suite to write its done footer, or for HeadlessMC to die first.
+     * Wait for the suite to write its done footer, or for the game to stop being able to.
      *
      * <p>Polled rather than watched: the file is appended to by another process on another
      * filesystem path, and a second of latency on a run measured in minutes buys nothing worth the
      * complication of a watch service.
      *
-     * <p><b>Which of the two failures happened is reported, because they send you to different
+     * <p><b>Which of the failures happened is reported, because they send you to different
      * places.</b> This returned a bare boolean once, and the caller printed "did not finish within 90
      * minutes" for a client that had crashed in three — a confident, well-phrased sentence pointing
      * at a budget that was never the problem, and sending the reader to look for a slow run instead
      * of a crash report sitting right there.
+     *
+     * <p>The crash report is checked as well as the process, because a crashed game frequently does
+     * not exit. A modpack leaves non-daemon threads behind — a pool of {@code AwsEventLoop} threads
+     * was enough — so the JVM that has already written its crash report and closed its window stays
+     * in the process table forever, and waiting on {@code isAlive} spends the whole {@code --timeout}
+     * on a game that stopped being one 45 minutes earlier.
      */
-    private static Waited awaitDoneFooter(Path results, int timeoutMinutes, Process hmc)
+    private static Waited awaitDoneFooter(Path results, int timeoutMinutes, Process game,
+                                          CrashWatch crashes)
             throws IOException, InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(timeoutMinutes);
         while (System.nanoTime() < deadline) {
@@ -407,12 +454,30 @@ public final class Main {
                     if (line.contains("\"type\":\"done\"")) return Waited.DONE;
                 }
             }
-            // Checked AFTER the file, not before: a client that writes its footer and exits in the
+            // Both checked AFTER the file, not before: a run that writes its footer and dies in the
             // same second would otherwise be reported as having died with nothing to show.
-            if (!hmc.isAlive()) return Waited.PROCESS_DIED;
+            if (crashes.fresh() != null) return Waited.CRASHED;
+            if (!game.isAlive()) return Waited.PROCESS_DIED;
             Thread.sleep(1000);
         }
         return Waited.TIMED_OUT;
+    }
+
+    /**
+     * Give a finished game its chance to close itself, then say why it is being killed.
+     *
+     * <p>Only ever called once the results file carries its done footer, which is what makes killing
+     * safe: the verdict is already complete on disk and the process holds nothing else this run
+     * wants. Without it a suite that has finished still costs the whole {@code --timeout}, because
+     * the JVM the harness could not halt is indistinguishable from a suite still running.
+     */
+    private static void drain(Process game, Path runLog) throws InterruptedException {
+        if (!game.isAlive()) return;
+        if (game.waitFor(DRAIN_GRACE_SECONDS, TimeUnit.SECONDS)) return;
+        System.err.println("[stagewright] the suite finished and its results are complete, but the"
+                + " game JVM was still up " + DRAIN_GRACE_SECONDS + "s later — a mod is holding"
+                + " non-daemon threads and the harness's own halt could not bring the VM down."
+                + " Killing it; the verdict below is read from the finished file. See " + runLog);
     }
 
     /**
@@ -424,7 +489,7 @@ public final class Main {
      * missing" rather than "the property did not apply".
      */
     private static List<String> buildCommand(Path gameDir, Map<String, String> opts,
-                                             List<String> systemProps) {
+                                             List<String> systemProps, Consumer<String> log) {
         String javaBinary = opts.getOrDefault("java",
                 Path.of(System.getProperty("java.home"), "bin", "java").toString());
 
@@ -449,12 +514,13 @@ public final class Main {
     }
 
     /**
-     * How this run arms the harness: autorun, or hold.
+     * How this run arms the harness: autorun, or hold — and where it writes.
      *
-     * <p>They are mutually exclusive and the reason is not a policy choice. An autorun suite calls
-     * {@code server.halt(false)} the moment its scenes drain — which takes the endpoint down
-     * underneath anything attached to it, mid-call. So a run with out-of-process scenes must hold:
-     * the server arms, publishes its endpoint descriptor, and waits to be told to run.
+     * <p>The two arming modes are mutually exclusive and the reason is not a policy choice. An
+     * autorun suite calls {@code server.halt(false)} the moment its scenes drain — which takes the
+     * endpoint down underneath anything attached to it, mid-call. So a run with out-of-process
+     * scenes must hold: the server arms, publishes its endpoint descriptor, and waits to be told to
+     * run.
      */
     private static List<String> armingProps(Map<String, String> opts, Path gameDir) {
         List<String> props = new ArrayList<>(resultsProps(resultsName(opts)));
@@ -509,7 +575,8 @@ public final class Main {
      * already uses, and it cannot leave an orphan holding the port.
      */
     private static int runAttached(Path gameDir, Path results, Map<String, String> opts,
-                                   List<String> systemProps, int timeoutMinutes, String loader)
+                                   List<String> systemProps, int timeoutMinutes, String loader,
+                                   Consumer<String> log)
             throws IOException, InterruptedException {
         Path attachedDir = Path.of(opts.get("attached")).toAbsolutePath().normalize();
         Path attachedResults = gameDir.resolve("stagewright-attached-results.jsonl");
@@ -517,7 +584,8 @@ public final class Main {
         Path runLog = gameDir.resolve("stagewright-run.log");
         Files.deleteIfExists(attachedResults);
 
-        Process game = startServer(gameDir, opts, systemProps, List.of(), runLog);
+        CrashWatch crashes = CrashWatch.on(gameDir);
+        Process game = startServer(gameDir, opts, systemProps, List.of(), runLog, log);
         int attachedCode;
         try {
             EndpointDescriptor descriptor = awaitEndpoint(endpoint, game, runLog, timeoutMinutes);
@@ -546,10 +614,13 @@ public final class Main {
                 // Now the in-process half, on the same live server.
                 System.out.println("[stagewright] triggering the in-process suite (mc.test.run)");
                 binding.route("mc.test.run", java.util.Map.of());
-                Waited waited = awaitDoneFooter(results, timeoutMinutes, game);
+                Waited waited = awaitDoneFooter(results, timeoutMinutes, game, crashes);
                 if (waited == Waited.TIMED_OUT) {
                     System.err.println("[stagewright] the in-process suite did not finish within "
                             + timeoutMinutes + " minutes and the server was still alive — see " + runLog);
+                } else if (waited == Waited.CRASHED) {
+                    System.err.println("[stagewright] the server crashed during the in-process suite"
+                            + " — " + crashes.describe() + ", then " + runLog);
                 } else if (waited == Waited.PROCESS_DIED) {
                     System.err.println("[stagewright] the server exited before the in-process suite"
                             + " finished — see " + runLog);
@@ -560,7 +631,7 @@ public final class Main {
             game.waitFor(30, TimeUnit.SECONDS);
         }
 
-        int inProcess = judge(gameDir, results, opts, runLog);
+        int inProcess = judge(gameDir, results, opts, runLog, crashes);
         // Worst-wins across the two files, the same rule the companion client already gets:
         // GREEN 0 < RED 1 < DEAD 2 < ENV 3. Reporting only the in-process verdict would let a red
         // attached half ride home on a green suite.
@@ -661,23 +732,13 @@ public final class Main {
         }
     }
 
-    private static int judge(Path gameDir, Path results, Map<String, String> opts, Path log)
-            throws IOException {
+    private static int judge(Path gameDir, Path results, Map<String, String> opts, Path log,
+                             CrashWatch crashes) throws IOException {
         if (!Files.isRegularFile(results)) {
             System.err.println("stagewright: ENV — the run wrote no results");
             System.err.println("  expected: " + results);
-            // The one cause we can rule in or out ourselves, stated rather than listed. Offering a
-            // menu of three possibilities when we know the answer to one of them sends the reader
-            // to check something we already checked.
-            if (!ModInstall.frameworkPresent(gameDir)) {
-                System.err.println("  There is no StageWright jar in " + gameDir.resolve("mods")
-                        + ", so nothing in this pack could have armed. Drop --no-install to let"
-                        + " this CLI install it.");
-            } else {
-                System.err.println("  A StageWright jar IS in this pack's mods folder, so it either"
-                        + " failed to load or the server never reached its first tick — " + log
-                        + " says which. A jar built for the other loader looks like this too.");
-            }
+            noResultsCause(gameDir, results, crashes.fresh(),
+                    ModInstall.frameworkPresent(gameDir), log).forEach(System.err::println);
             return 3;
         }
 

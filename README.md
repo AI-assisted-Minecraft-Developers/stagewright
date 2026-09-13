@@ -82,6 +82,26 @@ plugin's `virtualDisplay` makes. In exchange the pack runs the way a player runs
 that need a connected player finally execute: All the Mods 10's 进度解锁 and 任务领取 had skipped in
 every run that ever existed before this.
 
+**A crash on the first client tick is the pack's, not the runner's.** A client ticks throughout its
+own loading — `Minecraft.run` calls `runTick` from the first frame — so every mod's client-tick
+handler fires while the loading overlay is still up and configs are still being loaded. A mod that
+reads a config value there with no guard throws `Cannot get config value before config is loaded` and
+takes the launch down, under any launcher, with nothing of StageWright's on the stack. The director
+does not force or count those ticks, and the run is reported as the crash it is — the report under
+`<game dir>/crash-reports` names the mod. Drop it from the client half or take it up with its author.
+
+**Which file answers which question.** Each topology leaves its logs under its own game dir, and the
+two client-side files are not the same log:
+
+| topology | the game's own log | the launcher's output |
+|---|---|---|
+| server (`--game-dir <server dir>`) | `stagewright-run.log` | — (the CLI runs the server itself) |
+| HeadlessMC client (`--headlessmc`) | `logs/latest.log` | `stagewright-headlessmc.log` |
+| `--display-client` | `logs/latest.log` | `stagewright-client-launch.log` |
+
+A crash line points at the crash report first and the launcher log second; what the game itself said
+on the way down is in `logs/latest.log`.
+
 #### …or give HeadlessMC an account: `--account` / `--online`
 
 Offline is what forces the stub, so an account is what removes it — and then HeadlessMC's launch is

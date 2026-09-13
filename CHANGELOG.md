@@ -33,6 +33,44 @@ conditionally: a topology on the convention produces a byte-identical command li
 StageWright jar older than the property ignores it and writes the convention, which is exactly the
 old failure again — so the ENV verdict now names that possibility when the run was renamed.
 
+### A run ends when its results file says so, not when the game's JVM exits · green against a third party
+
+Those were the same statement for as long as every pack could close itself. A dedicated server halts
+when the suite drains, so waiting for the process was waiting for the run. On a 262-mod pack it is
+not: the suite finishes, the footer lands, the harness's exit watchdog warns and calls
+`Runtime.halt(0)` — and the process is still there afterwards, in futex wait, unreachable by `jcmd`
+and silent under `SIGQUIT`, which is what a JVM stuck inside `VM_Exit` looks like from outside.
+`halt` is already the most forceful thing a JVM can do to itself; it still needs a safepoint, and a
+process wedged in native code never reaches one. Nothing inside the game can improve on that.
+
+So the supervisor is now the backstop. Every topology waits for the done footer, gives a finished
+game 45 seconds to close itself — longer than the harness's own 30-second watchdog, so a JVM that
+can go down always does — and then kills the process tree and judges the finished file. A pack that
+cannot end its own process costs 45 seconds instead of the whole `--timeout`.
+
+### A crash report ends the wait, and then ends the explaining · green against a third party
+
+The other half of the same problem, and the reason the first one was hard to see: a crashed
+Minecraft frequently does not exit either. One mod's un-shut-down thread pool keeps the JVM in the
+process table long after the crash report is on disk and the window is gone, so `Process.isAlive`
+stays true, the CLI waits out the full `--timeout`, and then reports "the run wrote no results" —
+true, forty-five minutes late, and silent about the report that has been sitting in `crash-reports/`
+since minute three.
+
+The directory is snapshotted before the launch and polled beside the results file. Names rather than
+timestamps decide what is new, because a pack directory is reused and its old reports would
+otherwise fail every run before it started. The crash line then points at the launcher's own
+output, which a `--display-client` run now writes to `stagewright-client-launch.log`
+(`stagewright-headlessmc.log` stays the HeadlessMC launch's), so the pointer no longer names a
+launcher the run never used.
+
+The ENV verdict that follows now says the crash report and nothing else. It used to name the report
+and then offer three guesses underneath it — the framework jar may have failed to load, an
+`-lwjgl` stub may have handed a mod an all-zero image, you renamed the results file — so the last
+three paragraphs a reader saw were all wrong about a run whose cause was already on disk, and one of
+them was about a stub `--display-client` never uses. A report is the game's own account; the guesses
+are still printed when there is none, which is the case they were written for.
+
 ### Loader detection reads the pack's own launch script · green against a third party
 
 A pack directory holds every loader it has ever had installed — fourteen, in the one that found

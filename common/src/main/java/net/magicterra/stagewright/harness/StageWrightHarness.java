@@ -572,6 +572,16 @@ public final class StageWrightHarness {
      *
      * <p>Dedicated servers only. Under the client topology this JVM is a game the director is still
      * shutting down in an orderly way, and halting it here would race that.
+     *
+     * <p><b>{@code halt} is already the most forceful thing a JVM can do to itself, and it is not
+     * always enough.</b> It skips shutdown hooks — which is the point, since a hook that waits on
+     * the server thread would deadlock against the thread that called it — but it still has to reach
+     * a safepoint to bring the VM down, and a process wedged in native code never gets there. Measured
+     * on a 262-mod pack: this warning is the last line in the log, the process then sits in futex
+     * wait, {@code jcmd} cannot attach and {@code SIGQUIT} produces no thread dump — all three being
+     * what a JVM stuck inside {@code VM_Exit} looks like from outside. So this is best-effort by
+     * construction, and the supervisor is the backstop: the CLI stops waiting once the results file
+     * carries its done footer and kills the process tree itself.
      */
     private void armExitWatchdog() {
         if (!server.isDedicatedServer()) return;

@@ -5,6 +5,12 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
+## A gradle gate still waits for a game JVM that cannot exit
+
+The CLI stops at the done footer and kills what it launched; the plugin's gate is a `JavaExec` and
+waits for the process, so a pack whose mods leave non-daemon threads behind costs that topology its
+whole `timeoutMinutes` after the suite has finished. Same defect, other consumer.
+
 ## The companion mechanism is configuration-cache incompatible
 
 `stagewright { topologies { … companionRunTask = 'x' } }` starts a second game process built from
