@@ -637,10 +637,10 @@ bare-bones testkit-`<loader>` module to a real, feature-loaded mod. Same exit
 codes as plain T0 above; the suite header's `registered[]` carries the
 built-in scenes plus every downstream `wd.*` scene.
 
-The `wd.*` scenes live in `common` behind a loader-injected body-factory seam
-(neoforge injects `FakePlayerFactory`; fabric injects a vanilla-only
-`AvatarFakePlayer`), so both loaders register the **same** scenes via the **same**
-common `SceneProvider` service file. P1.6's dual-loader ×3 determinism matrix
+The `wd.*` scenes live in `common` and take their server bodies from worlddriver's common
+`ServerAvatarBodies`, which joins a vanilla player through `PlayerList.placeNewPlayer` on
+either loader (until 2026-09-14 each loader injected its own fake-player factory there), so
+both loaders register the **same** scenes via the **same** common `SceneProvider` service file. P1.6's dual-loader ×3 determinism matrix
 found every `wd.*` scene metric **byte-identical across both loaders** (fabric ==
 neoforge; the sole timing variance is `wd.entityLeash`'s await tick count — an
 entity-indexing wait sensitive to server startup tick-debt, both within the
