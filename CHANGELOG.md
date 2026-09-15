@@ -10,6 +10,19 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ---
 
+## 2026-09-15
+
+### An arena PREP gives up on says what the chunk system thinks of it · compiled
+
+The ENV_FAIL for an arena that never became usable now ends with, per arena chunk, its ticket level,
+full status and entity-ticking future (`pending`, `done`, or the failure it holds — a holder never
+promoted still holds the unloaded result), and the ticket levels of every chunk within two of the
+arena. It is for the integrated-NeoForge failure where every arena chunk is present, none ticks
+entities, and the count never moves: the old message could say that much and not which of an
+unticketed chunk, an unpromoted holder or a failed promotion it was. Reads only; nothing is loaded or
+ticketed. The holder is found by reflection on its Mojang name; where that name is absent the chunk's
+public debug line stands in, without the future.
+
 ## 2026-09-11
 
 Everything below marked **green against a third party** was verified on a 262-mod NeoForge 21.1.248

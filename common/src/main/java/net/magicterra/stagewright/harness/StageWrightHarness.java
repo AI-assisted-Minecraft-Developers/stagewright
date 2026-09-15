@@ -327,7 +327,7 @@ public final class StageWrightHarness {
                                 + what + " after " + phaseTicks + " ticks, and that stopped changing "
                                 + prepStalledTicks + " ticks ago. Dimension "
                                 + level.dimension().location() + " at " + origin.getX() + ","
-                                + origin.getZ() + ".");
+                                + origin.getZ() + ". " + ArenaChunkReport.describe(level, origin, radius));
                         teardown(scene, level, origin, radius);
                     }
                 }
