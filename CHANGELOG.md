@@ -12,25 +12,20 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ## 2026-09-15
 
-### The server thread sample says where PREP's executor polls go · compiled
+### An arena is stalled only when the whole level has stopped loading around it · compiled
 
-With PREP running the chunk executor, integrated NeoForge went from five to eight stalled arenas a run
-to two, and seven arenas that would have stalled were ready after 100 to 350 ticks. The two that still
-failed had had seven to twelve thousand polls, and their executor held the same two tasks throughout:
-a poll runs the distance manager's pending updates first and returns without the executor's tasks
-whenever it found any. The server thread sample now also counts the samples inside
-`ServerChunkCache.pollTask` and names their most frequent stacks, cut at that frame.
-
-### PREP gives a stalled arena's chunk executor a slice of every tick · compiled
-
-The readings below traced the integrated-NeoForge stall to vanilla. The server thread spent its ticks
-in `ChunkMap.processUnloads`, re-running an unload whose chunk was not ready for saving because a
-generation still referenced it. The FULL step that would release that reference waits on the chunk
-executor, which vanilla runs only in the time a tick leaves over, and the re-running unload left none;
-the arena's neighbours stood at `spawn` until PREP gave up. Once an arena has made no progress for 20
-ticks, PREP now runs chunk executor tasks for up to 10 ms of each tick, as a synchronous chunk load does
-while it waits, and the scene records `prep.chunkPump`: the tick it began, the unloads that were not
-ready then, and how many polls ran. The stalled-arena report also lists the unloads that are not ready.
+The integrated-NeoForge ENV_FAIL was not a stuck chunk system. The readings below had the arena's
+neighbours at `spawn` behind a server thread whose ticks went to `ChunkMap.processUnloads`, which looked
+like the unloads starving the chunk executor. Running that executor from PREP for part of every tick was
+tried and taken out again: the executor answered about fifty polls a tick, arenas still waited up to
+380 ticks, and it changed the order every scene's chunks load in for a queue that was only long. Of
+74 stalled arenas across the integrated-NeoForge runs on hand, 49 came straight after a scene that
+adopted the real player, which only 6 in 100 scenes follow. That scene sends the player back where it
+came from, the chunks there reload ahead of the next arena's neighbours, and the arena stood still
+past `PREP_STALL_TICKS` while they did. PREP now also counts the level's loaded chunks and the chunks
+it has turned ticking as progress, so an arena waiting its turn is not a stall; one that waits past
+`PREP_CEILING_TICKS` still fails, and a stall's message names both counts. The report also lists the
+unloads that are not ready.
 
 ### A stalled arena's report says where the server thread spent the wait · compiled
 

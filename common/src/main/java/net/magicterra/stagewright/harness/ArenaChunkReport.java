@@ -247,7 +247,7 @@ final class ArenaChunkReport {
      * latest-status}. {@code ChunkMap.processUnloads} re-runs an unload whose chunk is not ready for as
      * long as the tick has time, and a chunk is not ready while a generation still references it.
      */
-    static String pendingUnloads(ServerLevel level, BlockPos origin) {
+    private static String pendingUnloads(ServerLevel level, BlockPos origin) {
         if (PENDING_UNLOADS == null) return "?";
         ChunkPos centre = new ChunkPos(origin);
         try {

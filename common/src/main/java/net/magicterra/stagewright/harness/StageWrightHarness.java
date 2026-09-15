@@ -54,22 +54,16 @@ public final class StageWrightHarness {
      *  stall test. Deliberately far above any real arena so it is never the thing that fires. */
     private static final int PREP_CEILING_TICKS = 6_000;
 
-    /** How long an arena stands still before PREP runs chunk executor tasks itself, and for how long
-     *  per tick: a second of no progress, and a fifth of a tick. */
-    private static final int PREP_PUMP_AFTER_TICKS = 20;
-    private static final long PREP_PUMP_NANOS = 10_000_000L;
-
     private enum Phase { PREP, RUN, ADVANCE_DONE }
 
-    /** Arena chunks ready as of the last PREP tick, and how long that number has stood still. */
+    /** Arena chunks ready as of the last PREP tick, the level's loaded chunks and chunks turned ticking
+     *  then, and how long none of the three has changed. */
     private int prepReadyChunks;
+    private int prepLevelLoaded = -1;
+    private int prepLevelTicking = -1;
     private int prepStalledTicks;
     /** Samples the server thread from half way through a PREP stall; null the rest of the time. */
     private ServerThreadSampler prepSampler;
-    /** When this scene's PREP began running chunk executor tasks and what was waiting to unload then,
-     *  and how many polls it has run; null and 0 until it does. */
-    private String prepPumpNote;
-    private int prepPumpPolls;
 
     private final MinecraftServer server;
     private final List<Scene> scenes;
@@ -290,9 +284,6 @@ public final class StageWrightHarness {
                     // published commits could not answer because neither run had the distribution.
                     ctx.record("prep.ticks", phaseTicks);
                     ctx.record("prep.ms", System.currentTimeMillis() - sceneStartMs);
-                    if (prepPumpNote != null) {
-                        ctx.record("prep.chunkPump", prepPumpNote + "; " + prepPumpPolls + " executor polls");
-                    }
                     arenaBefore = ArenaAudit.take(level, origin, radius);
                     // Per scene, not per suite: this is what stops one scene's clock from being a
                     // function of how long its predecessors took — or of a predecessor having asked
@@ -322,8 +313,19 @@ public final class StageWrightHarness {
                     // will fix it. The hard ceiling stays as a backstop for a chunk system that
                     // dribbles forever.
                     int ready = readyChunks(level, origin, radius);
-                    if (ready > prepReadyChunks) {
-                        prepReadyChunks = ready;
+                    // Progress is the level's, not only the arena's. An arena waits its turn behind
+                    // whatever else the level is loading: on integrated NeoForge, a scene that adopted
+                    // the real player sends it back where it came from, the chunks there reload ahead
+                    // of the next arena's neighbours, and the arena stood still past PREP_STALL_TICKS
+                    // while they did. Stalled means nothing in the level loaded, unloaded or started
+                    // ticking either.
+                    int loaded = level.getChunkSource().getLoadedChunksCount();
+                    int ticking = level.getChunkSource().getTickingGenerated();
+                    boolean arenaMoved = ready > prepReadyChunks;
+                    if (arenaMoved || loaded != prepLevelLoaded || ticking != prepLevelTicking) {
+                        if (arenaMoved) prepReadyChunks = ready;
+                        prepLevelLoaded = loaded;
+                        prepLevelTicking = ticking;
                         prepStalledTicks = 0;
                         prepSampler = ServerThreadSampler.stop(prepSampler);
                     } else {
@@ -333,20 +335,6 @@ public final class StageWrightHarness {
                     // in ENV_FAIL says where the thread spent the ticks it waited.
                     if (prepStalledTicks == PREP_STALL_TICKS / 2 && prepSampler == null) {
                         prepSampler = ServerThreadSampler.start(server.getRunningThread());
-                    }
-                    // Vanilla can starve the chunk executor while an arena waits. An unload whose chunk
-                    // a generation still references re-queues itself for as long as the tick has time,
-                    // and the FULL step that would drop the reference runs on the chunk executor, which
-                    // only gets the time a tick leaves over: on integrated NeoForge the arena's
-                    // neighbours stood at spawn for good. Once stalled, PREP gives the executor a slice
-                    // of every tick, as a synchronous chunk load does while it waits.
-                    if (prepStalledTicks >= PREP_PUMP_AFTER_TICKS) {
-                        if (prepPumpNote == null) {
-                            prepPumpNote = "from stalled tick " + prepStalledTicks + ", unloads "
-                                    + ArenaChunkReport.pendingUnloads(level, origin);
-                        }
-                        long until = System.nanoTime() + PREP_PUMP_NANOS;
-                        while (System.nanoTime() < until && level.getChunkSource().pollTask()) prepPumpPolls++;
                     }
                     if (prepStalledTicks > PREP_STALL_TICKS || phaseTicks > PREP_CEILING_TICKS) {
                         int total = (2 * radius + 1) * (2 * radius + 1);
@@ -359,13 +347,12 @@ public final class StageWrightHarness {
                                 : "all " + total + " arena chunks loaded but only " + ready
                                         + " reached entity-ticking";
                         record(scene, SceneOutcome.ENV_FAIL, 0, "the arena never became usable: "
-                                + what + " after " + phaseTicks + " ticks, and that stopped changing "
-                                + prepStalledTicks + " ticks ago. Dimension "
+                                + what + " after " + phaseTicks + " ticks, and neither that nor the level's chunks ("
+                                + loaded + " loaded, " + ticking + " turned ticking so far) had changed for "
+                                + prepStalledTicks + " ticks. Dimension "
                                 + level.dimension().location() + " at " + origin.getX() + ","
                                 + origin.getZ() + ". " + ArenaChunkReport.describe(level, origin, radius)
-                                + (prepSampler == null ? "" : " Server thread while stalled: " + prepSampler.describe() + ".")
-                                + (prepPumpNote == null ? "" : " Chunk executor run by PREP " + prepPumpNote
-                                        + "; " + prepPumpPolls + " executor polls."));
+                                + (prepSampler == null ? "" : " Server thread while stalled: " + prepSampler.describe() + "."));
                         prepSampler = ServerThreadSampler.stop(prepSampler);
                         teardown(scene, level, origin, radius);
                     }
@@ -553,9 +540,9 @@ public final class StageWrightHarness {
         phase = Phase.PREP;
         phaseTicks = 0;
         prepReadyChunks = 0;
+        prepLevelLoaded = -1;
+        prepLevelTicking = -1;
         prepStalledTicks = 0;
-        prepPumpNote = null;
-        prepPumpPolls = 0;
         ctx = null;
         sceneLevel = null;
         // A fresh starvation window per scene, for the same reason the clock is applied per scene:
