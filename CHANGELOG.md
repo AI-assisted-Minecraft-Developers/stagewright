@@ -12,6 +12,14 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ## 2026-09-15
 
+### The same report names what waits in the chunk executor and the server's queue · compiled
+
+The third reading had the sorter's main queue holding work while its main executor waited on a batch,
+with two tasks sitting in the chunk executor. Vanilla runs chunk executor tasks only once the server's
+own task queue is empty and the server has time before its next tick. The report now ends with both
+queues, each with the classes of the tasks at its head (a server task also names the tick it was queued
+on), the server's tick count, its average tick time and whether it is sprinting. It still only reads.
+
 ### The same report ends with the chunk task sorter's state · compiled
 
 The second reading had every chunk within two of the arena that was not already FULL stopped at

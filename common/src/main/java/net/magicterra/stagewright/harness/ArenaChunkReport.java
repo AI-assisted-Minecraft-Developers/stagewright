@@ -4,18 +4,23 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.TickTask;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ChunkResult;
 import net.minecraft.server.level.ChunkTaskPriorityQueue;
 import net.minecraft.server.level.ChunkTaskPriorityQueueSorter;
+import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.thread.BlockableEventLoop;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
@@ -30,15 +35,18 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
  * {@code ChunkMap.prepareEntityTickingChunk}: generation to {@code FULL} of every chunk within two,
  * then a hop onto the main-thread executor. The second reading had every chunk within two that was not
  * already FULL stopped at {@code spawn}, the step before, with no generation task pending. The
- * {@code FULL} step runs on the main thread through {@code ChunkMap}'s task sorter, which holds a
- * chunk's tasks while an earlier one is acquired and puts an executor to sleep until a release.
+ * {@code FULL} step runs on the main thread through {@code ChunkMap}'s task sorter, and the third
+ * reading had the sorter's main queue holding work while its main executor waited on a batch, with two
+ * tasks sitting in the chunk executor. Vanilla runs those only once the server's own task queue is
+ * empty and the server has time before its next tick.
  *
  * <p>So per arena chunk: the ticket level, the full status and the ticking and entity-ticking futures;
  * per chunk within two of the arena: the ticket level, how far generation got and the full-chunk
- * future; then the pending generation tasks, the main-thread tasks, and the sorter's state.
+ * future; then the pending generation tasks, the sorter's state, the chunk executor's and the server's
+ * own queues with what heads them, and the server's tick time.
  *
- * <p>An instrument only: it reads, and never loads a chunk or adds a ticket. The private members are
- * found by their Mojang names, the runtime names in a development run and on NeoForge.
+ * <p>An instrument only: it reads, and never loads a chunk, adds a ticket or runs a task. The private
+ * members are found by their Mojang names, the runtime names in a development run and on NeoForge.
  */
 final class ArenaChunkReport {
 
@@ -53,6 +61,12 @@ final class ArenaChunkReport {
     private static final Field GENERATION_TASKS = declaredField(ChunkMap.class, "pendingGenerationTasks");
     private static final Field SORTER = declaredField(ChunkMap.class, "queueSorter");
     private static final Field SORTER_QUEUES = declaredField(ChunkTaskPriorityQueueSorter.class, "queues");
+    private static final Field CHUNK_EXECUTOR = declaredField(ServerChunkCache.class, "mainThreadProcessor");
+    private static final Field PENDING_RUNNABLES = declaredField(BlockableEventLoop.class, "pendingRunnables");
+    private static final Field TICK_TASK_RUNNABLE = declaredField(TickTask.class, "runnable");
+
+    /** How many queued tasks {@link #queue} names. */
+    private static final int TASKS_NAMED = 3;
 
     private static Method visibleHolder() {
         try {
@@ -96,9 +110,8 @@ final class ArenaChunkReport {
                 out.append(neighbour(level, new ChunkPos(centre.x + dx, centre.z + dz)));
             }
         }
-        out.append(". Queued: ").append(generationTasks(level)).append(" generation task(s), ")
-                .append(level.getChunkSource().getPendingTasksCount()).append(" main-thread task(s). Sorter: ")
-                .append(sorter(level)).append('.');
+        out.append(". Queued: ").append(generationTasks(level)).append(" generation task(s). Sorter: ")
+                .append(sorter(level)).append(". Executors: ").append(executors(level)).append('.');
         return out.toString();
     }
 
@@ -160,9 +173,9 @@ final class ArenaChunkReport {
 
     /**
      * The sorter's own debug line (each executor's queue with the chunks it holds acquired, and how many
-     * executors sleep waiting for a release), whether it has work, and each queue's name with its first
-     * non-empty priority, which is {@link ChunkTaskPriorityQueue#PRIORITY_LEVEL_COUNT} when it is empty.
-     * The sorter changes on its own mailbox thread, so a read that races it says so instead.
+     * executors sleep, which is idle with nothing to poll), whether it has work, and each queue's name
+     * with its first non-empty priority, which is {@link ChunkTaskPriorityQueue#PRIORITY_LEVEL_COUNT} when
+     * it is empty. The sorter changes on its own mailbox thread, so a read that races it says so instead.
      */
     private static String sorter(ServerLevel level) {
         if (SORTER == null) return "?";
@@ -177,6 +190,49 @@ final class ArenaChunkReport {
         } catch (ReflectiveOperationException | RuntimeException e) {
             return "? (" + e + ")";
         }
+    }
+
+    /**
+     * The chunk executor's queue and the server's own, each with what heads it, then the server's tick
+     * count and time. A server task names the tick it was queued on beside the class that queued it.
+     */
+    private static String executors(ServerLevel level) {
+        MinecraftServer server = level.getServer();
+        BlockableEventLoop<?> chunks = null;
+        if (CHUNK_EXECUTOR != null) {
+            try {
+                chunks = (BlockableEventLoop<?>) CHUNK_EXECUTOR.get(level.getChunkSource());
+            } catch (ReflectiveOperationException | RuntimeException ignored) {
+                // Stays null and prints as unreadable.
+            }
+        }
+        return "chunk " + (chunks == null ? "unreadable" : queue(chunks)) + "; server " + queue(server)
+                + "; server tick " + server.getTickCount() + ", average "
+                + String.format(java.util.Locale.ROOT, "%.1f", server.getAverageTickTimeNanos() / 1_000_000.0)
+                + " ms, sprinting " + server.tickRateManager().isSprinting();
+    }
+
+    private static String queue(BlockableEventLoop<?> loop) {
+        StringBuilder out = new StringBuilder().append(loop.getPendingTasksCount()).append(" waiting");
+        if (PENDING_RUNNABLES == null) return out.toString();
+        try {
+            int n = 0;
+            for (Object task : (Queue<?>) PENDING_RUNNABLES.get(loop)) {
+                out.append(n == 0 ? " [" : ", ");
+                if (n++ == TASKS_NAMED) { out.append("…"); break; }
+                out.append(taskName(task));
+            }
+            return n == 0 ? out.toString() : out.append(']').toString();
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return out.append(" (").append(e).append(')').toString();
+        }
+    }
+
+    private static String taskName(Object task) throws ReflectiveOperationException {
+        if (task instanceof TickTask t && TICK_TASK_RUNNABLE != null) {
+            return "tick " + t.getTick() + " " + TICK_TASK_RUNNABLE.get(t).getClass().getName();
+        }
+        return task.getClass().getName();
     }
 
     private static ChunkHolder holder(ServerLevel level, ChunkPos c) throws ReflectiveOperationException {
