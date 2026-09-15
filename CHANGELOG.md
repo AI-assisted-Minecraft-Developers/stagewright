@@ -12,6 +12,15 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ## 2026-09-15
 
+### The server thread sample says where PREP's executor polls go · compiled
+
+With PREP running the chunk executor, integrated NeoForge went from five to eight stalled arenas a run
+to two, and seven arenas that would have stalled were ready after 100 to 350 ticks. The two that still
+failed had had seven to twelve thousand polls, and their executor held the same two tasks throughout:
+a poll runs the distance manager's pending updates first and returns without the executor's tasks
+whenever it found any. The server thread sample now also counts the samples inside
+`ServerChunkCache.pollTask` and names their most frequent stacks, cut at that frame.
+
 ### PREP gives a stalled arena's chunk executor a slice of every tick · compiled
 
 The readings below traced the integrated-NeoForge stall to vanilla. The server thread spent its ticks
