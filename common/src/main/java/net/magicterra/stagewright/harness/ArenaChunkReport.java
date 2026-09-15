@@ -37,13 +37,15 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
  * already FULL stopped at {@code spawn}, the step before, with no generation task pending. The
  * {@code FULL} step runs on the main thread through {@code ChunkMap}'s task sorter, and the third
  * reading had the sorter's main queue holding work while its main executor waited on a batch, with two
- * tasks sitting in the chunk executor. Vanilla runs those only once the server's own task queue is
- * empty and the server has time before its next tick.
+ * tasks sitting in the chunk executor. The fourth had the server's own queue all but empty and every
+ * tick taking its whole budget, and a sample of the server thread put that time in
+ * {@code ChunkMap.processUnloads}, re-running an unload that re-queues itself: an unload waits until its
+ * chunk is ready for saving, which a generation still referencing it prevents.
  *
  * <p>So per arena chunk: the ticket level, the full status and the ticking and entity-ticking futures;
  * per chunk within two of the arena: the ticket level, how far generation got and the full-chunk
  * future; then the pending generation tasks, the sorter's state, the chunk executor's and the server's
- * own queues with what heads them, and the server's tick time.
+ * own queues with what heads them, the server's tick time, and the unloads that are not ready.
  *
  * <p>An instrument only: it reads, and never loads a chunk, adds a ticket or runs a task. The private
  * members are found by their Mojang names, the runtime names in a development run and on NeoForge.
@@ -59,6 +61,7 @@ final class ArenaChunkReport {
     private static final Method VISIBLE_HOLDER = visibleHolder();
 
     private static final Field GENERATION_TASKS = declaredField(ChunkMap.class, "pendingGenerationTasks");
+    private static final Field PENDING_UNLOADS = declaredField(ChunkMap.class, "pendingUnloads");
     private static final Field SORTER = declaredField(ChunkMap.class, "queueSorter");
     private static final Field SORTER_QUEUES = declaredField(ChunkTaskPriorityQueueSorter.class, "queues");
     private static final Field CHUNK_EXECUTOR = declaredField(ServerChunkCache.class, "mainThreadProcessor");
@@ -67,6 +70,8 @@ final class ArenaChunkReport {
 
     /** How many queued tasks {@link #queue} names. */
     private static final int TASKS_NAMED = 3;
+    /** How many unloads that are not ready {@link #pendingUnloads} names. */
+    private static final int UNLOADS_NAMED = 6;
 
     private static Method visibleHolder() {
         try {
@@ -111,7 +116,8 @@ final class ArenaChunkReport {
             }
         }
         out.append(". Queued: ").append(generationTasks(level)).append(" generation task(s). Sorter: ")
-                .append(sorter(level)).append(". Executors: ").append(executors(level)).append('.');
+                .append(sorter(level)).append(". Executors: ").append(executors(level))
+                .append(". Unloads: ").append(pendingUnloads(level, origin)).append('.');
         return out.toString();
     }
 
@@ -233,6 +239,37 @@ final class ArenaChunkReport {
             return "tick " + t.getTick() + " " + TICK_TASK_RUNNABLE.get(t).getClass().getName();
         }
         return task.getClass().getName();
+    }
+
+    /**
+     * The chunks waiting to unload: how many, how many of them are not ready for saving, and the first
+     * few of those as {@code x,z (chunks from the arena centre) generation-references/save-sync-done/
+     * latest-status}. {@code ChunkMap.processUnloads} re-runs an unload whose chunk is not ready for as
+     * long as the tick has time, and a chunk is not ready while a generation still references it.
+     */
+    static String pendingUnloads(ServerLevel level, BlockPos origin) {
+        if (PENDING_UNLOADS == null) return "?";
+        ChunkPos centre = new ChunkPos(origin);
+        try {
+            Map<?, ?> pending = (Map<?, ?>) PENDING_UNLOADS.get(level.getChunkSource().chunkMap);
+            StringBuilder named = new StringBuilder();
+            int notReady = 0;
+            for (Object o : pending.values()) {
+                ChunkHolder h = (ChunkHolder) o;
+                if (h.isReadyForSaving()) continue;
+                if (notReady++ < UNLOADS_NAMED) {
+                    ChunkPos p = h.getPos();
+                    named.append(notReady == 1 ? ": " : ", ").append(p.x).append(',').append(p.z).append(" (")
+                            .append(Math.max(Math.abs(p.x - centre.x), Math.abs(p.z - centre.z))).append(" out) ")
+                            .append(h.getGenerationRefCount()).append('/').append(h.getSaveSyncFuture().isDone())
+                            .append('/').append(statusName(h.getLatestStatus()));
+                }
+            }
+            if (notReady > UNLOADS_NAMED) named.append(", …");
+            return pending.size() + " pending, " + notReady + " not ready for saving" + named;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return "? (" + e + ")";
+        }
     }
 
     private static ChunkHolder holder(ServerLevel level, ChunkPos c) throws ReflectiveOperationException {

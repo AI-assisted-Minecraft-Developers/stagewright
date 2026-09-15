@@ -12,6 +12,17 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ## 2026-09-15
 
+### PREP gives a stalled arena's chunk executor a slice of every tick · compiled
+
+The readings below traced the integrated-NeoForge stall to vanilla. The server thread spent its ticks
+in `ChunkMap.processUnloads`, re-running an unload whose chunk was not ready for saving because a
+generation still referenced it. The FULL step that would release that reference waits on the chunk
+executor, which vanilla runs only in the time a tick leaves over, and the re-running unload left none;
+the arena's neighbours stood at `spawn` until PREP gave up. Once an arena has made no progress for 20
+ticks, PREP now runs chunk executor tasks for up to 10 ms of each tick, as a synchronous chunk load does
+while it waits, and the scene records `prep.chunkPump`: the tick it began, the unloads that were not
+ready then, and how many polls ran. The stalled-arena report also lists the unloads that are not ready.
+
 ### A stalled arena's report says where the server thread spent the wait · compiled
 
 The fourth reading had the chunk executor holding sorter tasks that never ran, the server's own queue
