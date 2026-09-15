@@ -12,6 +12,15 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ## 2026-09-15
 
+### A stalled arena's report says where the server thread spent the wait · compiled
+
+The fourth reading had the chunk executor holding sorter tasks that never ran, the server's own queue
+all but empty, and an average tick time of 49.9 ms, a whole tick's budget: the thread had no time left
+for those tasks, and the report could not say what filled it. Half way to giving up, PREP now samples
+the server thread's stack every 5 ms for two seconds on a daemon thread, and the ENV_FAIL ends with the
+most frequent stacks and their sample counts. A sample pauses the thread for an instant; nothing else
+changes.
+
 ### The same report names what waits in the chunk executor and the server's queue · compiled
 
 The third reading had the sorter's main queue holding work while its main executor waited on a batch,

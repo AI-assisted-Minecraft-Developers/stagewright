@@ -59,6 +59,8 @@ public final class StageWrightHarness {
     /** Arena chunks ready as of the last PREP tick, and how long that number has stood still. */
     private int prepReadyChunks;
     private int prepStalledTicks;
+    /** Samples the server thread from half way through a PREP stall; null the rest of the time. */
+    private ServerThreadSampler prepSampler;
 
     private final MinecraftServer server;
     private final List<Scene> scenes;
@@ -291,6 +293,7 @@ public final class StageWrightHarness {
                     phaseTicks = 0;
                     prepReadyChunks = 0;
                     prepStalledTicks = 0;
+                    prepSampler = ServerThreadSampler.stop(prepSampler);
                 } else {
                     // Give up on STALL, not on elapsed time. A fixed tick budget is really a
                     // statement about how fast chunks generate, and that is a property of the pack:
@@ -310,8 +313,14 @@ public final class StageWrightHarness {
                     if (ready > prepReadyChunks) {
                         prepReadyChunks = ready;
                         prepStalledTicks = 0;
+                        prepSampler = ServerThreadSampler.stop(prepSampler);
                     } else {
                         prepStalledTicks++;
+                    }
+                    // Half way to giving up, start watching the server thread, so a stall that ends
+                    // in ENV_FAIL says where the thread spent the ticks it waited.
+                    if (prepStalledTicks == PREP_STALL_TICKS / 2 && prepSampler == null) {
+                        prepSampler = ServerThreadSampler.start(server.getRunningThread());
                     }
                     if (prepStalledTicks > PREP_STALL_TICKS || phaseTicks > PREP_CEILING_TICKS) {
                         int total = (2 * radius + 1) * (2 * radius + 1);
@@ -327,7 +336,9 @@ public final class StageWrightHarness {
                                 + what + " after " + phaseTicks + " ticks, and that stopped changing "
                                 + prepStalledTicks + " ticks ago. Dimension "
                                 + level.dimension().location() + " at " + origin.getX() + ","
-                                + origin.getZ() + ". " + ArenaChunkReport.describe(level, origin, radius));
+                                + origin.getZ() + ". " + ArenaChunkReport.describe(level, origin, radius)
+                                + (prepSampler == null ? "" : " Server thread while stalled: " + prepSampler.describe()));
+                        prepSampler = ServerThreadSampler.stop(prepSampler);
                         teardown(scene, level, origin, radius);
                     }
                 }
