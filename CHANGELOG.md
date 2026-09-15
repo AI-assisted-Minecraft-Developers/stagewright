@@ -12,7 +12,11 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ## 2026-09-15
 
-### An arena is stalled only when the whole level has stopped loading around it · compiled
+### An arena is stalled only when the whole level has stopped loading around it · green in the self-test suite
+
+Two integrated-NeoForge runs after it were GREEN with no ENV_FAIL, against 7 and 4 in the two before;
+their longest PREPs were 670 and 637 ticks, all client-body scenes following another.
+
 
 The integrated-NeoForge ENV_FAIL was not a stuck chunk system. The readings below had the arena's
 neighbours at `spawn` behind a server thread whose ticks went to `ChunkMap.processUnloads`, which looked
