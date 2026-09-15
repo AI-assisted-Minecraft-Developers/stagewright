@@ -3,6 +3,7 @@ package net.magicterra.stagewright.harness;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -12,6 +13,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ChunkResult;
+import net.minecraft.server.level.ChunkTaskPriorityQueue;
+import net.minecraft.server.level.ChunkTaskPriorityQueueSorter;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -25,26 +28,31 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
  * tickets at entity-ticking level with full status ENTITY_TICKING and their entity-ticking future
  * pending: the promotion was asked for and never finished. That promotion is
  * {@code ChunkMap.prepareEntityTickingChunk}: generation to {@code FULL} of every chunk within two,
- * then a hop onto the main-thread executor. So per arena chunk: the ticket level, the full status and
- * the ticking and entity-ticking futures; per chunk within two of the arena: the ticket level, how far
- * generation got and the full-chunk future; and the two queues the promotion passes through, the
- * pending generation tasks and the main-thread tasks.
+ * then a hop onto the main-thread executor. The second reading had every chunk within two that was not
+ * already FULL stopped at {@code spawn}, the step before, with no generation task pending. The
+ * {@code FULL} step runs on the main thread through {@code ChunkMap}'s task sorter, which holds a
+ * chunk's tasks while an earlier one is acquired and puts an executor to sleep until a release.
  *
- * <p>An instrument only: it reads, and never loads a chunk or adds a ticket.
+ * <p>So per arena chunk: the ticket level, the full status and the ticking and entity-ticking futures;
+ * per chunk within two of the arena: the ticket level, how far generation got and the full-chunk
+ * future; then the pending generation tasks, the main-thread tasks, and the sorter's state.
+ *
+ * <p>An instrument only: it reads, and never loads a chunk or adds a ticket. The private members are
+ * found by their Mojang names, the runtime names in a development run and on NeoForge.
  */
 final class ArenaChunkReport {
 
     private ArenaChunkReport() {}
 
     /**
-     * {@code ChunkMap.getVisibleChunkIfPresent} is protected, so it is looked up by its Mojang name: the
-     * runtime name in a development run and on NeoForge. Where that name does not exist the report
+     * {@code ChunkMap.getVisibleChunkIfPresent}, protected. Where that name does not exist the report
      * falls back to {@code ServerChunkCache.getChunkDebugData}, which is public but has no future.
      */
     private static final Method VISIBLE_HOLDER = visibleHolder();
 
-    /** {@code ChunkMap.pendingGenerationTasks}, private, by its Mojang name; null where it has another. */
-    private static final Field GENERATION_TASKS = generationTasksField();
+    private static final Field GENERATION_TASKS = declaredField(ChunkMap.class, "pendingGenerationTasks");
+    private static final Field SORTER = declaredField(ChunkMap.class, "queueSorter");
+    private static final Field SORTER_QUEUES = declaredField(ChunkTaskPriorityQueueSorter.class, "queues");
 
     private static Method visibleHolder() {
         try {
@@ -56,9 +64,10 @@ final class ArenaChunkReport {
         }
     }
 
-    private static Field generationTasksField() {
+    /** The private field, or null where it has another name. */
+    private static Field declaredField(Class<?> owner, String name) {
         try {
-            Field f = ChunkMap.class.getDeclaredField("pendingGenerationTasks");
+            Field f = owner.getDeclaredField(name);
             f.setAccessible(true);
             return f;
         } catch (ReflectiveOperationException | RuntimeException e) {
@@ -88,7 +97,8 @@ final class ArenaChunkReport {
             }
         }
         out.append(". Queued: ").append(generationTasks(level)).append(" generation task(s), ")
-                .append(level.getChunkSource().getPendingTasksCount()).append(" main-thread task(s).");
+                .append(level.getChunkSource().getPendingTasksCount()).append(" main-thread task(s). Sorter: ")
+                .append(sorter(level)).append('.');
         return out.toString();
     }
 
@@ -145,6 +155,27 @@ final class ArenaChunkReport {
             return Integer.toString(((List<?>) GENERATION_TASKS.get(level.getChunkSource().chunkMap)).size());
         } catch (ReflectiveOperationException | RuntimeException e) {
             return "?";
+        }
+    }
+
+    /**
+     * The sorter's own debug line (each executor's queue with the chunks it holds acquired, and how many
+     * executors sleep waiting for a release), whether it has work, and each queue's name with its first
+     * non-empty priority, which is {@link ChunkTaskPriorityQueue#PRIORITY_LEVEL_COUNT} when it is empty.
+     * The sorter changes on its own mailbox thread, so a read that races it says so instead.
+     */
+    private static String sorter(ServerLevel level) {
+        if (SORTER == null) return "?";
+        try {
+            ChunkTaskPriorityQueueSorter s = (ChunkTaskPriorityQueueSorter) SORTER.get(level.getChunkSource().chunkMap);
+            StringBuilder out = new StringBuilder(s.getDebugStatus()).append("; has work ").append(s.hasWork());
+            if (SORTER_QUEUES != null) {
+                out.append("; first non-empty priority (empty = ").append(ChunkTaskPriorityQueue.PRIORITY_LEVEL_COUNT)
+                        .append(") ").append(((Map<?, ?>) SORTER_QUEUES.get(s)).values());
+            }
+            return out.toString();
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return "? (" + e + ")";
         }
     }
 

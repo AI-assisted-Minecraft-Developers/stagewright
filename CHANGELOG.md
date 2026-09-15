@@ -12,6 +12,15 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ## 2026-09-15
 
+### The same report ends with the chunk task sorter's state · compiled
+
+The second reading had every chunk within two of the arena that was not already FULL stopped at
+`spawn`, one step short, with no generation task pending and two main-thread tasks. The `FULL` step
+runs on the main thread through `ChunkMap`'s task sorter, which holds a chunk's tasks while an earlier
+one is acquired and puts an executor to sleep until a release. The report now ends with the sorter's
+debug line (each queue's acquired chunks and the sleeping count), whether it has work, and each queue's
+first non-empty priority. The sorter and its queues are read by reflection on their Mojang names.
+
 ### The same report says how far generation got around the arena and what is queued · compiled
 
 The arena-chunk report now also gives each arena chunk's ticking future, and for every chunk within
