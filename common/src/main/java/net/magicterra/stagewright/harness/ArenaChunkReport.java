@@ -1,28 +1,34 @@
 package net.magicterra.stagewright.harness;
 
+import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ChunkResult;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 
 /**
  * What the chunk system says about an arena PREP gave up on, appended to that ENV_FAIL.
  *
  * <p>The failure it exists for: on integrated NeoForge, scenes ENV_FAIL with every arena chunk present
- * and none entity-ticking, and the count never changes again. Present-but-not-ticking has three
- * readings that want different investigations — the ticket is not at an entity-ticking level, the
- * holder was never promoted (its entity-ticking future still holds the unloaded result), or the
- * promotion ran and failed — and a neighbour short of FULL is what holds a promotion back. So per
- * arena chunk: the ticket level, the full status and that future; and the ticket levels of every chunk
- * within two of the arena, the ring a promotion waits on.
+ * and none entity-ticking, and the count never changes again. The first reading put the arena chunks'
+ * tickets at entity-ticking level with full status ENTITY_TICKING and their entity-ticking future
+ * pending: the promotion was asked for and never finished. That promotion is
+ * {@code ChunkMap.prepareEntityTickingChunk}: generation to {@code FULL} of every chunk within two,
+ * then a hop onto the main-thread executor. So per arena chunk: the ticket level, the full status and
+ * the ticking and entity-ticking futures; per chunk within two of the arena: the ticket level, how far
+ * generation got and the full-chunk future; and the two queues the promotion passes through, the
+ * pending generation tasks and the main-thread tasks.
  *
  * <p>An instrument only: it reads, and never loads a chunk or adds a ticket.
  */
@@ -37,6 +43,9 @@ final class ArenaChunkReport {
      */
     private static final Method VISIBLE_HOLDER = visibleHolder();
 
+    /** {@code ChunkMap.pendingGenerationTasks}, private, by its Mojang name; null where it has another. */
+    private static final Field GENERATION_TASKS = generationTasksField();
+
     private static Method visibleHolder() {
         try {
             Method m = ChunkMap.class.getDeclaredMethod("getVisibleChunkIfPresent", long.class);
@@ -47,9 +56,20 @@ final class ArenaChunkReport {
         }
     }
 
+    private static Field generationTasksField() {
+        try {
+            Field f = ChunkMap.class.getDeclaredField("pendingGenerationTasks");
+            f.setAccessible(true);
+            return f;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return null;
+        }
+    }
+
     static String describe(ServerLevel level, BlockPos origin, int radius) {
         ChunkPos centre = new ChunkPos(origin);
-        StringBuilder out = new StringBuilder("Arena chunks (x,z ticket-level full-status entity-ticking-future):");
+        StringBuilder out = new StringBuilder(
+                "Arena chunks (x,z ticket-level full-status ticking-future entity-ticking-future):");
         for (int dz = -radius; dz <= radius; dz++) {
             for (int dx = -radius; dx <= radius; dx++) {
                 ChunkPos c = new ChunkPos(centre.x + dx, centre.z + dz);
@@ -57,15 +77,18 @@ final class ArenaChunkReport {
             }
         }
         int ring = radius + 2;
-        out.append(" Ticket levels ").append(2 * ring + 1).append('x').append(2 * ring + 1)
-                .append(" around it, north row first, - for no holder:");
+        out.append(" Within two of it, ").append(2 * ring + 1).append('x').append(2 * ring + 1)
+                .append(" north row first, ticket-level/latest-status/full-future (+ done, . pending, x failed;"
+                        + " - for no holder):");
         for (int dz = -ring; dz <= ring; dz++) {
             out.append(dz == -ring ? " " : " / ");
             for (int dx = -ring; dx <= ring; dx++) {
                 if (dx > -ring) out.append(' ');
-                out.append(ticketLevel(level, new ChunkPos(centre.x + dx, centre.z + dz)));
+                out.append(neighbour(level, new ChunkPos(centre.x + dx, centre.z + dz)));
             }
         }
+        out.append(". Queued: ").append(generationTasks(level)).append(" generation task(s), ")
+                .append(level.getChunkSource().getPendingTasksCount()).append(" main-thread task(s).");
         return out.toString();
     }
 
@@ -74,7 +97,8 @@ final class ArenaChunkReport {
         try {
             ChunkHolder h = holder(level, c);
             if (h == null) return "no-holder";
-            return "L" + h.getTicketLevel() + " " + h.getFullStatus() + " " + future(h.getEntityTickingChunkFuture());
+            return "L" + h.getTicketLevel() + " " + h.getFullStatus() + " " + future(h.getTickingChunkFuture())
+                    + " " + future(h.getEntityTickingChunkFuture());
         } catch (ReflectiveOperationException | RuntimeException e) {
             return debugData(level, c) + " (holder unreadable: " + e + ")";
         }
@@ -94,7 +118,7 @@ final class ArenaChunkReport {
         }
     }
 
-    private static String ticketLevel(ServerLevel level, ChunkPos c) {
+    private static String neighbour(ServerLevel level, ChunkPos c) {
         if (VISIBLE_HOLDER == null) {
             String data = level.getChunkSource().getChunkDebugData(c);
             int nl = data.indexOf('\n');
@@ -102,7 +126,23 @@ final class ArenaChunkReport {
         }
         try {
             ChunkHolder h = holder(level, c);
-            return h == null ? "-" : Integer.toString(h.getTicketLevel());
+            if (h == null) return "-";
+            String f = future(h.getFullChunkFuture());
+            char mark = f.equals("done") ? '+' : f.equals("pending") ? '.' : 'x';
+            return h.getTicketLevel() + "/" + statusName(h.getLatestStatus()) + "/" + mark;
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            return "?";
+        }
+    }
+
+    private static String statusName(ChunkStatus s) {
+        return s == null ? "none" : BuiltInRegistries.CHUNK_STATUS.getKey(s).getPath();
+    }
+
+    private static String generationTasks(ServerLevel level) {
+        if (GENERATION_TASKS == null) return "?";
+        try {
+            return Integer.toString(((List<?>) GENERATION_TASKS.get(level.getChunkSource().chunkMap)).size());
         } catch (ReflectiveOperationException | RuntimeException e) {
             return "?";
         }

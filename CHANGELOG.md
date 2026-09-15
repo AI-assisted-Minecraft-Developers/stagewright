@@ -12,6 +12,16 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ## 2026-09-15
 
+### The same report says how far generation got around the arena and what is queued · compiled
+
+The arena-chunk report now also gives each arena chunk's ticking future, and for every chunk within
+two of the arena its latest generation status and full-chunk future beside its ticket level, then the
+number of pending generation tasks and main-thread tasks. The first reading on integrated NeoForge had
+every arena ticket at entity-ticking level and every entity-ticking future pending. The promotion
+behind that future waits for generation to FULL of every chunk within two and then for a main-thread
+task, so these are the places it can be standing. The generation queue is read by reflection on its
+Mojang name and prints `?` where that name is absent.
+
 ### An arena PREP gives up on says what the chunk system thinks of it · compiled
 
 The ENV_FAIL for an arena that never became usable now ends with, per arena chunk, its ticket level,
