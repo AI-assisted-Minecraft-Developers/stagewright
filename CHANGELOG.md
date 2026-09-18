@@ -10,6 +10,26 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ---
 
+## 2026-09-18
+
+### A provisioned client no longer waits for the compositor · compiled
+
+`options.txt` is seeded with `enableVsync:false`. With vsync on, the client's single thread blocks
+in `glfwSwapBuffers` until the compositor presents the window — and a compositor that is not
+presenting it (screen asleep, another workspace, a remote session) hands out about one frame a
+second. Minecraft runs at most ten game ticks per frame, so the client falls to ten ticks a second
+while the integrated server keeps twenty, and every scene that drives a client body needs twice the
+server ticks it budgeted for.
+
+What that looks like from the outside is not a slow machine. It looks like the bodies are broken:
+arrival one cell short, a bank climb that "stalls", a craft that times out, a retreat chain that
+never releases the channel. One run came back with eight red scenes, all client-body, on a box with
+a load average under one.
+
+The measurement that named it: three `jstack`s of the render thread all sat in
+`RenderSystem.flipFrame` having burned 0.04 ms of CPU between them, and the failing scenes came in
+at almost exactly 2x their green tick counts — 59 → 118, 355 → 676, 127 → 306.
+
 ## 2026-09-15
 
 ### An arena is stalled only when the whole level has stopped loading around it · green in the self-test suite

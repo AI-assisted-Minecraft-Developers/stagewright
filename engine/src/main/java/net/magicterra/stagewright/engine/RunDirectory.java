@@ -285,11 +285,11 @@ public final class RunDirectory {
     }
 
     /**
-     * Write the three client settings a scene run cannot be correct without. A dedicated server
+     * Write the four client settings a scene run cannot be correct without. A dedicated server
      * never reads this file, so it is written unconditionally rather than guessed at from the run
      * type.
      *
-     * <p>Only three, and each earns its place:
+     * <p>Only four, and each earns its place:
      *
      * <ul>
      *   <li>{@code pauseOnLostFocus:false} — vanilla singleplayer pauses when the window is
@@ -302,16 +302,26 @@ public final class RunDirectory {
      *       it too; this stops it appearing at all, which is cheaper and does not depend on the
      *       director having started.</li>
      *   <li>{@code narrator:0} — nothing should attempt text-to-speech on a headless CI box.</li>
+     *   <li>{@code enableVsync:false} — with vsync on, the client's only thread blocks in
+     *       {@code glfwSwapBuffers} waiting for the compositor, and a compositor that is not
+     *       presenting the window (screen asleep, another workspace, a remote session) hands out
+     *       frames at about 1 Hz. Minecraft runs at most ten game ticks per frame, so the client
+     *       falls to ten ticks a second while the integrated server keeps twenty: every body the
+     *       client drives then needs twice the server ticks to do anything, and scenes with a tick
+     *       budget fail in a body-shaped way — arrival late, a climb that "stalls", a craft that
+     *       times out. Measured, not theorised: three jstacks of a 1 fps run sat in
+     *       {@code RenderSystem.flipFrame} having burned 0.04 ms of CPU between them, and the
+     *       failing scenes came in at almost exactly 2x their green tick counts.</li>
      * </ul>
      *
-     * <p>Minecraft merges missing keys with its defaults, so a three-line file is a complete one.
+     * <p>Minecraft merges missing keys with its defaults, so a four-line file is a complete one.
      * Rewritten every provision rather than created once: a run that changed a setting must not
      * carry it into the next one, which is the same discipline as deleting the world.
      */
     private static void seedClientOptions(Path options) {
         try {
             Files.writeString(options,
-                    "pauseOnLostFocus:false\nonboardAccessibility:false\nnarrator:0\n");
+                    "pauseOnLostFocus:false\nonboardAccessibility:false\nnarrator:0\nenableVsync:false\n");
         } catch (IOException e) {
             throw new UncheckedIOException("cannot seed the client options at " + options, e);
         }
