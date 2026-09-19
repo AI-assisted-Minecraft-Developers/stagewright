@@ -12,7 +12,7 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ## 2026-09-18
 
-### A provisioned client no longer waits for the compositor · compiled
+### A provisioned client no longer waits for the compositor · green in the self-test suite
 
 `options.txt` is seeded with `enableVsync:false`. With vsync on, the client's single thread blocks
 in `glfwSwapBuffers` until the compositor presents the window — and a compositor that is not
