@@ -5,6 +5,12 @@ Sources copied verbatim from the published `-sources` jar; the only edit is the 
 declaration, moved to `net.magicterra.stagewright.engine.json`. Every file keeps its
 original MIT header, which is the whole of the license obligation.
 
+StageWright as a whole is LGPL-3.0-only; this directory is the one exception and stays
+MIT. MIT is compatible with the LGPL in this direction, so distributing the combined work
+under the LGPL is fine — but the headers below are the upstream author's terms, not ours.
+They are not covered by the repository's `LICENSE` and must not be replaced with an LGPL
+notice or stripped.
+
 ## Why a copy instead of a dependency
 
 This parser decides whether a build passes, and it runs on a consumer's **buildscript**

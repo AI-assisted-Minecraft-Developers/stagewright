@@ -1401,3 +1401,14 @@ consumers existed).
 - Published artifact versions track `mod_version` in the root
   `gradle.properties` — there is no independent versioning scheme for
   `stagewright` or `mc_stagewright-junit`.
+
+## License
+
+[LGPL-3.0-only](LICENSE). A mod that merely *uses* this framework — declaring the
+artifacts as dependencies, writing scenes against the SPI, running the gates — is not
+a derived work of it and carries whatever license it likes; the copyleft attaches to
+StageWright's own sources and to modified copies of them.
+
+One directory is a documented exception: `engine/src/main/java/.../engine/json/` is
+minimal-json 0.9.5 vendored verbatim, MIT, © 2013–2016 EclipseSource. Its headers are
+upstream's terms and stay as they are — see `VENDORED.md` beside them.
