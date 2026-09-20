@@ -5,8 +5,8 @@ comment next to it; what is still open lives in `TODO.md`; this file is for chan
 notice.
 
 Every entry says how far it was verified: **compiled** · **green in the self-test suite**
-(worlddriver's `cap.*` / `wd.*`) · **green against a third party** (`conformance-mods/` or
-`conformance-modpacks/`, which is the only level that proves a claim about mods we do not control).
+(worlddriver's `cap.*` / `wd.*`) · **green against a third party** (a mod or modpack this project
+does not control, which is the only level that proves a claim about such code).
 
 ---
 
@@ -27,6 +27,28 @@ copyleft attaches to StageWright's own sources and to modified copies of them.
 One directory is exempt and stays MIT: `engine/src/main/java/.../engine/json/`, minimal-json
 0.9.5 vendored verbatim from EclipseSource. MIT composes into an LGPL work in this direction,
 but those headers are upstream's terms rather than ours — see `VENDORED.md` beside them.
+
+### Documentation split out of the README and rewritten · checked line by line against the source
+
+`README.md` was 1415 lines carrying a landing page, a tutorial, three contracts, the design
+rationale and a changelog at once. It is now a landing page, with the rest under `docs/`: guides
+for doing something, reference for what the contracts are, design for why the framework is shaped
+this way, and an archive for records that describe the past and say so. `docs/README.md` indexes
+all of it, and `README-zh_CN.md` is a Chinese translation of the landing page.
+
+Consumers should expect the old deep links to break. `docs/orchestration-contract-v0.md` and
+`docs/instrument-contract-v0.md` are now `docs/reference/orchestration-contract.md` and
+`docs/reference/instrument-contract.md`; the three design documents lost their `-design` suffix
+and moved under `docs/design/`; the version suffix is gone because it named a freeze rather than a
+revision, and there was never a version one to compare against.
+
+Several statements did not survive verification, and a consumer may have been relying on them. The
+published-artifact table named coordinates that do not exist and omitted three that do; the task
+naming was attributed to the plugin when it comes from the topology names a consuming project
+declares; the provisioning step was documented as writing server properties it does not write; the
+endpoint descriptor's file name, its `topology` field and its process id were all described wrongly;
+and the instrument checklist enumerated assertions belonging to runners deleted some time ago. Each
+is corrected in the reference documents rather than carried forward.
 
 ## 2026-09-18
 
@@ -469,7 +491,8 @@ server's 2,490. The launcher-installed instance reports 2,490.
 
 A skipped scene resolved as PASS and printed as `pass:`, which is how the All the Mods 10 suite came
 to report GREEN over two of the six subjects it exists to test. `atm.advancementUnlocksForAPlayer`
-(进度解锁) and `atm.aQuestCanBeClaimed` (任务领取) were registered, reconciled against the manifest,
+(advancement unlock) and `atm.aQuestCanBeClaimed` (quest claim) were registered, reconciled against
+the manifest,
 counted in the footer — and skipped for want of a player in every run that has ever existed, because
 the pack has only ever been run on a dedicated server. Every one of those runs was honestly green.
 Nothing anywhere said the two subjects were untested.
@@ -538,7 +561,8 @@ always `-lwjgl`, and that is not usable for a pack:
   a second time trying to recover and the run dies in twenty "already registered" errors that name
   nothing relevant. Removing the mod only surfaces the next one.
 
-What this bought, on All the Mods 10: **进度解锁 and 任务领取 executed for the first time.**
+What this bought, on All the Mods 10: **advancement unlock and quest claim executed for the first
+time.**
 `atm.advancementUnlocksForAPlayer` passes; `atm.aQuestCanBeClaimed` failed on its first ever
 execution because three of the pack's 546 startable quests are already complete the moment a player
 joins — FTB Quests finishes a quest as soon as its tasks are satisfied, and a welcome quest's task is
