@@ -1,3 +1,58 @@
+> **Archived. This is a historical record and does not describe current behaviour.** The report
+> below is preserved as it was filed, including claims its own authors later withdrew and
+> references to files and identifiers that have since moved or been removed. Read
+> `docs/reference/` for what is true now.
+
+## What this is
+
+The first external project to adopt StageWright, reporting back.
+
+**Date.** Filed 2026-08-03, revisited by the same authors on 2026-08-08 against a newer build of
+the framework.
+
+**What they were trying to do.** Move an existing consumer — a NeoForge-only mod built with
+ModDevGradle, carrying a suite of a hundred and thirty-odd scenes that was already passing — off
+the framework's pre-split artifacts and onto the ones StageWright publishes now. In effect, a
+rehearsal of every step a new adopter has to take, performed by someone who already had a
+working suite to compare against.
+
+**What they found.** The migration itself was almost entirely a rename: the scene API was
+source-compatible one for one, and the suite passed with no changes to any scene body. What
+broke was everything around the scenes. The first run against a freshly created run directory
+wedged during arena preparation and was killed by the game's own hang watchdog roughly a minute
+and a half in, producing a crash report that named no scene. That failure turned out to be a
+chain of four separate problems, each of which hid the next: the run directory was not seeded
+with the settings the retired orchestrator used to write; arena chunks were pinned by a
+mechanism that blocked the server thread; the game's watchdog fired thirty seconds before the
+framework's own, so the framework's far better diagnosis never ran; and the verdict step was
+wired to depend on the run task, so a crashed run produced no verdict at all and the partial
+results already on disk were never read.
+
+They also reported a set of smaller findings: a piece of documentation on the scene context that
+was wrong about what happens when a scene writes outside its forced-chunk window, an asymmetry
+between two APIs over an asymmetric window, and — the one they asked for most plainly — that no
+migration note existed anywhere, so every consumer would have to rediscover the same table of
+renames.
+
+**What changed as a result.** The arena is now pinned with a single non-blocking region ticket
+rather than a series of blocking chunk loads, and preparation waits on chunk *progress* rather
+than on a fixed budget — which fixes the original crash at its cause rather than by seeding a
+world type, and fixes it for run directories nobody provisioned. The reporters re-ran their suite
+against the game's stock defaults with their own workaround removed and it passed. Run-directory
+provisioning now forces the settings a scene run cannot be correct without, and the reasoning for
+each is recorded in the [orchestration contract](../../reference/orchestration-contract.md). The
+suite header carries the world state a run held still, and the verdict reports what a run
+actually covered rather than only whether it failed. The reporters withdrew one of their own
+claims on the revisit — that a spawn-protection setting was needed — having established that
+arenas sit far enough from spawn for it never to have applied.
+
+**What was still open when they last looked.** The watchdog ordering and the verdict's dependency
+on the run task, which they argue are one chain and worth fixing as one; the incorrect piece of
+scene-context documentation; half of the asymmetric-window finding; and the missing migration
+note, for which they supplied their own table.
+
+---
+
 # Feedback — migrating a 132-scene suite from mc-testkit to StageWright
 
 > Date: 2026-08-03 · **Revisited: 2026-08-08** against `80c74b9` plus its working tree
