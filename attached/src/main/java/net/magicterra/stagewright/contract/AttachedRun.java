@@ -18,7 +18,7 @@ import com.google.gson.GsonBuilder;
 /**
  * Runs a directory of {@code .js} scenes out of process and writes the results file the verdict reads.
  *
- * <p>The results format is orchestration-contract-v0, unchanged — the same header / scene / done
+ * <p>The results format is the orchestration contract, unchanged — the same header / scene / done
  * shape the in-process suite and the companion client write, so the existing worst-wins verdict
  * judges a third file without learning anything new. Four details of that contract are not obvious
  * for a home with no game, and each is a way to be silently wrong:
