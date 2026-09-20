@@ -8,8 +8,8 @@ original MIT header, which is the whole of the license obligation.
 StageWright as a whole is LGPL-3.0-only; this directory is the one exception and stays
 MIT. MIT is compatible with the LGPL in this direction, so distributing the combined work
 under the LGPL is fine — but the headers below are the upstream author's terms, not ours.
-They are not covered by the repository's `LICENSE` and must not be replaced with an LGPL
-notice or stripped.
+They are not covered by the repository's `COPYING.LESSER` and must not be replaced with an
+LGPL notice or stripped.
 
 ## Why a copy instead of a dependency
 

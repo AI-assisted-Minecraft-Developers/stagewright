@@ -10,6 +10,24 @@ Every entry says how far it was verified: **compiled** · **green in the self-te
 
 ---
 
+## 2026-09-20
+
+### Relicensed from MIT to LGPL-3.0-only · compiled
+
+The text is `COPYING.LESSER` (the additional permissions) over `COPYING` (the GPL-3.0 text they
+modify), the two-file layout the LGPL itself prescribes. `mod_license` follows in
+`gradle.properties`, and both loaders' generated jar metadata was checked to declare it.
+
+What it means for a consumer, which is the part worth being precise about: declaring the
+artifacts as dependencies, writing scenes against the SPI, and running the gates are all *use*
+of the framework, not derivation from it — the mod under test carries whatever license it
+likes, and nothing about running StageWright against a closed-source pack changes that. The
+copyleft attaches to StageWright's own sources and to modified copies of them.
+
+One directory is exempt and stays MIT: `engine/src/main/java/.../engine/json/`, minimal-json
+0.9.5 vendored verbatim from EclipseSource. MIT composes into an LGPL work in this direction,
+but those headers are upstream's terms rather than ours — see `VENDORED.md` beside them.
+
 ## 2026-09-18
 
 ### A provisioned client no longer waits for the compositor · green in the self-test suite
