@@ -1404,7 +1404,8 @@ consumers existed).
 
 ## License
 
-[LGPL-3.0-only](LICENSE). A mod that merely *uses* this framework — declaring the
+[LGPL-3.0-only](COPYING.LESSER) — the additional permissions, on top of the GPL-3.0 text
+in `COPYING` that they modify. A mod that merely *uses* this framework — declaring the
 artifacts as dependencies, writing scenes against the SPI, running the gates — is not
 a derived work of it and carries whatever license it likes; the copyleft attaches to
 StageWright's own sources and to modified copies of them.
