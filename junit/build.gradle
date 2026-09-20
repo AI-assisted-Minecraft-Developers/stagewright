@@ -63,8 +63,8 @@ test {
 // root build.gradle's subprojects{} block. Mod jars (worlddriver-*,
 // mc_stagewright-common/fabric/neoforge) nest their runtime deps via Jar-in-Jar and
 // therefore strip <dependency> entries from the published POM (a naive consumer
-// resolving the raw POM would double up e.g. Rhino — docs/feedback/2026-06-04,
-// bug #2). This module is a THIN PLAIN-JVM LIBRARY: it does not shade or nest
+// resolving the raw POM would double up e.g. Rhino, as the first external consumer
+// did). This module is a THIN PLAIN-JVM LIBRARY: it does not shade or nest
 // anything, so a consumer's build tool is the one that must resolve gson and
 // junit-jupiter-api transitively. The POM MUST declare them, or `mc_stagewright-junit`
 // silently fails to compile for any consumer that doesn't happen to already have

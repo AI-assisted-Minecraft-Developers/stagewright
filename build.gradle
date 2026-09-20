@@ -119,7 +119,7 @@ subprojects {
 
                 // Strip <dependency> entries, because a mod jar NESTS its runtime deps via
                 // Jar-in-Jar: a consumer resolving the raw POM would end up with a second copy of
-                // something the jar already carries (docs/feedback/2026-06-04, bug #2).
+                // something the jar already carries. The first external consumer hit exactly this.
                 //
                 // ONE EXCEPTION, and it is not a loophole — it is the rule applied correctly.
                 // mc_stagewright-attached is nested in NOTHING. It is a plain-JVM library holding the
@@ -162,13 +162,8 @@ subprojects {
     }
 }
 
-// ---- Release order (the cost of separate repos) ----
-// stagewright-api depends on nobody. worlddriver's testmod depends on stagewright-api.
-// stagewright's RUNTIME modules depend on worlddriver. So a full cold bootstrap is:
-//
-//     stagewright> ./gradlew :stagewright-api:publishToMavenLocal
-//     worlddriver> ./gradlew publishToMavenLocal
-//     stagewright> ./gradlew publishToMavenLocal
-//
-// Only an api change forces the whole dance; api is interfaces + value types and changes
-// rarely, which is what keeps this from being a daily tax.
+// ---- Release order ----
+// The bootstrap sequence is the one in the header of this file. It is written out, with the
+// reason each step is needed and the artifacts each one produces, in docs/reference/publishing.md.
+// A shorter sequence used to be given here and was wrong: it omitted the engine build, the Gradle
+// plugin, the attached module and the bootstrap property, and so failed on a clean machine.
