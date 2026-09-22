@@ -410,6 +410,38 @@ class VerdictTest {
         assertFalse(reports(result, "FILTERED"));
     }
 
+    // ---- a companion client's file -------------------------------------------------------------
+
+    @Test
+    void anAbsentCompanionFileIsEnvNotAPass(@TempDir Path dir) throws IOException {
+        Verdict.Result result = Verdict.judgeCompanion(dir.resolve("client.jsonl"), new ArrayList<>());
+        assertEquals(3, result.code());
+        assertTrue(reports(result, "wrote no results"));
+    }
+
+    @Test
+    void aCompanionFileIsJudgedAgainstItsOwnHeader(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve("client.jsonl");
+        Files.writeString(file, String.join("\n",
+                "{\"type\":\"suite\",\"loader\":\"fabric\",\"registered\":[{\"name\":\"client.p\"}]}",
+                "{\"type\":\"scene\",\"name\":\"client.p\",\"outcome\":\"TIMEOUT\",\"reason\":\"\"}",
+                "{\"type\":\"done\",\"scenes\":1}"), StandardCharsets.UTF_8);
+        Verdict.Result result = Verdict.judgeCompanion(file, new ArrayList<>());
+        assertEquals(1, result.code());
+        assertTrue(reports(result, "FAIL: 'client.p' -> TIMEOUT"));
+    }
+
+    @Test
+    void theWorseOfTwoResultsWinsAndATieKeepsTheFirst() {
+        Verdict.Result green = new Verdict.Result(0, List.of());
+        Verdict.Result dead = new Verdict.Result(2, List.of());
+        Verdict.Result env = new Verdict.Result(3, List.of());
+        assertEquals(dead, Verdict.worst(green, dead));
+        assertEquals(env, Verdict.worst(env, dead));
+        Verdict.Result otherGreen = new Verdict.Result(0, List.of("x"));
+        assertTrue(Verdict.worst(green, otherGreen) == green);
+    }
+
     // ---- reading a results file ----------------------------------------------------------------
 
     @Test

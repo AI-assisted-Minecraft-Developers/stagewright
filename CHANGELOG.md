@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### `--with-client` judges the client's own probe · compiled, green in unit tests
+
+The joined client always ran its probe and wrote `stagewright-client-results.jsonl`, and the CLI
+never read it: a probe that failed or timed out still exited GREEN, where the same pair of files
+under the Gradle plugin's `companionResultsFile` was RED. The CLI now judges that file with the
+engine's companion rule — its own header, worst verdict wins, missing file ENV — and provisioning
+clears it and its heartbeat, rather than a `stagewright-results.jsonl` the client never writes.
+
 ### The CLI refuses an empty expected-scenes manifest, as the plugin does · compiled, green in unit tests
 
 A manifest holding only comments or blank lines was a hard error under Gradle and a silently

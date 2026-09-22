@@ -158,8 +158,13 @@ java -jar stagewright.jar --game-dir <the pack's server directory> --scenes <a f
      --headlessmc headlessmc-launcher.jar --loader neoforge --mc-version 1.21.1
 ```
 
-The scenes run on the server; it writes the results and its verdict is the run's. The client's whole
-job is to be logged in while they do. It is installed with the same framework build and the same
+The scenes run on the server, which writes `stagewright-results.jsonl`. The client has two jobs: to be
+logged in while they run, and to run the one probe only a joined client can — that a damage event
+survives the wire — writing `stagewright-client-results.jsonl` in its own directory. Both files are
+judged, each as its own suite, and the worse verdict is the run's; a client that wrote no file is
+ENV. That is the rule the Gradle plugin applies to a topology's `companionResultsFile`, from the same
+engine code, so the pair cannot be GREEN here and RED there. The client is installed with the same
+framework build and the same
 `--mod` jars as the server, because a loader that finds a different mod list on each end refuses the
 connection, and it dials the local address at whatever port the pack's `server.properties` names.
 

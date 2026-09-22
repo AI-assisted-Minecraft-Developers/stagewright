@@ -82,6 +82,27 @@ public final class Verdict {
         return records;
     }
 
+    /**
+     * Judge a companion client's own results file.
+     *
+     * <p>A self-contained suite with its own header and footer, so it is judged on its own rather
+     * than merged into the server's records, and against its header only — the manifest names the
+     * server's scenes. A missing file is ENV, never a pass: a client launched to assert something
+     * and then silent is indistinguishable from one that never started.
+     */
+    public static Result judgeCompanion(Path file, List<String> warnings) throws IOException {
+        if (!Files.isRegularFile(file)) {
+            return new Result(3, List.of("ENV — the companion client wrote no results at "
+                    + file.toAbsolutePath()));
+        }
+        return judge(parse(file, warnings), null);
+    }
+
+    /** The more severe of two results; the codes are ordered GREEN < RED < DEAD < ENV. */
+    public static Result worst(Result a, Result b) {
+        return b.code() > a.code() ? b : a;
+    }
+
     /** @param expected scene names that MUST be registered, or null to skip reconciliation. */
     public static Result judge(List<Map<String, Object>> records, List<String> expected) {
         Map<String, Object> suite = null;

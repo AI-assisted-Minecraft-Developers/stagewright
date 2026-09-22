@@ -144,7 +144,7 @@ public final class Main {
         // Deliberately NOT an early return on any of them: a killed or crashed run usually still
         // wrote records, and the missing done footer is what turns them into a RED that names how
         // far it got. Judging is strictly more informative than reporting the ending alone.
-        return judge(gameDir, results, opts, runLog, crashes);
+        return judge(gameDir, results, opts, runLog, crashes).code();
     }
 
     /**
@@ -156,12 +156,13 @@ public final class Main {
      * {@code isClientSide} show up. A pack that is green on the other two and red here is not an
      * unlucky pack; it is a pack whose players would have hit this.
      *
-     * <p>The server is the half that matters. It runs the scenes, it writes the results, and it
-     * halts itself when they drain — so waiting for it IS waiting for the run, exactly as in the
-     * plain server topology. The client's whole job is to be logged in while that happens, which is
-     * what {@code -Dstagewright.awaitPlayer} makes load-bearing: without a player the server sits
-     * armed and starts nothing, so a client that never arrives fails as a timeout rather than as a
-     * suite that quietly proved nothing.
+     * <p>The server runs the scenes, writes the results, and halts itself when they drain — so
+     * waiting for it IS waiting for the run, exactly as in the plain server topology. The client has
+     * to be logged in while that happens, which is what {@code -Dstagewright.awaitPlayer} makes
+     * load-bearing: without a player the server sits armed and starts nothing, so a client that never
+     * arrives fails as a timeout rather than as a suite that quietly proved nothing. It also runs
+     * its own probe and writes its own results, judged beside the server's — see
+     * {@link #judgeWithClient}.
      *
      * <p>Neither half is trusted to bring itself down. Both do — the server halts, and the client
      * closes when the server drops it — but a run that ends with an orphaned headless Minecraft
@@ -188,7 +189,7 @@ public final class Main {
         // The client half gets what the server half got, minus the scenes. It never arms a harness,
         // so a scene file there is dead weight at best; at worst it is a second suite nobody asked
         // for, writing over the results this run is going to be judged on.
-        RunDirectory.provision(clientDir, List.of(clientDir.resolve(results.getFileName())),
+        RunDirectory.provision(clientDir, clientStaleResults(clientDir),
                 !"false".equals(opts.get("clean-world")), null, log);
         if (!opts.containsKey("no-install")) {
             ModInstall.install(clientDir, loader, extraMods, log);
@@ -235,7 +236,36 @@ public final class Main {
             kill(server);
         }
 
-        return judge(gameDir, results, opts, runLog, crashes);
+        return judgeWithClient(judge(gameDir, results, opts, runLog, crashes), clientDir,
+                System.out::println);
+    }
+
+    /** What provisioning must clear in the client half's directory: the probe results it writes
+     *  there, and with them the heartbeat beside them. */
+    static List<Path> clientStaleResults(Path clientDir) {
+        return List.of(clientDir.resolve(RunDirectory.CLIENT_RESULTS_FILE));
+    }
+
+    /**
+     * The run's code once the client half's own probe results are judged beside the server's.
+     *
+     * <p>By the engine's companion rule, the one the plugin applies to {@code companionResultsFile},
+     * so the same pair of files cannot be GREEN here and RED under Gradle. Worst wins.
+     */
+    static int judgeWithClient(Verdict.Result server, Path clientDir, Consumer<String> out)
+            throws IOException {
+        List<String> warnings = new ArrayList<>();
+        Verdict.Result client = Verdict.judgeCompanion(
+                clientDir.resolve(RunDirectory.CLIENT_RESULTS_FILE), warnings);
+        warnings.forEach(w -> out.accept("[stagewright] client: " + w));
+        client.report().forEach(line -> out.accept("[stagewright] client: " + line));
+        out.accept("[stagewright] CLIENT VERDICT: " + client.label());
+        Verdict.Result worst = Verdict.worst(server, client);
+        // Keeps the server's FILTERED suffix whichever half is worse: the run was narrowed either way.
+        out.accept("[stagewright] VERDICT (server and client): "
+                + new Verdict.Result(worst.code(), List.of(), server.filtered()).label()
+                + (worst == client && client.code() > server.code() ? "  (from the client half)" : ""));
+        return worst.code();
     }
 
     private static Path headlessMcJar(Map<String, String> opts) {
@@ -405,7 +435,7 @@ public final class Main {
                         + " like: mod loading goes down before the game can produce one.");
             }
         }
-        return judge(gameDir, results, opts, hmcLog, crashes);
+        return judge(gameDir, results, opts, hmcLog, crashes).code();
     }
 
     /** How a wait for the run's done footer ended. The four are not interchangeable. */
@@ -617,7 +647,7 @@ public final class Main {
             game.waitFor(30, TimeUnit.SECONDS);
         }
 
-        int inProcess = judge(gameDir, results, opts, runLog, crashes);
+        int inProcess = judge(gameDir, results, opts, runLog, crashes).code();
         // Worst-wins across the two files, the same rule the companion client already gets:
         // GREEN 0 < RED 1 < DEAD 2 < ENV 3. Reporting only the in-process verdict would let a red
         // attached half ride home on a green suite.
@@ -718,14 +748,14 @@ public final class Main {
         }
     }
 
-    private static int judge(Path gameDir, Path results, Map<String, String> opts, Path log,
-                             CrashWatch crashes) throws IOException {
+    private static Verdict.Result judge(Path gameDir, Path results, Map<String, String> opts,
+                                        Path log, CrashWatch crashes) throws IOException {
         if (!Files.isRegularFile(results)) {
             System.err.println("stagewright: ENV — the run wrote no results");
             System.err.println("  expected: " + results);
             noResultsCause(gameDir, results, crashes.fresh(),
                     ModInstall.frameworkPresent(gameDir), log).forEach(System.err::println);
-            return 3;
+            return new Verdict.Result(3, List.of("the run wrote no results"));
         }
 
         List<String> warnings = new ArrayList<>();
@@ -736,7 +766,7 @@ public final class Main {
         verdict.report().forEach(line -> System.out.println("[stagewright] " + line));
         System.out.println("[stagewright] VERDICT: " + verdict.label());
         if (verdict.code() != 0) System.out.println("[stagewright] log: " + log);
-        return verdict.code();
+        return verdict;
     }
 
     /** The {@code --expect} manifest's names, or null when the run is not reconciled against one. */
@@ -928,7 +958,8 @@ public final class Main {
                   --mc-version <ver>  Minecraft version to install a loader for (with --headlessmc)
                   --loader <name>     neoforge|fabric to install; detected when the dir already says
                   --world <name>      singleplayer world the client creates (default stagewright)
-                  --with-client <dir> also run a client, in this dir, joined to the pack's server
+                  --with-client <dir> also run a client, in this dir, joined to the pack's server.
+                                      Its own probe results are judged too; worst wins.
                   --launch "<cmd>"    start the server this way instead of detecting it
                   --java <path>       java executable to launch with
                   -D<key>=<value>     extra system properties for the game
