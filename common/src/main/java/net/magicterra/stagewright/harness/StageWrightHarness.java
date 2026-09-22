@@ -379,7 +379,12 @@ public final class StageWrightHarness {
                     // Entered, resolved, and carrying its reason into the results — the scene is
                     // accounted for, so coverage reconciliation still sees it, and the one thing
                     // it must not do is look like a scene that quietly did its job.
-                    record(scene, SceneOutcome.PASS, ctx.ticks(), "skipped: " + s.getMessage(), true);
+                    String failed = SceneSkipped.failureAfterChecks(ctx.softViolations(), s.getMessage());
+                    if (failed != null) {
+                        record(scene, SceneOutcome.FAIL, ctx.ticks(), failed);
+                    } else {
+                        record(scene, SceneOutcome.PASS, ctx.ticks(), "skipped: " + s.getMessage(), true);
+                    }
                     teardown(scene, level, origin, radius);
                 } catch (SceneFailure f) {
                     record(scene, SceneOutcome.FAIL, ctx.ticks(), f.getMessage());

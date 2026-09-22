@@ -243,6 +243,11 @@ manifest, and reported separately from a real pass. The rule is uniform — `pla
 `mods().require(id)`, `capability(name)` and `probe(className)` all skip the same way, with a reason
 that names what was missing.
 
+A skip does not excuse a `check` that already failed. If the body recorded soft violations before it
+skipped, the scene is a FAIL whose reason lists them followed by `then skipped: <reason>` — in both
+homes. The missing thing explains why the rest of the body did not run; it says nothing about the
+values that were measured and came out wrong.
+
 What a scene proves by skipping is nothing. See [Topologies](topologies.md#a-skip-is-not-coverage)
 for the check that stops a suite whose every player scene skips everywhere from reporting success.
 

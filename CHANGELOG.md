@@ -10,6 +10,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-09-22
+
+### A skip no longer hides a `check` that already failed · compiled, attached home green in its unit test
+
+A body that recorded soft violations with `check(...)` and then skipped — explicitly, or through
+`player()`, `capability()`, `probe()` or `mods().require()` finding nothing — was recorded as a PASS
+skip, and the violations appeared nowhere. Both homes now record it as a FAIL whose reason lists the
+violations followed by `then skipped: <reason>`. The wording is one shared function, so the two
+homes cannot drift apart on it. The new built-in canary `canaryCheckThenSkipMustFail` holds the
+in-process harness to this rule: if a skip wins again, the run is DEAD.
+
 ## 2026-09-20
 
 ### Relicensed from MIT to LGPL-3.0-only · compiled

@@ -98,8 +98,14 @@ public final class AttachedRun {
                 // An absent thing is a recorded PASS carrying the reason — the framework's central
                 // rule, and the one Rhino's WrappedException hid for so long. Scripts.unwrapOurs is
                 // shared precisely so this branch cannot be reached in one home and missed in the other.
-                reason = "skipped: " + e.getMessage();
-                skipped = true;
+                String failed = SceneSkipped.failureAfterChecks(ctx.softViolations(), e.getMessage());
+                if (failed != null) {
+                    outcome = "FAIL";
+                    reason = failed;
+                } else {
+                    reason = "skipped: " + e.getMessage();
+                    skipped = true;
+                }
             } catch (SceneFailure e) {
                 outcome = "FAIL";
                 reason = e.getMessage();

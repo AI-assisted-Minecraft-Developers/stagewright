@@ -67,6 +67,17 @@ dependencies {
     // consumers that actually TALK RPC declare their own (junit, and the CLI's fat jar), and inside
     // the game the class is present without anybody shipping it.
     compileOnly 'com.google.code.gson:gson:2.11.0'
+
+    // The runner is tested the way the CLI runs it, so the tests need what the CLI's fat jar ships.
+    testImplementation "dev.latvian.mods:rhino:${rootProject.rhino_version}"
+    testImplementation 'com.google.code.gson:gson:2.11.0'
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
 }
 
 // A thin plain-JVM library: it shades nothing and nests nothing, so the POM must declare what a

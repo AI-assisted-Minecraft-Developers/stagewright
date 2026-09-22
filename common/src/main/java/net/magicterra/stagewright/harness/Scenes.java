@@ -307,6 +307,12 @@ public final class Scenes {
                         ctx -> ctx.fail("canary: this scene must be reported as FAIL")),
                 Scene.canary("canaryMustTimeout", 60, Canary.MUST_TIMEOUT,
                         ctx -> ctx.await(() -> false).within(40).then(() -> {})),
+                // A skip after a failed soft check: were the skip allowed to win, a real finding
+                // would be recorded as an absent subject and pass.
+                Scene.canary("canaryCheckThenSkipMustFail", 100, Canary.MUST_FAIL, ctx -> {
+                    ctx.check(1).as("canary: a soft check that must fail").isEqualTo(2);
+                    ctx.skip("canary: skipping after a failed check must not hide it");
+                }),
                 Scene.canary("canaryMustSwallow", 100, Canary.MUST_SWALLOW,
                         ctx -> { /* never executed by design; the harness skips it */ })
         );
