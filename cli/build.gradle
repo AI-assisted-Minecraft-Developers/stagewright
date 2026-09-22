@@ -96,6 +96,10 @@ application {
 // Fat jar, deliberately: the audience is someone who downloads one file and runs it. A CLI that
 // needed a -cp with the engine beside it would be a worse experience than the Gradle plugin it
 // exists to replace for them.
+//
+// Merging a library's classes conveys that library, so each one needs its entry in
+// src/main/resources/META-INF/THIRD-PARTY-NOTICES and its license text beside it; the merged jars
+// carry none of their own. scripts/check_packaging.py fails a jar holding classes it cannot place.
 tasks.named('jar', Jar) {
     archiveBaseName = 'stagewright'
     archiveClassifier = ''

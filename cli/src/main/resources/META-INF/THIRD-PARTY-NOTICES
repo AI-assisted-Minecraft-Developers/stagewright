@@ -1,0 +1,32 @@
+stagewright.jar: third-party notices
+
+StageWright itself is licensed under the GNU Lesser General Public License v3.0 only; the texts
+are META-INF/COPYING and META-INF/COPYING.LESSER. This jar also carries the following
+third-party code, unmodified unless stated, each under its own license.
+
+--------------------------------------------------------------------------------
+minimal-json (com.eclipsesource.minimal-json:minimal-json)
+  Copyright (c) 2013-2017 EclipseSource.
+  License: MIT, full text in META-INF/licenses/minimal-json-MIT.txt
+  Source:  https://github.com/ralfstx/minimal-json
+  Vendored under net/magicterra/stagewright/engine/json/, package name changed.
+
+--------------------------------------------------------------------------------
+Rhino (dev.latvian.mods:rhino), latvian.dev's fork of Mozilla Rhino
+  Copyright latvian.dev and the Mozilla Rhino contributors.
+  License: Mozilla Public License 2.0, full text in META-INF/licenses/MPL-2.0.txt
+  Source:  https://github.com/KubeJS-Mods/Rhino
+           (upstream: https://github.com/mozilla/rhino)
+  The Source Code Form of these files is available at the address above.
+
+--------------------------------------------------------------------------------
+Gson (com.google.code.gson:gson)
+  Copyright 2008 Google Inc.
+  License: Apache License 2.0, full text in META-INF/licenses/Apache-2.0.txt
+  Source:  https://github.com/google/gson
+
+--------------------------------------------------------------------------------
+Error Prone annotations (com.google.errorprone:error_prone_annotations), a dependency of Gson
+  Copyright The Error Prone Authors.
+  License: Apache License 2.0, full text in META-INF/licenses/Apache-2.0.txt
+  Source:  https://github.com/google/error-prone

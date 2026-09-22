@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### The engine and CLI jars carry the notices of the third-party code inside them · checked in the built jars
+
+The engine jar holds minimal-json's compiled classes, whose MIT headers exist only in the `.java`
+sources, and the CLI's fat jar merges minimal-json, Rhino (MPL-2.0), Gson and Error Prone
+annotations (Apache-2.0), none of which ships its own license file. Both jars were handed out
+with no copyright or permission notice and no pointer to Rhino's source. The engine jar now
+carries `META-INF/licenses/minimal-json-MIT.txt`; the CLI jar adds `META-INF/THIRD-PARTY-NOTICES`
+and the MPL-2.0 and Apache-2.0 texts, and the packaging check fails a CLI jar holding classes
+from a library it has no notice for.
+
 ### Every jar carries the LGPL text, and every POM declares the license · checked in the built jars and generated POMs
 
 The relicense changed the headers but no build packaged `COPYING` or `COPYING.LESSER`, so every

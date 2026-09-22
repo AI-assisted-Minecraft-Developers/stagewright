@@ -9,7 +9,9 @@ tasks that produce them (jar assembly and POM generation only, never a publish):
 Checked:
   - every jar, -sources jar included, carries META-INF/COPYING and META-INF/COPYING.LESSER,
     byte-identical to the repository's own;
-  - every generated POM declares LGPL-3.0-only with its URL, the project URL and the SCM URL.
+  - every generated POM declares LGPL-3.0-only with its URL, the project URL and the SCM URL;
+  - a jar holding third-party classes carries that code's license text (minimal-json, Rhino,
+    gson, Error Prone annotations), and the CLI jar a notice naming each of them.
 
 Exit 0 when all hold, 1 with one line per violation otherwise.
 """
@@ -38,6 +40,14 @@ POMS = [
     'engine/build/publications/mavenJava/pom-default.xml',
     'gradle-plugin/build/publications/pluginMaven/pom-default.xml',
     'gradle-plugin/build/publications/mcStageWrightPluginMarkerMaven/pom-default.xml',
+]
+
+# A class path prefix found in a jar, and the license text that must travel with it.
+THIRD_PARTY = [
+    ('net/magicterra/stagewright/engine/json/JsonParser.class', 'META-INF/licenses/minimal-json-MIT.txt'),
+    ('dev/latvian/mods/rhino/', 'META-INF/licenses/MPL-2.0.txt'),
+    ('com/google/gson/', 'META-INF/licenses/Apache-2.0.txt'),
+    ('com/google/errorprone/', 'META-INF/licenses/Apache-2.0.txt'),
 ]
 
 
@@ -80,6 +90,26 @@ def check_jars(problems):
                         problems.append(f'{rel}: {entry} appears {listed.count(entry)} times')
                     elif z.read(entry) != want:
                         problems.append(f'{rel}: {entry} differs from the repository copy')
+                if jar.name.endswith('-sources.jar'):
+                    continue
+                for marker, text in THIRD_PARTY:
+                    if any(n.startswith(marker) for n in names) and text not in names:
+                        problems.append(f'{rel}: ships {marker} without {text}')
+                if module == 'cli':
+                    # A library merged into the fat jar that this list does not know about is one
+                    # whose notice nobody has written.
+                    known = ('net/magicterra/', 'META-INF/versions/') + tuple(m for m, _ in THIRD_PARTY)
+                    for n in sorted(names):
+                        if n.endswith('.class') and not n.startswith(known):
+                            problems.append(f'{rel}: {n} belongs to no library with a notice')
+                            break
+                    if 'META-INF/THIRD-PARTY-NOTICES' not in names:
+                        problems.append(f'{rel}: missing META-INF/THIRD-PARTY-NOTICES')
+                    else:
+                        notices = z.read('META-INF/THIRD-PARTY-NOTICES').decode('utf-8')
+                        for lib in ('minimal-json', 'Rhino', 'Gson', 'Error Prone'):
+                            if lib not in notices:
+                                problems.append(f'{rel}: THIRD-PARTY-NOTICES does not name {lib}')
 
 
 def check_poms(problems):
