@@ -20,14 +20,16 @@ public final class Scenes {
     private Scenes() {}
 
     /** Built-in scenes first, then downstream {@link SceneProvider} contributions in
-     *  ServiceLoader discovery order — execution order mirrors this concatenation. */
+     *  ServiceLoader discovery order — execution order mirrors this concatenation. Never narrowed
+     *  here: {@link SceneFilter} is the only filter, because its pattern is the one the suite header
+     *  records. */
     public static List<Scene> all() {
         List<Scene> out = new ArrayList<>(builtin());
         for (SceneProvider p : ServiceLoader.load(SceneProvider.class)) {
             out.addAll(p.scenes());
         }
         out.addAll(scriptScenes());
-        return List.copyOf(filter(out, System.getProperty(FILTER_PROPERTY)));
+        return List.copyOf(out);
     }
 
     /** Rhino, probed by name for the same reason worlddriver is: to answer "can we run JS here"
@@ -63,61 +65,6 @@ public final class Scenes {
                     + " run here.");
         }
         return net.magicterra.stagewright.script.JsScenes.load();
-    }
-
-    /** {@code -Dstagewright.filter=sb.magnet*,wd.bridge*} — comma-separated globs ({@code *} and
-     *  {@code ?}) matched against whole scene names. */
-    public static final String FILTER_PROPERTY = "stagewright.filter";
-
-    /**
-     * Narrow the suite for iteration. A full run costs minutes and grows with the suite, so
-     * re-running 165 scenes to look at one is the single biggest tax on writing scenes.
-     *
-     * <p><b>Canaries are never filtered out.</b> They are what proves the harness can still catch a
-     * failure at all; a filtered run that dropped them would report the same GREEN whether or not
-     * the framework was working. Keeping them costs three scenes and means even a one-scene run
-     * carries its own proof.
-     *
-     * <p>A filtered run is deliberately NOT gate-worthy: the orchestrator reconciles against the
-     * expected-scenes manifest, so the scenes left out surface as MISSING-EXPECTED and the verdict
-     * is RED. That is the intended relationship — iterate filtered, gate whole.
-     */
-    static List<Scene> filter(List<Scene> scenes, String spec) {
-        if (spec == null || spec.isBlank()) return scenes;
-        List<java.util.regex.Pattern> globs = new ArrayList<>();
-        for (String part : spec.split(",")) {
-            String g = part.trim();
-            if (!g.isEmpty()) globs.add(java.util.regex.Pattern.compile(globToRegex(g)));
-        }
-        if (globs.isEmpty()) return scenes;
-
-        List<Scene> kept = new ArrayList<>();
-        for (Scene s : scenes) {
-            if (s.canary() != Canary.NONE) {
-                kept.add(s);
-                continue;
-            }
-            for (java.util.regex.Pattern p : globs) {
-                if (p.matcher(s.name()).matches()) {
-                    kept.add(s);
-                    break;
-                }
-            }
-        }
-        return kept;
-    }
-
-    private static String globToRegex(String glob) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < glob.length(); i++) {
-            char c = glob.charAt(i);
-            switch (c) {
-                case '*' -> sb.append(".*");
-                case '?' -> sb.append('.');
-                default -> sb.append(java.util.regex.Pattern.quote(String.valueOf(c)));
-            }
-        }
-        return sb.toString();
     }
 
     private static List<Scene> builtin() {

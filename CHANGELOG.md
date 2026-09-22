@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### `-Dstagewright.filter` is gone · compiled, registry green in a unit test
+
+A second, older filter still narrowed the registry by glob, but it never reached the suite header,
+so the verdict judged a narrowed run as the whole suite — no FILTERED label, and a pattern that
+matched nothing came out as a canary-only GREEN. The property now does nothing. Narrow a run with
+`-Pstagewright.scenes` (the game reads it as `-Dstagewright.scenes`), which the header records.
+`@SceneDef(tags = …)` was documented as feeding that filter; nothing reads it.
+
 ### A filtered run keeps the framework canaries · compiled, filter and verdict green in unit tests
 
 `-Pstagewright.scenes` used to filter the canaries out with everything else, so a narrow run

@@ -71,6 +71,7 @@ public @interface SceneDef {
      */
     boolean mustSkip() default false;
 
-    /** Free-form labels for {@code -Dstagewright.filter}. Not part of the name, not reconciled. */
+    /** Free-form labels for the reader. Nothing selects or reconciles by them; a run is narrowed by
+     *  scene name alone, through {@code -Pstagewright.scenes}. */
     String[] tags() default {};
 }
