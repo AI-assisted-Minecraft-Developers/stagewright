@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import net.magicterra.stagewright.engine.Manifest;
 import net.magicterra.stagewright.engine.Progress;
 import net.magicterra.stagewright.engine.Verdict;
 import org.gradle.api.DefaultTask;
@@ -160,11 +161,10 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
     private List<String> readExpected() {
         if (!getExpectFile().isPresent()) return null;
         File file = getExpectFile().get().getAsFile();
-        List<String> names = net.magicterra.stagewright.engine.Manifest.read(file.toPath());
-        if (names.isEmpty()) {
-            throw new GradleException("the expected-scenes manifest " + file + " names no scenes —"
-                    + " an empty manifest reconciles against nothing and would pass any run");
+        try {
+            return Manifest.read(file.toPath());
+        } catch (IllegalArgumentException e) {
+            throw new GradleException(e.getMessage(), e);
         }
-        return names;
     }
 }

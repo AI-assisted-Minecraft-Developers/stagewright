@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### The CLI refuses an empty expected-scenes manifest, as the plugin does · compiled, green in unit tests
+
+A manifest holding only comments or blank lines was a hard error under Gradle and a silently
+skipped reconciliation under `--expect`, so one file got two verdicts. The refusal now lives in
+`Manifest.read`, which both front ends call, and the CLI reads the manifest before it starts the
+game.
+
 ### The CLI refuses options it does not know · compiled, parser green in unit tests
 
 Any `--name value` used to be accepted and stored, so a typo was a setting nobody read:

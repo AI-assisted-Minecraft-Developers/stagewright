@@ -20,7 +20,12 @@ public final class Manifest {
 
     private Manifest() {}
 
-    /** Names from a manifest file, or an empty list if it holds none. */
+    /**
+     * Names from a manifest file.
+     *
+     * @throws IllegalArgumentException if it names no scene. Refused here rather than by each front
+     *         end, because a front end that forgot would reconcile against nothing and pass any run.
+     */
     public static List<String> read(Path file) {
         List<String> names = new ArrayList<>();
         try {
@@ -38,6 +43,10 @@ public final class Manifest {
             }
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read the expected-scenes manifest " + file, e);
+        }
+        if (names.isEmpty()) {
+            throw new IllegalArgumentException("the expected-scenes manifest " + file + " names no"
+                    + " scenes — an empty manifest reconciles against nothing and would pass any run");
         }
         return names;
     }

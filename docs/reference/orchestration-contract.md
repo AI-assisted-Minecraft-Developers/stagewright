@@ -376,7 +376,8 @@ The manifest — conventionally `scripts/stagewright/expected-scenes-<loader>.tx
 list of the scene names a run must contain. One name per line; `#` starts a comment and the rest
 of the line is discarded; blank lines are ignored; commas separate several names on one line, so
 the two spellings cannot disagree. An empty manifest is refused rather than treated as "expect
-nothing", because a gate armed with an expectation of nothing would pass any run.
+nothing", because a gate armed with an expectation of nothing would pass any run. The refusal is
+`Manifest.read`'s own, so the plugin and the CLI reject the same file with the same message.
 
 Reconciliation runs in both directions, and the second half is the one that closes the hole:
 

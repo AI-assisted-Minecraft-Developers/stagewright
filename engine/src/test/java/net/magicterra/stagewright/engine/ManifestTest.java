@@ -2,6 +2,7 @@ package net.magicterra.stagewright.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -48,6 +49,17 @@ class ManifestTest {
     void commasAndLinesAreTheSameSpelling(@TempDir Path dir) throws IOException {
         Path file = write(dir, "wd.a, wd.b,,wd.c", "wd.d,");
         assertEquals(List.of("wd.a", "wd.b", "wd.c", "wd.d"), Manifest.read(file));
+    }
+
+    @Test
+    void aManifestThatNamesNothingIsRefused(@TempDir Path dir) throws IOException {
+        // A gate armed with an expectation of nothing would pass any run, and a truncated checkout
+        // or a manifest commented out while debugging is exactly that.
+        Path file = write(dir, "# wd.a", "", "  # wd.b", ",");
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> Manifest.read(file));
+        assertTrue(e.getMessage().contains("names no scenes"), e.getMessage());
+        assertTrue(e.getMessage().contains(file.toString()), e.getMessage());
     }
 
     @Test

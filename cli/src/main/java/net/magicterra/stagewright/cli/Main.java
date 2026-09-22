@@ -81,6 +81,10 @@ public final class Main {
         // once both have finished.
         if (opts.containsKey("coverage")) return coverage(opts.get("coverage"));
 
+        // Read now as well as at judging time, so a manifest the engine refuses stops the run before
+        // it has spent a game boot and a whole suite on a verdict it could never give.
+        expected(opts);
+
         Path gameDir = Path.of(require(opts, "game-dir")).toAbsolutePath().normalize();
         if (!Files.isDirectory(gameDir)) {
             throw new IllegalArgumentException("--game-dir " + gameDir + " is not a directory");
@@ -728,13 +732,16 @@ public final class Main {
         List<Map<String, Object>> records = Verdict.parse(results, warnings);
         warnings.forEach(w -> System.out.println("[stagewright] " + w));
 
-        List<String> expected = opts.containsKey("expect")
-                ? Manifest.read(Path.of(opts.get("expect"))) : null;
-        Verdict.Result verdict = Verdict.judge(records, expected);
+        Verdict.Result verdict = Verdict.judge(records, expected(opts));
         verdict.report().forEach(line -> System.out.println("[stagewright] " + line));
         System.out.println("[stagewright] VERDICT: " + verdict.label());
         if (verdict.code() != 0) System.out.println("[stagewright] log: " + log);
         return verdict.code();
+    }
+
+    /** The {@code --expect} manifest's names, or null when the run is not reconciled against one. */
+    static List<String> expected(Map<String, String> opts) {
+        return opts.containsKey("expect") ? Manifest.read(Path.of(opts.get("expect"))) : null;
     }
 
     /**

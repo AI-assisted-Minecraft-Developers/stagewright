@@ -53,7 +53,7 @@ model, and `--help` for the flags not covered here.
 | `--game-dir <dir>` | The pack directory holding `mods/` and `config/`. Required. |
 | `--scenes <dir>` | A folder of scene files. `.js` goes to the scenes directory, `.json` to the capability descriptors directory. |
 | `--mod <jar>` | Install this mod too. Repeatable. |
-| `--expect <file>` | Reconcile the run against an expected-scenes manifest. |
+| `--expect <file>` | Reconcile the run against an expected-scenes manifest. A manifest that names no scene is refused before the game starts. |
 | `--timeout <min>` | A ceiling, not a duration — the run ends when the results file carries its footer. Defaults to 45. |
 | `--clean-world false` | Keep the existing world. The default is to delete it. |
 | `--no-install` | Do not touch `mods/`; the pack already has what it needs. |
