@@ -4,12 +4,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The verdict rules, exercised against hand-built results.
@@ -321,5 +326,93 @@ class VerdictTest {
         Verdict.Result result = Verdict.judge(
                 records(suite(reg("a")), scene("a", "PASS"), done(1)), null);
         assertEquals(0, result.code());
+    }
+
+    // ---- filtered runs -------------------------------------------------------------------------
+
+    private static Map<String, Object> filtered(String pattern, Map<String, Object>... registered) {
+        Map<String, Object> rec = suite(registered);
+        rec.put("filter", pattern);
+        return rec;
+    }
+
+    @Test
+    void aFilteredGreenIsLabelledAsNotAGateResult() {
+        // The label is what a human reads first; a bare GREEN here would read as the suite passing.
+        Verdict.Result result = Verdict.judge(
+                records(filtered("wd.a*", reg("wd.a")), scene("wd.a", "PASS"), done(1)), null);
+        assertEquals(0, result.code());
+        assertTrue(result.filtered());
+        assertEquals("GREEN (FILTERED — not a gate result)", result.label());
+        assertTrue(reports(result, "FILTERED to 'wd.a*'"));
+    }
+
+    @Test
+    void aFilteredRedKeepsItsSuffix() {
+        Verdict.Result result = Verdict.judge(
+                records(filtered("wd.a", reg("wd.a")), scene("wd.a", "FAIL"), done(1)), null);
+        assertEquals(1, result.code());
+        assertEquals("RED (FILTERED — not a gate result)", result.label());
+    }
+
+    @Test
+    void aFilteredRunSkipsManifestReconciliation() {
+        // Every scene the pattern left out is legitimately absent; reporting the whole manifest as
+        // missing would bury the one outcome the run was asked about.
+        Verdict.Result result = Verdict.judge(
+                records(filtered("wd.a", reg("wd.a")), scene("wd.a", "PASS"), done(1)),
+                List.of("wd.a", "wd.b", "wd.c"));
+        assertEquals(0, result.code());
+        assertFalse(reports(result, "MISSING-EXPECTED"));
+    }
+
+    @Test
+    void aFilterThatMatchedNothingIsRed() {
+        Verdict.Result result = Verdict.judge(records(filtered("wd.typo*"), done(0)), null);
+        assertEquals(1, result.code());
+        assertTrue(result.filtered());
+        assertTrue(reports(result, "matched NO scenes"));
+    }
+
+    @Test
+    void anUnfilteredRunIsNotLabelledFiltered() {
+        Verdict.Result result = Verdict.judge(
+                records(suite(reg("a")), scene("a", "PASS"), done(1)), null);
+        assertFalse(result.filtered());
+        assertFalse(reports(result, "FILTERED"));
+    }
+
+    // ---- reading a results file ----------------------------------------------------------------
+
+    @Test
+    void parseDropsWhatDoesNotDecodeAndSaysWhich(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve("results.jsonl");
+        Files.writeString(file, String.join("\n",
+                "{\"type\":\"suite\",\"loader\":\"fabric\",\"registered\":[{\"name\":\"a\"}]}",
+                "",
+                "{\"type\":\"scene\",\"name\":\"a\",\"outc",
+                "[1,2,3]",
+                "{\"type\":\"done\",\"scenes\":1}"), StandardCharsets.UTF_8);
+        List<String> warnings = new ArrayList<>();
+        List<Map<String, Object>> parsed = Verdict.parse(file, warnings);
+
+        assertEquals(2, parsed.size());
+        assertEquals("suite", parsed.get(0).get("type"));
+        assertEquals("done", parsed.get(1).get("type"));
+        assertEquals(2, warnings.size());
+        assertTrue(warnings.get(0).contains("undecodable line 3"));
+        assertTrue(warnings.get(1).contains("non-object line 4"));
+    }
+
+    @Test
+    void aDroppedSceneLineSurfacesAsSwallowedRatherThanGreen(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve("results.jsonl");
+        Files.writeString(file, String.join("\n",
+                "{\"type\":\"suite\",\"loader\":\"fabric\",\"registered\":[{\"name\":\"a\"}]}",
+                "{\"type\":\"scene\",\"name\":\"a\",\"outcome\":\"FA",
+                "{\"type\":\"done\",\"scenes\":1}"), StandardCharsets.UTF_8);
+        Verdict.Result result = Verdict.judge(Verdict.parse(file, new ArrayList<>()), null);
+        assertEquals(1, result.code());
+        assertTrue(reports(result, "SWALLOWED: 'a'"));
     }
 }
