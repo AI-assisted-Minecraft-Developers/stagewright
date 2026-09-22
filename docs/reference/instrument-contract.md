@@ -69,6 +69,11 @@ the handshake, it hangs it, so the symptom is a timeout that reads as "the pack 
 starting". The MCP address is `http://<rpcHost>:<mcpPort>/mcp`, and asking for it when no
 `mcpPort` was written throws rather than producing a URL to nothing.
 
+The host in both is the recorded bind address made dialable. A wildcard (`0.0.0.0`, `::`) accepts
+on every interface but is not itself an address, so it becomes the same family's loopback
+(`127.0.0.1`, `[::1]`); any other IPv6 literal is bracketed, because `ws://::1:39801` cannot say
+where the port starts. Host names are used as written.
+
 ### Lifecycle
 
 **Written once a run is attachable, not once a process has started.** There are two call sites

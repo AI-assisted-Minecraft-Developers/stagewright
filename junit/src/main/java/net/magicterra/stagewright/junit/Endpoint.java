@@ -6,9 +6,12 @@ import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Pattern;
 
 /**
  * The TESTKIT_ENDPOINT descriptor (schema v1), written by a held game — see
@@ -95,7 +98,31 @@ public record Endpoint(
 
     /** The bare-RPC websocket URI this endpoint listens on: {@code ws://host:port/rpc}. */
     public String wsUri() {
-        return "ws://" + rpcHost + ":" + rpcPort + "/rpc";
+        return "ws://" + uriHost(rpcHost) + ":" + rpcPort + "/rpc";
+    }
+
+    private static final Pattern IPV4_LITERAL = Pattern.compile("\\d{1,3}(\\.\\d{1,3}){3}");
+
+    /**
+     * A bind address as something a URI can dial: a wildcard becomes the same family's loopback,
+     * because it accepts on every interface but is not itself connectable, and an IPv6 literal is
+     * bracketed, because {@code ws://::1:39801} has no way to say where the port starts.
+     */
+    static String uriHost(String host) {
+        String bare = host.startsWith("[") && host.endsWith("]")
+                ? host.substring(1, host.length() - 1) : host;
+        boolean v6 = bare.indexOf(':') >= 0;
+        // Only literals are inspected: resolving a host name here would be a DNS lookup whose
+        // answer the game never saw.
+        if (!v6 && !IPV4_LITERAL.matcher(bare).matches()) return bare;
+        boolean wildcard;
+        try {
+            wildcard = InetAddress.getByName(bare).isAnyLocalAddress();
+        } catch (UnknownHostException e) {
+            wildcard = false;
+        }
+        if (wildcard) return v6 ? "[::1]" : "127.0.0.1";
+        return v6 ? "[" + bare + "]" : bare;
     }
 
     /**
@@ -110,7 +137,7 @@ public record Endpoint(
             throw new IllegalStateException("endpoint " + topology + " carries no mcpPort — the MCP"
                     + " server did not come up in that JVM, so its schema catalog is unreachable");
         }
-        return "http://" + rpcHost + ":" + mcpPort + "/mcp";
+        return "http://" + uriHost(rpcHost) + ":" + mcpPort + "/mcp";
     }
 
     private static JsonElement req(JsonObject o, String key) {
