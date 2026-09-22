@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.fabric;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -91,5 +92,47 @@ class FabricModMetadataTest {
     @Test
     void loaderRangeIsTheOneGradlePropertiesStates() throws VersionParsingException {
         assertSameInterval("fabric_loader_version_range", META.getAsJsonObject("depends").get("fabricloader"));
+    }
+
+    /** Any predicate in a string-or-array dependency value matches, as Fabric Loader reads it. */
+    private static boolean matches(JsonElement value, String version) throws VersionParsingException {
+        List<JsonElement> terms = value.isJsonArray() ? value.getAsJsonArray().asList() : List.of(value);
+        for (JsonElement t : terms) {
+            if (VersionPredicate.parse(t.getAsString()).test(Version.parse(version))) return true;
+        }
+        return false;
+    }
+
+    @Test
+    void worlddriverIsOptionalButRefusedOutsideTheLineStageWrightLinksAgainst() throws VersionParsingException {
+        for (String kind : List.of("depends", "recommends")) {
+            JsonObject deps = META.getAsJsonObject(kind);
+            assertTrue(deps == null || !deps.has("worlddriver"), "worlddriver must stay optional, found in " + kind);
+        }
+        assertTrue(META.has("suggests") && META.getAsJsonObject("suggests").has("worlddriver"),
+                "no suggests entry for worlddriver");
+        assertTrue(META.has("breaks") && META.getAsJsonObject("breaks").has("worlddriver"),
+                "no breaks entry for worlddriver");
+        JsonElement suggests = META.getAsJsonObject("suggests").get("worlddriver");
+        JsonElement breaks = META.getAsJsonObject("breaks").get("worlddriver");
+
+        // suggests is advisory only; breaks is what makes Fabric Loader refuse the pair, so the two
+        // must be exact complements around the release line of worlddriver_version.
+        String built = prop("worlddriver_version");
+        Matcher v = Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)").matcher(built);
+        assertTrue(v.find(), built);
+        int major = Integer.parseInt(v.group(1));
+        int minor = Integer.parseInt(v.group(2));
+        String base = v.group();
+        String nextBreaking = major == 0 ? "0." + (minor + 1) + ".0" : (major + 1) + ".0.0";
+        String laterCompatible = major + "." + minor + "." + (Integer.parseInt(v.group(3)) + 1);
+        for (String version : List.of(built, base, laterCompatible)) {
+            assertTrue(matches(suggests, version), "suggests should cover " + version);
+            assertFalse(matches(breaks, version), "breaks must not refuse " + version);
+        }
+        for (String version : List.of(base + "-alpha", nextBreaking, nextBreaking + "+1.21.1")) {
+            assertFalse(matches(suggests, version), "suggests should not cover " + version);
+            assertTrue(matches(breaks, version), "breaks must refuse " + version);
+        }
     }
 }

@@ -47,6 +47,18 @@ architectury {
     minecraft = project.minecraft_version
 }
 
+// worlddriver stays optional, but one that is present must be a release StageWright links against:
+// the line of worlddriver_version up to its next breaking release (the next minor while it is 0.x).
+// Both loaders' metadata declare it, so the loader refuses the pair instead of the mc.test.* verbs
+// failing to link at server start.
+ext.worlddriverVersionRange = {
+    def m = worlddriver_version =~ /^(\d+)\.(\d+)\.(\d+)/
+    if (!m.find()) throw new GradleException("worlddriver_version is not major.minor.patch: '$worlddriver_version'")
+    int major = m.group(1) as int
+    int minor = m.group(2) as int
+    "[${m.group()},${major == 0 ? "0.${minor + 1}.0" : "${major + 1}.0.0"})".toString()
+}()
+
 allprojects {
     group = rootProject.maven_group
     version = rootProject.mod_version

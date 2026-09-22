@@ -22,5 +22,11 @@
     "fabric-api": "*",
     "minecraft": "${minecraft_version_range}",
     "java": ">=21"
+  },
+  "suggests": {
+    "worlddriver": "${worlddriver_version_range}"
+  },
+  "breaks": {
+    "worlddriver": ${worlddriver_breaks}
   }
 }

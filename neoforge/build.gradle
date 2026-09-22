@@ -59,15 +59,16 @@ tasks.named('test', Test) {
 
 processResources {
     def metadata = [
-            version                : project.version,
-            mod_id                 : rootProject.mod_id,
-            mod_name               : rootProject.mod_name,
-            mod_license            : rootProject.mod_license,
-            mod_authors            : rootProject.mod_authors,
-            mod_description        : rootProject.mod_description,
-            loader_version_range   : rootProject.loader_version_range,
-            neoforge_version_range : rootProject.neoforge_version_range,
-            minecraft_version_range: rootProject.minecraft_version_range,
+            version                  : project.version,
+            mod_id                   : rootProject.mod_id,
+            mod_name                 : rootProject.mod_name,
+            mod_license              : rootProject.mod_license,
+            mod_authors              : rootProject.mod_authors,
+            mod_description          : rootProject.mod_description,
+            loader_version_range     : rootProject.loader_version_range,
+            neoforge_version_range   : rootProject.neoforge_version_range,
+            minecraft_version_range  : rootProject.minecraft_version_range,
+            worlddriver_version_range: rootProject.worlddriverVersionRange,
     ]
     inputs.properties metadata
 

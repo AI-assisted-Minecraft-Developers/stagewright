@@ -1,7 +1,9 @@
 package net.magicterra.stagewright.neoforge;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -9,9 +11,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.electronwill.nightconfig.core.Config;
 import com.electronwill.nightconfig.toml.TomlParser;
+import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
+import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -74,5 +80,31 @@ class NeoForgeModMetadataTest {
         assertEquals(prop("loader_version_range"), META.get("loaderVersion"));
         assertEquals(prop("neoforge_version_range"), dependency("neoforge").get("versionRange"));
         assertEquals(prop("minecraft_version_range"), dependency("minecraft").get("versionRange"));
+    }
+
+    @Test
+    void worlddriverIsOptionalButRefusedOutsideTheLineStageWrightLinksAgainst() throws Exception {
+        Config wd = dependency("worlddriver");
+        assertNotNull(wd, "no dependency entry for worlddriver");
+        // FML refuses an OPTIONAL dependency that is present with a version outside its range, and
+        // ignores it when absent — exactly the relationship StageWright has with its driver.
+        assertEquals("optional", wd.get("type"));
+        assertEquals("BOTH", wd.get("side"));
+
+        VersionRange range = VersionRange.createFromVersionSpec(wd.get("versionRange"));
+        String built = prop("worlddriver_version");
+        Matcher v = Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)").matcher(built);
+        assertTrue(v.find(), built);
+        int major = Integer.parseInt(v.group(1));
+        int minor = Integer.parseInt(v.group(2));
+        String base = v.group();
+        String nextBreaking = major == 0 ? "0." + (minor + 1) + ".0" : (major + 1) + ".0.0";
+        String laterCompatible = major + "." + minor + "." + (Integer.parseInt(v.group(3)) + 1);
+        for (String version : List.of(built, base, laterCompatible + "+1.21.1")) {
+            assertTrue(range.containsVersion(new DefaultArtifactVersion(version)), "range should accept " + version);
+        }
+        for (String version : List.of(base + "-alpha", nextBreaking, nextBreaking + "+1.21.1")) {
+            assertFalse(range.containsVersion(new DefaultArtifactVersion(version)), "range should refuse " + version);
+        }
     }
 }

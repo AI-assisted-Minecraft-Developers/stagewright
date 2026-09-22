@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### A WorldDriver StageWright cannot link against is refused by the loader · green in unit tests over the processed metadata
+
+Neither loader's metadata named WorldDriver, and the only guard was a presence probe by class
+name. A driver whose verb API had moved passed the probe; the `mc.test.*` verbs then failed to
+link at server start and were logged as an error, leaving an orchestrator waiting on a trigger
+that was not there. Both files now declare WorldDriver as optional with the range
+`[0.1.0,0.2.0)`, derived from `worlddriver_version`: NeoForge as an `optional` dependency, Fabric
+as `suggests` plus a `breaks` on everything outside the range, since Fabric Loader ignores a
+`suggests` version. Without WorldDriver StageWright still loads, as before.
+
 ### Both loaders' metadata comes from `gradle.properties` · green in unit tests over the processed metadata
 
 `fabric.mod.json` and `neoforge.mods.toml` expanded only `version`; the licence, description,
