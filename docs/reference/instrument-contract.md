@@ -85,7 +85,9 @@ writes the single descriptor — the same port either way, but later, when there
 
 **Deleted at provision.** A stale descriptor is the most dangerous kind of leftover, because it
 names a port: an out-of-process test would attach to whatever now answers there — nothing, or
-somebody else's game — instead of failing fast on a descriptor that is not there yet.
+somebody else's game — instead of failing fast on a descriptor that is not there yet. That covers
+a held companion's descriptor too, which sits beside the companion's results file rather than in
+the primary run directory.
 
 **A liveness probe is the only proof an endpoint is usable.** `writtenAtEpochMs` is not a
 freshness test, and a file existing with a recent timestamp guarantees nothing about the process

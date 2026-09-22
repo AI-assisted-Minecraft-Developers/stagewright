@@ -159,7 +159,7 @@ Before every run, the provision step:
 
 - deletes the previous `world` and `saves` directories, unless the topology asks it not to;
 - deletes the results file it is about to judge, the heartbeat beside it, and any stale endpoint
-  descriptor;
+  descriptor, both in the run directory and beside a companion client's results file;
 - writes `eula.txt`;
 - forces three keys in `server.properties` and leaves every other line alone: online mode off, a
   fixed level seed, and chunk-write syncing off;
