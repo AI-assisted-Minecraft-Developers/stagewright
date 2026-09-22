@@ -42,7 +42,7 @@ problem and keeps holding, because the game is still attachable by hand from the
 
 ### Schema
 
-Version 1. Eight required keys, two optional.
+Version 1. Eight required keys, three optional.
 
 | Key | Type | Presence | Meaning |
 |---|---|---|---|
@@ -56,6 +56,7 @@ Version 1. Eight required keys, two optional.
 | `writtenAtEpochMs` | long | required | When it was written. Not a freshness test — see below. |
 | `serverRpcPort` | int | optional | Reserved for a descriptor that carries both faces. Nothing writes it today. |
 | `mcpPort` | int | optional | The MCP HTTP port, written when the driver bound one. |
+| `mcpHost` | string | optional | Host the MCP server bound to, written with `mcpPort` when `worlddriver.mcpHost` was set. Absent, the MCP server is on `rpcHost`'s default too. |
 
 A missing required key throws, naming the key, rather than defaulting. **Unknown keys are
 tolerated**, so a future key does not break an older reader.
@@ -66,8 +67,9 @@ consuming build declared, with `-client` appended for a companion.
 Two URIs are derived rather than stored. The WebSocket address is
 `ws://<rpcHost>:<rpcPort>/rpc`, and the `/rpc` path is load-bearing: omitting it does not fail
 the handshake, it hangs it, so the symptom is a timeout that reads as "the pack is still
-starting". The MCP address is `http://<rpcHost>:<mcpPort>/mcp`, and asking for it when no
-`mcpPort` was written throws rather than producing a URL to nothing.
+starting". The MCP address is `http://<mcpHost>:<mcpPort>/mcp`, falling back to `rpcHost` when
+no `mcpHost` was written, and asking for it when no `mcpPort` was written throws rather than
+producing a URL to nothing.
 
 The host in both is the recorded bind address made dialable. A wildcard (`0.0.0.0`, `::`) accepts
 on every interface but is not itself an address, so it becomes the same family's loopback

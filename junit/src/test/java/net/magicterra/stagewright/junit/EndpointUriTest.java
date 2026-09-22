@@ -49,6 +49,16 @@ class EndpointUriTest {
         assertEquals("http://127.0.0.1:39802/mcp", endpoint("0.0.0.0", "").mcpUri());
     }
 
+    /** The MCP server binds from its own property, so it can be on a different host than RPC. */
+    @Test
+    void theMcpUriUsesTheMcpHostWhenTheDescriptorCarriesOne() {
+        assertEquals("http://10.0.0.5:39802/mcp",
+                endpoint("127.0.0.1", ",\"mcpHost\":\"10.0.0.5\"").mcpUri());
+        assertEquals("http://[::1]:39802/mcp", endpoint("127.0.0.1", ",\"mcpHost\":\"::\"").mcpUri());
+        assertEquals("ws://127.0.0.1:39801/rpc",
+                endpoint("127.0.0.1", ",\"mcpHost\":\"10.0.0.5\"").wsUri());
+    }
+
     @Test
     void anIpv6WildcardBecomesLoopback() {
         assertEquals("ws://[::1]:39801/rpc", endpoint("::", "").wsUri());

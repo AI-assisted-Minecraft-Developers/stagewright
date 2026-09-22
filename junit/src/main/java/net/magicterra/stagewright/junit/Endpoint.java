@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 /**
  * The TESTKIT_ENDPOINT descriptor (schema v1), written by a held game — see
  * {@code EndpointDescriptor} on the mod side and the {@code stagewright<Topology>Hold} tasks that
- * ask for one. Immutable; carries all eight frozen required keys plus two optional extensions.
+ * ask for one. Immutable; carries all eight frozen required keys plus three optional extensions.
  *
  * <p><b>Required (frozen v1, all eight):</b> {@code version}, {@code topology},
  * {@code loader}, {@code rpcHost}, {@code rpcPort}, {@code worldName},
@@ -35,6 +35,9 @@ import java.util.regex.Pattern;
  *       schemas are advertised through MCP's {@code tools/list}, so anything asserting about a
  *       tool's declared shape needs this instead of {@code rpcPort}. {@link #mcpUri()} builds the
  *       endpoint; {@link #mcpPort()} is {@code null} when the MCP server did not come up.</li>
+ *   <li>{@code mcpHost} — where the MCP server bound, written only when the driver was told to bind
+ *       it somewhere of its own. {@link #mcpHost()} is {@code null} otherwise, and {@link #mcpUri()}
+ *       then uses {@code rpcHost}, which is what both bind to by default.</li>
  *   <li>{@code serverRpcPort} — a client-face descriptor's pointer at the dedicated server it is
  *       joined to. {@link #serverRpcPort()} is {@code null} when the key is absent, which it is for
  *       every descriptor the current holds write; it survives because removing a tolerated optional
@@ -54,12 +57,21 @@ public record Endpoint(
         long holdPid,
         long writtenAtEpochMs,
         Integer serverRpcPort,
-        Integer mcpPort) {
+        Integer mcpPort,
+        String mcpHost) {
+
+    /** The shape before {@code mcpHost}, kept so code that built one by hand still compiles. */
+    public Endpoint(int version, String topology, String loader, String rpcHost, int rpcPort,
+                    String worldName, long holdPid, long writtenAtEpochMs, Integer serverRpcPort,
+                    Integer mcpPort) {
+        this(version, topology, loader, rpcHost, rpcPort, worldName, holdPid, writtenAtEpochMs,
+                serverRpcPort, mcpPort, null);
+    }
 
     /**
      * Parse a descriptor from its JSON text. Requires all eight frozen keys; parses the
-     * optional {@code serverRpcPort} and {@code mcpPort} when present ({@code null} when absent);
-     * tolerates any unknown keys (they are simply not read).
+     * optional {@code serverRpcPort}, {@code mcpPort} and {@code mcpHost} when present
+     * ({@code null} when absent); tolerates any unknown keys (they are simply not read).
      */
     public static Endpoint parse(String json) {
         JsonElement root;
@@ -82,7 +94,8 @@ public record Endpoint(
                 reqLong(o, "holdPid"),
                 reqLong(o, "writtenAtEpochMs"),
                 optInt(o, "serverRpcPort"),
-                optInt(o, "mcpPort"));
+                optInt(o, "mcpPort"),
+                optString(o, "mcpHost"));
     }
 
     /** Read and parse a descriptor from a file. */
@@ -137,7 +150,7 @@ public record Endpoint(
             throw new IllegalStateException("endpoint " + topology + " carries no mcpPort — the MCP"
                     + " server did not come up in that JVM, so its schema catalog is unreachable");
         }
-        return "http://" + uriHost(rpcHost) + ":" + mcpPort + "/mcp";
+        return "http://" + uriHost(mcpHost != null ? mcpHost : rpcHost) + ":" + mcpPort + "/mcp";
     }
 
     private static JsonElement req(JsonObject o, String key) {
@@ -167,5 +180,14 @@ public record Endpoint(
             return null;
         }
         return e.getAsInt();
+    }
+
+    /** Optional string: the parsed value when the key is present + non-null, else {@code null}. */
+    private static String optString(JsonObject o, String key) {
+        JsonElement e = o.get(key);
+        if (e == null || e.isJsonNull()) {
+            return null;
+        }
+        return e.getAsString();
     }
 }
