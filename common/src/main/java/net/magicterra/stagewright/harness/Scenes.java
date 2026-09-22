@@ -8,7 +8,9 @@ import net.magicterra.stagewright.contract.Terrain;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.ServiceLoader;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 
@@ -120,6 +122,11 @@ public final class Scenes {
         return sb.toString();
     }
 
+    /** Where {@code arenaLeftoversAreSwept} plays; {@code arenaLeftoversStayGone} takes the next slot. */
+    private static final int SWEEP_PROBE_SLOT = 2002;
+
+    private static final String SWEEP_PROBE_TAG = "stagewright.sweepProbe";
+
     private static List<Scene> builtin() {
         return List.of(
                 // -- walking-skeleton scenes --
@@ -181,6 +188,44 @@ public final class Scenes {
                                 + " whole arena — this is a flat generator, not the noise one");
                     }
                 }).withTerrain(Terrain.GENERATED).withOriginSlot(2001),
+                /*
+                 * The teardown sweep, checked from the scene after it, because a scene cannot watch
+                 * its own teardown. The first leaves a tagged armor stand in a superflat arena, which
+                 * sits at the surface near y=-60 — far below the grid altitude, so a sweep boxed
+                 * around the grid slot never reaches it. The second loads that arena again and
+                 * asserts the stand is gone. Pinned to adjacent slots so the second knows where the
+                 * first played; the first leaves no cleanup on purpose.
+                 */
+                Scene.of("arenaLeftoversAreSwept", 100, ctx -> {
+                    // A probe a pre-sweep run left behind is in this scene's baseline, so the sweep
+                    // would spare it and the next scene would blame this run for it.
+                    ctx.level().getEntitiesOfClass(ArmorStand.class, new AABB(ctx.origin()).inflate(8),
+                                    stand -> stand.getTags().contains(SWEEP_PROBE_TAG))
+                            .forEach(stand -> stand.discard());
+                    ctx.command("summon minecraft:armor_stand ~ ~ ~ {NoGravity:1b,Tags:[\""
+                            + SWEEP_PROBE_TAG + "\"]}");
+                    ctx.record("surfaceY", ctx.originY());
+                }).withTerrain(Terrain.SUPERFLAT).withOriginSlot(SWEEP_PROBE_SLOT),
+                Scene.of("arenaLeftoversStayGone", 200, ctx -> {
+                    BlockPos previous = StageWrightHarness.originFor(SWEEP_PROBE_SLOT);
+                    String at = previous.getX() + " " + previous.getZ();
+                    ctx.cleanup(() -> ctx.command("forceload remove " + at));
+                    ctx.command("forceload add " + at);
+                    long chunk = ChunkPos.asLong(previous.getX() >> 4, previous.getZ() >> 4);
+                    ctx.await(() -> ctx.level().areEntitiesLoaded(chunk)).within(160).then(() -> {
+                        AABB column = new AABB(previous.getX() - 8, ctx.level().getMinBuildHeight(),
+                                previous.getZ() - 8, previous.getX() + 8,
+                                ctx.level().getMaxBuildHeight(), previous.getZ() + 8);
+                        var left = ctx.level().getEntitiesOfClass(ArmorStand.class, column,
+                                stand -> stand.getTags().contains(SWEEP_PROBE_TAG));
+                        ctx.record("leftBehind", left.size());
+                        if (!left.isEmpty()) {
+                            ctx.fail("the armor stand arenaLeftoversAreSwept left at y="
+                                    + left.get(0).getBlockY() + " survived teardown — the sweep"
+                                    + " and the leak audit are not looking where terrain scenes play");
+                        }
+                    });
+                }).withTerrain(Terrain.SUPERFLAT).withOriginSlot(SWEEP_PROBE_SLOT + 1),
                 // -- topology probe --
                 /*
                  * The client-joins-server topology's whole claim is that the scenes ran with a real

@@ -39,18 +39,30 @@ import net.minecraft.world.phys.AABB;
  */
 final class ArenaAudit {
 
-    /** The globals a new world would reset and a new arena would not. */
-    record Snapshot(Set<UUID> arenaIds, boolean raining, boolean thundering,
-                    int forcedChunks, long gameRuleFingerprint) {
+    /**
+     * The globals a new world would reset and a new arena would not.
+     *
+     * <p>Carries where it was taken, so the sweep and the closing snapshot cannot be handed a
+     * different box than the baseline. For terrain that box is at the surface, far below the grid
+     * altitude, and a box at the grid altitude would see none of what the scene left.
+     */
+    record Snapshot(BlockPos origin, int radius, Set<UUID> arenaIds, boolean raining,
+                    boolean thundering, int forcedChunks, long gameRuleFingerprint) {
 
         int arenaEntities() { return arenaIds.size(); }
     }
 
     private ArenaAudit() {}
 
-    /** Everything within the scene's arena, plus the level-wide state around it. */
+    /**
+     * Everything within the scene's arena, plus the level-wide state around it.
+     *
+     * @param origin the arena origin the scene's context was built at, not the grid slot's
+     */
     static Snapshot take(ServerLevel level, BlockPos origin, int radius) {
         return new Snapshot(
+                origin,
+                radius,
                 idsIn(level, arena(origin, radius)),
                 level.isRaining(),
                 level.isThundering(),
@@ -77,15 +89,21 @@ final class ArenaAudit {
      *
      * @return how many entities were removed
      */
-    static int sweep(ServerLevel level, BlockPos origin, int radius, Snapshot before) {
+    static int sweep(ServerLevel level, Snapshot before) {
         int swept = 0;
-        for (Entity e : level.getEntities((Entity) null, arena(origin, radius), x -> true)) {
+        AABB box = arena(before.origin(), before.radius());
+        for (Entity e : level.getEntities((Entity) null, box, x -> true)) {
             if (e instanceof Player) continue;
             if (before.arenaIds().contains(e.getUUID())) continue;
             e.discard();
             swept++;
         }
         return swept;
+    }
+
+    /** The closing snapshot, taken in the same box as {@code before}. */
+    static Snapshot again(ServerLevel level, Snapshot before) {
+        return take(level, before.origin(), before.radius());
     }
 
     /**
