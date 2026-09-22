@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### The CLI refuses options it does not know · compiled, parser green in unit tests
+
+Any `--name value` used to be accepted and stored, so a typo was a setting nobody read:
+`--expected expected-scenes.txt` ran with manifest reconciliation off and could exit GREEN over a
+provider whose scenes had vanished, and `--clean-wrold false` deleted the world. An unknown option
+now prints the usage and exits 3, and `--clean-world` takes only `true` or `false`.
+
 ### `-Dstagewright.filter` is gone · compiled, registry green in a unit test
 
 A second, older filter still narrowed the registry by glob, but it never reached the suite header,

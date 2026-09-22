@@ -59,8 +59,12 @@ model, and `--help` for the flags not covered here.
 | `--no-install` | Do not touch `mods/`; the pack already has what it needs. |
 | `--launch "<command>"` | Start the server this way instead of detecting how. |
 
-`--help` is only recognised as the **first** argument. Anywhere else it is parsed as a flag that eats
-the next token.
+`--help` is only recognised as the **first** argument. Anywhere else it is an unknown option.
+
+An option the CLI does not know is refused with the usage text and exit 3, and so is a value other
+than `true` or `false` for `--clean-world`. A mistyped name is therefore an error before anything
+runs, rather than a setting that is silently never read — `--expected` for `--expect` would
+otherwise run with reconciliation off, and `--clean-wrold false` would delete the world.
 
 Detection covers NeoForge and Forge argument files under `libraries/`, and a Fabric or Quilt server
 jar at the top level. When it cannot tell, it says so and asks for `--launch`.

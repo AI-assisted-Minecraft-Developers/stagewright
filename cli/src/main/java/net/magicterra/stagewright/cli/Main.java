@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -70,27 +69,10 @@ public final class Main {
             return 0;
         }
 
-        Map<String, String> opts = new LinkedHashMap<>();
-        List<String> systemProps = new ArrayList<>();
-        List<Path> extraMods = new ArrayList<>();
-        for (int i = 0; i < args.length; i++) {
-            String a = args[i];
-            if (a.startsWith("-D")) {
-                systemProps.add(a);
-            } else if ("--no-install".equals(a)) {
-                opts.put("no-install", "true");
-            } else if ("--online".equals(a)) {
-                opts.put("online", "true");
-            } else if ("--mod".equals(a)) {
-                if (i + 1 >= args.length) throw new IllegalArgumentException(a + " needs a value");
-                extraMods.add(Path.of(args[++i]).toAbsolutePath().normalize());
-            } else if (a.startsWith("--")) {
-                if (i + 1 >= args.length) throw new IllegalArgumentException(a + " needs a value");
-                opts.put(a.substring(2), args[++i]);
-            } else {
-                throw new IllegalArgumentException("unexpected argument '" + a + "'");
-            }
-        }
+        Args.Parsed parsed = Args.parse(args);
+        Map<String, String> opts = parsed.opts();
+        List<String> systemProps = parsed.systemProps();
+        List<Path> extraMods = parsed.extraMods();
 
         // Judged from files alone, so it runs no game and needs no --game-dir. It is a separate
         // invocation rather than a step of a run because the runs it reconciles are separate
@@ -907,7 +889,7 @@ public final class Main {
                   --timeout <min>     kill the run after this long (default 45). A ceiling, not a
                                       duration: the run ends when the results file carries its done
                                       footer, whether or not the game's JVM manages to exit.
-                  --clean-world false keep the existing world (default: delete it)
+                  --clean-world false keep the existing world (default: delete it; true or false only)
                   --mod <jar>         also install this mod (repeatable — e.g. the driver whose
                                       verbs your scenes call)
                   --no-install        do not touch mods/; the pack already has what it needs
