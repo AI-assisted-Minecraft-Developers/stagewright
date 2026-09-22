@@ -957,7 +957,8 @@ public final class Main {
                                       footer, whether or not the game's JVM manages to exit.
                   --clean-world false keep the existing world (default: delete it; true or false only)
                   --mod <jar>         also install this mod (repeatable — e.g. the driver whose
-                                      verbs your scenes call)
+                                      verbs your scenes call). Refused if a jar of the same file
+                                      name is already in the pack's mods/
                   --no-install        do not touch mods/; the pack already has what it needs
                   --headlessmc <jar>  run a CLIENT topology through this headlessmc-launcher jar.
                                       It installs the loader and the assets itself. Without an

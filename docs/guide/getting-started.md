@@ -36,7 +36,8 @@ Both loader builds of the framework ride inside `stagewright.jar`, so there is n
 pairing for you to get right — which is the step that usually fails, and fails looking exactly like
 the mod not working. Other mods your scenes need come in through `--mod <jar>`, repeatable.
 Everything installed is recorded and swept again on the next run, so upgrading never leaves two
-copies behind.
+copies behind. A `--mod` jar with the same file name as a jar the pack already has in `mods/` is
+refused, because installing it would overwrite the pack's copy and a later run would delete it.
 
 Scenes are plain JavaScript and register into the same registry, canaries and results file the
 compiled ones do. See [Writing a scene](writing-a-scene.md#scenes-written-in-javascript) for the

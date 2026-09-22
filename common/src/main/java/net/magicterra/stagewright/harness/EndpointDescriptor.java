@@ -79,6 +79,9 @@ public final class EndpointDescriptor {
 
         String host = System.getProperty("worlddriver.rpcHost", "127.0.0.1");
         Integer mcpPort = readPort(MCP_PORT_FILE);
+        // The MCP server binds from its own property, so a reader dialling rpcHost for it would be
+        // wrong exactly when someone moved it. Written only when set: unset, both share one default.
+        String mcpHost = System.getProperty("worlddriver.mcpHost");
         String json = "{\"version\":" + SCHEMA_VERSION
                 + ",\"topology\":\"" + ResultsJsonl.escape(System.getProperty(TOPOLOGY_PROPERTY, "unknown")) + '"'
                 + ",\"loader\":\"" + ResultsJsonl.escape(loader == null ? "unknown" : loader) + '"'
@@ -88,6 +91,8 @@ public final class EndpointDescriptor {
                 + ",\"holdPid\":" + ProcessHandle.current().pid()
                 + ",\"writtenAtEpochMs\":" + System.currentTimeMillis()
                 + (mcpPort == null ? "" : ",\"mcpPort\":" + mcpPort)
+                + (mcpPort == null || mcpHost == null || mcpHost.isBlank() ? ""
+                        : ",\"mcpHost\":\"" + ResultsJsonl.escape(mcpHost.trim()) + '"')
                 + "}\n";
         try {
             Path parent = out.toAbsolutePath().getParent();

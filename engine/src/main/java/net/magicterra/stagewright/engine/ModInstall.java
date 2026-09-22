@@ -43,6 +43,10 @@ import java.util.function.Consumer;
  * one. Overwriting by name is not enough: the jars carry versions, so an upgrade lands BESIDE its
  * predecessor rather than on top of it, and the loader then sees two StageWrights — which either
  * refuses to start or, worse, arms the stale one and reports its behaviour as the new code's.
+ *
+ * <p>The ledger only ever names what we copied in. A jar to install whose name is already in
+ * mods/ and not in the ledger belongs to the pack, and the install is refused rather than taking
+ * that name over — once ledgered, the pack's jar would be deleted by the next sweep.
  */
 public final class ModInstall {
 
@@ -66,14 +70,19 @@ public final class ModInstall {
         Path mods = gameDir.resolve("mods");
         try {
             Files.createDirectories(mods);
-            sweep(mods, log);
-
-            List<Path> installed = new ArrayList<>();
+            Set<Path> ours = previouslyInstalled(mods);
+            // Checked before the sweep, so a refused install leaves mods/ exactly as it found it.
             for (Path jar : jars) {
                 if (!Files.isRegularFile(jar)) {
                     throw new IllegalArgumentException(jar + " is not a file, so it cannot be"
                             + " installed into " + mods);
                 }
+                refusePackOwned(mods, jar, ours);
+            }
+            sweep(mods, ours, log);
+
+            List<Path> installed = new ArrayList<>();
+            for (Path jar : jars) {
                 Path target = mods.resolve(jar.getFileName().toString());
                 Files.copy(jar, target, StandardCopyOption.REPLACE_EXISTING);
                 installed.add(target);
@@ -95,20 +104,8 @@ public final class ModInstall {
      * down, and sweeping by pattern would eventually delete a mod that merely looked like one of
      * them. {@link #FRAMEWORK_PREFIX} is swept unconditionally, per its own reasoning above.
      */
-    private static void sweep(Path mods, Consumer<String> log) throws IOException {
-        Set<Path> doomed = new LinkedHashSet<>();
-
-        Path ledger = mods.resolve(LEDGER);
-        if (Files.isRegularFile(ledger)) {
-            for (String name : Files.readAllLines(ledger, StandardCharsets.UTF_8)) {
-                String trimmed = name.trim();
-                if (trimmed.isEmpty()) continue;
-                Path old = mods.resolve(trimmed);
-                // A name carrying a separator would escape mods/; refuse rather than delete.
-                if (!old.getParent().equals(mods)) continue;
-                doomed.add(old);
-            }
-        }
+    private static void sweep(Path mods, Set<Path> ours, Consumer<String> log) throws IOException {
+        Set<Path> doomed = new LinkedHashSet<>(ours);
         try (var files = Files.list(mods)) {
             files.filter(ModInstall::isFrameworkJar).forEach(doomed::add);
         }
@@ -118,6 +115,38 @@ public final class ModInstall {
             if (Files.deleteIfExists(old)) removed++;
         }
         if (removed > 0) log.accept("removed " + removed + " previously-installed jar(s)");
+    }
+
+    /** The files the ledger says the last install put in mods/. */
+    private static Set<Path> previouslyInstalled(Path mods) throws IOException {
+        Set<Path> ours = new LinkedHashSet<>();
+        Path ledger = mods.resolve(LEDGER);
+        if (!Files.isRegularFile(ledger)) return ours;
+        for (String name : Files.readAllLines(ledger, StandardCharsets.UTF_8)) {
+            String trimmed = name.trim();
+            if (trimmed.isEmpty()) continue;
+            Path old = mods.resolve(trimmed);
+            // A name carrying a separator would escape mods/; refuse rather than delete.
+            if (!old.getParent().equals(mods)) continue;
+            ours.add(old);
+        }
+        return ours;
+    }
+
+    /**
+     * Refuse a jar whose name is already taken in mods/ by something we did not put there.
+     *
+     * <p>Copying over it would not just replace the pack's jar: the ledger would then claim the name,
+     * and the next run's sweep would delete it, leaving the pack short a mod it shipped with.
+     */
+    private static void refusePackOwned(Path mods, Path jar, Set<Path> ours) {
+        Path target = mods.resolve(jar.getFileName().toString());
+        if (!Files.exists(target) || ours.contains(target) || isFrameworkJar(target)) return;
+        throw new IllegalArgumentException("refusing to install " + jar + ": " + target
+                + " is already there and StageWright did not put it there, so it belongs to the"
+                + " pack. Installing over it would overwrite that jar and a later run would delete"
+                + " it. If the pack already ships this mod, do not install it again; otherwise"
+                + " rename one of the two jars.");
     }
 
     private static void writeLedger(Path mods, List<Path> installed) throws IOException {

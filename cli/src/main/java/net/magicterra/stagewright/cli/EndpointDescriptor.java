@@ -1,9 +1,12 @@
 package net.magicterra.stagewright.cli;
 
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Pattern;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -37,7 +40,31 @@ record EndpointDescriptor(String topology, String loader, String rpcHost, int rp
      * eventually sharing a parser rather than a schema comment.
      */
     String wsUri() {
-        return "ws://" + rpcHost + ":" + rpcPort + "/rpc";
+        return "ws://" + uriHost(rpcHost) + ":" + rpcPort + "/rpc";
+    }
+
+    private static final Pattern IPV4_LITERAL = Pattern.compile("\\d{1,3}(\\.\\d{1,3}){3}");
+
+    /**
+     * A bind address as something a URI can dial: a wildcard becomes the same family's loopback, and
+     * an IPv6 literal is bracketed. The same rule as {@code Endpoint} in {@code :stagewright-junit},
+     * which this build cannot depend on.
+     */
+    static String uriHost(String host) {
+        String bare = host.startsWith("[") && host.endsWith("]")
+                ? host.substring(1, host.length() - 1) : host;
+        boolean v6 = bare.indexOf(':') >= 0;
+        // Only literals are inspected: resolving a host name here would be a DNS lookup whose
+        // answer the game never saw.
+        if (!v6 && !IPV4_LITERAL.matcher(bare).matches()) return bare;
+        boolean wildcard;
+        try {
+            wildcard = InetAddress.getByName(bare).isAnyLocalAddress();
+        } catch (UnknownHostException e) {
+            wildcard = false;
+        }
+        if (wildcard) return v6 ? "[::1]" : "127.0.0.1";
+        return v6 ? "[" + bare + "]" : bare;
     }
 
     /** Parse the descriptor, or null if it is absent, torn, or missing what it takes to connect. */

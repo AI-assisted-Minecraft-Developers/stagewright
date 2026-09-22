@@ -155,13 +155,17 @@ deletes what it lists, plus any jar whose name marks it as a framework build. Fi
 versions, so without the sweep an upgrade lands *beside* its predecessor and the loader arms one of
 the two — reporting the old code's behaviour as the new code's.
 
+A jar to install whose file name is already in `mods/`, and not in the ledger, belongs to whoever put
+it there, so the install fails naming it rather than overwriting it. Taking the name over would put
+it in the ledger, and the next run's sweep would delete a jar the install never owned.
+
 ## What provisioning does to the run directory
 
 Before every run, the provision step:
 
 - deletes the previous `world` and `saves` directories, unless the topology asks it not to;
 - deletes the results file it is about to judge, the heartbeat beside it, and any stale endpoint
-  descriptor;
+  descriptor, both in the run directory and beside a companion client's results file;
 - writes `eula.txt`;
 - forces three keys in `server.properties` and leaves every other line alone: online mode off, a
   fixed level seed, and chunk-write syncing off;

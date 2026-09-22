@@ -101,9 +101,10 @@ defaulting — a truncated descriptor must never attach to a plausible wrong por
 | `holdPid` | The **game's** own process id, not the launcher's. |
 | `writtenAtEpochMs` | When it was written. |
 
-Two optional keys are tolerated. `mcpPort` is the same JVM's Model Context Protocol HTTP port, which
+Three optional keys are tolerated. `mcpPort` is the same JVM's Model Context Protocol HTTP port, which
 anything asserting about a tool's declared schema needs — bare RPC does not carry the schema catalog.
-`serverRpcPort` lets a client-face descriptor point at the dedicated server it is joined to.
+`mcpHost` is where that server bound, written only when `worlddriver.mcpHost` moved it off the
+default; without it the MCP address uses `rpcHost`. `serverRpcPort` lets a client-face descriptor point at the dedicated server it is joined to.
 
 Unknown keys are ignored, so a future addition never breaks an older reader.
 

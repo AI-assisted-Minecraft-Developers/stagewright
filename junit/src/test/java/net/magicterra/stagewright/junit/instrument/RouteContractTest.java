@@ -71,10 +71,16 @@ class RouteContractTest {
         refuses(tk, "mc.system.waitTicks", params, "unexpected key");
     }
 
-    /** A client-only verb on a dedicated server must fail LOUDLY, never silently no-op. */
+    /**
+     * A client-only verb on a dedicated server must fail LOUDLY, never silently no-op.
+     *
+     * <p>{@code mc.bot.setting} with empty params, a plain read: every key in its schema is optional,
+     * so the call passes validation and reaches the missing client bot. Not {@code mc.bot.status},
+     * which a dedicated server answers with its registered {@code bodies}.
+     */
     @Test
     void clientOnlyVerbIsRefused(StageWright tk) {
-        refuses(tk, "mc.bot.status", "client only");
+        refuses(tk, "mc.bot.setting", "client only");
     }
 
     /** The in-JVM script route must agree with the transport it is being called over. */

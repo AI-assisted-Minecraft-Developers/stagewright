@@ -294,7 +294,9 @@ public final class StageWrightHarness {
                     // published commits could not answer because neither run had the distribution.
                     ctx.record("prep.ticks", phaseTicks);
                     ctx.record("prep.ms", System.currentTimeMillis() - sceneStartMs);
-                    arenaBefore = ArenaAudit.take(level, origin, radius);
+                    // At the context's origin, not the grid slot's: a terrain scene plays at the
+                    // surface, and a box at y=200 would neither sweep nor report what it left.
+                    arenaBefore = ArenaAudit.take(level, ctx.origin(), radius);
                     // Per scene, not per suite: this is what stops one scene's clock from being a
                     // function of how long its predecessors took — or of a predecessor having asked
                     // for Clock.RUNNING. AFTER the audit baseline, so a Clock.RUNNING scene's
@@ -439,13 +441,13 @@ public final class StageWrightHarness {
         if (ctx != null) {
             ctx.runCleanups(msg -> StageWrightCommon.LOG.warn("[{}] {}: {}", StageWrightCommon.MOD_ID, scene.name(), msg));
         }
-        sweepArena(scene, level, origin, radius);
+        sweepArena(scene, level);
         forceChunks(level, origin, radius, false);
         // Back to the suite's frozen night BEFORE the audit's closing snapshot. A Clock.RUNNING
         // scene was GRANTED doDaylightCycle by the harness; leaving it set here would have the audit
         // report the scene for a gamerule the harness itself changed on its behalf.
         WorldPin.applyClock(server, Clock.MIDNIGHT);
-        auditLeaks(scene, level, origin, radius);
+        auditLeaks(scene, level);
     }
 
     /**
@@ -459,9 +461,9 @@ public final class StageWrightHarness {
      * forgot. Sweeping is a backstop for that, not a replacement for the cleanups: a scene that
      * relies on this instead of discarding its own avatar still leaks everywhere the arena is not.
      */
-    private void sweepArena(Scene scene, ServerLevel level, BlockPos origin, int radius) {
+    private void sweepArena(Scene scene, ServerLevel level) {
         if (arenaBefore == null) return;
-        int swept = ArenaAudit.sweep(level, origin, radius, arenaBefore);
+        int swept = ArenaAudit.sweep(level, arenaBefore);
         if (swept > 0) {
             StageWrightCommon.LOG.info("[{}] swept {} leftover entit{} from '{}' arena",
                     StageWrightCommon.MOD_ID, swept, swept == 1 ? "y" : "ies", scene.name());
@@ -477,9 +479,9 @@ public final class StageWrightHarness {
      * matters because of what it does to the NEXT scene — so the count that gets acted on is the
      * suite total, logged at {@link #finish()}.
      */
-    private void auditLeaks(Scene scene, ServerLevel level, BlockPos origin, int radius) {
+    private void auditLeaks(Scene scene, ServerLevel level) {
         if (arenaBefore == null) return;                // ENV_FAIL out of PREP: nothing ever ran
-        for (String leak : ArenaAudit.diff(arenaBefore, ArenaAudit.take(level, origin, radius))) {
+        for (String leak : ArenaAudit.diff(arenaBefore, ArenaAudit.again(level, arenaBefore))) {
             leakedScenes.add(scene.name());
             StageWrightCommon.LOG.warn("[{}] LEAK after '{}': {}", StageWrightCommon.MOD_ID,
                     scene.name(), leak);
@@ -732,7 +734,8 @@ public final class StageWrightHarness {
         return new BlockPos(gridOrigin.getX(), y, gridOrigin.getZ());
     }
 
-    private static BlockPos originFor(int slot) {
+    /** The grid position of a slot, before {@link #arenaOrigin} moves it onto terrain. */
+    static BlockPos originFor(int slot) {
         return new BlockPos(GRID_X0 + slot * GRID_STEP, GRID_Y, GRID_Z0);
     }
 

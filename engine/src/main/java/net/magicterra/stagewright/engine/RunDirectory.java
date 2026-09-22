@@ -5,7 +5,9 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -63,7 +65,8 @@ public final class RunDirectory {
      * @param staleResults every results file this run will be judged on, deleted if present. Full
      *                     paths rather than names under {@code gameDir}, and a list rather than one:
      *                     a topology with a companion client is judged on a second file in the
-     *                     companion's own run directory, which is not under this one
+     *                     companion's own run directory, which is not under this one. The heartbeat
+     *                     and endpoint descriptor beside each are deleted with it
      * @param cleanWorld   delete the world before running
      * @param sceneScripts a directory of {@code .js} scene files to install, or null
      * @param log          receives one line per action worth reporting
@@ -127,14 +130,21 @@ public final class RunDirectory {
 
         // Same argument, one step worse: a stale endpoint descriptor names a port. Left behind, an
         // out-of-process test attaches to whatever now answers there — nothing, or somebody else's
-        // game — instead of failing fast on a descriptor that is not there yet.
-        Path endpoint = gameDir.resolve(ENDPOINT_FILE);
-        try {
-            if (Files.deleteIfExists(endpoint)) {
-                log.accept("removed the previous endpoint descriptor at " + endpoint);
+        // game — instead of failing fast on a descriptor that is not there yet. Beside every results
+        // file as well as in gameDir, because a held companion writes its own beside its results.
+        Set<Path> endpoints = new LinkedHashSet<>();
+        endpoints.add(gameDir.resolve(ENDPOINT_FILE).toAbsolutePath());
+        for (Path results : staleResults) {
+            endpoints.add(results.toAbsolutePath().resolveSibling(ENDPOINT_FILE));
+        }
+        for (Path endpoint : endpoints) {
+            try {
+                if (Files.deleteIfExists(endpoint)) {
+                    log.accept("removed the previous endpoint descriptor at " + endpoint);
+                }
+            } catch (IOException e) {
+                throw new UncheckedIOException("cannot delete the stale endpoint descriptor " + endpoint, e);
             }
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot delete the stale endpoint descriptor " + endpoint, e);
         }
 
         seedClientOptions(gameDir.resolve("options.txt"));

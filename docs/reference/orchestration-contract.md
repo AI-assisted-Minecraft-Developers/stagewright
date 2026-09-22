@@ -18,8 +18,8 @@ A run happens in one directory, which is the game process's working directory. T
 prepares it before the game starts; `RunDirectory.provision` is that preparation.
 
 Provisioning deletes the world (`world/` for a dedicated server, `saves/` for a client), every
-results file the run will be judged on, the heartbeat beside each of them, and any endpoint
-descriptor left over from a previous run. Deleting the world is not tidiness. A reused world
+results file the run will be judged on, the heartbeat and endpoint descriptor beside each of
+them, and the endpoint descriptor in the run directory itself. Deleting the world is not tidiness. A reused world
 still holds the blocks a previous run placed and the shafts a previous run dug, so scenes fail
 in ways that are indistinguishable from defects in the code under test, and which scenes fail
 varies between runs, so it reads as flakiness.
