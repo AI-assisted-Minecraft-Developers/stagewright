@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### Coverage refuses filtered runs and does not count ENV_FAIL as execution · compiled, green in unit tests
+
+`stagewrightCoverage` and `--coverage` reconciled whatever results were on disk, so after a
+`-Pstagewright.scenes` iteration they reported "N of N executed" over the subset the pattern kept.
+A results file whose header records a filter now makes coverage ENV, naming the file. And an
+`ENV_FAIL` record — written before the body runs — no longer counts as the scene having executed,
+so a scene whose arena never loads on any topology is reported UNCOVERED.
+
 ### `--with-client` judges the client's own probe · compiled, green in unit tests
 
 The joined client always ran its probe and wrote `stagewright-client-results.jsonl`, and the CLI

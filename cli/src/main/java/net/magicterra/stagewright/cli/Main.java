@@ -857,7 +857,7 @@ public final class Main {
         net.magicterra.stagewright.engine.Coverage.Result result =
                 net.magicterra.stagewright.engine.Coverage.judge(runs);
         result.report().forEach(line -> System.out.println("[stagewright] " + line));
-        System.out.println("[stagewright] COVERAGE VERDICT: " + (result.code() == 0 ? "GREEN" : "RED"));
+        System.out.println("[stagewright] COVERAGE VERDICT: " + Verdict.LABELS[result.code()]);
         return result.code();
     }
 
@@ -914,7 +914,8 @@ public final class Main {
                                       results are judged, worst wins.
                   --coverage <files>  judge nothing but coverage: comma-separated results files from
                                       runs that have already finished, RED if any scene they register
-                                      executed in none of them. Runs no game and takes no --game-dir.
+                                      executed in none of them, ENV if any of them was a filtered
+                                      run. Runs no game and takes no --game-dir.
                                       A scene skipping is fine in one run and a hole across all of
                                       them, which is a question no single run can be asked.
                   --expect <file>     expected-scenes manifest to reconcile against

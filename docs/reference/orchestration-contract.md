@@ -417,6 +417,14 @@ person who just forgot to. Add a scene and it is covered the moment it exists; a
 the check gets easier to satisfy; delete the only topology that could run something and the check
 REDs naming it.
 
+"Executed" means a record that is neither a skip nor `ENV_FAIL`. `ENV_FAIL` is written out of
+PREP, before a body exists, so a scene that only ever ENV_FAILs has tested nothing. A FAIL or
+TIMEOUT did execute; its run is RED for that on its own.
+
+A results file whose header carries `filter` is not reconciled at all: coverage over it is ENV,
+naming the file, because its `registered` list is whatever the pattern kept and every count
+derived from it would describe a subset while reading as the suite.
+
 The single exemption is declared at the scene, by the author who knows why:
 `@SceneDef(mustSkip = true)`. That is an assertion rather than an excuse — the verdict then
 *requires* the scene to skip and calls the run DEAD if it executes.

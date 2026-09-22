@@ -193,6 +193,12 @@ counts how many of the registered scenes executed across how many runs. A declar
 is not there is reported rather than skipped: dropping it would shrink the union of executed scenes
 and blame the runs that did happen.
 
+Two inputs are not evidence, and are treated that way. A results file whose header says it was
+filtered — the last run of that topology was a `-Pstagewright.scenes` iteration — makes the whole
+reconciliation ENV, naming the file: its registered list is whatever the pattern kept, so any count
+over it describes a subset. And a scene recorded `ENV_FAIL` did not execute, because that outcome is
+written before the body runs; it counts as a hole exactly as a skip does.
+
 For a pack tested through the standalone command-line runner, the same reconciliation is available
 without a build tool:
 
