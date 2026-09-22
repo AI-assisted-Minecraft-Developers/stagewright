@@ -85,6 +85,39 @@ violations followed by `then skipped: <reason>`. The wording is one shared funct
 homes cannot drift apart on it. The new built-in canary `canaryCheckThenSkipMustFail` holds the
 in-process harness to this rule: if a skip wins again, the run is DEAD.
 
+### `--mod` refuses to take over a jar the pack already ships · compiled, green in unit tests
+
+A `--mod` jar whose file name was already in the pack's `mods/` overwrote it and was written to the
+install ledger, so the next run's sweep deleted it and the pack lost a mod it shipped with. An
+install whose target exists and is not in the ledger is now refused before anything is swept, so a
+refused install leaves `mods/` exactly as it was.
+
+### Teardown sweeps and audits the arena a terrain scene actually played in · compiled, awaiting the self-test suite
+
+The entity sweep and the leak audit used the grid slot's box at y=200 while a terrain scene plays at
+the surface, so its leftovers were neither removed nor reported. Both now use the scene's own
+origin. Two built-in scenes, `arenaLeftoversAreSwept` and `arenaLeftoversStayGone`, pin slots 2002
+and 2003 to prove it in every run.
+
+### Provision deletes a companion's stale endpoint descriptor · compiled, green in unit tests
+
+Only the run directory's own descriptor was deleted, so a companion hold restarted later could be
+dialled at yesterday's port while it was still booting. The descriptor beside every stale results
+file is now deleted too.
+
+### A skip for a missing capability names adapters that failed to load · compiled, green in a unit test
+
+An adapter that threw while loading — typically a linkage error after the mod it wraps changed —
+left the skip reading "nothing in this run offers X", as if the mod were absent. Every skip where no
+provider matches now lists the adapters that failed and why.
+
+### Endpoint URIs bracket IPv6 and dial a wildcard bind as loopback · compiled, green in unit tests
+
+`TESTKIT_ENDPOINT` readers built `ws://host:port` from the bind address verbatim, so `::` or
+`0.0.0.0` produced a URI nothing could dial. A wildcard now becomes the same family's loopback, IPv6
+literals are bracketed, and the descriptor carries `mcpHost` when the driver's MCP bind differs, so
+the MCP URI no longer assumes the RPC host.
+
 ## 2026-09-20
 
 ### Relicensed from MIT to LGPL-3.0-only · compiled
