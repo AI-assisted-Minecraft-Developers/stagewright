@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### `--attached` ends on the true label of its exit code · compiled, green in unit tests
+
+The closing line printed RED for anything non-zero, so a DEAD in-process half (canary on the wrong
+outcome, results void) or an ENV one (never armed) ended the output reading as a code defect while
+the process exited 2 or 3. Both closing lines now carry the label of their code, and the run's line
+reads `VERDICT (in-process and attached): <label>`.
+
 ### Coverage refuses filtered runs and does not count ENV_FAIL as execution · compiled, green in unit tests
 
 `stagewrightCoverage` and `--coverage` reconciled whatever results were on disk, so after a

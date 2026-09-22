@@ -652,10 +652,21 @@ public final class Main {
         // GREEN 0 < RED 1 < DEAD 2 < ENV 3. Reporting only the in-process verdict would let a red
         // attached half ride home on a green suite.
         int worst = Math.max(inProcess, attachedCode);
-        System.out.println("[stagewright] ATTACHED VERDICT: " + (attachedCode == 0 ? "GREEN" : "RED")
-                + "  (" + attachedResults + ")");
-        System.out.println("[stagewright] VERDICT: " + (worst == 0 ? "GREEN" : "RED"));
+        attachedSummary(inProcess, attachedCode, attachedResults).forEach(System.out::println);
         return worst;
+    }
+
+    /**
+     * The closing lines of an {@code --attached} run: the attached half's verdict, then the run's.
+     * Labelled by code, never collapsed to GREEN/RED: a DEAD or ENV half must not end the output
+     * reading as a code defect.
+     */
+    static List<String> attachedSummary(int inProcess, int attachedCode, Path attachedResults) {
+        int worst = Math.max(inProcess, attachedCode);
+        return List.of(
+                "[stagewright] ATTACHED VERDICT: " + Verdict.LABELS[attachedCode]
+                        + "  (" + attachedResults + ")",
+                "[stagewright] VERDICT (in-process and attached): " + Verdict.LABELS[worst]);
     }
 
     /**
