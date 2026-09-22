@@ -11,33 +11,14 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
 
     // The published scene contract (Scene/SceneContext/SceneProvider/...). Split out so the
-    // artifact graph stays acyclic once this repo and worlddriver publish separately — see
-    // stagewright/api/build.gradle for the full reasoning.
+    // artifact graph between this repo and worlddriver stays acyclic — see api/build.gradle for
+    // the full reasoning.
     implementation project(path: ':stagewright-api', configuration: 'namedElements')
 
-    // The flipped edge: StageWright depends on the driver it drives — the direction the
-    // chrome/chromedriver framing implies, and the reverse of what shipped until now. It buys
-    // the mc.test.* verbs the ability to call ToolCatalog.registerVerb directly, which is why
-    // StageWrightVerbHook (an SPI whose only job was breaking the resulting cycle) is deleted.
-    //
-    // Resolved two ways because BOTH builds must work while the repos are being split:
-    //
-    //   in worlddriver's build   -> the project, via namedElements. Not a cycle: worlddriver's
-    //                               :common depends back only from its `testmod` source set, so
-    //                               the task graph stays acyclic (:common:compileJava ->
-    //                               :stagewright-common:compileJava -> :common:compileTestmodJava).
-    //   standalone (this build)  -> the published `dev` classifier, which is the SAME
-    //                               named-mappings artifact namedElements points at. The plain
-    //                               published jar is remapped to intermediary and will not link
-    //                               against a dev-mapped compile classpath.
-    //
-    // The branch collapses to the `else` once this tree is its own repo, where :common never
-    // exists. Keeping it means no commit in the split leaves either build broken.
-    if (rootProject.findProject(':common') != null) {
-        implementation project(path: ':common', configuration: 'namedElements')
-    } else {
-        implementation "net.magicterra:worlddriver-common:${rootProject.worlddriver_version}:dev"
-    }
+    // StageWright depends on the driver it drives, so the mc.test.* verbs call
+    // ToolCatalog.registerVerb directly. The `dev` classifier, not the plain jar: the published jar
+    // is remapped to intermediary and will not link against a dev-mapped compile classpath.
+    implementation "net.magicterra:worlddriver-common:${rootProject.worlddriver_version}:dev"
 
     // JavaScript scene files. compileOnly, and that is the whole point: the runtime copy is the one
     // worlddriver nests, so this jar neither embeds Rhino nor declares a runtime dependency on it,

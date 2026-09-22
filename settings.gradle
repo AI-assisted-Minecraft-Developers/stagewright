@@ -1,14 +1,10 @@
-// StageWright — standalone build settings.
+// StageWright — build settings.
 //
-// Only read when Gradle is invoked from this directory. worlddriver's build declares the same
-// four modules itself (`project(':stagewright-common').projectDir = file('stagewright/common')`)
-// and never consults this file, so both builds coexist during the repo split.
-//
-// Module names are IDENTICAL to the ones worlddriver's settings.gradle uses
-// (:stagewright-api, :stagewright-common, ...) so that every build script under this tree
-// resolves the same way in either build and needs no conditional project paths.
+// worlddriver is a separate repository and build; it consumes these modules only as published
+// artifacts (see RELEASE ORDER in build.gradle), so nothing here has to resolve inside its build.
 pluginManagement {
-    // The gradle plugin is its own build, exactly as in worlddriver's settings.gradle.
+    // The gradle plugin is its own build. worlddriver, its first consumer, resolves it from
+    // mavenLocal by version instead.
     includeBuild('gradle-plugin')
 
     repositories {
