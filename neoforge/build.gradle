@@ -47,13 +47,32 @@ dependencies {
 
     common(project(path: ':stagewright-common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':stagewright-common', configuration: 'transformProductionNeoForge')
+
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
 }
 
 processResources {
-    inputs.property 'version', project.version
+    def metadata = [
+            version                : project.version,
+            mod_id                 : rootProject.mod_id,
+            mod_name               : rootProject.mod_name,
+            mod_license            : rootProject.mod_license,
+            mod_authors            : rootProject.mod_authors,
+            mod_description        : rootProject.mod_description,
+            loader_version_range   : rootProject.loader_version_range,
+            neoforge_version_range : rootProject.neoforge_version_range,
+            minecraft_version_range: rootProject.minecraft_version_range,
+    ]
+    inputs.properties metadata
 
     filesMatching('META-INF/neoforge.mods.toml') {
-        expand version: project.version
+        expand metadata
     }
 }
 

@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "id": "mc_testkit",
+  "id": "${mod_id}",
   "version": "${version}",
-  "name": "stagewright",
-  "description": "Cross-loader Minecraft mod test framework: scene harness, assertions, orchestrated topologies.",
+  "name": "${mod_name}",
+  "description": "${mod_description}",
   "authors": [
-    "AI-assisted-Minecraft-Developers"
+    "${mod_authors}"
   ],
-  "license": "LGPL-3.0-only",
+  "license": "${mod_license}",
   "environment": "*",
   "entrypoints": {
     "main": [
@@ -18,9 +18,9 @@
     ]
   },
   "depends": {
-    "fabricloader": ">=0.16",
+    "fabricloader": "${fabric_loader_version_range}",
     "fabric-api": "*",
-    "minecraft": ">=1.21",
+    "minecraft": "${minecraft_version_range}",
     "java": ">=21"
   }
 }

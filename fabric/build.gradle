@@ -45,13 +45,42 @@ dependencies {
 
     common(project(path: ':stagewright-common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':stagewright-common', configuration: 'transformProductionFabric')
+
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
+}
+
+// fabric.mod.json cannot read Maven ranges, and gradle.properties states each range once, in the
+// Maven form neoforge.mods.toml takes verbatim. '[1.21.1,1.22)' becomes '>=1.21.1 <1.22'.
+def fabricPredicate = { String range ->
+    def m = range.trim() =~ /^([\[(])([^,]*),([^\])]*)([\])])$/
+    if (!m.matches()) throw new GradleException("not a Maven version range: '$range'")
+    def terms = []
+    if (m.group(2).trim()) terms << (m.group(1) == '[' ? '>=' : '>') + m.group(2).trim()
+    if (m.group(3).trim()) terms << (m.group(4) == ']' ? '<=' : '<') + m.group(3).trim()
+    terms ? terms.join(' ') : '*'
 }
 
 processResources {
-    inputs.property 'version', project.version
+    def metadata = [
+            version                    : project.version,
+            mod_id                     : rootProject.mod_id,
+            mod_name                   : rootProject.mod_name,
+            mod_license                : rootProject.mod_license,
+            mod_authors                : rootProject.mod_authors,
+            mod_description            : rootProject.mod_description,
+            minecraft_version_range    : fabricPredicate(rootProject.minecraft_version_range),
+            fabric_loader_version_range: fabricPredicate(rootProject.fabric_loader_version_range),
+    ]
+    inputs.properties metadata
 
     filesMatching('fabric.mod.json') {
-        expand version: project.version
+        expand metadata
     }
 }
 

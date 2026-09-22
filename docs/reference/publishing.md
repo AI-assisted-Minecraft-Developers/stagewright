@@ -165,9 +165,13 @@ was last built against.
 |---|---|
 | Minecraft | 1.21.1 (range `[1.21.1,1.22)`) |
 | Loaders | Fabric and NeoForge, through Architectury |
-| Fabric Loader | the version pinned in `gradle.properties` |
+| Fabric Loader | the version pinned in `gradle.properties`, range `[0.16,)` |
 | NeoForge | the version pinned in `gradle.properties`, range `[21,)` |
 | Java | 21 |
+
+Both loaders' jar metadata takes the mod id, name, authors, licence, description and every range
+above from `gradle.properties` when the jar is built; `fabric.mod.json` gets the Maven ranges
+rewritten into Fabric's predicate form (`[1.21.1,1.22)` becomes `>=1.21.1 <1.22`).
 
 The Minecraft platform versions must stay in lockstep with WorldDriver's `gradle.properties`.
 StageWright compiles against WorldDriver's common module built against those exact versions, and

@@ -12,6 +12,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### Both loaders' metadata comes from `gradle.properties` · green in unit tests over the processed metadata
+
+`fabric.mod.json` and `neoforge.mods.toml` expanded only `version`; the licence, description,
+name and version ranges were literals, so nothing in `gradle.properties` reached either jar and
+the two could drift apart the next time one was edited. They had already: both jars carried a
+description different from `mod_description` and the display name `stagewright`, and the Fabric
+jar accepted any Minecraft from 1.21 on where the NeoForge jar stops at `[1.21.1,1.22)`. Both now
+take id, name, authors, licence, description and ranges from `gradle.properties`, with a new
+`fabric_loader_version_range`. The Fabric jar therefore now refuses Minecraft 1.21 and 1.22, and
+both show the name `StageWright`.
+
 ### The CLI jar no longer carries Rhino's mod metadata · checked in the built jar
 
 The fat jar merged Rhino's jar whole, so `fabric.mod.json`, `META-INF/mods.toml` and
