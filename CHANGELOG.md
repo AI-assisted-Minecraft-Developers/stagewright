@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### A filtered run keeps the framework canaries · compiled, filter and verdict green in unit tests
+
+`-Pstagewright.scenes` used to filter the canaries out with everything else, so a narrow run
+carried no proof that the harness could still catch a failure. `MUST_FAIL`, `MUST_TIMEOUT` and
+`MUST_SWALLOW` scenes now survive every pattern and are judged as in a full run. Since the
+registered list is then never empty, "the pattern matched nothing" is judged on the scenes other
+than those canaries, and stays RED. `MUST_SKIP` scenes belong to the suite and are still selected
+by name.
+
 ### A skip no longer hides a `check` that already failed · compiled, attached home green in its unit test
 
 A body that recorded soft violations with `check(...)` and then skipped — explicitly, or through

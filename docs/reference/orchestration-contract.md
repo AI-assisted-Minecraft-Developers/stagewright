@@ -476,8 +476,13 @@ also carries the pattern, and the verdict reads it back:
 - **A pattern that matched nothing is RED.** That is the most dangerous typo in the system:
   otherwise it would be a green run of an empty suite, the failure that looks most like success.
 
-Two further facts make a filtered run unsuitable as evidence. Canaries are filtered like
-anything else, so a narrow run usually carries no self-check at all. And origin slots are
+The framework canaries — `MUST_FAIL`, `MUST_TIMEOUT` and `MUST_SWALLOW` — are never filtered
+out, so every narrow run still proves the harness can catch a failure, and the verdict judges
+them as it would in a full run. Because they are always there, "matched nothing" means that no
+registered scene other than those canaries is left. A `MUST_SKIP` scene is a suite's own scene and
+is selected by name like any other.
+
+A further fact makes a filtered run unsuitable as evidence. Origin slots are
 assigned *after* filtering, so a scene that sits at slot 6 in the full suite runs at slot 0
 alone — several thousand blocks away, on different ground. A scene passing alone is therefore not
 evidence about the run it failed in. Reproduce with the full suite; filter to iterate on a scene

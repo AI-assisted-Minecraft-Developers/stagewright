@@ -375,6 +375,34 @@ class VerdictTest {
     }
 
     @Test
+    void aFilterThatMatchedOnlyTheCanariesItKeepsIsStillRed() {
+        // The filter never drops the framework canaries, so a typo leaves exactly those behind —
+        // and they pass, which is the empty-suite green in a disguise.
+        Verdict.Result result = Verdict.judge(
+                records(filtered("wd.typo*", reg("cf", "MUST_FAIL"), reg("cs", "MUST_SWALLOW")),
+                        scene("cf", "FAIL"), done(1)), null);
+        assertEquals(1, result.code());
+        assertTrue(reports(result, "matched NO scenes"));
+    }
+
+    @Test
+    void aFilteredRunStillJudgesTheCanariesItKept() {
+        Verdict.Result result = Verdict.judge(
+                records(filtered("wd.a", reg("wd.a"), reg("cf", "MUST_FAIL")),
+                        scene("wd.a", "PASS"), scene("cf", "PASS"), done(2)), null);
+        assertEquals(2, result.code());
+    }
+
+    @Test
+    void aMustSkipSceneIsAMatchNotAKeptCanary() {
+        Verdict.Result result = Verdict.judge(
+                records(filtered("cap.*", reg("cap.absent", "MUST_SKIP"), reg("cf", "MUST_FAIL")),
+                        skipped("cap.absent", "nothing offers it"), scene("cf", "FAIL"), done(2)),
+                null);
+        assertEquals(0, result.code());
+    }
+
+    @Test
     void anUnfilteredRunIsNotLabelledFiltered() {
         Verdict.Result result = Verdict.judge(
                 records(suite(reg("a")), scene("a", "PASS"), done(1)), null);

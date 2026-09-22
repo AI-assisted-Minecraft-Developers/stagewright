@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import net.magicterra.stagewright.contract.Canary;
 import net.magicterra.stagewright.scene.Scene;
 
 /**
@@ -22,8 +23,10 @@ import net.magicterra.stagewright.scene.Scene;
  * empty suite. Without that last rule the most dangerous typo in the system — a pattern matching no
  * scene — would be the one that looks most like success.
  *
- * <p>Canaries are filtered like anything else. A narrow run therefore usually has no framework
- * self-check left in it, which is the other half of why it must never be read as a gate.
+ * <p><b>The framework canaries are never filtered out.</b> They are what proves the harness can still
+ * catch a failure; a narrow run without them would report the same GREEN whether or not it could.
+ * They cost a few ticks, and they are why "matched nothing" is judged on the scenes a pattern
+ * selected rather than on the registered list, which is never empty.
  *
  * <p><b>A filtered run does not reproduce an unfiltered run's arena.</b> Arena slots are assigned
  * from the scene list AFTER filtering, so slot == index in whatever survived: a scene that sits at
@@ -57,17 +60,26 @@ public final class SceneFilter {
         return raw == null || raw.isBlank() ? null : raw.trim();
     }
 
-    /** {@code scenes} narrowed to those matching {@code patterns}; the list unchanged when null. */
+    /** {@code scenes} narrowed to those matching {@code patterns}, plus every framework canary; the
+     *  list unchanged when null. */
     public static List<Scene> apply(List<Scene> scenes, String patterns) {
         if (patterns == null || patterns.isBlank()) return scenes;
         List<Pattern> compiled = compile(patterns);
         List<Scene> kept = new ArrayList<>();
         for (Scene s : scenes) {
+            if (selfCheck(s.canary())) { kept.add(s); continue; }
             for (Pattern p : compiled) {
                 if (p.matcher(s.name()).matches()) { kept.add(s); break; }
             }
         }
         return kept;
+    }
+
+    /** A canary whose subject is the harness itself. {@code MUST_SKIP} is not one: its subject is an
+     *  absence in the pack, so it is a scene like any other and is selected by name. */
+    private static boolean selfCheck(Canary canary) {
+        return canary == Canary.MUST_FAIL || canary == Canary.MUST_TIMEOUT
+                || canary == Canary.MUST_SWALLOW;
     }
 
     /** One regex per comma-separated entry, with {@code *} as the only metacharacter. */

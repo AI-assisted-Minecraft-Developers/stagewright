@@ -218,11 +218,12 @@ is therefore the difference between iterating on a scene and batching guesses at
 results header, the game logs it, the plugin logs it, and the verdict label carries the `FILTERED`
 suffix. Expected-scenes reconciliation is skipped, because under a filter every unmatched scene is
 legitimately absent and reporting the whole manifest as missing would bury the outcome you asked for.
-Canaries are filtered out like everything else, so a narrow run usually has no framework self-check
-left in it at all.
+The framework canaries are never filtered out, so even a one-scene run proves the harness can still
+catch a failure.
 
-A pattern that matches **nothing** fails the run rather than reporting an empty success. That typo is
-otherwise the failure that looks most like a pass.
+A pattern that matches **nothing** fails the run rather than reporting an empty success — the
+canaries it kept do not count as a match. That typo is otherwise the failure that looks most like a
+pass.
 
 One more thing the filter is not good for. Arena slots are assigned from the scene list *after*
 filtering, so a scene that sits sixth in the full suite runs first when it runs alone — several

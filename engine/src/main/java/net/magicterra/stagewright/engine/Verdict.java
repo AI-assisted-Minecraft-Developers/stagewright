@@ -133,10 +133,16 @@ public final class Verdict {
         String filter = str(suite.get("filter"));
         boolean filtered = filter != null && !filter.isBlank();
         if (filtered) {
-            report.add("FILTERED to '" + filter + "' — " + registeredNames.size()
-                    + " scene(s) ran. Expected-scenes reconciliation is SKIPPED and most canaries"
-                    + " are filtered out with everything else, so this run judges only what it ran.");
-            if (registeredNames.isEmpty()) {
+            // The framework canaries survive every filter, so they are not evidence that the
+            // pattern matched anything.
+            int matched = 0;
+            for (Map<String, Object> r : registered) {
+                if (!selfCheck(str(r.get("canary")))) matched++;
+            }
+            report.add("FILTERED to '" + filter + "' — " + matched + " scene(s) matched, plus"
+                    + " the framework canaries. Expected-scenes reconciliation is SKIPPED, so this"
+                    + " run judges only what it ran.");
+            if (matched == 0) {
                 // The most dangerous typo in the system: a pattern matching nothing would otherwise
                 // be a green run of an empty suite, i.e. the failure that looks most like success.
                 return new Result(1, List.of("FILTERED to '" + filter + "' matched NO scenes —"
@@ -168,7 +174,7 @@ public final class Verdict {
                     String name = str(r.get("name"));
                     String canary = str(r.get("canary"));
                     if (wanted.contains(name)) continue;
-                    if (CANARY_EXPECT.containsKey(canary) || "MUST_SWALLOW".equals(canary)) continue;
+                    if (selfCheck(canary)) continue;
                     for (String ns : namespaces) {
                         if (name.startsWith(ns)) {
                             code = Math.max(code, 1);
@@ -287,6 +293,12 @@ public final class Verdict {
     static boolean skipped(Map<String, Object> rec) {
         if (Boolean.TRUE.equals(rec.get("skipped")) || "true".equals(rec.get("skipped"))) return true;
         return str(rec.get("reason")).startsWith("skipped: ");
+    }
+
+    /** A canary whose subject is the harness rather than the suite: the ones a filter keeps and a
+     *  manifest need not list. {@code MUST_SKIP} is a suite's own scene and is neither. */
+    private static boolean selfCheck(String canary) {
+        return CANARY_EXPECT.containsKey(canary) || "MUST_SWALLOW".equals(canary);
     }
 
     @SuppressWarnings("unchecked")
