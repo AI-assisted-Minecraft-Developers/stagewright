@@ -139,7 +139,7 @@ reason, and retrying it once per test buries that reason under a page of identic
 
 ### The hidden verbs
 
-StageWright registers three verbs into the driver's catalog, all under `mc.test.*`, all hidden
+StageWright registers four verbs into the driver's catalog, all under `mc.test.*`, all hidden
 so that they never enter an MCP `tools/list` and never cost a language-model client a token of
 prompt budget. They are registered through the driver's paired registration entry point, which
 supplies a schema and a handler atomically, so a hidden verb is still schema-checked.
