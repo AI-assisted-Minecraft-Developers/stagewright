@@ -1,0 +1,2 @@
+# An adapter whose mod is missing, so discovery has a load failure to report.
+net.magicterra.stagewright.scene.CapabilitiesTest$UnloadableAdapter

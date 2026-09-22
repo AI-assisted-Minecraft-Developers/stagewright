@@ -177,7 +177,9 @@ import.
 and therefore cannot even load in a runtime without Curios — which is correct, since it could not
 have worked there either, and discovery is built for it. Each provider is instantiated inside its own
 guard, so one that cannot load is recorded as absent *with the reason*, and its neighbours are
-unaffected.
+unaffected. An adapter that never loaded cannot say which name it would have answered to, so the
+reason is attached to every skip for a capability nothing offers: a scene asking for yours reads the
+linkage error rather than a bare "nothing in this run offers it".
 
 That is also why the two adapters StageWright itself ships are reflective and yours should not be.
 They ride in the harness jar, which is present in every run whether or not the mods they adapt are,

@@ -44,4 +44,14 @@ dependencies {
     // It carries its OWN package (net.magicterra.stagewright.contract) rather than a slice of this
     // one — see the package-ownership note above, which is about exactly this and is load-bearing.
     api project(':stagewright-attached')
+
+    // Plain JUnit, no game: only the logic that never touches a live level is tested here.
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test', Test) {
+    useJUnitPlatform()
 }

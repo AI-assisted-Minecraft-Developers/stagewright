@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.stream.Stream;
 import com.google.gson.JsonArray;
@@ -47,8 +48,10 @@ final class Capabilities {
     /** Providers that loaded, by name, in discovery order. */
     private static Map<String, CapabilityProvider> providers;
 
-    /** Providers that did not load, and why — kept so a skip can say more than "absent". */
-    private static Map<String, String> unavailable;
+    /** Why each provider that did not load failed, so a skip can say more than "absent". A list
+     *  rather than a map by capability name: that name comes from the instance that never got
+     *  built, so a failure can only be shown to every lookup that finds no provider. */
+    private static List<String> loadFailures;
 
     /** Facets already built for the scene currently running, so an adapter that registers a cleanup
      *  registers exactly one. Cleared whenever the context changes. */
@@ -123,21 +126,25 @@ final class Capabilities {
      */
     private String reasonFor(String name, CapabilityProvider provider) {
         if (provider != null) return provider.absentReason();
-        String whyNotLoaded = unavailable.get(name);
-        if (whyNotLoaded != null) return whyNotLoaded;
 
         String head = "this scene needs the '" + name + "' capability, which nothing in this run"
                 + " offers";
+        String failures = loadFailures.isEmpty() ? "" : ". " + loadFailures.size()
+                + " capability adapter(s) failed to load, and any of them may be the one that offers"
+                + " it: " + String.join("; ", loadFailures);
         if (providers.isEmpty()) {
-            return head + " — and NO capability provider loaded at all, not even the ones StageWright"
-                    + " ships, so this is the framework's service file missing from the jar rather"
-                    + " than a mod missing from the pack";
+            return head + (loadFailures.isEmpty()
+                    ? " — and NO capability provider loaded at all, not even the ones StageWright"
+                            + " ships, so this is the framework's service file missing from the jar"
+                            + " rather than a mod missing from the pack"
+                    : " — and no capability provider loaded at all" + failures);
         }
         List<String> present = available();
         return head + " — registered here: " + String.join(", ", registered())
                 + (present.isEmpty()
                         ? ", none of them available in this runtime"
-                        : "; available: " + String.join(", ", present));
+                        : "; available: " + String.join(", ", present))
+                + failures;
     }
 
     /**
@@ -150,7 +157,7 @@ final class Capabilities {
     private static void discover() {
         if (providers != null) return;
         Map<String, CapabilityProvider> found = new LinkedHashMap<>();
-        Map<String, String> failed = new LinkedHashMap<>();
+        List<String> failed = new ArrayList<>();
 
         for (ServiceLoader.Provider<CapabilityProvider> handle
                 : ServiceLoader.load(CapabilityProvider.class).stream().toList()) {
@@ -161,8 +168,15 @@ final class Capabilities {
             } catch (Throwable t) {
                 // Throwable, not Exception: the expected failure here is NoClassDefFoundError, an
                 // Error. Catching Exception would let exactly the case this exists for through.
-                failed.put(className, "the capability adapter " + className + " could not load in"
-                        + " this runtime (" + t.getClass().getSimpleName() + ": " + t.getMessage()
+                // ServiceLoader wraps what the constructor threw, and only the cause names the class
+                // that was missing.
+                Throwable cause = t;
+                while (cause instanceof ServiceConfigurationError && cause.getCause() != null) {
+                    cause = cause.getCause();
+                }
+                failed.add("the capability adapter " + className + " could not load in"
+                        + " this runtime (" + cause.getClass().getSimpleName() + ": "
+                        + cause.getMessage()
                         + "), which normally means the mod it adapts is not installed here");
                 continue;
             }
@@ -187,7 +201,7 @@ final class Capabilities {
             found.put(descriptor.name(), descriptor);
         }
 
-        unavailable = failed;
+        loadFailures = failed;
         providers = found;
     }
 
@@ -255,6 +269,6 @@ final class Capabilities {
      *  harness, which wants exactly one discovery per JVM. */
     static void reset() {
         providers = null;
-        unavailable = null;
+        loadFailures = null;
     }
 }
