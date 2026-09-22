@@ -26,10 +26,13 @@ configured in any build script. A consumer therefore needs `mavenLocal()` in bot
 
 ## The artifacts
 
-Group is `net.magicterra` throughout. Two version tracks, and the difference is deliberate:
-everything with a Minecraft classpath carries `mod_version` from `gradle.properties`, which
-embeds the Minecraft version; the three artifacts with no Minecraft classpath carry a plain
-version that does not move when Minecraft does.
+Group is `net.magicterra` throughout. Two version tracks, split by build rather than by
+classpath: every artifact of the root build carries `mod_version` from `gradle.properties`,
+which embeds the Minecraft version. That includes `mc_stagewright-attached` and
+`mc_stagewright-junit`, which have no Minecraft classpath but take their version from the root
+build's `allprojects` block like its other modules, so a consumer depends on
+`mc_stagewright-junit:0.1.0+1.21.1`, not `:0.1.0`. The engine and the Gradle plugin are separate
+builds with a plain version of their own that does not move when Minecraft does.
 
 | Coordinate | What it is | Classifiers | POM dependencies |
 |---|---|---|---|
@@ -198,7 +201,7 @@ patch and minor releases.
 Everything else carries no promise and may change without notice — scene execution timing,
 internal classes, and the `StageWrightRpc` wire details.
 
-Versions of the Minecraft-facing artifacts track `mod_version` in `gradle.properties`; there is
-no independent scheme for any of them. The engine, the Gradle plugin and the command-line runner
-are versioned separately, because they carry no Minecraft classpath and should not move when the
-Minecraft version does.
+Versions of every root-build artifact, the two plain-JVM libraries included, track `mod_version`
+in `gradle.properties`; there is no independent scheme for any of them. The engine, the Gradle
+plugin and the command-line runner are separate builds, versioned separately, because they carry
+no Minecraft classpath and should not move when the Minecraft version does.
