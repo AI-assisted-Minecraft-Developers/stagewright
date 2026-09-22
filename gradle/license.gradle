@@ -1,0 +1,36 @@
+// The LGPL-3.0-only terms, attached to every jar and POM a StageWright build produces. Applied by
+// the root build to each subproject and by the standalone engine, cli and gradle-plugin builds, so
+// no artifact can leave any of them without the terms it is conveyed under.
+//
+// Resolved against this script's own location, not the applying project: the standalone builds
+// each have their own rootProject, and none of them is the repository root.
+def repoRoot = buildscript.sourceFile.parentFile.parentFile
+
+// LGPLv3 builds on GPLv3 §4/§6, which require a copy of the license to accompany object code.
+// Both files, because COPYING.LESSER is only additional permissions on top of COPYING.
+// shadowJar is left out: it bundles this build's own jars, which already carry both, and Shadow
+// writes a path it reads from a bundled jar again even when the task itself added it.
+tasks.withType(Jar).matching { it.name != 'shadowJar' }.configureEach {
+    into('META-INF') {
+        from(new File(repoRoot, 'COPYING'))
+        from(new File(repoRoot, 'COPYING.LESSER'))
+    }
+}
+
+plugins.withId('maven-publish') {
+    publishing.publications.withType(MavenPublication).configureEach {
+        pom {
+            url = 'https://github.com/AI-assisted-Minecraft-Developers/stagewright'
+            licenses {
+                license {
+                    name = 'LGPL-3.0-only'
+                    url = 'https://www.gnu.org/licenses/lgpl-3.0.txt'
+                }
+            }
+            scm {
+                url = 'https://github.com/AI-assisted-Minecraft-Developers/stagewright'
+                connection = 'scm:git:https://github.com/AI-assisted-Minecraft-Developers/stagewright.git'
+            }
+        }
+    }
+}

@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### Every jar carries the LGPL text, and every POM declares the license · checked in the built jars and generated POMs
+
+The relicense changed the headers but no build packaged `COPYING` or `COPYING.LESSER`, so every
+mod jar, `-sources` jar, plain-JVM library and the CLI jar was conveyed without the license the
+LGPL requires to travel with object code, and no POM named a license at all, so scanners
+reported the artifacts as unknown. All four builds now put both files under `META-INF/` in every
+jar and declare `LGPL-3.0-only`, the project URL and the SCM URL in every POM, from one
+`gradle/license.gradle`. `scripts/check_packaging.py` inspects the built artifacts for it.
+
 ### A registry that cannot be built is RED, with its error · compiled, registry and verdict green in unit tests
 
 A duplicate scene name, an illegal origin pin, a `SceneProvider` with no scenes, a `.js` file that

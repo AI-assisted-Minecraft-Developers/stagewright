@@ -53,6 +53,9 @@ allprojects {
 }
 
 subprojects {
+    // Before the pure-JVM early return below: those two modules publish too.
+    apply from: rootProject.file('gradle/license.gradle')
+
     // Two pure-JVM modules — no Minecraft, no loader, no loom — each providing its own
     // java-library setup. Scope them out of the loom/architectury/MC pipeline that every other
     // subproject shares. (group/version still come from allprojects.)
