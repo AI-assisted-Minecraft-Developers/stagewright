@@ -82,9 +82,13 @@ subprojects {
         mavenLocal()
         mavenCentral()
         // Rhino (KubeJS fork), compile-only, for the JavaScript scene loader. Not on Maven Central.
+        // Fenced to its own group: Gradle takes the first repository that answers, and a third-party
+        // host whose parking page answers 200 to any path would otherwise serve bogus POMs for every
+        // artifact not found earlier.
         maven {
             name = 'latvian-releases'
             url = 'https://maven.latvian.dev/releases'
+            content { includeGroup 'dev.latvian.mods' }
         }
     }
 

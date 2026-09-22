@@ -12,11 +12,13 @@ Checked:
   - every generated POM declares LGPL-3.0-only with its URL, the project URL and the SCM URL;
   - a jar holding third-party classes carries that code's license text (minimal-json, Rhino,
     gson, Error Prone annotations), and the CLI jar a notice naming each of them and no other
-    mod's loader metadata at its root.
+    mod's loader metadata at its root;
+  - every repository declaration for maven.latvian.dev is fenced to its own group.
 
 Exit 0 when all hold, 1 with one line per violation otherwise.
 """
 import argparse
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
@@ -140,6 +142,24 @@ def check_poms(problems):
             problems.append(f'{rel}: <scm><url> is not {PROJECT_URL}')
 
 
+def check_latvian_fence(problems):
+    for script in sorted(ROOT.rglob('*.gradle')):
+        parts = script.relative_to(ROOT).parts
+        if 'build' in parts or '.gradle' in parts:
+            continue
+        text = script.read_text(encoding='utf-8')
+        for m in re.finditer(r'maven\.latvian\.dev', text):
+            start = text.rfind('maven {', 0, m.start())
+            depth, end = 0, start
+            for end in range(start, len(text)):
+                depth += {'{': 1, '}': -1}.get(text[end], 0)
+                if depth == 0 and text[end] == '}':
+                    break
+            if not re.search(r"content\s*\{\s*includeGroup\s*['\"]dev\.latvian\.mods['\"]", text[start:end]):
+                line = text.count('\n', 0, m.start()) + 1
+                problems.append(f'{script.relative_to(ROOT)}:{line}: maven.latvian.dev is not fenced to dev.latvian.mods')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--build', action='store_true', help='run the jar and POM tasks first')
@@ -151,6 +171,7 @@ def main():
     problems = []
     check_jars(problems)
     check_poms(problems)
+    check_latvian_fence(problems)
     for p in problems:
         print(p)
     print(f'check_packaging: {"FAIL, " + str(len(problems)) + " problem(s)" if problems else "OK"}')
