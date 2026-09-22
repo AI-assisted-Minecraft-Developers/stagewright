@@ -99,6 +99,11 @@ failure behind a later pass, so the run refuses to judge them.
 
 **`DRIFTED:`** — a record exists for a name nothing registered.
 
+**`REGISTRY:`** — the game armed but could not assemble the suite, so nothing ran: a duplicate scene
+name, an illegal origin pin, a provider with no scenes, a scene file that does not parse, scene files
+with no Rhino. The line carries the error. It is RED rather than an environment failure, because
+the fix is in the scenes, not the host.
+
 **`TRUNCATED:`** — the footer's scene count disagrees with the number of records present.
 
 **`WORLD:`** — not a failure. It prints on every run, including a clean one, and states what the run

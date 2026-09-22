@@ -94,6 +94,22 @@ public final class ResultsJsonl {
         write(sb.toString(), true);
     }
 
+    /**
+     * The whole file for a run whose registry could not be built: a header that registers nothing and
+     * carries {@code registryError}, then a footer. Complete, so a supervisor waiting on the footer
+     * stops waiting, and judged RED with the error, where a crash with no header would read ENV.
+     */
+    public synchronized void writeRegistryFailure(String loader, String filter, String error) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\"type\":\"suite\",\"loader\":\"").append(escape(loader)).append("\",\"registered\":[]");
+        if (filter != null && !filter.isBlank()) {
+            sb.append(",\"filter\":\"").append(escape(filter)).append('"');
+        }
+        sb.append(",\"registryError\":\"").append(escape(error)).append("\"}\n");
+        write(sb.toString(), true);
+        writeDone(0);
+    }
+
     public void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs, String reason) {
         writeScene(name, outcome, ticks, wallMs, reason, java.util.Map.of());
     }

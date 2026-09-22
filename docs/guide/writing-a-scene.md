@@ -83,9 +83,9 @@ entitled to judge from the prefixes present in its expected-scenes file, which i
 StageWright's own built-ins — which carry no dot — out of a consumer's verdict. A consumer that
 omits `@SceneSet` gets bare method names that no manifest can bound.
 
-Names must be globally unique across every provider in the run. A duplicate is rejected before the
-suite header is written: two records under one name let the later one overwrite the earlier in any
-last-wins map, which turns a real failure into a pass.
+Names must be globally unique across every provider in the run. A duplicate is rejected before any
+scene runs, and the run is RED with a `REGISTRY:` line naming it: two records under one name let the
+later one overwrite the earlier in any last-wins map, which turns a real failure into a pass.
 
 ### Options a scene declares
 

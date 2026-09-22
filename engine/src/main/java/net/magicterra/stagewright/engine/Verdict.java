@@ -22,7 +22,8 @@ import java.util.TreeSet;
  *   <li><b>0 GREEN</b> — footer present, every registered non-canary scene PASSed (or failed while
  *       marked optional), every canary landed on the outcome it was declared to require.</li>
  *   <li><b>1 RED</b> — a required scene failed, was never recorded, or reconciliation against the
- *       expected-scenes manifest failed.</li>
+ *       expected-scenes manifest failed. Also a suite the game armed but could not assemble
+ *       ({@code registryError} in the header): that is the author's defect, not the host's.</li>
  *   <li><b>2 DEAD</b> — a canary landed on the WRONG outcome. The framework can no longer be trusted
  *       to catch failures, so the whole run's results are void rather than merely bad. This is not a
  *       louder RED: a RED says the code is broken, a DEAD says the measurement is.</li>
@@ -125,6 +126,14 @@ public final class Verdict {
 
         List<String> report = new ArrayList<>();
         if (suite == null) return new Result(3, List.of("no suite header — the game never armed"));
+        // Before the footer check: the game armed, tried to assemble the suite and could not, and
+        // that is a defect in what was handed to it — a duplicate name, a script that does not
+        // parse — not an environment that failed to start.
+        String registryError = str(suite.get("registryError"));
+        if (!registryError.isBlank()) {
+            return new Result(1, List.of("REGISTRY: the suite could not be assembled, so no scene"
+                    + " ran — " + registryError));
+        }
         if (done == null) return new Result(1, List.of("no done footer — the harness died mid-run"));
 
         int code = 0;

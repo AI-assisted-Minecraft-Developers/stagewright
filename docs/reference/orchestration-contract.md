@@ -109,8 +109,17 @@ context class loader.
 
 **Scene names are globally unique.** The harness rejects a duplicate before writing the suite
 header, because the verdict keeps a last-wins map of scene records and a duplicate would let a
-later record mask an earlier FAIL as a pass. The rejection throws during harness construction,
-so the game dies before any header exists and the supervisor reports ENV rather than RED.
+later record mask an earlier FAIL as a pass.
+
+**A registry that cannot be built is a RED result, not a crash.** Discovery, the filter and the
+harness's structural checks all run before any harness exists, and each can refuse the registry: a
+duplicate name, an illegal or colliding origin pin, a provider that declares no scenes or cannot be
+loaded, a scene file that does not parse, scene files with no Rhino to run them. When one does,
+the suite runs nothing and the results file is a header that registers nothing and carries
+`registryError`, then a footer with `scenes: 0`. The verdict reads that as RED with the error's
+message. Letting the exception escape instead would leave no header, and the run would read as
+ENV — "the game never armed" — which sends the author of a typo to look for a missing mod jar.
+Under autorun the server then halts, as after a finished suite; under a hold it stays up.
 
 ## Coordinate pinning
 
@@ -245,8 +254,9 @@ Exactly one, first:
 | `registered[].canary` | string | always | `NONE`, `MUST_FAIL`, `MUST_TIMEOUT`, `MUST_SWALLOW` or `MUST_SKIP`. |
 | `filter` | string | only when narrowed | The pattern this run was narrowed by. |
 | `worldPin` | string | only when pinned | One line naming the world state held still. |
+| `registryError` | string | only when the registry could not be built | Why; `registered` is then empty and nothing ran. See *Scene discovery*. |
 
-The two optional keys appear only when they have a value, so a run that pins nothing and filters
+The optional keys appear only when they have a value, so a run that pins nothing and filters
 nothing produces a byte-identical header to one written before either existed. A stream that
 does not pin a world — an out-of-process run — states that by omitting the key rather than by
 writing something untrue.
@@ -443,7 +453,7 @@ results files can take the worse of the two.
 | Code | Label | Meaning |
 |---|---|---|
 | 0 | GREEN | Header and footer present, every required non-canary scene passed or failed while optional, every canary landed on the outcome it declared. |
-| 1 | RED | A required scene failed, a scene was never recorded, records drifted or duplicated, the footer disagreed with the file, or reconciliation against the manifest failed. Also: no footer. |
+| 1 | RED | A required scene failed, a scene was never recorded, records drifted or duplicated, the footer disagreed with the file, or reconciliation against the manifest failed. Also: no footer, and a header carrying `registryError` — the game armed but could not assemble the suite. |
 | 2 | DEAD | A canary landed on the wrong outcome. The framework can no longer be trusted to catch failures, so the whole run's results are void rather than merely bad. |
 | 3 | ENV | No suite header — the game never armed. Also reported when the results file is absent entirely. |
 

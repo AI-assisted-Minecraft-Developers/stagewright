@@ -78,6 +78,12 @@ public final class Coverage {
                         + " contributes no coverage");
                 continue;
             }
+            if (!Verdict.str(suite.get("registryError")).isBlank()) {
+                // RED in its own verdict; here, like a run that never armed, it can only narrow.
+                report.add("NOTE: '" + run.label() + "' could not assemble its suite and"
+                        + " contributes no coverage");
+                continue;
+            }
             String filter = Verdict.str(suite.get("filter"));
             if (!filter.isBlank()) {
                 filtered.add("FILTERED: '" + run.label() + "' was FILTERED to '" + filter + "'");

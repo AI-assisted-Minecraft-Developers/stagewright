@@ -131,6 +131,16 @@ public final class StageWrightHarness {
         StageWrightCommon.LOG.info("[{}] harness armed: {} scenes", StageWrightCommon.MOD_ID, scenes.size());
     }
 
+    /**
+     * The structural checks a registry must pass before a harness is built for it: unique names and
+     * legal origin-slot pins. Throws {@link IllegalStateException} naming the offender.
+     * {@link SuiteRegistry} calls it so a rejection becomes a recorded result rather than a crash.
+     */
+    public static void validate(List<Scene> scenes) {
+        rejectDuplicateNames(scenes);
+        assignSlots(scenes);
+    }
+
     /** A duplicate scene name lets a later record silently overwrite an earlier one
      *  in the orchestrator's last-wins map, masking a real FAIL as GREEN. Reject the
      *  whole registry loudly before the suite header is ever written (spec §5/§10). */
@@ -585,8 +595,14 @@ public final class StageWrightHarness {
         }
         StageWrightCommon.LOG.info("[{}] suite complete ({} scenes executed) — halting server",
                 StageWrightCommon.MOD_ID, executed);
+        haltAfterResults(server);
+    }
+
+    /** End the run once its results file is complete: halt the server, and make sure the JVM goes
+     *  with it. Shared with the path that records a registry which could not be built. */
+    public static void haltAfterResults(MinecraftServer server) {
         server.halt(false);
-        armExitWatchdog();
+        armExitWatchdog(server);
     }
 
     /** Grace period between the server halting and forcing the JVM down, long enough for the world
@@ -616,7 +632,7 @@ public final class StageWrightHarness {
      * construction, and the supervisor is the backstop: the CLI stops waiting once the results file
      * carries its done footer and kills the process tree itself.
      */
-    private void armExitWatchdog() {
+    private static void armExitWatchdog(MinecraftServer server) {
         if (!server.isDedicatedServer()) return;
         Thread watchdog = new Thread(() -> {
             try {

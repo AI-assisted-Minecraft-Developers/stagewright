@@ -615,17 +615,9 @@ public final class Main {
 
             try (StageWrightRpc rpc = attach(descriptor.wsUri())) {
                 DriverBinding binding = new RpcDriverBinding(rpc, 60_000);
-                List<SceneSpec> specs = Scripts.load(attachedDir,
-                        // No extra globals: out here `driver` is the ONLY door to the game, and it is
-                        // installed as a plain Java object below rather than as a script-visible
-                        // reflection surface. A second door would be a verb one home has.
-                        (cx, scope, fileName) -> { },
-                        line -> System.out.println("[stagewright] " + line));
-                AttachedRun run = new AttachedRun(specs, binding,
+                attachedCode = runAttachedScenes(attachedDir, binding,
                         descriptor.loader() != null ? descriptor.loader() : loader,
-                        line -> System.out.println("[stagewright] " + line),
-                        System::currentTimeMillis);
-                attachedCode = run.run(attachedResults) ? 0 : 1;
+                        attachedResults, line -> System.out.println("[stagewright] " + line));
 
                 // Now the in-process half, on the same live server.
                 System.out.println("[stagewright] triggering the in-process suite (mc.test.run)");
@@ -654,6 +646,31 @@ public final class Main {
         int worst = Math.max(inProcess, attachedCode);
         attachedSummary(inProcess, attachedCode, attachedResults).forEach(System.out::println);
         return worst;
+    }
+
+    /**
+     * Load and run the attached half's scene files; 0 when nothing failed, 1 otherwise.
+     *
+     * <p>A file that does not load is RED: it is the author's defect, and letting the exception
+     * reach {@code main} would exit 3 — the code that says the host never came up.
+     */
+    static int runAttachedScenes(Path attachedDir, DriverBinding binding, String loader,
+                                 Path attachedResults, Consumer<String> log) {
+        List<SceneSpec> specs;
+        try {
+            specs = Scripts.load(attachedDir,
+                    // No extra globals: out here `driver` is the ONLY door to the game, and it is
+                    // installed as a plain Java object below rather than as a script-visible
+                    // reflection surface. A second door would be a verb one home has.
+                    (cx, scope, fileName) -> { },
+                    log);
+        } catch (RuntimeException e) {
+            log.accept("RED: the attached scenes could not be loaded, so none of them ran — "
+                    + e.getMessage());
+            return 1;
+        }
+        AttachedRun run = new AttachedRun(specs, binding, loader, log, System::currentTimeMillis);
+        return run.run(attachedResults) ? 0 : 1;
     }
 
     /**

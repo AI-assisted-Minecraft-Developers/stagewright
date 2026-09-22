@@ -8,6 +8,7 @@ import java.util.Map;
 import net.magicterra.stagewright.harness.EndpointDescriptor;
 import net.magicterra.stagewright.harness.ResultsJsonl;
 import net.magicterra.stagewright.harness.StageWrightHarness;
+import net.magicterra.stagewright.harness.SuiteRegistry;
 import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.verbs.TestInputVerbs;
 import net.magicterra.stagewright.verbs.TestResetVerb;
@@ -55,6 +56,9 @@ public final class StageWrightCommon {
     private static MinecraftServer armedServer;
     private static String armedLoader;
     private static List<Scene> resolvedScenes;   // resolved once at arm time on the server thread
+    private static String registryError;         // why resolvedScenes is empty, or null
+    // Volatile for the same lock-free per-tick read as `harness`.
+    private static volatile boolean registryFailureRecorded;
     private static boolean armed;
     private static boolean verbHooksInstalled;
     private static boolean onDemandRequested;
@@ -126,16 +130,20 @@ public final class StageWrightCommon {
         // loader for SceneProvider discovery), and cache it: autorun builds the harness from it now;
         // on-demand builds from the SAME list later, and needs its size synchronously to answer
         // {scenes:N} without re-running ServiceLoader off the server thread.
-        resolvedScenes = Scenes.all();
-        // Narrowing happens HERE, before the harness exists, so the suite header's registered list
-        // is the filtered one and every downstream rule (SWALLOWED, DRIFTED, the canary gates) keeps
-        // working against what this run actually meant to do rather than against the full registry.
+        //
+        // Narrowing happens here too, before the harness exists, so the suite header's registered
+        // list is the filtered one and every downstream rule (SWALLOWED, DRIFTED, the canary gates)
+        // keeps working against what this run actually meant to do.
         String filter = SceneFilter.pattern();
-        if (filter != null) {
-            int before = resolvedScenes.size();
-            resolvedScenes = SceneFilter.apply(resolvedScenes, filter);
+        SuiteRegistry.Resolved registry = SuiteRegistry.resolve(Scenes::all, filter);
+        resolvedScenes = registry.scenes();
+        registryError = registry.error();
+        if (registryError != null) {
+            LOG.error("[{}] the scene registry could not be built — the suite will record this"
+                    + " as its result instead of running", MOD_ID, registry.failure());
+        } else if (filter != null) {
             LOG.warn("[{}] FILTERED to '{}' — {} of {} scenes. This run is NOT a gate result.",
-                    MOD_ID, filter, resolvedScenes.size(), before);
+                    MOD_ID, filter, resolvedScenes.size(), registry.discovered());
         }
         // Register the mc.test.* verbs — BOTH autorun states, so the hidden-verb contract is
         // topology-uniform.
@@ -153,7 +161,7 @@ public final class StageWrightCommon {
                 LOG.info("[{}] armed, deferring the suite until a player joins (-D{}) — {} scenes",
                         MOD_ID, AWAIT_PLAYER, resolvedScenes.size());
             } else {
-                harness = new StageWrightHarness(server, loader, resolvedScenes, new ResultsJsonl(Path.of(outFile())));
+                startSuite(server, loader);
             }
         } else {
             LOG.info("[{}] armed, awaiting mc.test.run ({} scenes) — stagewright.autorun not set",
@@ -247,7 +255,7 @@ public final class StageWrightCommon {
                     + "Nothing to trigger here.");
         }
         if (harness != null || onDemandRequested) {
-            boolean done = harness != null && harness.isFinished();
+            boolean done = suiteFinished();
             throw new IllegalStateException(
                     "mc.test.run: the scene suite has already " + (done ? "run" : "been started")
                     + " on this server — refusing to re-run (idempotent; the JSONL done footer is the "
@@ -272,9 +280,9 @@ public final class StageWrightCommon {
         // sets `harness` on the server thread) cannot double-build.
         server.execute(() -> {
             synchronized (StageWrightCommon.class) {
-                if (harness != null) return;
+                if (harness != null || registryFailureRecorded) return;
                 try {
-                    harness = new StageWrightHarness(server, loader, scenes, new ResultsJsonl(Path.of(outFile())));
+                    startSuite(server, loader);
                 } catch (Throwable t) {
                     // Hardening (Task-1 review Minor 1): the harness ctor can throw (duplicate scene
                     // name / origin-slot collision — see StageWrightHarness). If it does, RELEASE the
@@ -301,6 +309,7 @@ public final class StageWrightCommon {
      * orchestrator to read it would make the client's exit depend on filesystem timing.
      */
     public static boolean suiteFinished() {
+        if (registryFailureRecorded) return true;
         StageWrightHarness h = harness;
         return h != null && h.isFinished();
     }
@@ -380,7 +389,8 @@ public final class StageWrightCommon {
             }
             if (!settled) return;
         }
-        if (harness == null && armed && !holding() && Boolean.getBoolean("stagewright.autorun")
+        if (harness == null && !registryFailureRecorded && armed && !holding()
+                && Boolean.getBoolean("stagewright.autorun")
                 && Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() > 0) {
             armDeferredSuite(server);
         }
@@ -394,12 +404,28 @@ public final class StageWrightCommon {
 
     /** Build the deferred harness, on the server thread, exactly once. */
     private static synchronized void armDeferredSuite(MinecraftServer server) {
-        if (harness != null) return;
+        if (harness != null || registryFailureRecorded) return;
         LOG.info("[{}] a player joined — starting the deferred suite ({} scenes)",
                 MOD_ID, resolvedScenes.size());
         opTestPlayers(server);
-        harness = new StageWrightHarness(server, armedLoader, resolvedScenes,
-                new ResultsJsonl(Path.of(outFile())));
+        startSuite(server, armedLoader);
+    }
+
+    /**
+     * Build the harness over the resolved registry — or, when it could not be resolved, write that
+     * as the run's whole result and end the run the way a finished suite ends it. Server thread,
+     * under this class's monitor.
+     */
+    private static void startSuite(MinecraftServer server, String loader) {
+        ResultsJsonl out = new ResultsJsonl(Path.of(outFile()));
+        if (registryError == null) {
+            harness = new StageWrightHarness(server, loader, resolvedScenes, out);
+            return;
+        }
+        out.writeRegistryFailure(loader, SceneFilter.pattern(), registryError);
+        registryFailureRecorded = true;
+        // A hold hands the world back rather than ending, exactly as a finished suite does.
+        if (!holding()) StageWrightHarness.haltAfterResults(server);
     }
 
     /**

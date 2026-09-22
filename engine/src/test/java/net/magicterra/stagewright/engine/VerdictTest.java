@@ -132,6 +132,27 @@ class VerdictTest {
     }
 
     @Test
+    void aRegistryThatCouldNotBeBuiltIsRedNotEnv() {
+        // A duplicate name or a JS syntax error is the author's defect, fully deterministic. ENV
+        // would send them to check the mod jar, and a CI that retries ENV would retry it forever.
+        Map<String, Object> header = suite();
+        header.put("registryError", "IllegalStateException: duplicate scene name 'pack.smelt'");
+        Verdict.Result result = Verdict.judge(records(header, done(0)), null);
+        assertEquals(1, result.code());
+        assertTrue(reports(result, "duplicate scene name 'pack.smelt'"));
+        assertTrue(reports(result, "REGISTRY"));
+    }
+
+    @Test
+    void aRegistryErrorIsRedEvenWithoutAFooter() {
+        Map<String, Object> header = suite();
+        header.put("registryError", "scene file pack.js failed to load: missing ; before statement");
+        Verdict.Result result = Verdict.judge(records(header), null);
+        assertEquals(1, result.code());
+        assertTrue(reports(result, "pack.js failed to load"));
+    }
+
+    @Test
     void aMissingFooterIsRedBecauseTheRunIsIncomplete() {
         Verdict.Result result = Verdict.judge(
                 records(suite(reg("a")), scene("a", "PASS")), null);

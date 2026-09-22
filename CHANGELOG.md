@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### A registry that cannot be built is RED, with its error · compiled, registry and verdict green in unit tests
+
+A duplicate scene name, an illegal origin pin, a `SceneProvider` with no scenes, a `.js` file that
+does not parse or scene files with no Rhino all threw during SERVER_STARTED, so no header was ever
+written and the run was ENV — "the game never armed" — pointing the author at a missing mod jar. The
+registry is now resolved before the harness is built, and a refusal is written as the run's
+whole results file: a header registering nothing with `registryError`, then a footer. The verdict
+reads that as RED with the message; under autorun the server then halts as after a finished suite.
+The CLI's `--attached` half treats a scene file that does not load the same way: RED, not exit 3.
+
 ### `--attached` ends on the true label of its exit code · compiled, green in unit tests
 
 The closing line printed RED for anything non-zero, so a DEAD in-process half (canary on the wrong
