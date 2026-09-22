@@ -149,6 +149,10 @@ deletes what it lists, plus any jar whose name marks it as a framework build. Fi
 versions, so without the sweep an upgrade lands *beside* its predecessor and the loader arms one of
 the two — reporting the old code's behaviour as the new code's.
 
+A jar to install whose file name is already in `mods/`, and not in the ledger, belongs to whoever put
+it there, so the install fails naming it rather than overwriting it. Taking the name over would put
+it in the ledger, and the next run's sweep would delete a jar the install never owned.
+
 ## What provisioning does to the run directory
 
 Before every run, the provision step:
