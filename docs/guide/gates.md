@@ -87,9 +87,10 @@ Usually a typo or broken service wiring.
 informational; the cross-topology check is a separate task.
 
 **`DEAD:` on a canary** — the framework's own self-check landed on the wrong outcome. Nothing else in
-that run's results can be believed. Three canaries ship with StageWright: one that must be reported
-as a failure, one that must be reported as a timeout, and one that must never be executed at all. A
-fourth kind is available to consumers for a scene whose subject is a recorded skip.
+that run's results can be believed. Four canaries ship with StageWright: one that must be reported
+as a failure, one that must be reported as a timeout, one that must never be executed at all, and one
+that fails a soft check and then skips, which must be reported as a failure rather than a skip. A
+further kind is available to consumers for a scene whose subject is a recorded skip.
 
 **`SWALLOWED:`** — a scene is registered and no record of it exists. It did not run and nothing said
 so.
