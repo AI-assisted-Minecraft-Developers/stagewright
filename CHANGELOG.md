@@ -10,6 +10,81 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-09-22
+
+### A registry that cannot be built is RED, with its error · compiled, registry and verdict green in unit tests
+
+A duplicate scene name, an illegal origin pin, a `SceneProvider` with no scenes, a `.js` file that
+does not parse or scene files with no Rhino all threw during SERVER_STARTED, so no header was ever
+written and the run was ENV — "the game never armed" — pointing the author at a missing mod jar. The
+registry is now resolved before the harness is built, and a refusal is written as the run's
+whole results file: a header registering nothing with `registryError`, then a footer. The verdict
+reads that as RED with the message; under autorun the server then halts as after a finished suite.
+The CLI's `--attached` half treats a scene file that does not load the same way: RED, not exit 3.
+
+### `--attached` ends on the true label of its exit code · compiled, green in unit tests
+
+The closing line printed RED for anything non-zero, so a DEAD in-process half (canary on the wrong
+outcome, results void) or an ENV one (never armed) ended the output reading as a code defect while
+the process exited 2 or 3. Both closing lines now carry the label of their code, and the run's line
+reads `VERDICT (in-process and attached): <label>`.
+
+### Coverage refuses filtered runs and does not count ENV_FAIL as execution · compiled, green in unit tests
+
+`stagewrightCoverage` and `--coverage` reconciled whatever results were on disk, so after a
+`-Pstagewright.scenes` iteration they reported "N of N executed" over the subset the pattern kept.
+A results file whose header records a filter now makes coverage ENV, naming the file. And an
+`ENV_FAIL` record — written before the body runs — no longer counts as the scene having executed,
+so a scene whose arena never loads on any topology is reported UNCOVERED.
+
+### `--with-client` judges the client's own probe · compiled, green in unit tests
+
+The joined client always ran its probe and wrote `stagewright-client-results.jsonl`, and the CLI
+never read it: a probe that failed or timed out still exited GREEN, where the same pair of files
+under the Gradle plugin's `companionResultsFile` was RED. The CLI now judges that file with the
+engine's companion rule — its own header, worst verdict wins, missing file ENV — and provisioning
+clears it and its heartbeat, rather than a `stagewright-results.jsonl` the client never writes.
+
+### The CLI refuses an empty expected-scenes manifest, as the plugin does · compiled, green in unit tests
+
+A manifest holding only comments or blank lines was a hard error under Gradle and a silently
+skipped reconciliation under `--expect`, so one file got two verdicts. The refusal now lives in
+`Manifest.read`, which both front ends call, and the CLI reads the manifest before it starts the
+game.
+
+### The CLI refuses options it does not know · compiled, parser green in unit tests
+
+Any `--name value` used to be accepted and stored, so a typo was a setting nobody read:
+`--expected expected-scenes.txt` ran with manifest reconciliation off and could exit GREEN over a
+provider whose scenes had vanished, and `--clean-wrold false` deleted the world. An unknown option
+now prints the usage and exits 3, and `--clean-world` takes only `true` or `false`.
+
+### `-Dstagewright.filter` is gone · compiled, registry green in a unit test
+
+A second, older filter still narrowed the registry by glob, but it never reached the suite header,
+so the verdict judged a narrowed run as the whole suite — no FILTERED label, and a pattern that
+matched nothing came out as a canary-only GREEN. The property now does nothing. Narrow a run with
+`-Pstagewright.scenes` (the game reads it as `-Dstagewright.scenes`), which the header records.
+`@SceneDef(tags = …)` was documented as feeding that filter; nothing reads it.
+
+### A filtered run keeps the framework canaries · compiled, filter and verdict green in unit tests
+
+`-Pstagewright.scenes` used to filter the canaries out with everything else, so a narrow run
+carried no proof that the harness could still catch a failure. `MUST_FAIL`, `MUST_TIMEOUT` and
+`MUST_SWALLOW` scenes now survive every pattern and are judged as in a full run. Since the
+registered list is then never empty, "the pattern matched nothing" is judged on the scenes other
+than those canaries, and stays RED. `MUST_SKIP` scenes belong to the suite and are still selected
+by name.
+
+### A skip no longer hides a `check` that already failed · compiled, attached home green in its unit test
+
+A body that recorded soft violations with `check(...)` and then skipped — explicitly, or through
+`player()`, `capability()`, `probe()` or `mods().require()` finding nothing — was recorded as a PASS
+skip, and the violations appeared nowhere. Both homes now record it as a FAIL whose reason lists the
+violations followed by `then skipped: <reason>`. The wording is one shared function, so the two
+homes cannot drift apart on it. The new built-in canary `canaryCheckThenSkipMustFail` holds the
+in-process harness to this rule: if a skip wins again, the run is DEAD.
+
 ## 2026-09-20
 
 ### Relicensed from MIT to LGPL-3.0-only · compiled

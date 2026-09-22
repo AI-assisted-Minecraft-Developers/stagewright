@@ -60,6 +60,7 @@ public final class Coverage {
         Set<String> canaries = new LinkedHashSet<>();
         Map<String, Map<String, String>> absentIn = new LinkedHashMap<>();   // scene -> run -> why
         Set<String> everRegistered = new TreeSet<>();
+        List<String> filtered = new ArrayList<>();
 
         for (Run run : runs) {
             Map<String, Object> suite = null;
@@ -77,6 +78,17 @@ public final class Coverage {
                         + " contributes no coverage");
                 continue;
             }
+            if (!Verdict.str(suite.get("registryError")).isBlank()) {
+                // RED in its own verdict; here, like a run that never armed, it can only narrow.
+                report.add("NOTE: '" + run.label() + "' could not assemble its suite and"
+                        + " contributes no coverage");
+                continue;
+            }
+            String filter = Verdict.str(suite.get("filter"));
+            if (!filter.isBlank()) {
+                filtered.add("FILTERED: '" + run.label() + "' was FILTERED to '" + filter + "'");
+                continue;
+            }
             for (Map<String, Object> reg : Verdict.registered(suite)) {
                 String name = Verdict.str(reg.get("name"));
                 String canary = Verdict.str(reg.get("canary"));
@@ -90,15 +102,31 @@ public final class Coverage {
                     continue;
                 }
                 Map<String, Object> rec = scenes.get(name);
-                if (rec != null && !Verdict.skipped(rec)) {
+                // ENV_FAIL is written out of PREP, before any body exists, so it is as much "did
+                // not run" as a skip — unlike FAIL or TIMEOUT, which executed and found something.
+                boolean envFail = rec != null && "ENV_FAIL".equals(Verdict.str(rec.get("outcome")));
+                if (rec != null && !Verdict.skipped(rec) && !envFail) {
                     everExecuted.add(name);
                 } else {
                     absentIn.computeIfAbsent(name, k -> new LinkedHashMap<>())
                             .put(run.label(), rec == null
                                     ? "no record — the scene was registered and never ran"
+                                    : envFail
+                                    ? "ENV_FAIL before the body ran — " + Verdict.str(rec.get("reason"))
                                     : Verdict.str(rec.getOrDefault("reason", "skipped")));
                 }
             }
+        }
+
+        // Not reconciled around: the filtered run's registered list is whatever its pattern kept, so
+        // every figure below would describe a subset while reading as the suite.
+        if (!filtered.isEmpty()) {
+            List<String> out = new ArrayList<>(report);
+            out.addAll(filtered);
+            out.add("A filtered run is not a coverage claim. Re-run "
+                    + (filtered.size() == 1 ? "that topology" : "those topologies")
+                    + " without -Pstagewright.scenes, then reconcile again.");
+            return new Result(3, out);
         }
 
         int code = 0;

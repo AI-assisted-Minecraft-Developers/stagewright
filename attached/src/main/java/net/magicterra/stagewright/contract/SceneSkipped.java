@@ -1,5 +1,7 @@
 package net.magicterra.stagewright.contract;
 
+import java.util.List;
+
 /**
  * Thrown by a scene body to stop early on a topology it does not apply to. The harness resolves the
  * scene PASS and records the reason verbatim.
@@ -19,5 +21,18 @@ public final class SceneSkipped extends RuntimeException {
 
     public SceneSkipped(String reason) {
         super(reason, null, false, false);
+    }
+
+    /**
+     * The failure a skip turns into when soft checks had already failed before it, or null when none
+     * had. A skip says the subject is absent; a failed check says something that WAS measured came
+     * out wrong, and the absence of one thing cannot excuse a wrong answer about another.
+     *
+     * <p>Shared so that both homes word it identically and neither can drop the violations.
+     */
+    public static String failureAfterChecks(List<String> softViolations, String skipReason) {
+        if (softViolations.isEmpty()) return null;
+        return softViolations.size() + " check(s) failed: " + String.join("; ", softViolations)
+                + " — then skipped: " + skipReason;
     }
 }

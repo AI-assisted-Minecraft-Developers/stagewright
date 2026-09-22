@@ -22,7 +22,8 @@ import java.util.TreeSet;
  *   <li><b>0 GREEN</b> — footer present, every registered non-canary scene PASSed (or failed while
  *       marked optional), every canary landed on the outcome it was declared to require.</li>
  *   <li><b>1 RED</b> — a required scene failed, was never recorded, or reconciliation against the
- *       expected-scenes manifest failed.</li>
+ *       expected-scenes manifest failed. Also a suite the game armed but could not assemble
+ *       ({@code registryError} in the header): that is the author's defect, not the host's.</li>
  *   <li><b>2 DEAD</b> — a canary landed on the WRONG outcome. The framework can no longer be trusted
  *       to catch failures, so the whole run's results are void rather than merely bad. This is not a
  *       louder RED: a RED says the code is broken, a DEAD says the measurement is.</li>
@@ -82,6 +83,27 @@ public final class Verdict {
         return records;
     }
 
+    /**
+     * Judge a companion client's own results file.
+     *
+     * <p>A self-contained suite with its own header and footer, so it is judged on its own rather
+     * than merged into the server's records, and against its header only — the manifest names the
+     * server's scenes. A missing file is ENV, never a pass: a client launched to assert something
+     * and then silent is indistinguishable from one that never started.
+     */
+    public static Result judgeCompanion(Path file, List<String> warnings) throws IOException {
+        if (!Files.isRegularFile(file)) {
+            return new Result(3, List.of("ENV — the companion client wrote no results at "
+                    + file.toAbsolutePath()));
+        }
+        return judge(parse(file, warnings), null);
+    }
+
+    /** The more severe of two results; the codes are ordered GREEN < RED < DEAD < ENV. */
+    public static Result worst(Result a, Result b) {
+        return b.code() > a.code() ? b : a;
+    }
+
     /** @param expected scene names that MUST be registered, or null to skip reconciliation. */
     public static Result judge(List<Map<String, Object>> records, List<String> expected) {
         Map<String, Object> suite = null;
@@ -104,6 +126,14 @@ public final class Verdict {
 
         List<String> report = new ArrayList<>();
         if (suite == null) return new Result(3, List.of("no suite header — the game never armed"));
+        // Before the footer check: the game armed, tried to assemble the suite and could not, and
+        // that is a defect in what was handed to it — a duplicate name, a script that does not
+        // parse — not an environment that failed to start.
+        String registryError = str(suite.get("registryError"));
+        if (!registryError.isBlank()) {
+            return new Result(1, List.of("REGISTRY: the suite could not be assembled, so no scene"
+                    + " ran — " + registryError));
+        }
         if (done == null) return new Result(1, List.of("no done footer — the harness died mid-run"));
 
         int code = 0;
@@ -133,10 +163,16 @@ public final class Verdict {
         String filter = str(suite.get("filter"));
         boolean filtered = filter != null && !filter.isBlank();
         if (filtered) {
-            report.add("FILTERED to '" + filter + "' — " + registeredNames.size()
-                    + " scene(s) ran. Expected-scenes reconciliation is SKIPPED and most canaries"
-                    + " are filtered out with everything else, so this run judges only what it ran.");
-            if (registeredNames.isEmpty()) {
+            // The framework canaries survive every filter, so they are not evidence that the
+            // pattern matched anything.
+            int matched = 0;
+            for (Map<String, Object> r : registered) {
+                if (!selfCheck(str(r.get("canary")))) matched++;
+            }
+            report.add("FILTERED to '" + filter + "' — " + matched + " scene(s) matched, plus"
+                    + " the framework canaries. Expected-scenes reconciliation is SKIPPED, so this"
+                    + " run judges only what it ran.");
+            if (matched == 0) {
                 // The most dangerous typo in the system: a pattern matching nothing would otherwise
                 // be a green run of an empty suite, i.e. the failure that looks most like success.
                 return new Result(1, List.of("FILTERED to '" + filter + "' matched NO scenes —"
@@ -168,7 +204,7 @@ public final class Verdict {
                     String name = str(r.get("name"));
                     String canary = str(r.get("canary"));
                     if (wanted.contains(name)) continue;
-                    if (CANARY_EXPECT.containsKey(canary) || "MUST_SWALLOW".equals(canary)) continue;
+                    if (selfCheck(canary)) continue;
                     for (String ns : namespaces) {
                         if (name.startsWith(ns)) {
                             code = Math.max(code, 1);
@@ -287,6 +323,12 @@ public final class Verdict {
     static boolean skipped(Map<String, Object> rec) {
         if (Boolean.TRUE.equals(rec.get("skipped")) || "true".equals(rec.get("skipped"))) return true;
         return str(rec.get("reason")).startsWith("skipped: ");
+    }
+
+    /** A canary whose subject is the harness rather than the suite: the ones a filter keeps and a
+     *  manifest need not list. {@code MUST_SKIP} is a suite's own scene and is neither. */
+    private static boolean selfCheck(String canary) {
+        return CANARY_EXPECT.containsKey(canary) || "MUST_SWALLOW".equals(canary);
     }
 
     @SuppressWarnings("unchecked")

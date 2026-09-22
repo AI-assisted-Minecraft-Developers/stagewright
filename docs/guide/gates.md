@@ -87,9 +87,10 @@ Usually a typo or broken service wiring.
 informational; the cross-topology check is a separate task.
 
 **`DEAD:` on a canary** — the framework's own self-check landed on the wrong outcome. Nothing else in
-that run's results can be believed. Three canaries ship with StageWright: one that must be reported
-as a failure, one that must be reported as a timeout, and one that must never be executed at all. A
-fourth kind is available to consumers for a scene whose subject is a recorded skip.
+that run's results can be believed. Four canaries ship with StageWright: one that must be reported
+as a failure, one that must be reported as a timeout, one that must never be executed at all, and one
+that fails a soft check and then skips, which must be reported as a failure rather than a skip. A
+further kind is available to consumers for a scene whose subject is a recorded skip.
 
 **`SWALLOWED:`** — a scene is registered and no record of it exists. It did not run and nothing said
 so.
@@ -98,6 +99,11 @@ so.
 failure behind a later pass, so the run refuses to judge them.
 
 **`DRIFTED:`** — a record exists for a name nothing registered.
+
+**`REGISTRY:`** — the game armed but could not assemble the suite, so nothing ran: a duplicate scene
+name, an illegal origin pin, a provider with no scenes, a scene file that does not parse, scene files
+with no Rhino. The line carries the error. It is RED rather than an environment failure, because
+the fix is in the scenes, not the host.
 
 **`TRUNCATED:`** — the footer's scene count disagrees with the number of records present.
 
@@ -193,6 +199,12 @@ counts how many of the registered scenes executed across how many runs. A declar
 is not there is reported rather than skipped: dropping it would shrink the union of executed scenes
 and blame the runs that did happen.
 
+Two inputs are not evidence, and are treated that way. A results file whose header says it was
+filtered — the last run of that topology was a `-Pstagewright.scenes` iteration — makes the whole
+reconciliation ENV, naming the file: its registered list is whatever the pattern kept, so any count
+over it describes a subset. And a scene recorded `ENV_FAIL` did not execute, because that outcome is
+written before the body runs; it counts as a hole exactly as a skip does.
+
 For a pack tested through the standalone command-line runner, the same reconciliation is available
 without a build tool:
 
@@ -218,11 +230,12 @@ is therefore the difference between iterating on a scene and batching guesses at
 results header, the game logs it, the plugin logs it, and the verdict label carries the `FILTERED`
 suffix. Expected-scenes reconciliation is skipped, because under a filter every unmatched scene is
 legitimately absent and reporting the whole manifest as missing would bury the outcome you asked for.
-Canaries are filtered out like everything else, so a narrow run usually has no framework self-check
-left in it at all.
+The framework canaries are never filtered out, so even a one-scene run proves the harness can still
+catch a failure.
 
-A pattern that matches **nothing** fails the run rather than reporting an empty success. That typo is
-otherwise the failure that looks most like a pass.
+A pattern that matches **nothing** fails the run rather than reporting an empty success — the
+canaries it kept do not count as a match. That typo is otherwise the failure that looks most like a
+pass.
 
 One more thing the filter is not good for. Arena slots are assigned from the scene list *after*
 filtering, so a scene that sits sixth in the full suite runs first when it runs alone — several

@@ -38,6 +38,10 @@ public final class RunDirectory {
      *  ({@code StageWrightCommon}) for the same reason {@link #PROGRESS_FILE} is. */
     public static final String DEFAULT_RESULTS_FILE = "stagewright-results.jsonl";
 
+    /** What a client joined to a dedicated server writes in its own run directory: the results of
+     *  the probes only a client can run. Repeated game-side in {@code ClientProbes}. */
+    public static final String CLIENT_RESULTS_FILE = "stagewright-client-results.jsonl";
+
     /**
      * The system property that carries a renamed results file INTO the game.
      *

@@ -83,9 +83,9 @@ entitled to judge from the prefixes present in its expected-scenes file, which i
 StageWright's own built-ins — which carry no dot — out of a consumer's verdict. A consumer that
 omits `@SceneSet` gets bare method names that no manifest can bound.
 
-Names must be globally unique across every provider in the run. A duplicate is rejected before the
-suite header is written: two records under one name let the later one overwrite the earlier in any
-last-wins map, which turns a real failure into a pass.
+Names must be globally unique across every provider in the run. A duplicate is rejected before any
+scene runs, and the run is RED with a `REGISTRY:` line naming it: two records under one name let the
+later one overwrite the earlier in any last-wins map, which turns a real failure into a pass.
 
 ### Options a scene declares
 
@@ -242,6 +242,11 @@ skip must not read as a pass either, so the outcome is recorded, counted, reconc
 manifest, and reported separately from a real pass. The rule is uniform — `player()`,
 `mods().require(id)`, `capability(name)` and `probe(className)` all skip the same way, with a reason
 that names what was missing.
+
+A skip does not excuse a `check` that already failed. If the body recorded soft violations before it
+skipped, the scene is a FAIL whose reason lists them followed by `then skipped: <reason>` — in both
+homes. The missing thing explains why the rest of the body did not run; it says nothing about the
+values that were measured and came out wrong.
 
 What a scene proves by skipping is nothing. See [Topologies](topologies.md#a-skip-is-not-coverage)
 for the check that stops a suite whose every player scene skips everywhere from reporting success.

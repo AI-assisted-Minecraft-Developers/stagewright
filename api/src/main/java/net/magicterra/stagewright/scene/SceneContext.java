@@ -144,8 +144,9 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
     }
 
     /**
-     * Stop the body here; the scene resolves PASS carrying this reason. See {@link SceneSkipped} for
-     * why a skip is a recorded outcome rather than a silent one.
+     * Stop the body here; the scene resolves PASS carrying this reason — unless a {@link #check} has
+     * already failed, which makes it a FAIL naming both. See {@link SceneSkipped} for why a skip is a
+     * recorded outcome rather than a silent one.
      */
     public void skip(String why) {
         throw new SceneSkipped(why);
@@ -602,6 +603,11 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
     /** Harness-internal: the values {@link #record}ed by this scene, in insertion order. */
     public java.util.Map<String, Object> records() {
         return java.util.Collections.unmodifiableMap(records);
+    }
+
+    /** Harness-internal: every {@link #check} that has failed so far, in the order it failed. */
+    public java.util.List<String> softViolations() {
+        return java.util.List.copyOf(softViolations);
     }
 
     /** Expect-internal: report one violation, hard or soft. Public because {@code Expect} now lives

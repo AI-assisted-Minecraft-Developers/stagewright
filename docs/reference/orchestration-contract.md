@@ -109,8 +109,17 @@ context class loader.
 
 **Scene names are globally unique.** The harness rejects a duplicate before writing the suite
 header, because the verdict keeps a last-wins map of scene records and a duplicate would let a
-later record mask an earlier FAIL as a pass. The rejection throws during harness construction,
-so the game dies before any header exists and the supervisor reports ENV rather than RED.
+later record mask an earlier FAIL as a pass.
+
+**A registry that cannot be built is a RED result, not a crash.** Discovery, the filter and the
+harness's structural checks all run before any harness exists, and each can refuse the registry: a
+duplicate name, an illegal or colliding origin pin, a provider that declares no scenes or cannot be
+loaded, a scene file that does not parse, scene files with no Rhino to run them. When one does,
+the suite runs nothing and the results file is a header that registers nothing and carries
+`registryError`, then a footer with `scenes: 0`. The verdict reads that as RED with the error's
+message. Letting the exception escape instead would leave no header, and the run would read as
+ENV — "the game never armed" — which sends the author of a typo to look for a missing mod jar.
+Under autorun the server then halts, as after a finished suite; under a hold it stays up.
 
 ## Coordinate pinning
 
@@ -245,8 +254,9 @@ Exactly one, first:
 | `registered[].canary` | string | always | `NONE`, `MUST_FAIL`, `MUST_TIMEOUT`, `MUST_SWALLOW` or `MUST_SKIP`. |
 | `filter` | string | only when narrowed | The pattern this run was narrowed by. |
 | `worldPin` | string | only when pinned | One line naming the world state held still. |
+| `registryError` | string | only when the registry could not be built | Why; `registered` is then empty and nothing ran. See *Scene discovery*. |
 
-The two optional keys appear only when they have a value, so a run that pins nothing and filters
+The optional keys appear only when they have a value, so a run that pins nothing and filters
 nothing produces a byte-identical header to one written before either existed. A stream that
 does not pin a world — an out-of-process run — states that by omitting the key rather than by
 writing something untrue.
@@ -376,7 +386,8 @@ The manifest — conventionally `scripts/stagewright/expected-scenes-<loader>.tx
 list of the scene names a run must contain. One name per line; `#` starts a comment and the rest
 of the line is discarded; blank lines are ignored; commas separate several names on one line, so
 the two spellings cannot disagree. An empty manifest is refused rather than treated as "expect
-nothing", because a gate armed with an expectation of nothing would pass any run.
+nothing", because a gate armed with an expectation of nothing would pass any run. The refusal is
+`Manifest.read`'s own, so the plugin and the CLI reject the same file with the same message.
 
 Reconciliation runs in both directions, and the second half is the one that closes the hole:
 
@@ -416,6 +427,14 @@ person who just forgot to. Add a scene and it is covered the moment it exists; a
 the check gets easier to satisfy; delete the only topology that could run something and the check
 REDs naming it.
 
+"Executed" means a record that is neither a skip nor `ENV_FAIL`. `ENV_FAIL` is written out of
+PREP, before a body exists, so a scene that only ever ENV_FAILs has tested nothing. A FAIL or
+TIMEOUT did execute; its run is RED for that on its own.
+
+A results file whose header carries `filter` is not reconciled at all: coverage over it is ENV,
+naming the file, because its `registered` list is whatever the pattern kept and every count
+derived from it would describe a subset while reading as the suite.
+
 The single exemption is declared at the scene, by the author who knows why:
 `@SceneDef(mustSkip = true)`. That is an assertion rather than an excuse — the verdict then
 *requires* the scene to skip and calls the run DEAD if it executes.
@@ -434,7 +453,7 @@ results files can take the worse of the two.
 | Code | Label | Meaning |
 |---|---|---|
 | 0 | GREEN | Header and footer present, every required non-canary scene passed or failed while optional, every canary landed on the outcome it declared. |
-| 1 | RED | A required scene failed, a scene was never recorded, records drifted or duplicated, the footer disagreed with the file, or reconciliation against the manifest failed. Also: no footer. |
+| 1 | RED | A required scene failed, a scene was never recorded, records drifted or duplicated, the footer disagreed with the file, or reconciliation against the manifest failed. Also: no footer, and a header carrying `registryError` — the game armed but could not assemble the suite. |
 | 2 | DEAD | A canary landed on the wrong outcome. The framework can no longer be trusted to catch failures, so the whole run's results are void rather than merely bad. |
 | 3 | ENV | No suite header — the game never armed. Also reported when the results file is absent entirely. |
 
@@ -476,8 +495,13 @@ also carries the pattern, and the verdict reads it back:
 - **A pattern that matched nothing is RED.** That is the most dangerous typo in the system:
   otherwise it would be a green run of an empty suite, the failure that looks most like success.
 
-Two further facts make a filtered run unsuitable as evidence. Canaries are filtered like
-anything else, so a narrow run usually carries no self-check at all. And origin slots are
+The framework canaries — `MUST_FAIL`, `MUST_TIMEOUT` and `MUST_SWALLOW` — are never filtered
+out, so every narrow run still proves the harness can catch a failure, and the verdict judges
+them as it would in a full run. Because they are always there, "matched nothing" means that no
+registered scene other than those canaries is left. A `MUST_SKIP` scene is a suite's own scene and
+is selected by name like any other.
+
+A further fact makes a filtered run unsuitable as evidence. Origin slots are
 assigned *after* filtering, so a scene that sits at slot 6 in the full suite runs at slot 0
 alone — several thousand blocks away, on different ground. A scene passing alone is therefore not
 evidence about the run it failed in. Reproduce with the full suite; filter to iterate on a scene

@@ -53,14 +53,18 @@ model, and `--help` for the flags not covered here.
 | `--game-dir <dir>` | The pack directory holding `mods/` and `config/`. Required. |
 | `--scenes <dir>` | A folder of scene files. `.js` goes to the scenes directory, `.json` to the capability descriptors directory. |
 | `--mod <jar>` | Install this mod too. Repeatable. |
-| `--expect <file>` | Reconcile the run against an expected-scenes manifest. |
+| `--expect <file>` | Reconcile the run against an expected-scenes manifest. A manifest that names no scene is refused before the game starts. |
 | `--timeout <min>` | A ceiling, not a duration — the run ends when the results file carries its footer. Defaults to 45. |
 | `--clean-world false` | Keep the existing world. The default is to delete it. |
 | `--no-install` | Do not touch `mods/`; the pack already has what it needs. |
 | `--launch "<command>"` | Start the server this way instead of detecting how. |
 
-`--help` is only recognised as the **first** argument. Anywhere else it is parsed as a flag that eats
-the next token.
+`--help` is only recognised as the **first** argument. Anywhere else it is an unknown option.
+
+An option the CLI does not know is refused with the usage text and exit 3, and so is a value other
+than `true` or `false` for `--clean-world`. A mistyped name is therefore an error before anything
+runs, rather than a setting that is silently never read — `--expected` for `--expect` would
+otherwise run with reconciliation off, and `--clean-wrold false` would delete the world.
 
 Detection covers NeoForge and Forge argument files under `libraries/`, and a Fabric or Quilt server
 jar at the top level. When it cannot tell, it says so and asks for `--launch`.
@@ -154,8 +158,13 @@ java -jar stagewright.jar --game-dir <the pack's server directory> --scenes <a f
      --headlessmc headlessmc-launcher.jar --loader neoforge --mc-version 1.21.1
 ```
 
-The scenes run on the server; it writes the results and its verdict is the run's. The client's whole
-job is to be logged in while they do. It is installed with the same framework build and the same
+The scenes run on the server, which writes `stagewright-results.jsonl`. The client has two jobs: to be
+logged in while they run, and to run the one probe only a joined client can — that a damage event
+survives the wire — writing `stagewright-client-results.jsonl` in its own directory. Both files are
+judged, each as its own suite, and the worse verdict is the run's; a client that wrote no file is
+ENV. That is the rule the Gradle plugin applies to a topology's `companionResultsFile`, from the same
+engine code, so the pair cannot be GREEN here and RED there. The client is installed with the same
+framework build and the same
 `--mod` jars as the server, because a loader that finds a different mod list on each end refuses the
 connection, and it dials the local address at whatever port the pack's `server.properties` names.
 

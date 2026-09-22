@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -70,27 +69,10 @@ public final class Main {
             return 0;
         }
 
-        Map<String, String> opts = new LinkedHashMap<>();
-        List<String> systemProps = new ArrayList<>();
-        List<Path> extraMods = new ArrayList<>();
-        for (int i = 0; i < args.length; i++) {
-            String a = args[i];
-            if (a.startsWith("-D")) {
-                systemProps.add(a);
-            } else if ("--no-install".equals(a)) {
-                opts.put("no-install", "true");
-            } else if ("--online".equals(a)) {
-                opts.put("online", "true");
-            } else if ("--mod".equals(a)) {
-                if (i + 1 >= args.length) throw new IllegalArgumentException(a + " needs a value");
-                extraMods.add(Path.of(args[++i]).toAbsolutePath().normalize());
-            } else if (a.startsWith("--")) {
-                if (i + 1 >= args.length) throw new IllegalArgumentException(a + " needs a value");
-                opts.put(a.substring(2), args[++i]);
-            } else {
-                throw new IllegalArgumentException("unexpected argument '" + a + "'");
-            }
-        }
+        Args.Parsed parsed = Args.parse(args);
+        Map<String, String> opts = parsed.opts();
+        List<String> systemProps = parsed.systemProps();
+        List<Path> extraMods = parsed.extraMods();
 
         // Judged from files alone, so it runs no game and needs no --game-dir. It is a separate
         // invocation rather than a step of a run because the runs it reconciles are separate
@@ -98,6 +80,10 @@ public final class Main {
         // each other, and the question "did anything ever execute this scene" only has an answer
         // once both have finished.
         if (opts.containsKey("coverage")) return coverage(opts.get("coverage"));
+
+        // Read now as well as at judging time, so a manifest the engine refuses stops the run before
+        // it has spent a game boot and a whole suite on a verdict it could never give.
+        expected(opts);
 
         Path gameDir = Path.of(require(opts, "game-dir")).toAbsolutePath().normalize();
         if (!Files.isDirectory(gameDir)) {
@@ -158,7 +144,7 @@ public final class Main {
         // Deliberately NOT an early return on any of them: a killed or crashed run usually still
         // wrote records, and the missing done footer is what turns them into a RED that names how
         // far it got. Judging is strictly more informative than reporting the ending alone.
-        return judge(gameDir, results, opts, runLog, crashes);
+        return judge(gameDir, results, opts, runLog, crashes).code();
     }
 
     /**
@@ -170,12 +156,13 @@ public final class Main {
      * {@code isClientSide} show up. A pack that is green on the other two and red here is not an
      * unlucky pack; it is a pack whose players would have hit this.
      *
-     * <p>The server is the half that matters. It runs the scenes, it writes the results, and it
-     * halts itself when they drain — so waiting for it IS waiting for the run, exactly as in the
-     * plain server topology. The client's whole job is to be logged in while that happens, which is
-     * what {@code -Dstagewright.awaitPlayer} makes load-bearing: without a player the server sits
-     * armed and starts nothing, so a client that never arrives fails as a timeout rather than as a
-     * suite that quietly proved nothing.
+     * <p>The server runs the scenes, writes the results, and halts itself when they drain — so
+     * waiting for it IS waiting for the run, exactly as in the plain server topology. The client has
+     * to be logged in while that happens, which is what {@code -Dstagewright.awaitPlayer} makes
+     * load-bearing: without a player the server sits armed and starts nothing, so a client that never
+     * arrives fails as a timeout rather than as a suite that quietly proved nothing. It also runs
+     * its own probe and writes its own results, judged beside the server's — see
+     * {@link #judgeWithClient}.
      *
      * <p>Neither half is trusted to bring itself down. Both do — the server halts, and the client
      * closes when the server drops it — but a run that ends with an orphaned headless Minecraft
@@ -202,7 +189,7 @@ public final class Main {
         // The client half gets what the server half got, minus the scenes. It never arms a harness,
         // so a scene file there is dead weight at best; at worst it is a second suite nobody asked
         // for, writing over the results this run is going to be judged on.
-        RunDirectory.provision(clientDir, List.of(clientDir.resolve(results.getFileName())),
+        RunDirectory.provision(clientDir, clientStaleResults(clientDir),
                 !"false".equals(opts.get("clean-world")), null, log);
         if (!opts.containsKey("no-install")) {
             ModInstall.install(clientDir, loader, extraMods, log);
@@ -249,7 +236,36 @@ public final class Main {
             kill(server);
         }
 
-        return judge(gameDir, results, opts, runLog, crashes);
+        return judgeWithClient(judge(gameDir, results, opts, runLog, crashes), clientDir,
+                System.out::println);
+    }
+
+    /** What provisioning must clear in the client half's directory: the probe results it writes
+     *  there, and with them the heartbeat beside them. */
+    static List<Path> clientStaleResults(Path clientDir) {
+        return List.of(clientDir.resolve(RunDirectory.CLIENT_RESULTS_FILE));
+    }
+
+    /**
+     * The run's code once the client half's own probe results are judged beside the server's.
+     *
+     * <p>By the engine's companion rule, the one the plugin applies to {@code companionResultsFile},
+     * so the same pair of files cannot be GREEN here and RED under Gradle. Worst wins.
+     */
+    static int judgeWithClient(Verdict.Result server, Path clientDir, Consumer<String> out)
+            throws IOException {
+        List<String> warnings = new ArrayList<>();
+        Verdict.Result client = Verdict.judgeCompanion(
+                clientDir.resolve(RunDirectory.CLIENT_RESULTS_FILE), warnings);
+        warnings.forEach(w -> out.accept("[stagewright] client: " + w));
+        client.report().forEach(line -> out.accept("[stagewright] client: " + line));
+        out.accept("[stagewright] CLIENT VERDICT: " + client.label());
+        Verdict.Result worst = Verdict.worst(server, client);
+        // Keeps the server's FILTERED suffix whichever half is worse: the run was narrowed either way.
+        out.accept("[stagewright] VERDICT (server and client): "
+                + new Verdict.Result(worst.code(), List.of(), server.filtered()).label()
+                + (worst == client && client.code() > server.code() ? "  (from the client half)" : ""));
+        return worst.code();
     }
 
     private static Path headlessMcJar(Map<String, String> opts) {
@@ -419,7 +435,7 @@ public final class Main {
                         + " like: mod loading goes down before the game can produce one.");
             }
         }
-        return judge(gameDir, results, opts, hmcLog, crashes);
+        return judge(gameDir, results, opts, hmcLog, crashes).code();
     }
 
     /** How a wait for the run's done footer ended. The four are not interchangeable. */
@@ -599,17 +615,9 @@ public final class Main {
 
             try (StageWrightRpc rpc = attach(descriptor.wsUri())) {
                 DriverBinding binding = new RpcDriverBinding(rpc, 60_000);
-                List<SceneSpec> specs = Scripts.load(attachedDir,
-                        // No extra globals: out here `driver` is the ONLY door to the game, and it is
-                        // installed as a plain Java object below rather than as a script-visible
-                        // reflection surface. A second door would be a verb one home has.
-                        (cx, scope, fileName) -> { },
-                        line -> System.out.println("[stagewright] " + line));
-                AttachedRun run = new AttachedRun(specs, binding,
+                attachedCode = runAttachedScenes(attachedDir, binding,
                         descriptor.loader() != null ? descriptor.loader() : loader,
-                        line -> System.out.println("[stagewright] " + line),
-                        System::currentTimeMillis);
-                attachedCode = run.run(attachedResults) ? 0 : 1;
+                        attachedResults, line -> System.out.println("[stagewright] " + line));
 
                 // Now the in-process half, on the same live server.
                 System.out.println("[stagewright] triggering the in-process suite (mc.test.run)");
@@ -631,15 +639,51 @@ public final class Main {
             game.waitFor(30, TimeUnit.SECONDS);
         }
 
-        int inProcess = judge(gameDir, results, opts, runLog, crashes);
+        int inProcess = judge(gameDir, results, opts, runLog, crashes).code();
         // Worst-wins across the two files, the same rule the companion client already gets:
         // GREEN 0 < RED 1 < DEAD 2 < ENV 3. Reporting only the in-process verdict would let a red
         // attached half ride home on a green suite.
         int worst = Math.max(inProcess, attachedCode);
-        System.out.println("[stagewright] ATTACHED VERDICT: " + (attachedCode == 0 ? "GREEN" : "RED")
-                + "  (" + attachedResults + ")");
-        System.out.println("[stagewright] VERDICT: " + (worst == 0 ? "GREEN" : "RED"));
+        attachedSummary(inProcess, attachedCode, attachedResults).forEach(System.out::println);
         return worst;
+    }
+
+    /**
+     * Load and run the attached half's scene files; 0 when nothing failed, 1 otherwise.
+     *
+     * <p>A file that does not load is RED: it is the author's defect, and letting the exception
+     * reach {@code main} would exit 3 — the code that says the host never came up.
+     */
+    static int runAttachedScenes(Path attachedDir, DriverBinding binding, String loader,
+                                 Path attachedResults, Consumer<String> log) {
+        List<SceneSpec> specs;
+        try {
+            specs = Scripts.load(attachedDir,
+                    // No extra globals: out here `driver` is the ONLY door to the game, and it is
+                    // installed as a plain Java object below rather than as a script-visible
+                    // reflection surface. A second door would be a verb one home has.
+                    (cx, scope, fileName) -> { },
+                    log);
+        } catch (RuntimeException e) {
+            log.accept("RED: the attached scenes could not be loaded, so none of them ran — "
+                    + e.getMessage());
+            return 1;
+        }
+        AttachedRun run = new AttachedRun(specs, binding, loader, log, System::currentTimeMillis);
+        return run.run(attachedResults) ? 0 : 1;
+    }
+
+    /**
+     * The closing lines of an {@code --attached} run: the attached half's verdict, then the run's.
+     * Labelled by code, never collapsed to GREEN/RED: a DEAD or ENV half must not end the output
+     * reading as a code defect.
+     */
+    static List<String> attachedSummary(int inProcess, int attachedCode, Path attachedResults) {
+        int worst = Math.max(inProcess, attachedCode);
+        return List.of(
+                "[stagewright] ATTACHED VERDICT: " + Verdict.LABELS[attachedCode]
+                        + "  (" + attachedResults + ")",
+                "[stagewright] VERDICT (in-process and attached): " + Verdict.LABELS[worst]);
     }
 
     /**
@@ -732,27 +776,30 @@ public final class Main {
         }
     }
 
-    private static int judge(Path gameDir, Path results, Map<String, String> opts, Path log,
-                             CrashWatch crashes) throws IOException {
+    private static Verdict.Result judge(Path gameDir, Path results, Map<String, String> opts,
+                                        Path log, CrashWatch crashes) throws IOException {
         if (!Files.isRegularFile(results)) {
             System.err.println("stagewright: ENV — the run wrote no results");
             System.err.println("  expected: " + results);
             noResultsCause(gameDir, results, crashes.fresh(),
                     ModInstall.frameworkPresent(gameDir), log).forEach(System.err::println);
-            return 3;
+            return new Verdict.Result(3, List.of("the run wrote no results"));
         }
 
         List<String> warnings = new ArrayList<>();
         List<Map<String, Object>> records = Verdict.parse(results, warnings);
         warnings.forEach(w -> System.out.println("[stagewright] " + w));
 
-        List<String> expected = opts.containsKey("expect")
-                ? Manifest.read(Path.of(opts.get("expect"))) : null;
-        Verdict.Result verdict = Verdict.judge(records, expected);
+        Verdict.Result verdict = Verdict.judge(records, expected(opts));
         verdict.report().forEach(line -> System.out.println("[stagewright] " + line));
         System.out.println("[stagewright] VERDICT: " + verdict.label());
         if (verdict.code() != 0) System.out.println("[stagewright] log: " + log);
-        return verdict.code();
+        return verdict;
+    }
+
+    /** The {@code --expect} manifest's names, or null when the run is not reconciled against one. */
+    static List<String> expected(Map<String, String> opts) {
+        return opts.containsKey("expect") ? Manifest.read(Path.of(opts.get("expect"))) : null;
     }
 
     /**
@@ -838,7 +885,7 @@ public final class Main {
         net.magicterra.stagewright.engine.Coverage.Result result =
                 net.magicterra.stagewright.engine.Coverage.judge(runs);
         result.report().forEach(line -> System.out.println("[stagewright] " + line));
-        System.out.println("[stagewright] COVERAGE VERDICT: " + (result.code() == 0 ? "GREEN" : "RED"));
+        System.out.println("[stagewright] COVERAGE VERDICT: " + Verdict.LABELS[result.code()]);
         return result.code();
     }
 
@@ -895,7 +942,8 @@ public final class Main {
                                       results are judged, worst wins.
                   --coverage <files>  judge nothing but coverage: comma-separated results files from
                                       runs that have already finished, RED if any scene they register
-                                      executed in none of them. Runs no game and takes no --game-dir.
+                                      executed in none of them, ENV if any of them was a filtered
+                                      run. Runs no game and takes no --game-dir.
                                       A scene skipping is fine in one run and a hole across all of
                                       them, which is a question no single run can be asked.
                   --expect <file>     expected-scenes manifest to reconcile against
@@ -907,7 +955,7 @@ public final class Main {
                   --timeout <min>     kill the run after this long (default 45). A ceiling, not a
                                       duration: the run ends when the results file carries its done
                                       footer, whether or not the game's JVM manages to exit.
-                  --clean-world false keep the existing world (default: delete it)
+                  --clean-world false keep the existing world (default: delete it; true or false only)
                   --mod <jar>         also install this mod (repeatable — e.g. the driver whose
                                       verbs your scenes call)
                   --no-install        do not touch mods/; the pack already has what it needs
@@ -939,7 +987,8 @@ public final class Main {
                   --mc-version <ver>  Minecraft version to install a loader for (with --headlessmc)
                   --loader <name>     neoforge|fabric to install; detected when the dir already says
                   --world <name>      singleplayer world the client creates (default stagewright)
-                  --with-client <dir> also run a client, in this dir, joined to the pack's server
+                  --with-client <dir> also run a client, in this dir, joined to the pack's server.
+                                      Its own probe results are judged too; worst wins.
                   --launch "<cmd>"    start the server this way instead of detecting it
                   --java <path>       java executable to launch with
                   -D<key>=<value>     extra system properties for the game

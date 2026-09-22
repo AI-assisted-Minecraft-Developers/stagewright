@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import net.magicterra.stagewright.engine.Manifest;
 import net.magicterra.stagewright.engine.Progress;
 import net.magicterra.stagewright.engine.Verdict;
 import org.gradle.api.DefaultTask;
@@ -111,8 +112,7 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
         // The worse of the two wins, and the codes are already ordered by severity: GREEN 0 < RED 1
         // < DEAD 2 < ENV 3. A green server with a red client is a red run — the whole reason the
         // client half asserts anything is that the server cannot see what it sees.
-        Verdict.Result worst = companion != null && companion.code() > verdict.code()
-                ? companion : verdict;
+        Verdict.Result worst = companion == null ? verdict : Verdict.worst(verdict, companion);
         if (worst.code() != 0) {
             throw new GradleException("stagewright " + topology + ": " + worst.label()
                     + (worst == companion ? " (from the companion client)" : "")
@@ -134,22 +134,16 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
     private Verdict.Result judgeCompanion(String topology) {
         if (!getCompanionResults().isPresent()) return null;
         File file = getCompanionResults().get().getAsFile();
-        if (!file.isFile()) {
-            getLogger().lifecycle("[stagewright:{}] client: ENV — the companion client wrote no"
-                    + " results at {}", topology, file.getAbsolutePath());
-            return new Verdict.Result(3, List.of());
-        }
         List<String> warnings = new ArrayList<>();
-        List<Map<String, Object>> records;
+        Verdict.Result result;
         try {
-            records = Verdict.parse(file.toPath(), warnings);
+            result = Verdict.judgeCompanion(file.toPath(), warnings);
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read " + file, e);
         }
         for (String w : warnings) {
             getLogger().warn("[stagewright:{}] client: {}", topology, w);
         }
-        Verdict.Result result = Verdict.judge(records, null);
         for (String line : result.report()) {
             getLogger().lifecycle("[stagewright:{}] client: {}", topology, line);
         }
@@ -160,11 +154,10 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
     private List<String> readExpected() {
         if (!getExpectFile().isPresent()) return null;
         File file = getExpectFile().get().getAsFile();
-        List<String> names = net.magicterra.stagewright.engine.Manifest.read(file.toPath());
-        if (names.isEmpty()) {
-            throw new GradleException("the expected-scenes manifest " + file + " names no scenes —"
-                    + " an empty manifest reconciles against nothing and would pass any run");
+        try {
+            return Manifest.read(file.toPath());
+        } catch (IllegalArgumentException e) {
+            throw new GradleException(e.getMessage(), e);
         }
-        return names;
     }
 }

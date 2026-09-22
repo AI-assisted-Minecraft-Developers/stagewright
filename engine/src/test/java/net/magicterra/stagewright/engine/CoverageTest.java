@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -145,6 +146,41 @@ class CoverageTest {
                 run("live", suite(reg("a")), ran("a"))));
         assertEquals(0, result.code());
         assertTrue(reports(result, "no suite header"));
+    }
+
+    @Test
+    void aFilteredRunIsNotACoverageClaim() {
+        // Its registered list is whatever the pattern kept, so "N of N executed" over it would be a
+        // statement about a subset dressed as one about the suite.
+        Map<String, Object> narrowed = suite(reg("wd.a"));
+        narrowed.put("filter", "wd.a");
+        Coverage.Result result = Coverage.judge(List.of(
+                run("dedicated", narrowed, ran("wd.a")),
+                run("integrated", suite(reg("wd.a"), reg("wd.b")), ran("wd.a"), ran("wd.b"))));
+        assertEquals(3, result.code());
+        assertTrue(reports(result, "'dedicated' was FILTERED to 'wd.a'"));
+        assertFalse(reports(result, "COVERAGE: "));
+    }
+
+    @Test
+    void anEnvFailIsNotAnExecution() {
+        // ENV_FAIL is written from PREP, before a body exists: nothing about the scene was tested.
+        Map<String, Object> envFail = ran("a");
+        envFail.put("outcome", "ENV_FAIL");
+        envFail.put("reason", "the arena never became usable");
+        Coverage.Result result = Coverage.judge(List.of(
+                run("dedicated", suite(reg("a")), envFail)));
+        assertEquals(1, result.code());
+        assertTrue(reports(result, "UNCOVERED: 'a'"));
+        assertTrue(reports(result, "ENV_FAIL"));
+        assertTrue(reports(result, "the arena never became usable"));
+    }
+
+    @Test
+    void aFailedSceneStillExecuted() {
+        Map<String, Object> failed = ran("a");
+        failed.put("outcome", "FAIL");
+        assertEquals(0, Coverage.judge(List.of(run("dedicated", suite(reg("a")), failed))).code());
     }
 
     @Test
