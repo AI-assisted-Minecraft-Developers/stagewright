@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### The CLI jar no longer carries Rhino's mod metadata · checked in the built jar
+
+The fat jar merged Rhino's jar whole, so `fabric.mod.json`, `META-INF/mods.toml` and
+`META-INF/neoforge.mods.toml` declaring the mod `rhino` sat at its root. Dropped into `mods/` by
+mistake, `stagewright.jar` would load on either loader as a second Rhino beside the one
+worlddriver nests. Loader metadata from merged libraries is now left out.
+
 ### The engine and CLI jars carry the notices of the third-party code inside them · checked in the built jars
 
 The engine jar holds minimal-json's compiled classes, whose MIT headers exist only in the `.java`

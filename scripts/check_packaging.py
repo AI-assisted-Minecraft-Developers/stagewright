@@ -11,7 +11,8 @@ Checked:
     byte-identical to the repository's own;
   - every generated POM declares LGPL-3.0-only with its URL, the project URL and the SCM URL;
   - a jar holding third-party classes carries that code's license text (minimal-json, Rhino,
-    gson, Error Prone annotations), and the CLI jar a notice naming each of them.
+    gson, Error Prone annotations), and the CLI jar a notice naming each of them and no other
+    mod's loader metadata at its root.
 
 Exit 0 when all hold, 1 with one line per violation otherwise.
 """
@@ -48,6 +49,12 @@ THIRD_PARTY = [
     ('dev/latvian/mods/rhino/', 'META-INF/licenses/MPL-2.0.txt'),
     ('com/google/gson/', 'META-INF/licenses/Apache-2.0.txt'),
     ('com/google/errorprone/', 'META-INF/licenses/Apache-2.0.txt'),
+]
+
+# Loader metadata that makes a jar dropped into mods/ load as a mod. The CLI jar is not one.
+FOREIGN_MOD_METADATA = [
+    'fabric.mod.json', 'quilt.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml',
+    'pack.mcmeta',
 ]
 
 
@@ -110,6 +117,9 @@ def check_jars(problems):
                         for lib in ('minimal-json', 'Rhino', 'Gson', 'Error Prone'):
                             if lib not in notices:
                                 problems.append(f'{rel}: THIRD-PARTY-NOTICES does not name {lib}')
+                    for entry in FOREIGN_MOD_METADATA:
+                        if entry in names:
+                            problems.append(f'{rel}: carries third-party mod metadata {entry}')
 
 
 def check_poms(problems):
