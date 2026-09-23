@@ -26,10 +26,13 @@ configured in any build script. A consumer therefore needs `mavenLocal()` in bot
 
 ## The artifacts
 
-Group is `net.magicterra` throughout. Two version tracks, and the difference is deliberate:
-everything with a Minecraft classpath carries `mod_version` from `gradle.properties`, which
-embeds the Minecraft version; the three artifacts with no Minecraft classpath carry a plain
-version that does not move when Minecraft does.
+Group is `net.magicterra` throughout. Two version tracks, split by build rather than by
+classpath: every artifact of the root build carries `mod_version` from `gradle.properties`,
+which embeds the Minecraft version. That includes `mc_stagewright-attached` and
+`mc_stagewright-junit`, which have no Minecraft classpath but take their version from the root
+build's `allprojects` block like its other modules, so a consumer depends on
+`mc_stagewright-junit:0.1.0+1.21.1`, not `:0.1.0`. The engine and the Gradle plugin are separate
+builds with a plain version of their own that does not move when Minecraft does.
 
 | Coordinate | What it is | Classifiers | POM dependencies |
 |---|---|---|---|
@@ -47,6 +50,11 @@ with its dependencies inside it, because its audience downloads one file and run
 
 Exact versions are in `gradle.properties` (`mod_version` and the per-build literals); this table
 does not repeat them.
+
+Every jar above, `sources` and `dev` included, and the CLI's `stagewright.jar` carry
+`META-INF/COPYING` and `META-INF/COPYING.LESSER`, and every POM, the plugin marker's included,
+declares `LGPL-3.0-only` with its URL, plus the project and SCM URL. All four builds take both
+from `gradle/license.gradle`; `scripts/check_packaging.py` checks the built jars and POMs.
 
 ### Why the POM rules differ per artifact
 
@@ -160,9 +168,21 @@ was last built against.
 |---|---|
 | Minecraft | 1.21.1 (range `[1.21.1,1.22)`) |
 | Loaders | Fabric and NeoForge, through Architectury |
-| Fabric Loader | the version pinned in `gradle.properties` |
+| Fabric Loader | the version pinned in `gradle.properties`, range `[0.16,)` |
 | NeoForge | the version pinned in `gradle.properties`, range `[21,)` |
 | Java | 21 |
+| WorldDriver | optional; when present, `[0.1.0,0.2.0)` |
+
+Both loaders' jar metadata takes the mod id, name, authors, licence, description and every range
+above from `gradle.properties` when the jar is built; `fabric.mod.json` gets the Maven ranges
+rewritten into Fabric's predicate form (`[1.21.1,1.22)` becomes `>=1.21.1 <1.22`).
+
+WorldDriver's range is derived from `worlddriver_version`, the build StageWright compiles
+against: that release up to its next breaking one, which is the next minor while it is `0.x`.
+Without WorldDriver StageWright still loads and runs its scenes, with no `mc.test.*` verbs.
+With a WorldDriver outside the range the loader refuses to start: NeoForge through an
+`optional` dependency, Fabric through `breaks` (Fabric Loader does not check a `suggests`
+version, so that entry only documents the relationship).
 
 The Minecraft platform versions must stay in lockstep with WorldDriver's `gradle.properties`.
 StageWright compiles against WorldDriver's common module built against those exact versions, and
@@ -181,7 +201,7 @@ patch and minor releases.
 Everything else carries no promise and may change without notice — scene execution timing,
 internal classes, and the `StageWrightRpc` wire details.
 
-Versions of the Minecraft-facing artifacts track `mod_version` in `gradle.properties`; there is
-no independent scheme for any of them. The engine, the Gradle plugin and the command-line runner
-are versioned separately, because they carry no Minecraft classpath and should not move when the
-Minecraft version does.
+Versions of every root-build artifact, the two plain-JVM libraries included, track `mod_version`
+in `gradle.properties`; there is no independent scheme for any of them. The engine, the Gradle
+plugin and the command-line runner are separate builds, versioned separately, because they carry
+no Minecraft classpath and should not move when the Minecraft version does.

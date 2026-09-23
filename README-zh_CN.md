@@ -186,3 +186,6 @@ StageWright——但这确实意味着从零开始的引导只有一条可行顺
 
 有一个目录是明确的例外：`engine/src/main/java/.../engine/json/` 是原样内置的 minimal-json，采用 MIT
 许可证。那些文件头是上游的条款，保持原样；详见它们旁边的 `VENDORED.md`。
+
+CLI 的 `stagewright.jar` 还内含 Rhino（MPL-2.0）、Gson 及其依赖的 Error Prone 注解（Apache-2.0）。
+该 jar 中的 `META-INF/THIRD-PARTY-NOTICES` 逐一列出它们及其源码地址，许可证全文位于 `META-INF/licenses/`。

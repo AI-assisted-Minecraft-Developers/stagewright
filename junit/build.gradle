@@ -5,9 +5,8 @@
 // It is the OUT-OF-PROCESS consumer of a live testkit endpoint (TESTKIT_ENDPOINT,
 // naming a live topology), talking to the driver purely over the
 // bare-RPC websocket. The root build's `subprojects {}` block applies loom to every
-// subproject unconditionally; this module is scoped OUT of that block by name in the
-// root build.gradle (`if (project.name == 'stagewright-junit') return`). group/version
-// still flow from the root `allprojects {}` block.
+// other subproject; this module is scoped OUT of that block by name in the root
+// build.gradle. group/version still flow from the root `allprojects {}` block.
 plugins {
     id 'java-library'
     id 'maven-publish'
@@ -24,8 +23,8 @@ tasks.withType(JavaCompile).configureEach {
 
 repositories {
     // Non-loom module: loom is not here to auto-inject the essential repos, so we
-    // declare mavenCentral ourselves (the root subprojects.repositories block is
-    // empty and settings.gradle has no dependencyResolutionManagement).
+    // declare mavenCentral ourselves (the root subprojects{} block returns before its
+    // repositories for this module, and settings.gradle has no dependencyResolutionManagement).
     mavenCentral()
 }
 

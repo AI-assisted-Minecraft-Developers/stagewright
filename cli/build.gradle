@@ -7,6 +7,8 @@ plugins {
 group = 'net.magicterra'
 version = '0.1.0'
 
+apply from: '../gradle/license.gradle'
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -94,6 +96,10 @@ application {
 // Fat jar, deliberately: the audience is someone who downloads one file and runs it. A CLI that
 // needed a -cp with the engine beside it would be a worse experience than the Gradle plugin it
 // exists to replace for them.
+//
+// Merging a library's classes conveys that library, so each one needs its entry in
+// src/main/resources/META-INF/THIRD-PARTY-NOTICES and its license text beside it; the merged jars
+// carry none of their own. scripts/check_packaging.py fails a jar holding classes it cannot place.
 tasks.named('jar', Jar) {
     archiveBaseName = 'stagewright'
     archiveClassifier = ''
@@ -101,8 +107,11 @@ tasks.named('jar', Jar) {
     manifest {
         attributes 'Main-Class': 'net.magicterra.stagewright.cli.Main'
     }
-    from {
-        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    from({ configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }) {
+        // Rhino is itself a mod jar. Its loader metadata at this jar's root would make a copy
+        // dropped into mods/ by mistake load as a second `rhino` mod on either loader.
+        exclude 'fabric.mod.json', 'quilt.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml',
+                'pack.mcmeta', 'rhino_logo.png'
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

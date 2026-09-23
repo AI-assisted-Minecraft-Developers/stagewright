@@ -12,6 +12,53 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-22
 
+### A WorldDriver StageWright cannot link against is refused by the loader · green in unit tests over the processed metadata
+
+Neither loader's metadata named WorldDriver, and the only guard was a presence probe by class
+name. A driver whose verb API had moved passed the probe; the `mc.test.*` verbs then failed to
+link at server start and were logged as an error, leaving an orchestrator waiting on a trigger
+that was not there. Both files now declare WorldDriver as optional with the range
+`[0.1.0,0.2.0)`, derived from `worlddriver_version`: NeoForge as an `optional` dependency, Fabric
+as `suggests` plus a `breaks` on everything outside the range, since Fabric Loader ignores a
+`suggests` version. Without WorldDriver StageWright still loads, as before.
+
+### Both loaders' metadata comes from `gradle.properties` · green in unit tests over the processed metadata
+
+`fabric.mod.json` and `neoforge.mods.toml` expanded only `version`; the licence, description,
+name and version ranges were literals, so nothing in `gradle.properties` reached either jar and
+the two could drift apart the next time one was edited. They had already: both jars carried a
+description different from `mod_description` and the display name `stagewright`, and the Fabric
+jar accepted any Minecraft from 1.21 on where the NeoForge jar stops at `[1.21.1,1.22)`. Both now
+take id, name, authors, licence, description and ranges from `gradle.properties`, with a new
+`fabric_loader_version_range`. The Fabric jar therefore now refuses Minecraft 1.21 and 1.22, and
+both show the name `StageWright`.
+
+### The CLI jar no longer carries Rhino's mod metadata · checked in the built jar
+
+The fat jar merged Rhino's jar whole, so `fabric.mod.json`, `META-INF/mods.toml` and
+`META-INF/neoforge.mods.toml` declaring the mod `rhino` sat at its root. Dropped into `mods/` by
+mistake, `stagewright.jar` would load on either loader as a second Rhino beside the one
+worlddriver nests. Loader metadata from merged libraries is now left out.
+
+### The engine and CLI jars carry the notices of the third-party code inside them · checked in the built jars
+
+The engine jar holds minimal-json's compiled classes, whose MIT headers exist only in the `.java`
+sources, and the CLI's fat jar merges minimal-json, Rhino (MPL-2.0), Gson and Error Prone
+annotations (Apache-2.0), none of which ships its own license file. Both jars were handed out
+with no copyright or permission notice and no pointer to Rhino's source. The engine jar now
+carries `META-INF/licenses/minimal-json-MIT.txt`; the CLI jar adds `META-INF/THIRD-PARTY-NOTICES`
+and the MPL-2.0 and Apache-2.0 texts, and the packaging check fails a CLI jar holding classes
+from a library it has no notice for.
+
+### Every jar carries the LGPL text, and every POM declares the license · checked in the built jars and generated POMs
+
+The relicense changed the headers but no build packaged `COPYING` or `COPYING.LESSER`, so every
+mod jar, `-sources` jar, plain-JVM library and the CLI jar was conveyed without the license the
+LGPL requires to travel with object code, and no POM named a license at all, so scanners
+reported the artifacts as unknown. All four builds now put both files under `META-INF/` in every
+jar and declare `LGPL-3.0-only`, the project URL and the SCM URL in every POM, from one
+`gradle/license.gradle`. `scripts/check_packaging.py` inspects the built artifacts for it.
+
 ### A registry that cannot be built is RED, with its error · compiled, registry and verdict green in unit tests
 
 A duplicate scene name, an illegal origin pin, a `SceneProvider` with no scenes, a `.js` file that

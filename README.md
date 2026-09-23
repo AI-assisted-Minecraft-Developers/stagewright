@@ -204,3 +204,7 @@ licence it likes. The copyleft attaches to StageWright's own sources and to modi
 One directory is a documented exception: `engine/src/main/java/.../engine/json/` is minimal-json
 vendored verbatim under the MIT licence. Its headers are upstream's terms and stay as they are; see
 `VENDORED.md` beside them.
+
+The CLI's `stagewright.jar` also carries Rhino (MPL-2.0), Gson and its Error Prone annotations
+(Apache-2.0). `META-INF/THIRD-PARTY-NOTICES` in that jar names each one with its source, and
+`META-INF/licenses/` holds their licence texts.

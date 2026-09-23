@@ -1,24 +1,31 @@
 modLoader="javafml"
-loaderVersion="[4,)"
-license="LGPL-3.0-only"
+loaderVersion="${loader_version_range}"
+license="${mod_license}"
 
 [[mods]]
-modId="mc_testkit"
+modId="${mod_id}"
 version="${version}"
-displayName="stagewright"
-authors="AI-assisted-Minecraft-Developers"
-description='''Cross-loader Minecraft mod test framework: scene harness, assertions, orchestrated topologies.'''
+displayName="${mod_name}"
+authors="${mod_authors}"
+description='''${mod_description}'''
 
-[[dependencies.mc_testkit]]
+[[dependencies.${mod_id}]]
     modId="neoforge"
     type="required"
-    versionRange="[21,)"
+    versionRange="${neoforge_version_range}"
     ordering="NONE"
     side="BOTH"
 
-[[dependencies.mc_testkit]]
+[[dependencies.${mod_id}]]
     modId="minecraft"
     type="required"
-    versionRange="[1.21.1,1.22)"
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.${mod_id}]]
+    modId="worlddriver"
+    type="optional"
+    versionRange="${worlddriver_version_range}"
     ordering="NONE"
     side="BOTH"

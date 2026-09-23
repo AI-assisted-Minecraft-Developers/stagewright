@@ -5,10 +5,10 @@
 // topology's own dev-run task, and judges the results file against the orchestration contract.
 //
 // No Python, and no process boundary: the run is an ordinary task dependency, so Gradle supervises a
-// process it already knew how to supervise. That is why this module has no external dependencies —
-// the JSONL parser and the verdict rules are both in here, because a build plugin that drags a JSON
-// library onto a consumer's buildscript classpath is a version conflict waiting to happen.
-// See src/main/java/.../StageWrightPlugin.java.
+// process it already knew how to supervise. The JSONL parser and the verdict rules live in the
+// engine, shared with the CLI, and neither module has an external dependency, because a build plugin
+// that drags a JSON library onto a consumer's buildscript classpath is a version conflict waiting to
+// happen. See src/main/java/.../StageWrightPlugin.java.
 plugins {
     id 'java-gradle-plugin'
     // java-gradle-plugin only CREATES the plugin-marker publication once maven-publish is
@@ -21,6 +21,8 @@ plugins {
 
 group = 'net.magicterra'
 version = '0.1.0'
+
+apply from: '../gradle/license.gradle'
 
 java {
     toolchain {

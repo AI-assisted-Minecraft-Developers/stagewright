@@ -3,7 +3,9 @@
 `com.eclipsesource.minimal-json:minimal-json:0.9.5`, MIT, © 2013–2016 EclipseSource.
 Sources copied verbatim from the published `-sources` jar; the only edit is the package
 declaration, moved to `net.magicterra.stagewright.engine.json`. Every file keeps its
-original MIT header, which is the whole of the license obligation.
+original MIT header. That covers the sources only: compiled classes carry no header, so the
+engine jar, and the CLI jar that merges it, ship the notice as
+`META-INF/licenses/minimal-json-MIT.txt` from `engine/src/main/resources`.
 
 StageWright as a whole is LGPL-3.0-only; this directory is the one exception and stays
 MIT. MIT is compatible with the LGPL in this direction, so distributing the combined work
