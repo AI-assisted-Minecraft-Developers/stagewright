@@ -19,11 +19,13 @@ class ArgsTest {
     void optionsFlagsModsAndPropertiesLandWhereTheyBelong() {
         Args.Parsed p = Args.parse(new String[] {
                 "--game-dir", "pack", "--expect", "expected.txt", "--no-install",
-                "--mod", "driver.jar", "-Dstagewright.scenes=wd.a", "--clean-world", "false"});
+                "--mod", "driver.jar", "-Dstagewright.scenes=wd.a", "--world", "keep",
+                "--client", "neoforge:1.21.1:21.1.248"});
         assertEquals("pack", p.opts().get("game-dir"));
         assertEquals("expected.txt", p.opts().get("expect"));
         assertEquals("true", p.opts().get("no-install"));
-        assertEquals("false", p.opts().get("clean-world"));
+        assertEquals("keep", p.opts().get("world"));
+        assertEquals("neoforge:1.21.1:21.1.248", p.opts().get("client"));
         assertEquals(List.of("-Dstagewright.scenes=wd.a"), p.systemProps());
         assertEquals(List.of(Path.of("driver.jar").toAbsolutePath().normalize()), p.extraMods());
     }
@@ -37,18 +39,25 @@ class ArgsTest {
     }
 
     @Test
-    void aMistypedCleanWorldIsRefusedRatherThanDeletingTheWorld() {
+    void theRetiredOptionsAreRefusedRatherThanIgnored() {
+        // A script written for the HeadlessMC-era CLI must fail loudly, not run a different topology.
+        for (String retired : List.of("--clean-world", "--headlessmc", "--display-client", "--loader",
+                "--mc-version", "--launcher-jvm", "--account")) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> Args.parse(new String[] {"--game-dir", "pack", retired, "x"}), retired);
+        }
         assertThrows(IllegalArgumentException.class,
-                () -> Args.parse(new String[] {"--game-dir", "pack", "--clean-wrold", "false"}));
+                () -> Args.parse(new String[] {"--game-dir", "pack", "--online"}));
     }
 
     @Test
-    void aBooleanOptionTakesOnlyTrueOrFalse() {
+    void aServerWorldIsResetOrKeptAndNothingElse() {
+        assertEquals(Worlds.ServerWorld.RESET, Worlds.parse("reset"));
+        assertEquals(Worlds.ServerWorld.KEEP, Worlds.parse("keep"));
+        assertEquals(null, Worlds.parse(null));
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> Args.parse(new String[] {"--game-dir", "pack", "--clean-world", "no"}));
-        assertTrue(e.getMessage().contains("true or false"), e.getMessage());
-        assertEquals("true",
-                Args.parse(new String[] {"--clean-world", "true"}).opts().get("clean-world"));
+                () -> Worlds.parse("false"));
+        assertTrue(e.getMessage().contains("reset or keep"), e.getMessage());
     }
 
     @Test

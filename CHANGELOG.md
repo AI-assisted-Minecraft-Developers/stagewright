@@ -10,6 +10,67 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-09-28
+
+### The CLI installs and launches its own offline client; HeadlessMC is gone · green on NeoForge and Fabric clients and a server-with-client pair, run by hand; the launch command's argument order since then in unit tests only
+
+`--headlessmc`, `--display-client`, `--loader`, `--mc-version`, `--online`, `--account` and
+`--launcher-jvm` are removed, and so is every online-account path. `--client
+neoforge:<mc>:<version> | fabric:<mc>:<loader> | vanilla:<mc>` names one exact client, which the CLI
+installs into `--install-dir` — by default the official launcher's `.minecraft`, in its layout — and
+launches offline as `--username` (default `StageWright`). HeadlessMC's offline launch stubbed every
+graphics call, so a pack mod that read pixels while loading took the launch down, and its only
+alternative was a real account a build machine cannot hold. Downloads are checked against their
+SHA-1 and shared with HMCL through its `cache/SHA-1` directory; `--mirror bmclapi` tries BMCLAPI
+first, and `HTTPS_PROXY` now reaches the downloads. The NeoForge installer runs in a staging
+directory, so a failed install leaves the installation as it was.
+
+A client needs `DISPLAY` or `WAYLAND_DISPLAY`; without one the run is ENV before anything starts.
+The CLI never starts a display — that is the environment's.
+
+### A run leaves the game directory's own files alone · green on NeoForge and Fabric clients, run by hand, with a mid-run options save restored, and on a fresh game directory; the scenes-directory checks since then in unit tests only
+
+The CLI used to copy the framework and `--mod` jars into `mods/`, the scene files into
+`config/stagewright/`, and write four settings into `options.txt`. Pointed at a player's own
+`.minecraft`, that left test jars loading in their next game and overwrote their settings. Now:
+
+- Mods are handed to the loader — `-Dfabric.addMods` on Fabric, `--fml.mavenRoots`/`--fml.mods` on
+  NeoForge — and a `--mod` whose file name `mods/` already has is skipped rather than refused. Jars a
+  previous CLI version installed are swept once.
+- The game reads scenes and capability descriptors from the directory named by
+  `-Dstagewright.scenesDir`, which the CLI sets to `--scenes`. Without the property the mod still
+  reads `config/stagewright/scenes` and `config/stagewright/capabilities`. The results header names
+  the directory it read as `scenesDir`, and a `--scenes` run whose header does not — a pack's own,
+  older StageWright under `--no-install` — is ENV, not a GREEN run of none of them. A named
+  directory that is not there when the suite is assembled is a registry error, for the same reason.
+- `pauseOnLostFocus`, `onboardAccessibility`, `narrator` and `enableVsync` are set in memory as the
+  options load, and a save during the run writes the file's own lines for them back. Applying them at
+  the first tick, as before, was too late for the narrator: a `narrator` setting on a machine without
+  a speech library opened a modal dialog that waited for a click forever. They are applied at every
+  return of the options load, because a game directory with no `options.txt` returns early.
+- Results, the heartbeat, the endpoint descriptor and launch logs moved to `<game dir>/stagewright/`,
+  in the mod's defaults as well as the CLI's. `eula.txt` and `server.properties` are written only for
+  a dedicated server.
+
+### A dedicated server's existing world needs `--world reset` or `--world keep` · green on a NeoForge server, run by hand; refusal order since then in unit tests only
+
+`--clean-world` deleted the world by default, which is wrong for a pack someone plays. A server whose
+world exists is now ENV until `--world` says which is meant. A run refused for another reason — no
+loader this CLI carries a StageWright build for, no way to start the server, a `--mod` that is not a
+file or comes with `--no-install` — is refused before `--world reset` deletes anything, and a vanilla `--client` before anything
+is downloaded. A client runs in a new world, `stagewright-<timestamp>`, deleted after a GREEN run
+and kept, with its path printed, otherwise.
+
+### A stalled run ends early, and a mod that failed to construct is named · stall checked on a held NeoForge server, run by hand; the verdict on a part-way stall and the minute checks since then in unit tests only
+
+A run whose logs, results and heartbeat stop growing for `--stall-timeout` minutes (default 5) ends
+instead of waiting out `--timeout`, and says whether the game was spinning or asleep. It is ENV if it
+had written no results yet; a suite that stalls part-way is judged on what it wrote, which without a
+done footer is RED, since the scene holding the server may be the code under test. When
+`logs/debug.log` records a mod failing to construct, that line is quoted as the first cause, since
+the crash that follows is rarely it. A second game already writing to the same game directory is
+warned about. `--timeout` and `--stall-timeout` take whole minutes, at least 1.
+
 ## 2026-09-27
 
 ### Coverage refuses to reconcile runs of different code · green in unit tests

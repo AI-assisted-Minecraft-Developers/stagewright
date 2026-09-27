@@ -27,111 +27,97 @@ cd cli    && ../gradlew jar            # -> cli/build/libs/stagewright.jar
 java -jar stagewright.jar --game-dir <the pack's server directory> --scenes <a folder of .js files>
 ```
 
-That installs the right framework build into the pack's `mods/`, installs your scene files into
-`config/stagewright/scenes/`, works out how the pack starts, runs it, and judges the results. The
-process exit code is the verdict: `0` sound and passing, `1` a scene failed, `2` the framework itself
-is broken and the results are void, `3` the game never armed.
+That hands the right framework build to the pack's loader, points the game at your scene files,
+works out how the pack starts, runs it, and judges the results. The process exit code is the verdict:
+`0` sound and passing, `1` a scene failed, `2` the framework itself is broken and the results are
+void, `3` the environment never let the suite run — the game never armed, stalled before writing results,
+or had no display.
 
 Both loader builds of the framework ride inside `stagewright.jar`, so there is no loader-and-version
 pairing for you to get right — which is the step that usually fails, and fails looking exactly like
-the mod not working. Other mods your scenes need come in through `--mod <jar>`, repeatable.
-Everything installed is recorded and swept again on the next run, so upgrading never leaves two
-copies behind. A `--mod` jar with the same file name as a jar the pack already has in `mods/` is
-refused, because installing it would overwrite the pack's copy and a later run would delete it.
+the mod not working. Other mods your scenes need come in through `--mod <jar>`, repeatable. None of
+them is copied into `mods/`: Fabric gets them through `-Dfabric.addMods`, NeoForge through
+`--fml.mavenRoots` and `--fml.mods`. A `--mod` jar whose file name the pack's `mods/` already has is
+skipped, since the pack's own copy loads anyway.
 
-Scenes are plain JavaScript and register into the same registry, canaries and results file the
-compiled ones do. See [Writing a scene](writing-a-scene.md#scenes-written-in-javascript) for the
-model, and `--help` for the flags not covered here.
+The scene files are not copied either. The game reads `.js` scenes and `.json` capability
+descriptors straight from `--scenes`, through `-Dstagewright.scenesDir`. Scenes are plain JavaScript
+and register into the same registry, canaries and results file the compiled ones do. See
+[Writing a scene](writing-a-scene.md#scenes-written-in-javascript) for the model, and `--help` for
+the flags not covered here.
 
-> **Note.** Provisioning clears `config/stagewright/scenes` and `config/stagewright/capabilities` in
-> the game directory on **every** run, whether or not you passed `--scenes`. Keep the authored copies
-> outside the game directory and point `--scenes` at them.
+Everything StageWright writes for itself lands under `<game dir>/stagewright/`: the results, the
+heartbeat, the launch logs, staged mods and natives. A client's game directory is otherwise left as
+it was — `mods/`, `config/`, `options.txt` — so it may be a player's own `.minecraft`. A dedicated
+server's directory also gets its EULA acceptance and the forced `server.properties` keys, and
+`--world` decides what happens to its world.
 
 ### The flags you will reach for first
 
 | Flag | What it does |
 |---|---|
-| `--game-dir <dir>` | The pack directory holding `mods/` and `config/`. Required. |
-| `--scenes <dir>` | A folder of scene files. `.js` goes to the scenes directory, `.json` to the capability descriptors directory. A folder with no `.js` file is refused, and a `.js` file that registers no scene fails the run. |
-| `--mod <jar>` | Install this mod too. Repeatable. |
+| `--game-dir <dir>` | The pack's server directory, or a client's game directory. Required. |
+| `--scenes <dir>` | A folder of `.js` scenes and `.json` capability descriptors, read in place. A folder with no `.js` file is refused, and a `.js` file that registers no scene fails the run. |
+| `--mod <jar>` | Load this mod too. Repeatable. A path that is not a file is refused before anything runs, and so is `--mod` with `--no-install`. |
 | `--expect <file>` | Reconcile the run against an expected-scenes manifest. A manifest that names no scene is refused before the game starts. |
-| `--timeout <min>` | A ceiling, not a duration — the run ends when the results file carries its footer. Defaults to 45. |
-| `--clean-world false` | Keep the existing world. The default is to delete it. |
-| `--no-install` | Do not touch `mods/`; the pack already has what it needs. |
+| `--timeout <min>` | A ceiling, not a duration — the run ends when the results file carries its footer. Defaults to 45; at least 1. |
+| `--stall-timeout <min>` | End the run once nothing it writes has grown for this long. ENV if it had written no results yet; otherwise judged on what it wrote, and a suite with no done footer is RED. Defaults to 5; at least 1. |
+| `--world reset\|keep` | What to do with a dedicated server's existing world. Required when one exists. |
+| `--no-install` | Load nothing; the pack already has StageWright in its `mods/`. With `--scenes`, that copy must be new enough to read `-Dstagewright.scenesDir`, or the run is ENV. |
 | `--launch "<command>"` | Start the server this way instead of detecting how. |
 
 `--help` is only recognised as the **first** argument. Anywhere else it is an unknown option.
 
 An option the CLI does not know is refused with the usage text and exit 3, and so is a value other
-than `true` or `false` for `--clean-world`. A mistyped name is therefore an error before anything
-runs, rather than a setting that is silently never read — `--expected` for `--expect` would
-otherwise run with reconciliation off, and `--clean-wrold false` would delete the world.
+than `reset` or `keep` for `--world`. A mistyped name is therefore an error before anything runs,
+rather than a setting that is silently never read — `--expected` for `--expect` would otherwise run
+with reconciliation off.
+
+A server whose world already exists is refused with ENV until you say which you meant: `--world reset`
+deletes it first, `--world keep` runs the scenes in it as it is. Neither is a safe default — one
+destroys a world someone may care about, the other lets a previous run's leftovers fail this one.
 
 Detection covers NeoForge and Forge argument files under `libraries/`, and a Fabric or Quilt server
-jar at the top level. When it cannot tell, it says so and asks for `--launch`.
+jar at the top level. When it cannot tell, it says so and asks for `--launch`. StageWright itself runs
+on NeoForge and Fabric, so without `--no-install` a Forge pack is refused.
 
-The server's output goes to `stagewright-run.log` in the game directory, and the results to
-`stagewright-results.jsonl` beside it.
+The server's output goes to `stagewright/stagewright-run.log` in the game directory, and the results
+to `stagewright/stagewright-results.jsonl` beside it.
+
+When a run ends without its results, the runner says how: the game crashed, exited, or stalled. A
+stall is reported with whether the process was spinning or asleep, and a mod that failed to construct
+is quoted from `logs/debug.log`, because the crash that follows it is rarely the cause.
 
 ### Testing what only a client can reach
 
 A dedicated server cannot reach anything that exists only on a client: a GUI a mod adds, a screen a
-machine opens, the client half of a client-server split. Testing those needs a real client, and a
-real client on a build machine needs assets, natives, a JVM and a login.
-
-Point the runner at [HeadlessMC](https://github.com/headlesshq/headlessmc) and it needs none of that
-from you:
+machine opens, the client half of a client-server split. Testing those needs a real client, which
+the runner installs and launches itself:
 
 ```
 java -jar stagewright.jar --game-dir <a client game directory> \
-     --headlessmc headlessmc-launcher.jar --loader neoforge --mc-version 1.21.1 \
-     --scenes <a folder of .js files>
-```
-
-The first run downloads Minecraft and the loader into that directory; later runs reuse them. The
-client creates and enters a singleplayer world — `--world <name>`, defaulting to `stagewright` — so
-the suite runs on its integrated server.
-
-**Without an account, that client is genuinely headless**: every graphics call is replaced by a stub,
-so there is no display and no virtual framebuffer to arrange. Anything that depends on rendering is
-meaningless there by construction. Screen structure and input are testable; pixels are not.
-
-**The stub scales to a mod and not to a modpack.** With every graphics entry point replaced, a mod
-that reads image pixels while loading gets an all-zero image and throws, which takes mod loading down
-with it. The stub also cannot be switched off from outside: launching offline forces it. So for a
-pack, the choice is a real account or not going through that launcher's own launch at all.
-
-**A real account** removes the stub and gives a real graphics context:
-
-```
-java -jar stagewright.jar --game-dir <a client game directory> \
-     --headlessmc headlessmc-launcher.jar --loader neoforge --mc-version 1.21.1 \
-     --account 0 --scenes <a folder of .js files> --expect <manifest>
-```
-
-Logging in is yours and stays yours. StageWright never prompts for credentials, never stores a token,
-and never writes one to a results file or a log — an interactive login has no business going through
-a test runner. Use the launcher's own login and account commands, run **from the game directory**, so
-the credentials land there rather than in your real Minecraft installation. `--online` uses whichever
-account the launcher already has selected; `--account <id>` makes that one primary first.
-
-One trap that costs an hour: **Java ignores `HTTPS_PROXY`**. Behind a proxy, both the login and the
-run need proxy system properties, passed with `--launcher-jvm "…"`. The runner warns when the
-environment variable is set and no proxy property was given.
-
-**Launching what is already installed** is the other route to a rendering client, and it needs no
-account:
-
-```
-java -jar stagewright.jar --game-dir <the same client game directory> \
-     --display-client <version-id> \
+     --client neoforge:1.21.1:21.1.252 \
      --scenes <a folder of .js files> --expect <manifest>
 ```
 
-The version id is the directory name under `<game dir>/versions`. This is a real graphics context
-with no stubs, so it needs a display — a desktop, or a virtual framebuffer on a build machine, which
-is the same trade the Gradle plugin's `virtualDisplay` option makes. In exchange the pack runs the
-way a player runs it.
+`--client` is `neoforge:<mc>:<version>`, `fabric:<mc>:<loader version>` or `vanilla:<mc>`, always
+exact. The first run installs that version, its libraries and its assets into `--install-dir`, which
+defaults to the official launcher's `.minecraft`; later runs reuse them. The layout is the launcher's
+own, so the same installation serves both, and downloads go through HMCL's `cache/SHA-1` directory in
+both directions. `--mirror bmclapi` tries BMCLAPI before the official servers, and `HTTPS_PROXY` is
+honoured.
+
+The player is offline, named by `--username` (default `StageWright`) — a test run has no business
+holding an account. The client creates a world of its own, `stagewright-<timestamp>`, so the suite
+runs on its integrated server. A GREEN run deletes that world; any other keeps it and prints where.
+
+The four settings a run cannot be correct without — no pause on lost focus, no accessibility
+onboarding, no narrator, no vsync — are set in the game's memory and kept out of `options.txt`, so a
+player's own settings survive the run.
+
+**A client needs a display.** On Linux that means `DISPLAY` or `WAYLAND_DISPLAY`; without one the
+run is ENV before anything starts. The runner never starts a virtual framebuffer: a display is the
+environment's to provide — the desktop, a CI image with Xvfb, or `xvfb-run` around the command.
 
 > **Note.** A crash on the client's first tick is the pack's, not the runner's. A client ticks
 > throughout its own loading, so every mod's client-tick handler fires while the loading overlay is
@@ -143,9 +129,8 @@ Each shape leaves its logs in its own place, and the game's log is not the launc
 
 | Shape | The game's own log | The launcher's output |
 |---|---|---|
-| server | `stagewright-run.log` | — the runner starts the server itself |
-| `--headlessmc` | `logs/latest.log` | `stagewright-headlessmc.log` |
-| `--display-client` | `logs/latest.log` | `stagewright-client-launch.log` |
+| server | `stagewright/stagewright-run.log` | — the runner starts the server itself |
+| `--client` | `logs/latest.log` | `stagewright/stagewright-client-launch.log` |
 
 ### The shape a player actually plays
 
@@ -155,19 +140,19 @@ place a mod's halves can disagree — an unregistered packet, state behind a sid
 
 ```
 java -jar stagewright.jar --game-dir <the pack's server directory> --scenes <a folder of .js files> \
-     --with-client <a client game directory, not the server's> \
-     --headlessmc headlessmc-launcher.jar --loader neoforge --mc-version 1.21.1
+     --client neoforge:1.21.1:21.1.252 \
+     --with-client <a client game directory, not the server's>
 ```
 
-The scenes run on the server, which writes `stagewright-results.jsonl`. The client has two jobs: to be
-logged in while they run, and to run the one probe only a joined client can — that a damage event
-survives the wire — writing `stagewright-client-results.jsonl` in its own directory. Both files are
-judged, each as its own suite, and the worse verdict is the run's; a client that wrote no file is
-ENV. That is the rule the Gradle plugin applies to a topology's `companionResultsFile`, from the same
-engine code, so the pair cannot be GREEN here and RED there. The client is installed with the same
-framework build and the same
-`--mod` jars as the server, because a loader that finds a different mod list on each end refuses the
-connection, and it dials the local address at whatever port the pack's `server.properties` names.
+The scenes run on the server, which writes `stagewright/stagewright-results.jsonl`. The client has two
+jobs: to be logged in while they run, and to run the one probe only a joined client can — that a
+damage event survives the wire — writing `stagewright/stagewright-client-results.jsonl` in its own
+directory. Both files are judged, each as its own suite, and the worse verdict is the run's; a client
+that wrote no file is ENV. That is the rule the Gradle plugin applies to a topology's
+`companionResultsFile`, from the same engine code, so the pair cannot be GREEN here and RED there.
+The client loads the same framework build and the same `--mod` jars as the server, because a loader
+that finds a different mod list on each end refuses the connection, and it dials the local address at
+whatever port the pack's `server.properties` names.
 
 The server does not start the suite until a player is actually on it. That is what makes a client
 which never arrives a timeout you can read, rather than a passing run that quietly proved nothing.

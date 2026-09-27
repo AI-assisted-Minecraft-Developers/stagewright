@@ -50,13 +50,14 @@ is `net.magicterra.stagewright`.
 java -jar stagewright.jar --game-dir <the pack's server directory> --scenes <a folder of .js files>
 ```
 
-That installs the right framework build into the pack's `mods/`, installs your scene files, works out
-how the pack starts, runs it, and judges the results. The exit code is the verdict: `0` sound and
-passing, `1` a scene failed, `2` the framework itself is broken and the results are void, `3` the
-game never armed.
+That hands the right framework build to the pack's loader, points the game at your scene files,
+works out how the pack starts, runs it, and judges the results — without copying anything into
+`mods/` or `config/`. The exit code is the verdict: `0` sound and passing, `1` a scene failed, `2`
+the framework itself is broken and the results are void, `3` the environment never let the suite run.
 
 Both loader builds ride inside the jar, so there is no loader-and-version pairing for you to get
-right. `--help` lists the rest, including how to run a real client with no display and no account.
+right. `--client neoforge:1.21.1:<version>` installs and launches a real client instead, offline and
+into the official launcher's `.minecraft`; `--help` lists the rest.
 
 ### Adding it to a Gradle project
 

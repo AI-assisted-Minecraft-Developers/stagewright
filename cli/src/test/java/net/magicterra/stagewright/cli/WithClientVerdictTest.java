@@ -20,9 +20,11 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class WithClientVerdictTest {
 
-    private static final String CLIENT_FILE = "stagewright-client-results.jsonl";
+    /** Literal on purpose: the game writes this path from a module this one shares no code with. */
+    private static final String CLIENT_FILE = "stagewright/stagewright-client-results.jsonl";
 
     private static void writeClient(Path dir, String outcome) throws IOException {
+        Files.createDirectories(dir.resolve(CLIENT_FILE).getParent());
         Files.writeString(dir.resolve(CLIENT_FILE), String.join("\n",
                 "{\"type\":\"suite\",\"loader\":\"neoforge\",\"registered\":"
                         + "[{\"name\":\"client.damageSourceAcrossTheWire\",\"required\":true,\"canary\":\"NONE\"}]}",

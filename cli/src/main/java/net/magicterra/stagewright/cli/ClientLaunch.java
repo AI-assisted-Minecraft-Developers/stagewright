@@ -1,75 +1,52 @@
 package net.magicterra.stagewright.cli;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
+import java.util.UUID;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+
+import net.magicterra.stagewright.cli.install.Rules;
+import net.magicterra.stagewright.cli.install.Versions;
+import net.magicterra.stagewright.engine.RunDirectory;
 
 /**
- * Launch a client that is already installed in a game directory, on the real display.
+ * The command that launches an installed client, offline, on the real display.
  *
- * <p><b>Why this exists next to {@link HeadlessClient}, which also launches a client.</b> HeadlessMC
- * launches with {@code -lwjgl}, which replaces every LWJGL entry point with a stub. That is what
- * makes it headless, and it is fine for a suite of a dozen mods. It is not fine for a modpack: a
- * 452-mod pack's resource reload does real work through those entry points, so a mod that reads
- * image pixels while loading (Supplementaries reading a palette strip through Moonlight, measured)
- * sees an all-zero image and throws, NeoForge dispatches setup a second time trying to recover, and
- * the run dies in twenty "already registered" errors that say nothing about the cause. Removing the
- * offending mod only surfaces the next one.
+ * <p>Two directories, the way every launcher has them: the install ({@code versions/},
+ * {@code libraries/}, {@code assets/} — shared, normally the official {@code .minecraft}) and the game
+ * directory the client runs in (saves, logs, {@code mods/}). They may be the same directory.
  *
- * <p>The stub cannot be turned off from the outside: {@code hmc.offline=true} <i>forces</i> it — "You
- * are offline, game will start in headless mode!" So the only headed HeadlessMC launch is one with a
- * real Minecraft account ({@code --account}), which a developer's box can have and CI cannot.
- *
- * <p>This is the path for when there is no account. The two jobs split by what each is actually good
- * at: HeadlessMC installs a loader into an isolated game directory with no login, which is genuinely
- * hard and it does it well. Launching is not hard — the version JSONs it wrote say exactly what the
- * command is. This reads them.
- *
- * <p><b>It needs a display.</b> On a machine that has one, this runs the pack the way a player runs
- * it, with a real GL context and no stubs. On a headless CI box it needs an X server (Xvfb), which is
- * the same trade the Gradle plugin's {@code virtualDisplay} makes for the same reason.
+ * <p>Offline means no account and no authentication request at all: {@code user_type} is
+ * {@code legacy}, which the client maps to its offline user API service, and the UUID is the one an
+ * {@code online-mode=false} server derives from the same name — so the player a scene sees has the
+ * same identity on both ends of the wire.
  */
 final class ClientLaunch {
 
+    /** The offline profile's default name, so a results file says which player it ran as. */
+    static final String DEFAULT_USERNAME = "StageWright";
+
     private ClientLaunch() {}
 
-    /** The value Mojang's rule blocks match {@code os.name} against. */
-    private static final String RULES_OS = rulesOs();
-
-    private static String rulesOs() {
-        String name = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        if (name.contains("win")) return "windows";
-        if (name.contains("mac") || name.contains("darwin")) return "osx";
-        return "linux";
-    }
-
     /**
-     * Build the launch command for {@code versionId} as installed under {@code gameDir/versions}.
-     *
-     * @param systemProps our own {@code -D} properties, placed before the version's own JVM args so
-     *                    they cannot land after the main class and be read as game arguments.
+     * @param systemProps our own {@code -D} properties: after the version's own JVM args, so one the
+     *                    version also sets is ours (the JVM keeps the last), and before the main
+     *                    class, after which they would be read as game arguments
+     * @param gameArgs    program arguments appended after the version's own
      */
-    static List<String> command(Path gameDir, String versionId, String javaBinary,
-                                List<String> systemProps) {
-        List<JsonObject> chain = chain(gameDir, versionId);
-        JsonObject launched = chain.get(0);
+    static List<String> command(Path installDir, Path gameDir, String versionId, String javaBinary,
+                                List<String> systemProps, List<String> gameArgs, String username) {
+        List<JsonObject> chain = Versions.chain(installDir, versionId);
         JsonObject root = chain.get(chain.size() - 1);
-
-        Map<String, String> subst = substitutions(gameDir, versionId, chain, classpath(gameDir, chain));
+        Map<String, String> subst = substitutions(installDir, gameDir, versionId, root,
+                classpath(installDir, chain), username);
 
         List<String> jvm = new ArrayList<>();
         List<String> game = new ArrayList<>();
@@ -84,115 +61,42 @@ final class ClientLaunch {
 
         List<String> command = new ArrayList<>();
         command.add(javaBinary);
-        command.addAll(systemProps);
         for (String arg : jvm) command.add(fill(arg, subst));
-        command.add(launched.get("mainClass").getAsString());
+        command.addAll(systemProps);
+        command.add(chain.get(0).get("mainClass").getAsString());
         for (String arg : game) command.add(fill(arg, subst));
-
-        // LWJGL extracts its natives here. Absent, it falls back to the system temp directory, which
-        // works until two runs race for the same file.
-        try {
-            Files.createDirectories(gameDir.resolve("natives"));
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot create the natives directory", e);
-        }
-        if (root.has("assetIndex")) {
-            // touched above via substitutions; nothing more to do
-        }
+        command.addAll(gameArgs);
         return command;
     }
 
-    /** The version and everything it inherits from, launched version first. */
-    private static List<JsonObject> chain(Path gameDir, String versionId) {
-        List<JsonObject> out = new ArrayList<>();
-        String id = versionId;
-        while (id != null) {
-            Path file = gameDir.resolve("versions").resolve(id).resolve(id + ".json");
-            if (!Files.isRegularFile(file)) {
-                throw new IllegalArgumentException("no version '" + id + "' is installed in "
-                        + gameDir + " — expected " + file + ". Install one first (--headlessmc does"
-                        + " this) or name a version that is there.");
-            }
-            JsonObject data;
-            try {
-                data = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))
-                        .getAsJsonObject();
-            } catch (IOException e) {
-                throw new UncheckedIOException("cannot read " + file, e);
-            }
-            out.add(data);
-            id = data.has("inheritsFrom") ? data.get("inheritsFrom").getAsString() : null;
-        }
-        return out;
+    /** The UUID an {@code online-mode=false} server gives this name — vanilla's {@code UUIDUtil}. */
+    static UUID offlineUuid(String username) {
+        return UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8));
     }
 
-    private static List<String> classpath(Path gameDir, List<JsonObject> chain) {
-        Set<String> seen = new LinkedHashSet<>();
+    private static List<String> classpath(Path installDir, List<JsonObject> chain) {
         List<String> out = new ArrayList<>();
-        for (JsonObject data : chain) {                 // child first: its libraries win
-            JsonArray libraries = data.getAsJsonArray("libraries");
-            if (libraries == null) continue;
-            for (JsonElement element : libraries) {
-                JsonObject library = element.getAsJsonObject();
-                if (!allowed(library)) continue;
-                String name = library.get("name").getAsString();
-                String[] parts = name.split(":");
-                // group:artifact:CLASSIFIER. Without the classifier, org.lwjgl:lwjgl:3.3.3 hides
-                // org.lwjgl:lwjgl:3.3.3:natives-windows and the game dies at GLFW.<clinit> with
-                // "Failed to locate library: lwjgl.dll", which reads like a broken install rather
-                // than one missing jar.
-                String key = parts[0] + ":" + parts[1] + (parts.length > 3 ? ":" + parts[3] : "");
-                if (!seen.add(key)) continue;
-                out.add(artifact(gameDir, parts).toString());
-            }
+        for (JsonObject library : Versions.libraries(chain)) {
+            JsonObject downloads = library.getAsJsonObject("downloads");
+            // A natives-only entry from before 1.19 puts nothing on the classpath.
+            if (downloads != null && !downloads.has("artifact")) continue;
+            out.add(Versions.libraryPath(installDir, library.get("name").getAsString()).toString());
         }
-        // The LAUNCHED version's jar, never the inherited vanilla one. NeoForge's own JVM args say
-        // so: -DignoreList=client-extra,${version_name}.jar keeps exactly this jar off the module
-        // path. Add 1.21.1.jar instead and it becomes an automatic module exporting the same
-        // packages as NeoForge's patched `minecraft` module — a ResolutionException naming some JFR
-        // event package, which points nowhere near the mistake.
-        String id = chain.get(0).get("id").getAsString();
-        out.add(gameDir.resolve("versions").resolve(id).resolve(id + ".jar").toString());
+        // The LAUNCHED version's jar, never the inherited vanilla one: see Installer.gameJar.
+        out.add(Versions.jar(installDir, chain.get(0).get("id").getAsString()).toString());
         return out;
-    }
-
-    private static Path artifact(Path gameDir, String[] coordinates) {
-        Path path = gameDir.resolve("libraries");
-        for (String segment : coordinates[0].split("\\.")) path = path.resolve(segment);
-        String classifier = coordinates.length > 3 ? "-" + coordinates[3] : "";
-        return path.resolve(coordinates[1]).resolve(coordinates[2])
-                .resolve(coordinates[1] + "-" + coordinates[2] + classifier + ".jar");
     }
 
     /**
-     * Mojang's rule blocks: absent means allowed, otherwise the last matching rule wins.
-     *
-     * <p>Feature rules ({@code is_demo}, {@code has_custom_resolution}, quick-play) are skipped
-     * rather than evaluated, because we ask for none of those features — and a rule we cannot
-     * evaluate must not be allowed to turn an argument ON.
+     * Feature rules ({@code is_demo}, {@code has_custom_resolution}, quick-play) never switch an
+     * argument on here: we ask for none of those features, and {@code ClientDirector} enters the world.
      */
-    private static boolean allowed(JsonObject entry) {
-        JsonArray rules = entry.getAsJsonArray("rules");
-        if (rules == null || rules.isEmpty()) return true;
-        boolean verdict = false;
-        for (JsonElement element : rules) {
-            JsonObject rule = element.getAsJsonObject();
-            JsonObject os = rule.getAsJsonObject("os");
-            if (os != null && os.has("name") && !RULES_OS.equals(os.get("name").getAsString())) {
-                continue;
-            }
-            if (rule.has("features")) continue;
-            verdict = "allow".equals(rule.get("action").getAsString());
-        }
-        return verdict;
-    }
-
     private static void collect(JsonArray arguments, List<String> sink) {
         if (arguments == null) return;
         for (JsonElement element : arguments) {
             if (element.isJsonPrimitive()) {
                 sink.add(element.getAsString());
-            } else if (element.isJsonObject() && allowed(element.getAsJsonObject())) {
+            } else if (element.isJsonObject() && Rules.allowed(element.getAsJsonObject())) {
                 JsonElement value = element.getAsJsonObject().get("value");
                 if (value.isJsonArray()) {
                     for (JsonElement one : value.getAsJsonArray()) sink.add(one.getAsString());
@@ -203,28 +107,31 @@ final class ClientLaunch {
         }
     }
 
-    private static Map<String, String> substitutions(Path gameDir, String versionId,
-                                                     List<JsonObject> chain, List<String> classpath) {
-        JsonObject root = chain.get(chain.size() - 1);
+    private static Map<String, String> substitutions(Path installDir, Path gameDir, String versionId,
+                                                     JsonObject root, List<String> classpath,
+                                                     String username) {
         Map<String, String> out = new LinkedHashMap<>();
-        out.put("${natives_directory}", gameDir.resolve("natives").toString());
+        // LWJGL extracts its natives here. Absent, it falls back to the system temp directory, which
+        // works until two runs race for the same file.
+        out.put("${natives_directory}",
+                gameDir.resolve(RunDirectory.ARTIFACT_DIR).resolve("natives").toString());
         out.put("${launcher_name}", "stagewright");
         out.put("${launcher_version}", "1");
         out.put("${classpath}", String.join(java.io.File.pathSeparator, classpath));
-        out.put("${library_directory}", gameDir.resolve("libraries").toString());
+        out.put("${library_directory}", installDir.resolve("libraries").toString());
         out.put("${classpath_separator}", java.io.File.pathSeparator);
         out.put("${version_name}", versionId);
         out.put("${game_directory}", gameDir.toString());
-        out.put("${assets_root}", gameDir.resolve("assets").toString());
+        out.put("${assets_root}", installDir.resolve("assets").toString());
         out.put("${assets_index_name}", root.getAsJsonObject("assetIndex").get("id").getAsString());
-        out.put("${auth_player_name}", HeadlessClient.USERNAME);
-        // An offline profile. Nothing we touch validates it: the pack's own server is not
-        // authenticated and a scene run never joins a public one. A launcher would put a real
-        // session here, and needing one is precisely what makes CI impossible.
-        out.put("${auth_uuid}", "00000000-0000-0000-0000-000000000001");
+        out.put("${auth_player_name}", username);
+        out.put("${auth_uuid}", offlineUuid(username).toString().replace("-", ""));
+        // Required by the client's argument parser, read by nothing offline.
         out.put("${auth_access_token}", "0");
-        out.put("${clientid}", "0");
-        out.put("${auth_xuid}", "0");
+        out.put("${clientid}", "");
+        out.put("${auth_xuid}", "");
+        // Anything but msa: the client then builds its offline user API service and makes no
+        // authentication request at all.
         out.put("${user_type}", "legacy");
         out.put("${version_type}", "release");
         out.put("${resolution_width}", "854");

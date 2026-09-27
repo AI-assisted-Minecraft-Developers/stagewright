@@ -22,21 +22,28 @@ class ResultsNameTest {
     @Test
     void theDefaultIsTheNameTheHarnessWrites() {
         assertEquals("stagewright-results.jsonl", Main.resultsName(Map.of()));
-        assertEquals(RunDirectory.DEFAULT_RESULTS_FILE, Main.resultsName(Map.of()));
+        assertEquals(RunDirectory.DEFAULT_RESULTS_FILE,
+                RunDirectory.ARTIFACT_DIR + "/" + Main.resultsName(Map.of()));
     }
 
     @Test
     void aRenamedRunCarriesTheNameIntoTheGame() {
         String name = Main.resultsName(Map.of("results", "stagewright-server.jsonl"));
         assertEquals("stagewright-server.jsonl", name);
-        assertEquals(List.of("-Dstagewright.results=stagewright-server.jsonl"),
+        assertEquals(List.of("-Dstagewright.results=stagewright/stagewright-server.jsonl"),
                 Main.resultsProps(name));
     }
 
     @Test
     void theDefaultIsPassedTooSoTheCommandLineRecordsIt() {
-        assertEquals(List.of("-Dstagewright.results=stagewright-results.jsonl"),
+        assertEquals(List.of("-Dstagewright.results=stagewright/stagewright-results.jsonl"),
                 Main.resultsProps(Main.resultsName(Map.of())));
+    }
+
+    @Test
+    void aResultsNameCannotLeaveTheArtifactDirectory() {
+        assertThrows(IllegalArgumentException.class,
+                () -> Main.resultsName(Map.of("results", "../server.jsonl")));
     }
 
     /**
