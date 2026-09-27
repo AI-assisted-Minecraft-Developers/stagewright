@@ -16,10 +16,10 @@ class ScenesTest {
     }
 
     @Test
-    void nothingButTheRecordedFilterNarrowsTheRegistry() {
+    void theRetiredFilterPropertyDoesNotNarrowTheRegistry() {
         // Narrowing is only honest when the suite header says so, and only SceneFilter's pattern
-        // reaches the header. Any other property that shrank the list would produce a run the
-        // verdict judges as the whole suite.
+        // reaches the header. stagewright.filter does not, so if it shrank the list the verdict
+        // would judge part of the suite as the whole of it.
         List<String> whole = names(Scenes.all());
         String before = System.getProperty("stagewright.filter");
         System.setProperty("stagewright.filter", "floorAssert");
