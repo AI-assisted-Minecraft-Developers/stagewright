@@ -13,7 +13,7 @@ import static net.magicterra.worlddriver.mcp.schema.Schemas.stringEnum;
 import static net.magicterra.worlddriver.mcp.schema.Schemas.tool;
 
 /**
- * task#90 instrument-face gap closers — two hidden {@code mc.test.input.*} verbs registered
+ * Two hidden {@code mc.test.input.*} verbs that the instrument face was missing, registered
  * through the same paired SPI ({@link ToolCatalog#registerVerb}) as {@link TestResetVerb}, under
  * the granted {@code mc.test.*} namespace:
  *

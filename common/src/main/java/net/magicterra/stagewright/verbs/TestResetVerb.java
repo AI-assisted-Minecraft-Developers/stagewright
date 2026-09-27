@@ -12,7 +12,7 @@ import static net.magicterra.worlddriver.mcp.schema.Schemas.tool;
 
 /**
  * The first runtime consumer of the paired verb-registration SPI ({@link ToolCatalog#registerVerb}):
- * the hidden {@code mc.test.reset} client-pool entry reset (testkit P2b). It is the driver
+ * the hidden {@code mc.test.reset} client-pool entry reset. It is the driver
  * <b>dogfooding the third-party path on purpose</b> — {@code mc.test.reset} is a NEW name under the
  * granted {@code mc.test.*} namespace (not a driver-owned baseline verb), so it registers through the
  * same public paired entry a third-party mod would use, exercising the whole namespace-policy +

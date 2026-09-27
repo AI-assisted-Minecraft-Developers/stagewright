@@ -63,7 +63,7 @@ public final class StageWrightCommon {
     private static boolean verbHooksInstalled;
     private static boolean onDemandRequested;
 
-    // ---- Startup tick-debt settle barrier (task#88) ----
+    // ---- Startup tick-debt settle barrier ----
     // A freshly-STARTED MinecraftServer carries accumulated tick DEBT and runs unthrottled
     // catch-up ticks (~3 ms/tick instead of the steady 50 ms cadence) until it is caught up.
     // Arming the scene harness during that burst makes tick-budgeted awaits fragile: entity
@@ -108,7 +108,7 @@ public final class StageWrightCommon {
      * Arm the runtime when the server reaches STARTED. Two confluent paths meet here:
      * <ul>
      *   <li><b>autorun</b> ({@code -Dstagewright.autorun=true}) — build the harness immediately, exactly
-     *       as before (byte-identical; all existing T0/T1 dogfood paths are zero-touch);</li>
+     *       (the path every dedicated and integrated gate run takes);</li>
      *   <li><b>on-demand</b> ({@code stagewright.autorun} unset) — arm but do NOT execute: record
      *       "armed, awaiting mc.test.run" and wait for the {@code mc.test.run} RPC verb to trigger
      *       {@link #triggerOnDemandRun()}.</li>
@@ -365,7 +365,7 @@ public final class StageWrightCommon {
         StageWrightHarness live = harness;
         if (live != null) live.observeServerTick();
 
-        // Settle barrier (task#88): drain startup tick debt before arming scenes. See the field
+        // Settle barrier: drain startup tick debt before arming scenes. See the field
         // block above for the full rationale. Until the cadence settles we track tick spacing and
         // forward NOTHING to the harness — so all tick budgets count from the first post-settle tick.
         if (!settled) {

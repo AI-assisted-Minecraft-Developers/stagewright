@@ -2,8 +2,8 @@
 //
 // A scene file's promise is that the SAME `.js` runs in-process (server thread, inline on the
 // tick) and out-of-process (its own JVM, everything over RPC). That promise is only as good as
-// the sameness, and sameness maintained by two hand-written copies is sameness that rots — the
-// design doc's own §4 example called `.isAbove(60)`, a method `Expect` has never had. So the
+// the sameness, and sameness maintained by two hand-written copies is sameness that rots (see
+// docs/design/attached-scenes.md, "Sharing the vocabulary is the load-bearing decision"). So the
 // half that can be shared is shared as ONE COMPILED ARTIFACT, and drift dies at javac rather
 // than at run time in one home only.
 //
@@ -56,8 +56,8 @@ dependencies {
     // bundling a second copy into the mod jar would put two Rhino class trees on one classpath.
     // The out-of-process home has no such provider and declares a real dependency — see
     // cli/build.gradle. Both compile against this one coordinate, which is what keeps the two
-    // homes on the SAME interpreter; the fork matters (see the note in the design doc: DriverAccess
-    // relies on this fork's NativeObject implementing Map).
+    // homes on the SAME interpreter; the fork matters, because DriverAccess relies on this fork's
+    // NativeObject implementing Map.
     compileOnly "dev.latvian.mods:rhino:${rootProject.rhino_version}"
 
     // gson, for StageWrightRpc — compileOnly for a DIFFERENT reason than Rhino, and the reason is

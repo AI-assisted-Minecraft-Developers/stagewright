@@ -25,15 +25,15 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
- * Serial T0 scheduler on a PLAIN dedicated server. One scene at a time, each on
+ * Serial scheduler on a PLAIN dedicated server. One scene at a time, each on
  * its own grid-allocated origin in force-loaded chunks; per-scene tick budget;
  * results to the contract-v0 JSONL; halts the server when the registry is drained.
  *
  * Grid allocation: origin i = (GRID_X0 + i*GRID_STEP, GRID_Y, GRID_Z0), far from
  * spawn so a flat world's spawn chunks never overlap an arena. Chunks are
  * force-loaded for the scene's lifetime and released afterwards — serial
- * execution + per-scene origins is the whole isolation story at P1a (no shared
- * body yet; body reset arrives with dogfood migration).
+ * execution + per-scene origins is the harness's whole isolation; anything a scene
+ * changes outside its arena is for the scene's own cleanup to undo.
  */
 public final class StageWrightHarness {
     private static final int GRID_X0 = 100_000;
@@ -143,7 +143,7 @@ public final class StageWrightHarness {
 
     /** A duplicate scene name lets a later record silently overwrite an earlier one
      *  in the orchestrator's last-wins map, masking a real FAIL as GREEN. Reject the
-     *  whole registry loudly before the suite header is ever written (spec §5/§10). */
+     *  whole registry loudly before the suite header is ever written. */
     private static void rejectDuplicateNames(List<Scene> scenes) {
         Set<String> seen = new HashSet<>();
         for (Scene s : scenes) {
@@ -213,7 +213,7 @@ public final class StageWrightHarness {
         runningScene = scene.name();
         if (scene.canary() == Canary.MUST_SWALLOW) {
             // Deliberately never executed and never recorded: the orchestrator must
-            // flag exactly this omission, proving the swallow gate is alive (spec §5).
+            // flag exactly this omission, proving the swallow gate is alive.
             StageWrightCommon.LOG.info("[{}] skipping swallow-canary '{}'", StageWrightCommon.MOD_ID, scene.name());
             nextScene();
             return;

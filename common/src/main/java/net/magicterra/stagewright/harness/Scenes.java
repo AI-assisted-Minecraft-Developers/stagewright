@@ -294,7 +294,7 @@ public final class Scenes {
                     }).within(60).then(() ->
                             ctx.record("fellBy", String.format("%.2f", startY - stands.get(0).getY())));
                 }),
-                // -- canaries (spec §5): the framework must CATCH these, or the gate is dead --
+                // -- canaries: the framework must CATCH these, or the gate is dead --
                 Scene.canary("canaryMustFail", 100, Canary.MUST_FAIL,
                         ctx -> ctx.fail("canary: this scene must be reported as FAIL")),
                 Scene.canary("canaryMustTimeout", 60, Canary.MUST_TIMEOUT,

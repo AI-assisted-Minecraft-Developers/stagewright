@@ -6,7 +6,7 @@ import net.magicterra.stagewright.contract.Terrain;
 
 import java.util.function.Consumer;
 
-/** One registered scene. Explicit registry (spec §10) — the suite header is dumped
+/** One registered scene. Explicit registry — the suite header is dumped
  *  from this list, so registration and reconciliation share a single source. */
 public record Scene(String name, int budgetTicks, boolean required, Canary canary,
                     Consumer<SceneContext> body, int originSlot, int chunkRadius,

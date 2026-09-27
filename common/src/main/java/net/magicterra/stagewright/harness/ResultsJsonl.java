@@ -14,13 +14,12 @@ import net.magicterra.stagewright.contract.SceneOutcome;
  * Orchestration-contract-v0 results stream, one JSON object per line, written into
  * the server's working directory (the loom runDir).
  *
- * TIMING CONTRACT (P0 probe incident, worlddriver commit 926396d): file IO here
- * happens ONLY at scene boundaries — suite start, after a scene completes, suite
- * end. Never write during a scene's RUN ticks: synchronous server-thread IO
- * measurably broke a byte-deterministic arena once already. Boundary writes still
- * shift wall-clock for the NEXT scene; before hosting determinism-sensitive
- * dogfood arenas (P1c) this must be revisited (the precedent fix was an async
- * off-thread writer that drains a queue instead of doing IO inline).
+ * TIMING CONTRACT: file IO here happens ONLY at scene boundaries — suite start,
+ * after a scene completes, suite end. Never write during a scene's RUN ticks:
+ * synchronous server-thread IO shifts tick timing enough to break a
+ * byte-deterministic arena. Boundary writes still shift wall-clock for the NEXT
+ * scene; a scene that is sensitive to that needs an async off-thread writer that
+ * drains a queue instead of doing IO inline.
  *
  * Names/reasons are escaped (quote+backslash+control chars) — scene names are
  * ordinarily Java identifiers, but reasons are free text: the harness's

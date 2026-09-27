@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>To make the "reset clears chat" assertion non-vacuous, the scene first dirties the
  * chat log with one {@code mc.client.chat.send} (a client-instrument verb, same probe
- * P2b's reset.behavior uses) and confirms the readback went non-empty before reset.
+ * the reset.behavior contract uses) and confirms the readback went non-empty before reset.
  *
  * <p>Instrument face only: {@code input.key}/{@code input.typeText}/{@code screen.*}/
  * {@code chat.send}/{@code chat.history}/{@code mc.test.reset} — no behavior verbs.
