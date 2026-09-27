@@ -30,26 +30,10 @@ public abstract class StageWrightSideProcessService
     }
 
     private final List<Process> companions = new ArrayList<>();
-    private SideProcesses.VirtualDisplay virtualDisplay;
-
-    /**
-     * Start an Xvfb if this topology asked for one and the platform can use it.
-     *
-     * <p>At most one per build: the topologies that want a display want a screen to draw on, not a
-     * screen each, and a second Xvfb would only be a second thing to leak.
-     *
-     * @return the {@code DISPLAY} value to put in the run's environment, or null to leave it alone
-     */
-    public synchronized String ensureVirtualDisplay(Logger logger) {
-        if (virtualDisplay == null) {
-            virtualDisplay = SideProcesses.startVirtualDisplay(logger);
-        }
-        return virtualDisplay == null ? null : virtualDisplay.display();
-    }
 
     /** Start a companion run and take ownership of it. */
-    public synchronized void startCompanion(JavaExec spec, File logFile, String display, Logger logger) {
-        companions.add(SideProcesses.startCompanion(spec, logFile, display, logger));
+    public synchronized void startCompanion(JavaExec spec, File logFile, Logger logger) {
+        companions.add(SideProcesses.startCompanion(spec, logFile, logger));
     }
 
     @Override
@@ -59,7 +43,5 @@ public abstract class StageWrightSideProcessService
             SideProcesses.stopCompanion(companion, logger);
         }
         companions.clear();
-        SideProcesses.stopVirtualDisplay(virtualDisplay, logger);
-        virtualDisplay = null;
     }
 }

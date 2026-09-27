@@ -58,12 +58,6 @@ public abstract class StageWrightProvisionTask extends DefaultTask {
     @Internal
     public abstract DirectoryProperty getSceneScripts();
 
-    /** Jars to install into the run directory's {@code mods/} — normally the StageWright loader jar.
-     *  {@code @Classpath} rather than {@code @InputFiles} so a rebuild that changes nothing but a
-     *  timestamp does not re-provision, which would delete the world for no reason. */
-    @org.gradle.api.tasks.Classpath
-    public abstract org.gradle.api.file.ConfigurableFileCollection getInstallMods();
-
     @TaskAction
     public void provision() {
         File scripts = getSceneScripts().isPresent() ? getSceneScripts().get().getAsFile() : null;
@@ -85,40 +79,13 @@ public abstract class StageWrightProvisionTask extends DefaultTask {
                 log);
         RunDirectory.installAuthoredContent(gameDir, scripts == null ? null : scripts.toPath(), log);
 
-        // After provisioning, not before: provisioning is what creates the run directory on a first
-        // run, and installing into a directory that does not exist yet would have to create it in a
-        // second place with a second set of assumptions about what a run directory is.
-        java.util.List<java.nio.file.Path> jars = new java.util.ArrayList<>();
-        for (File jar : getInstallMods()) jars.add(jar.toPath());
-        if (!jars.isEmpty()) {
-            net.magicterra.stagewright.engine.ModInstall.install(gameDir, jars, log);
-            installIntoCompanion(jars, log);
+        // The harness reaches the game as a dependency of the run — modLocalRuntime under loom,
+        // localRuntime under ModDevGradle — so nothing is copied into mods/. What an earlier version
+        // of this plugin copied there is swept, or the loader would find the harness twice.
+        net.magicterra.stagewright.engine.ModInstall.uninstall(gameDir, log);
+        if (getCompanionGameDirectory().isPresent()) {
+            net.magicterra.stagewright.engine.ModInstall.uninstall(
+                    getCompanionGameDirectory().get().getAsFile().toPath(), log);
         }
-    }
-
-    /**
-     * Install the same jars into the companion client's own run directory.
-     *
-     * <p>The same jars, and that is the requirement rather than a convenience: a loader that finds a
-     * different mod list on each end of a connection refuses it. So a companion missing what the
-     * server has is not a degraded run, it is a run that cannot happen.
-     *
-     * <p>Only matters for a project that delivers the harness by INSTALLING it — a project that puts
-     * it on the run classpath gets it in both halves for free, which is why this went unnoticed
-     * while the first two forks with a companion happened to do that. The one that did not produced
-     * a hang, not an error: its client had no director, never dialled, and the server sat waiting
-     * for a player that was never coming. Nothing in either log said what was missing.
-     */
-    private void installIntoCompanion(java.util.List<java.nio.file.Path> jars,
-                                      java.util.function.Consumer<String> log) {
-        if (!getCompanionGameDirectory().isPresent()) return;
-        java.nio.file.Path companionDir = getCompanionGameDirectory().get().getAsFile().toPath();
-        try {
-            java.nio.file.Files.createDirectories(companionDir);
-        } catch (java.io.IOException e) {
-            throw new org.gradle.api.GradleException(
-                    "cannot create the companion run directory " + companionDir, e);
-        }
-        net.magicterra.stagewright.engine.ModInstall.install(companionDir, jars, log);
     }
 }

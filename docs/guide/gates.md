@@ -136,28 +136,29 @@ Redirect the whole thing instead:
 
 ## How the harness reaches the game
 
-The framework has to be a **mod** in the run, not a library on its classpath. `installMods` copies
-jars into the run directory's `mods/` before the game starts, normally just the framework's own
-loader jar resolved from a dependency configuration.
+The framework has to be a **mod** in the run. Declare it as your loader plugin declares any other
+runtime-only mod, and the loader discovers it on the run's classpath:
 
-Under architectury-loom you do not need it: that plugin already puts a mod jar in front of the
-loader. Under ModDevGradle you do, and leaving it out does not look like a mistake. Putting the
-harness on the runtime classpath instead — the obvious alternative — gets it discovered and then
-claimed as a plain game library. The loader logs the jar by name, the mod never enters the mod list,
-and the run boots, ticks, writes no results, and reports an environment failure over a log containing
-no error and no mention of StageWright at all.
+```groovy
+configurations {
+    runtimeClasspath.extendsFrom localRuntime   // ModDevGradle; the NeoForge MDK declares it so
+}
+dependencies {
+    modLocalRuntime 'net.magicterra:mc_stagewright-fabric:0.1.0+1.21.1'   // architectury-loom
+    localRuntime    'net.magicterra:mc_stagewright-neoforge:0.1.0+1.21.1' // ModDevGradle
+}
+```
 
-`mods/` is also where the loader looks in every run, development or production, so this is the only
-delivery that puts the exact artifact a player would install into the run.
+Not `runtimeOnly` under ModDevGradle: that is published with your mod as a runtime dependency, so
+everything that depends on your mod would load the test harness too.
 
-Jars a previous install left behind are swept first. The install keeps a ledger inside `mods/` and
-deletes what it lists, plus any jar whose name marks it as a framework build. Filenames carry
-versions, so without the sweep an upgrade lands *beside* its predecessor and the loader arms one of
-the two — reporting the old code's behaviour as the new code's.
+A companion client is started from its own run task's classpath, so it gets the same framework
+build — which it must, because a loader that finds a different mod list on each end refuses the
+connection.
 
-A jar to install whose file name is already in `mods/`, and not in the ledger, belongs to whoever put
-it there, so the install fails naming it rather than overwriting it. Taking the name over would put
-it in the ledger, and the next run's sweep would delete a jar the install never owned.
+Nothing is copied into `mods/`. Earlier versions of this plugin copied the framework there through a
+topology's `installMods`, and recorded what they copied in a ledger inside `mods/`; provisioning takes
+back what that ledger names, once, so the old copy does not load beside the new one as a duplicate.
 
 ## What provisioning does to the run directory
 
@@ -170,11 +171,12 @@ Before every run, the provision step:
 - forces three keys in `server.properties` and leaves every other line alone: online mode off, a
   fixed level seed, and chunk-write syncing off;
 - clears `config/stagewright/scenes` and `config/stagewright/capabilities`, then repopulates them
-  from the topology's declared scene-script directory if it has one.
+  from the topology's declared scene-script directory if it has one;
+- takes back any jar an earlier version of the plugin copied into `mods/`.
 
-That last step clears those two directories **whether or not** a scene-script directory is declared.
-A project that authors files there by hand should declare the directory they live in rather than
-writing into the run directory directly.
+The scenes-and-capabilities step clears those two directories **whether or not** a scene-script
+directory is declared. A project that authors files there by hand should declare the directory they
+live in rather than writing into the run directory directly.
 
 `options.txt` is not written. A client StageWright directs switches off focus-pausing, the
 accessibility onboarding prompt, the narrator and vertical sync in memory as its options load, and
@@ -185,6 +187,11 @@ swap until the compositor presents its window, and a compositor that is not pres
 asleep, another workspace, a remote session — hands out about one frame a second. Minecraft runs at
 most ten game ticks per frame, so the client falls to ten ticks a second while the server keeps
 twenty, and every scene that drives a client player needs twice the server ticks it budgeted for.
+
+A topology whose run task is a client (`client = true`), and every companion client, is refused
+before it starts on Linux when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set. The plugin does not
+start a display: on a headless machine, run the build under `xvfb-run` or in an image that provides
+one.
 
 ## Reconciling the topologies against each other
 

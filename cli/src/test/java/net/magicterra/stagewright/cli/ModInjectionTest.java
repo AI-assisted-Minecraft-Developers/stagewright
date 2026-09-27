@@ -76,6 +76,18 @@ class ModInjectionTest {
     }
 
     @Test
+    void aStageWrightThePackShipsIsKeptAndNotLoadedTwice(@TempDir Path tmp) throws IOException {
+        Path gameDir = tmp.resolve("pack");
+        Path mods = Files.createDirectories(gameDir.resolve("mods"));
+        Files.writeString(mods.resolve("mc_stagewright-neoforge-0.1.0+1.21.1.jar"), "shipped");
+
+        ModInjection.Arguments args = ModInjection.prepare(gameDir, "neoforge", List.of(), l -> {});
+
+        assertEquals(ModInjection.Arguments.NONE, args);
+        assertEquals("shipped", Files.readString(mods.resolve("mc_stagewright-neoforge-0.1.0+1.21.1.jar")));
+    }
+
+    @Test
     void aModThePackAlreadyShipsIsNotLoadedTwice(@TempDir Path tmp) throws IOException {
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));

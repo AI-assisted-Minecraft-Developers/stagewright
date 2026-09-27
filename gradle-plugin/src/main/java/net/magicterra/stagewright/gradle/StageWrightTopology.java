@@ -111,43 +111,14 @@ public abstract class StageWrightTopology implements Named {
     public abstract Property<Integer> getTimeoutMinutes();
 
     /**
-     * Run the game against an X virtual framebuffer this task starts and stops. Convention:
-     * {@code false}.
+     * The run task starts a game client. Convention: {@code false}.
      *
-     * <p>For the topologies that need a real client on a headless Linux CI box. A free display is
-     * probed rather than pinned — hardcoding {@code :99} collides with whatever a developer left
-     * running — and {@code DISPLAY} is injected into the run's environment for the duration.
-     *
-     * <p>Ignored where it cannot apply: not Linux, no {@code Xvfb} on PATH, or {@code DISPLAY}
-     * already set (a real desktop, which is a better display than one we would start).
+     * <p>A client needs a display, and on Linux the run is refused before it starts when neither
+     * {@code DISPLAY} nor {@code WAYLAND_DISPLAY} is in its environment. The plugin does not start
+     * one: a desktop, a CI image with Xvfb, or {@code xvfb-run ./gradlew …} provides it. A companion
+     * is always a client and is checked whether or not this is set.
      */
-    public abstract Property<Boolean> getVirtualDisplay();
-
-    /**
-     * Jars to install into the run directory's {@code mods/} folder before the game starts.
-     * Optional.
-     *
-     * <p>Point this at the StageWright loader jar — normally a configuration, so the version comes
-     * from the dependency block like everything else:
-     *
-     * <pre>{@code
-     * dependencies { stagewrightRuntime "net.magicterra:mc_stagewright-neoforge:0.1.0+1.21.1" }
-     * stagewright { topologies { dedicatedServer { installMods.from configurations.stagewrightRuntime } } }
-     * }</pre>
-     *
-     * <p><b>Not optional in practice for ModDevGradle consumers.</b> Under architectury-loom,
-     * {@code modLocalRuntime} already puts a mod jar in front of FML and this can stay empty. MDG has
-     * no equivalent — its dev run assumes the only mod is yours — and adding the harness to the
-     * runtime classpath instead does NOT work: FML claims it as a plain game library, the mod never
-     * appears in the mod list, and the run boots, ticks, writes no results and reports "the game
-     * never armed" over a log with no error in it.
-     *
-     * <p>{@link net.magicterra.stagewright.engine.ModInstall} does the work, so these are the same
-     * rules the CLI applies to a modpack: a previous install's jars are swept first, because the
-     * versioned filenames mean an upgrade otherwise lands beside its predecessor and the loader arms
-     * the stale one.
-     */
-    public abstract org.gradle.api.file.ConfigurableFileCollection getInstallMods();
+    public abstract Property<Boolean> getClient();
 
     /**
      * A checked-in directory of {@code .js} scene files, installed into the run directory's

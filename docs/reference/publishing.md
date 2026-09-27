@@ -109,10 +109,10 @@ So:
   classifier, on `modLocalRuntime` (loom) so that loom *does* remap it, because the published
   jar is intermediary and the dev runtime needs named. This is the mirror image of the rule
   above, and both are right for their side.
-- **Installing the framework into a modpack or a ModDevGradle run** — take
-  `mc_stagewright-<loader>` with no classifier and point the topology's `installMods` at it.
-  See the [orchestration contract](orchestration-contract.md) for what the run directory then
-  does with it.
+- **Putting the framework into a ModDevGradle run** — take `mc_stagewright-<loader>` with no
+  classifier, on a `localRuntime` that `runtimeClasspath` extends — not `runtimeOnly`, which would
+  publish it as a runtime dependency of your mod. A modpack gets the same jar handed to its loader
+  by the CLI.
 
 There is one exception worth knowing, because it saves a NeoForge-only consumer from looking for
 a classifier they do not need. Under ModDevGradle the shaded `-neoforge` jar is already

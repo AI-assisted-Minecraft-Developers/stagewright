@@ -46,9 +46,9 @@ stagewright {
             expectFile = file('src/testmod/expected-scenes.txt')
         }
         integratedServer {
-            runTask        = ':fabric:runStagewrightIntegratedServer'
-            expectFile     = file('src/testmod/expected-scenes.txt')
-            virtualDisplay = true
+            runTask    = ':fabric:runStagewrightIntegratedServer'
+            expectFile = file('src/testmod/expected-scenes.txt')
+            client     = true
         }
         dedicatedServerWithClient {
             runTask              = ':fabric:runStagewrightDedicatedServerWithClient'
@@ -74,11 +74,10 @@ result and how to read what they report.
 | `expectFile` | file | none | The expected-scenes manifest. Present, the run reconciles both directions against it; absent, outcomes are judged and nothing is reconciled. An empty manifest is a hard error rather than a run that reconciles against nothing. |
 | `companionRunTask` | `String` | none | A second run task stood up beside the first and killed afterwards. Must resolve to a `JavaExec`. |
 | `companionResultsFile` | file | none | The companion's own results. Declared, its absence is an environment failure; undeclared, it is not read at all. |
-| `installMods` | file collection | empty | Jars copied into the run directory's `mods/` before the game starts. |
 | `sceneScripts` | directory | none | A folder of JavaScript scenes and JSON capability descriptors, installed into the run's `config/stagewright/` before it starts. |
 | `cleanWorld` | `boolean` | `true` | Whether provisioning deletes the previous world. |
 | `timeoutMinutes` | `int` | `20` | Applied to the **run** task, not to the check, and not to a hold. |
-| `virtualDisplay` | `boolean` | `false` | Start an X virtual framebuffer for this run on headless Linux. A no-op elsewhere and where `DISPLAY` is already set. |
+| `client` | `boolean` | `false` | The run task is a game client. On Linux it is refused before it starts when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set; a companion is always checked. The plugin never starts a display. |
 
 ### `companionResultsFile` reads like an option and behaves like a requirement
 
@@ -96,16 +95,14 @@ output where someone will see it. Both failure modes have been paid for once eac
 started and never constructed the driver, and a third-party client that died on the tick after
 joining and turned twelve server-side scenes into skips three log files away from the cause.
 
-### `installMods`
+### The harness is a dependency, not a property
 
-Under architectury-loom this is usually unnecessary; under ModDevGradle it is not optional in
-practice. [Gates](gates.md#how-the-harness-reaches-the-game) explains why in full.
-
-Where a topology has a companion, the same jars are installed into the companion's own run directory
-too. A loader that finds a different mod list on each end refuses the connection.
-
-The property is treated as a classpath rather than as a plain file list, so a rebuild that changes
-nothing but a timestamp does not re-provision — which would delete the world for no reason.
+There is no property that puts the framework into a run. Declare it the way your loader plugin
+declares any other runtime-only mod — `modLocalRuntime` under architectury-loom, a `localRuntime`
+that `runtimeClasspath` extends under ModDevGradle (not `runtimeOnly`, which is published with your
+mod) — and it reaches the run task and,
+through the run task's own classpath, its companion. See
+[Gates](gates.md#how-the-harness-reaches-the-game).
 
 ### `sceneScripts`
 
@@ -129,8 +126,9 @@ Only these, and only in the cases named:
 | `stagewright.hold`, `stagewright.topology`, `stagewright.endpoint` | Only on a hold task. |
 | `stagewright.build` | On every run task that is a `JavaExec`, and its companion, when the project is a git work tree. Taken once per build, when its first run starts, so every run in the build carries the same id. |
 
-`DISPLAY` is injected into the run's environment, and the companion's, when a virtual display was
-started for the run.
+No environment variable is added. The display check reads the environment the game gets: the run
+task's own plus what its loader binds at launch. A companion starts with exactly that environment of
+its own task, so a variable the task removes from what it inherited stays removed.
 
 Everything else a run needs — arming the harness, waiting for a player, telling a client which world
 to open or which server to join — belongs to the **consuming project's own run configuration**, not to
@@ -175,11 +173,11 @@ module is a split package, and the loader's module layer rejects it at boot.
 
 ## Known limitations
 
-**A topology with a companion, or a virtual display, disables the configuration cache for its run
-task.** The companion is built from another task's `JavaExec` specification, read inside the run
-task's action, and a task reference cannot be serialised into the cache. The plugin declares the
-incompatibility rather than failing the build with a stack trace a consumer cannot act on. The cost
-is one cold configuration per run of such a topology.
+**A topology with a companion disables the configuration cache for its run task.** The companion is
+built from another task's `JavaExec` specification, read inside the run task's action, and a task
+reference cannot be serialised into the cache. The plugin declares the incompatibility rather than
+failing the build with a stack trace a consumer cannot act on. The cost is one cold configuration per
+run of such a topology.
 
 **A run whose game JVM cannot exit costs that topology its whole timeout.** The check waits for the
 process, so a pack whose mods leave non-daemon threads behind holds the task open after the suite has

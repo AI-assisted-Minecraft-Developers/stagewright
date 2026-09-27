@@ -81,7 +81,7 @@ public class StageWrightPlugin implements Plugin<Project> {
             topology.getResultsFile().convention(DEFAULT_RESULTS);
             topology.getCleanWorld().convention(true);
             topology.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
-            topology.getVirtualDisplay().convention(false);
+            topology.getClient().convention(false);
             topology.getGameDirectory().convention(project.getLayout().getProjectDirectory()
                     .dir("run-stagewright-" + topology.getName()));
             registerTopologyTasks(project, topology, sideProcesses);
@@ -113,7 +113,6 @@ public class StageWrightPlugin implements Plugin<Project> {
                     task.getResultsFile().set(topology.getResultsFile());
                     task.getCleanWorld().set(topology.getCleanWorld());
                     task.getSceneScripts().set(topology.getSceneScripts());
-                    task.getInstallMods().from(topology.getInstallMods());
                     task.getCompanionResultsFile().set(topology.getCompanionResultsFile());
                 });
 
@@ -248,21 +247,20 @@ public class StageWrightPlugin implements Plugin<Project> {
                 File endpoint = new File(topology.getGameDirectory().get().getAsFile(),
                         RunDirectory.ENDPOINT_FILE);
                 exec.systemProperty(ENDPOINT_PROPERTY, endpoint.getAbsolutePath());
-                holdCompanion(project, topology);
+                holdCompanion(project, topology, run);
                 attachSideProcesses(project, topology, run, sideProcesses);
-                run.doFirst(t -> t.getLogger().lifecycle(
-                        "[stagewright] holding '{}' — attach with TESTKIT_ENDPOINT={}\n"
-                        + "[stagewright] the descriptor appears once the game is in a world; Ctrl-C ends the hold",
-                        topology.getName(), endpoint.getAbsolutePath()));
+                RunSideProcesses.of(run).banner("[stagewright] holding '" + topology.getName()
+                        + "' — attach with TESTKIT_ENDPOINT=" + endpoint.getAbsolutePath() + "\n"
+                        + "[stagewright] the descriptor appears once the game is in a world; Ctrl-C ends the hold");
                 return run;
             }));
         });
     }
 
     /**
-     * Hang the display and the companion off the run task itself.
+     * Hang the display check and the companion off the run task itself.
      *
-     * <p>{@code doFirst} rather than a task of their own, because both have to be live for the
+     * <p>{@code doFirst} rather than a task of their own, because the companion has to be live for the
      * duration of THIS process and Gradle runs tasks in a project's graph one after another — a
      * companion started by an earlier task would have to outlive its own task, which is exactly the
      * ownership problem that produced orphaned game JVMs in the first place. Started here, owned by
@@ -386,7 +384,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                 : null;
     }
 
-    private void holdCompanion(Project project, StageWrightTopology topology) {
+    private void holdCompanion(Project project, StageWrightTopology topology, Task run) {
         String companionName = topology.getCompanionRunTask().getOrNull();
         if (companionName == null) return;
         if (!(resolveRunTask(project, companionName) instanceof JavaExec companion)) return;
@@ -396,20 +394,16 @@ public class StageWrightPlugin implements Plugin<Project> {
         if (results == null || results.getParentFile() == null) return;
         File endpoint = new File(results.getParentFile(), RunDirectory.ENDPOINT_NAME);
         companion.systemProperty(ENDPOINT_PROPERTY, endpoint.getAbsolutePath());
-        project.getLogger().lifecycle("[stagewright] companion held — client face at TESTKIT_ENDPOINT={}",
-                endpoint.getAbsolutePath());
+        RunSideProcesses.of(run).banner("[stagewright] companion held — client face at TESTKIT_ENDPOINT="
+                + endpoint.getAbsolutePath());
     }
 
     private void attachSideProcesses(Project project, StageWrightTopology topology, Task run,
                                      org.gradle.api.provider.Provider<StageWrightSideProcessService> sideProcesses) {
         String companionName = topology.getCompanionRunTask().getOrNull();
-        boolean wantsDisplay = Boolean.TRUE.equals(topology.getVirtualDisplay().getOrElse(false));
-        if (companionName == null && !wantsDisplay) return;
-
-        JavaExec companion = null;
         if (companionName != null) {
             Task resolved = resolveRunTask(project, companionName);
-            if (!(resolved instanceof JavaExec exec)) {
+            if (!(resolved instanceof JavaExec companion)) {
                 throw new GradleException("stagewright topology '" + topology.getName()
                         + "' names companionRunTask '" + companionName + "', which is "
                         + (resolved == null ? "not a task in this build"
@@ -417,13 +411,23 @@ public class StageWrightPlugin implements Plugin<Project> {
                                               + " rather than a JavaExec — a companion has to be a"
                                               + " dev run this plugin can copy a command line from"));
             }
-            companion = exec;
-            run.dependsOn(companion.getDependsOn());
-            // ...and on whatever produces its inputs. A run task's classpath is a file collection
-            // carrying its own build dependencies, which are not in dependsOn — so a companion
-            // launched without this can be handed a path to a jar nothing has built yet.
-            run.dependsOn(companion.getInputs().getFiles());
+            File companionLog = new File(topology.getGameDirectory().get().getAsFile(),
+                    "companion-" + companionName.replace(':', '-') + ".log");
+            if (RunSideProcesses.of(run).startCompanion(companion, companionLog, sideProcesses)) {
+                dependOnCompanion(run, companion);
+            }
         }
+        if (Boolean.TRUE.equals(topology.getClient().getOrElse(false))) {
+            RunSideProcesses.of(run).requireDisplay(topology.getName());
+        }
+    }
+
+    private void dependOnCompanion(Task run, JavaExec companion) {
+        run.dependsOn(companion.getDependsOn());
+        // ...and on whatever produces its inputs. A run task's classpath is a file collection
+        // carrying its own build dependencies, which are not in dependsOn — so a companion
+        // launched without this can be handed a path to a jar nothing has built yet.
+        run.dependsOn(companion.getInputs().getFiles());
 
         // Declared, not discovered. Starting a companion means reading another run task's command
         // line at execution time, so this task action holds a Task — which the configuration cache
@@ -438,21 +442,6 @@ public class StageWrightPlugin implements Plugin<Project> {
         // its own task action has run — which is the same fact that makes MOD_CLASSES late-bound.
         run.notCompatibleWithConfigurationCache("stagewright starts a companion run from another"
                 + " task's JavaExec spec, which cannot be serialized into the configuration cache");
-
-        JavaExec companionSpec = companion;
-        File companionLog = new File(topology.getGameDirectory().get().getAsFile(),
-                "companion-" + (companionName == null ? "none" : companionName.replace(':', '-')) + ".log");
-        run.doFirst(t -> {
-            StageWrightSideProcessService service = sideProcesses.get();
-            String display = wantsDisplay ? service.ensureVirtualDisplay(t.getLogger()) : null;
-            if (display != null && t instanceof JavaExec exec) {
-                exec.environment("DISPLAY", display);
-            }
-            if (companionSpec != null) {
-                companionLog.getParentFile().mkdirs();
-                service.startCompanion(companionSpec, companionLog, display, t.getLogger());
-            }
-        });
     }
 
     /**
