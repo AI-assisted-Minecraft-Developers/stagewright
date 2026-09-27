@@ -77,10 +77,13 @@ class SuiteRegistryTest {
         Path file = dir.resolve("stagewright-results.jsonl");
         new ResultsJsonl(file).writeRegistryFailure("fabric", "wd.*",
                 "IllegalStateException: duplicate scene name \"x\"");
+        // startedAt is the clock's, so it is checked for presence and then taken out of the comparison.
         List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+        assertTrue(lines.get(0).matches(".*,\"startedAt\":\\d+}"), lines.get(0));
         assertEquals(List.of(
                 "{\"type\":\"suite\",\"loader\":\"fabric\",\"registered\":[],\"filter\":\"wd.*\","
                         + "\"registryError\":\"IllegalStateException: duplicate scene name \\\"x\\\"\"}",
-                "{\"type\":\"done\",\"scenes\":0}"), lines);
+                "{\"type\":\"done\",\"scenes\":0}"),
+                List.of(lines.get(0).replaceFirst(",\"startedAt\":\\d+", ""), lines.get(1)));
     }
 }

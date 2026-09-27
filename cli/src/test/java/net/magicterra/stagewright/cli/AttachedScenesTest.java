@@ -45,4 +45,17 @@ class AttachedScenesTest {
         assertEquals(0, Main.runAttachedScenes(scenes, NO_DRIVER, "fabric", results, l -> { }));
         assertTrue(Files.readString(results).contains("\"name\":\"pack.a\""));
     }
+
+    @Test
+    void theAttachedHalfRecordsNoBuild(@TempDir Path dir) throws IOException {
+        // A digest of mods/ alone misses the scene files and whatever is injected from elsewhere,
+        // and a build that names part of the code lets coverage reconcile runs of different code.
+        Path scenes = Files.createDirectories(dir.resolve("attached"));
+        Files.writeString(scenes.resolve("ok.js"), "scene('pack.a', 20, function (s) { });",
+                StandardCharsets.UTF_8);
+        Path results = dir.resolve("attached-results.jsonl");
+        Main.runAttachedScenes(scenes, NO_DRIVER, "fabric", results, l -> { });
+        String header = Files.readAllLines(results).get(0);
+        assertTrue(header.contains("\"startedAt\":") && !header.contains("\"build\""), header);
+    }
 }

@@ -48,6 +48,7 @@ public final class AttachedRun {
     private final String loader;
     private final Consumer<String> log;
     private final java.util.function.LongSupplier clockMs;
+    private long startedAt;
 
     public AttachedRun(List<SceneSpec> scenes, DriverBinding driver, String loader,
                        Consumer<String> log, java.util.function.LongSupplier clockMs) {
@@ -64,6 +65,7 @@ public final class AttachedRun {
      * @return true when nothing failed — the caller turns that into an exit code
      */
     public boolean run(Path resultsFile) {
+        startedAt = clockMs.getAsLong();
         List<Map<String, Object>> records = new ArrayList<>();
         boolean allGood = true;
 
@@ -195,6 +197,7 @@ public final class AttachedRun {
                     registered.add(r);
                 }
                 header.put("registered", registered);
+                header.put("startedAt", startedAt);
                 // No worldPin key. Attached pins nothing, and the contract's "present only when it
                 // has a value" rule is what lets that be stated by omission rather than by a lie.
                 w.write(GSON.toJson(header));

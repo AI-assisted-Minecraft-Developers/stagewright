@@ -194,7 +194,7 @@ public final class ClientProbes {
         ResultsJsonl out = new ResultsJsonl(Path.of(OUT_FILE));
         // A header/footer pair so this file is judged by the same contract as the server's, rather
         // than being a bespoke format some second parser has to learn.
-        out.writeSuiteHeader(loader, List.of(Scene.of(PROBE, BUDGET_TICKS, ctx -> { })));
+        out.writeSuiteHeader(loader, List.of(Scene.of(PROBE, BUDGET_TICKS, ctx -> { })), startedMs);
         out.writeScene(PROBE, outcome, ticks, System.currentTimeMillis() - startedMs,
                 reason, data, skipped, bodyRan);
         out.writeDone(1);

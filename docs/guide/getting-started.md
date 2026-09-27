@@ -184,7 +184,9 @@ java -jar stagewright.jar --coverage run-a/stagewright-results.jsonl,run-b/stage
 
 This runs no game and takes no `--game-dir`. It answers the question no single run can be asked: did
 every scene these runs register execute in at least one of them? See
-[Topologies](topologies.md#a-skip-is-not-coverage) for why that matters.
+[Topologies](topologies.md#a-skip-is-not-coverage) for why that matters. This runner's results
+record no build and a Gradle gate's in a git work tree do, so listing both together is ENV
+(`MIXED BUILDS`).
 
 ### Scenes that run outside the game
 

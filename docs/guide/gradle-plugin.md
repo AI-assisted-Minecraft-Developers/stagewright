@@ -127,6 +127,7 @@ Only these, and only in the cases named:
 | `stagewright.results` | Only when `resultsFile` differs from the default. |
 | `stagewright.scenes` | Only when `-Pstagewright.scenes=<patterns>` is on the command line. |
 | `stagewright.hold`, `stagewright.topology`, `stagewright.endpoint` | Only on a hold task. |
+| `stagewright.build` | On every run task that is a `JavaExec`, and its companion, when the project is a git work tree. Taken once per build, when its first run starts, so every run in the build carries the same id. |
 
 `DISPLAY` is injected into the run's environment, and the companion's, when a virtual display was
 started for the run.

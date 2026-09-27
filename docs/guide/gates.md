@@ -221,6 +221,16 @@ client probe that skipped on every topology is reported like any other uncovered
 whose own name is another topology's companion label is refused, since one of the two results files
 would otherwise drop out of the reconciliation.
 
+Results from different code are not reconciled. Each gate passes the game a build id taken from the
+git work tree once per build, when its first run starts — HEAD, plus a digest of uncommitted
+changes to tracked files — and the header records it; every run and companion in one build gets the
+same id. When the files disagree, the
+reconciliation is ENV and lists each file's build, so a topology last run a week ago is re-run
+rather than counted. The id covers what git tracks, including edits inside submodules, whatever the
+local diff settings: a change only to an untracked file does not change it. A project git does not
+track records no build, so coverage cannot tell its runs apart by code: files with no build match
+each other, and a file with no build is never reconciled with one that has a build.
+
 For a pack tested through the standalone command-line runner, the same reconciliation is available
 without a build tool:
 
@@ -231,6 +241,9 @@ java -jar stagewright.jar --coverage run-a/stagewright-results.jsonl,run-b/stage
 The runner reconciles exactly the files it is given. List the attached half's
 `stagewright-attached-results.jsonl` and any client results file too, or their scenes are not part of
 the claim.
+
+The runner records no build, so it cannot tell runs of a pack whose mods changed in between from
+runs of the same pack. Reconcile files from runs you know tested the same mods.
 
 ## Running one scene while you write it
 
