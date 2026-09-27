@@ -241,13 +241,14 @@ public final class Main {
                 + ", world " + world);
         Process game = start(command, run.gameDir(), launchLog);
 
+        NoWindow noWindow = new NoWindow(launchLog);
         Waited waited = awaitDoneFooter(run, game, crashes, new Stall(List.of(launchLog,
                 run.gameDir().resolve("logs/latest.log"), run.results(), run.progress()),
-                run.stallMinutes()));
+                run.stallMinutes()), noWindow);
         // Drained like a server: the director closes the client once the suite is over, and the
         // world has to be saved and closed before it can be removed.
         if (waited == Waited.DONE) drain(game, launchLog);
-        explain(waited, run, "client", game, crashes, launchLog, run.gameDir(), started);
+        explain(waited, run, "client", game, crashes, noWindow, launchLog, run.gameDir(), started);
         kill(game);
         Verdict.Result verdict = judge(run, launchLog, crashes, waited);
         Worlds.finishClient(run.gameDir(), world, verdict.code() == 0, run.log());
@@ -330,10 +331,11 @@ public final class Main {
             // The server half is the one that writes the results, so its footer ends the wait here
             // exactly as it does in the plain topology — and for the same reason: a pack that cannot
             // close its own JVM must not cost the whole --timeout after it has finished.
+            NoWindow noWindow = new NoWindow(clientLog);
             waited = awaitDoneFooter(run, server, crashes, new Stall(List.of(runLog,
-                    clientLog, run.results(), run.progress()), run.stallMinutes()));
+                    clientLog, run.results(), run.progress()), run.stallMinutes()), noWindow);
             if (waited == Waited.DONE) drain(server, runLog);
-            explain(waited, run, "server", server, crashes, runLog, run.gameDir(), started);
+            explain(waited, run, "server", server, crashes, noWindow, runLog, run.gameDir(), started);
             String hint = companionHint(waited, clientLog);
             if (hint != null) System.err.println(hint);
         } finally {
@@ -487,7 +489,7 @@ public final class Main {
     }
 
     /** How a wait for the run's done footer ended. None of them is interchangeable with another. */
-    enum Waited { DONE, CRASHED, PROCESS_DIED, STALLED, TIMED_OUT }
+    enum Waited { DONE, CRASHED, NO_WINDOW, PROCESS_DIED, STALLED, TIMED_OUT }
 
     /**
      * Wait for the suite to write its done footer, or for the game to stop being able to.
@@ -510,6 +512,11 @@ public final class Main {
      */
     private static Waited awaitDoneFooter(Run run, Process game, CrashWatch crashes, Stall stall)
             throws IOException, InterruptedException {
+        return awaitDoneFooter(run, game, crashes, stall, NoWindow.NEVER);
+    }
+
+    private static Waited awaitDoneFooter(Run run, Process game, CrashWatch crashes, Stall stall,
+                                          NoWindow noWindow) throws IOException, InterruptedException {
         long start = System.nanoTime();
         long limit = TimeUnit.MINUTES.toNanos(run.timeoutMinutes());
         while (!expired(start, limit, System.nanoTime())) {
@@ -521,6 +528,7 @@ public final class Main {
             // All checked AFTER the file, not before: a run that writes its footer and dies in the
             // same second would otherwise be reported as having died with nothing to show.
             if (crashes.fresh() != null) return Waited.CRASHED;
+            if (noWindow.said() != null) return Waited.NO_WINDOW;
             if (!game.isAlive()) return Waited.PROCESS_DIED;
             if (stall.stalled()) return Waited.STALLED;
             Thread.sleep(1000);
@@ -536,8 +544,20 @@ public final class Main {
     /** Say how a run that did not finish ended, and — for a failed boot — what went wrong first. */
     private static void explain(Waited waited, Run run, String half, Process game, CrashWatch crashes,
                                 Path log, Path gameDir, long started) {
+        explain(waited, run, half, game, crashes, NoWindow.NEVER, log, gameDir, started);
+    }
+
+    private static void explain(Waited waited, Run run, String half, Process game, CrashWatch crashes,
+                                NoWindow noWindow, Path log, Path gameDir, long started) {
         switch (waited) {
             case DONE -> { return; }
+            case NO_WINDOW -> {
+                // The cause is the display, which the lines FirstCause would add only follow from.
+                System.err.println("[stagewright] ENV — the client could not open a window, and was"
+                        + " killed rather than left waiting on the dialog NeoForge opens next. It said: "
+                        + noWindow.said() + "  (" + noWindow.log() + ")");
+                return;
+            }
             case CRASHED, PROCESS_DIED -> System.err.println("[stagewright] the " + half
                     + " stopped before the suite finished. This is not a slow run: " + crashes.describe()
                     + ", then " + log + ".");
@@ -922,7 +942,9 @@ public final class Main {
             System.err.println("  expected: " + run.results());
             // A stall has already been explained, with the state the process was in. The guesses
             // below would follow it with "it never loaded" about a game that loaded and then waited.
-            if (waited == Waited.STALLED) return new Verdict.Result(3, List.of("the run wrote no results"));
+            if (waited == Waited.STALLED || waited == Waited.NO_WINDOW) {
+                return new Verdict.Result(3, List.of("the run wrote no results"));
+            }
             boolean injected = !run.opts().containsKey("no-install");
             noResultsCause(run.gameDir(), crashes.fresh(), injected,
                     injected || net.magicterra.stagewright.engine.ModInstall.frameworkPresent(run.gameDir()),
@@ -1149,6 +1171,7 @@ public final class Main {
                   A client needs a display, and this tool does not start one: DISPLAY, or
                   WAYLAND_DISPLAY when DISPLAY is unset. A local DISPLAY must also let the client
                   in with the cookie in XAUTHORITY or $HOME/.Xauthority, or the run is ENV at once.
+                  A client that still logs glfwInit failed is killed and reported as ENV.
                   HTTPS_PROXY is honoured for downloads.
 
                 exit: 0 GREEN / 1 RED / 2 DEAD (the framework is broken, results void)

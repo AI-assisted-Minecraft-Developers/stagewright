@@ -192,7 +192,10 @@ A topology whose run task is a client (`client = true`), and every companion cli
 before it starts on Linux when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set, or when the X server
 on a local `DISPLAY` is not there or refuses the cookie in `XAUTHORITY`. The plugin does not
 start a display: on a headless machine, run the build under `xvfb-run` or in an image that provides
-one.
+one. A client that passes this check and still cannot open its window is not watched for here:
+NeoForge opens a dialog nobody will click, and a gate lasts until `timeoutMinutes` ends it — a hold,
+which has no timeout, until you stop it. The command-line runner kills such a client as soon as it
+logs `glfwInit failed`.
 
 ## Reconciling the topologies against each other
 

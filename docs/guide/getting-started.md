@@ -124,7 +124,9 @@ run is ENV before anything starts. A local `DISPLAY` is also asked whether it le
 the cookie from `XAUTHORITY` or `$HOME/.Xauthority` (none when neither is set), and one that refuses
 is ENV with the server's reason.
 The runner never starts a virtual framebuffer: a display is the environment's to provide — the
-desktop, a CI image with Xvfb, or `xvfb-run` around the command.
+desktop, a CI image with Xvfb, or `xvfb-run` around the command. A client that passes these checks
+and still cannot open its window — it logs `glfwInit failed` — is killed and reported as ENV as soon
+as it says so, rather than left on the dialog NeoForge opens next.
 
 > **Note.** A crash on the client's first tick is the pack's, not the runner's. A client ticks
 > throughout its own loading, so every mod's client-tick handler fires while the loading overlay is
