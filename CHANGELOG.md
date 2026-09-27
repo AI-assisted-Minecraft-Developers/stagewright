@@ -12,6 +12,22 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-27
 
+### A dead socket is no longer a `StageWrightRpcException`, nor a refusal to `errorOf` · green in unit tests
+
+**Incompatible:** code that catches `StageWrightRpcException` no longer catches a failed handshake,
+a lost connection or an interrupt, and a call on a connection that has already closed throws
+`StageWrightTransportException` at once rather than a `StageWrightTimeoutException` after the wait.
+
+`StageWrightRpc` threw the same `StageWrightRpcException` for an error envelope and for a failed
+handshake, a broken socket or an interrupt, and `errorOf` returned the text of either as the
+driver's refusal. A test asserting that a call is refused with a given message could pass on a
+transport error whose text happened to contain it. Transport failures now throw
+`StageWrightTransportException`, a `RuntimeException` that is not a `StageWrightRpcException`:
+`errorOf` and every `catch` written for a refusal let it through, and an `assertThrows` expecting a
+refusal fails on it. Catch it separately where a lost connection should still count as a failure. An
+attached scene whose connection is lost now fails saying so, instead of quoting the error as a
+refusal or waiting out the timeout.
+
 ### A scene source that holds no scene is refused · green in unit tests
 
 A `sceneScripts` or `--scenes` directory with no `.js` file in it was installed as nothing and the run
@@ -32,8 +48,9 @@ The task read only each topology's main results file. The companion client's pro
 scene, and one that skipped on every topology was never reported. A topology with a
 `companionResultsFile` is now reconciled with it too, labelled `<topology>-client`, and a missing
 companion file is reported like a missing main one. A topology named like another's companion
-label is refused rather than letting one results file replace the other. The CLI's `--coverage` reconciles the files it is
-given, and its documentation now says to list the attached and client results files.
+label is refused rather than letting one results file replace the other. The CLI's `--coverage`
+reconciles the files it is given, and its documentation now says to list the attached and client
+results files.
 
 ### `passNote` is no longer suggested for a body with nothing to do · documentation
 
