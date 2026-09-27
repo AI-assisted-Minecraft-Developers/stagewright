@@ -115,6 +115,17 @@ dispatching lifecycle events, and the run crashes on its first tick in an unrela
 warns before launching. The display checks also run before the install now, and before
 `--world reset` deletes anything, so a refused run has downloaded and deleted nothing.
 
+### The CLI no longer deletes anything from `mods/`, and says which copy of a mod it loads · green in unit tests
+
+Taking back what an older CLI copied into `mods/` went by the file name in its ledger, and the
+ledger kept nothing else. A modpack that later put its own jar under the same name — the same
+driver build, assembled by its own tooling — had that jar deleted by the next run. The CLI now only
+names the ledgered files it finds and leaves them where they are; the Gradle plugin, whose run
+directories are its own, still takes them back. Where the pack's `mods/` already has StageWright or
+a jar named like a `--mod`, the pack's copy loads instead, and the log names that file with its
+SHA-1 — and warns when it differs from the one the command line asked for, which before was a
+single line saying the jar was not loaded again.
+
 ## 2026-09-27
 
 ### Coverage refuses to reconcile runs of different code · green in unit tests

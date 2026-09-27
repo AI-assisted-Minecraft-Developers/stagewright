@@ -14,6 +14,8 @@ import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
+import net.magicterra.stagewright.cli.install.Sha1;
+import net.magicterra.stagewright.engine.ModInstall;
 import net.magicterra.stagewright.engine.RunDirectory;
 
 /**
@@ -49,29 +51,36 @@ final class ModInjection {
     /**
      * Stage the framework and {@code extras} for {@code loader} and say how to load them.
      *
-     * <p>Jars an older CLI copied into mods/ are taken back out first — left there, each would load a
-     * second time beside the copy handed over here. An extra whose file name the pack's mods/ already
-     * holds is skipped rather than loaded twice.
+     * <p>Nothing in the pack's mods/ is touched — not even what an older CLI copied there, because
+     * its ledger kept only names and a pack may since have put its own jar under one. Where the pack
+     * already has StageWright, or a jar named like an extra, that copy loads instead of ours (two
+     * would be a duplicate mod), and the log says which file that is and whether its bytes match.
      */
     static Arguments prepare(Path gameDir, String loader, List<Path> extras, Consumer<String> log) {
         requireLoader(loader);
-        net.magicterra.stagewright.engine.ModInstall.uninstall(gameDir, log);
+        for (Path left : ModInstall.ledgered(gameDir)) {
+            log.accept("NOTE: an older StageWright CLI copied " + left.getFileName() + " into mods/."
+                    + " It is left there and loads as the pack's own; delete it if the pack did not"
+                    + " put it there.");
+        }
 
         Path staged = gameDir.resolve(RunDirectory.ARTIFACT_DIR).resolve("mods");
         deleteTree(staged);
         List<Path> jars = new ArrayList<>();
-        if (net.magicterra.stagewright.engine.ModInstall.frameworkPresent(gameDir)) {
-            // The pack's own, left where it is: a second copy would be a duplicate mod.
-            log.accept("not loading this CLI's StageWright: the pack's mods/ already has one");
+        Path ours = unpackFramework(loader, staged);
+        List<Path> packs = ModInstall.frameworkJars(gameDir);
+        if (packs.isEmpty()) {
+            jars.add(ours);
         } else {
-            jars.add(unpackFramework(loader, staged));
+            for (Path pack : packs) log.accept(usingThePacks(pack, ours, "this CLI's StageWright"));
         }
         for (Path extra : extras) {
             if (!Files.isRegularFile(extra)) {
                 throw new IllegalArgumentException("--mod " + extra + " is not a file");
             }
-            if (Files.exists(gameDir.resolve("mods").resolve(extra.getFileName().toString()))) {
-                log.accept("not loading " + extra.getFileName() + " again: the pack's mods/ already has it");
+            Path pack = gameDir.resolve("mods").resolve(extra.getFileName().toString());
+            if (Files.exists(pack)) {
+                log.accept(usingThePacks(pack, extra, extra.toString()));
                 continue;
             }
             jars.add(extra);
@@ -151,6 +160,27 @@ final class ModInjection {
             return out;
         } catch (IOException e) {
             throw new UncheckedIOException("cannot unpack " + resource, e);
+        }
+    }
+
+    /** Which copy this run loads when the pack has its own — and a warning when the bytes differ. */
+    private static String usingThePacks(Path pack, Path skipped, String skippedName) {
+        String packSha1 = sha1(pack);
+        String skippedSha1 = sha1(skipped);
+        if (packSha1.equals(skippedSha1)) {
+            return "using the pack's own " + pack + " (sha1 " + packSha1.substring(0, 8) + "), the same"
+                    + " bytes as " + skippedName;
+        }
+        return "WARNING: using the pack's own " + pack + " (sha1 " + packSha1.substring(0, 8) + "), not "
+                + skippedName + " (sha1 " + skippedSha1.substring(0, 8) + ") — they differ, so this run"
+                + " tests the pack's copy. Take it out of mods/ to test the other.";
+    }
+
+    private static String sha1(Path file) {
+        try {
+            return Sha1.of(file);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read " + file, e);
         }
     }
 

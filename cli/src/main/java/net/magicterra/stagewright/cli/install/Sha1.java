@@ -8,11 +8,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-final class Sha1 {
+public final class Sha1 {
 
     private Sha1() {}
 
-    static String of(Path file) throws IOException {
+    public static String of(Path file) throws IOException {
         MessageDigest digest = digest();
         byte[] buffer = new byte[1 << 16];
         try (InputStream in = Files.newInputStream(file)) {
