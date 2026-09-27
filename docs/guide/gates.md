@@ -209,6 +209,10 @@ reconciliation ENV, naming the file: its registered list is whatever the pattern
 over it describes a subset. And a scene recorded `ENV_FAIL` did not execute, because that outcome is
 written before the body runs; it counts as a hole exactly as a skip does.
 
+When the results files register no scene between them — none armed, none could assemble its
+registry, or the ones that did registered nothing — the reconciliation is ENV too, rather than a
+pass over zero scenes.
+
 For a pack tested through the standalone command-line runner, the same reconciliation is available
 without a build tool:
 

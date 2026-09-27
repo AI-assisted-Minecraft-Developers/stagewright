@@ -435,6 +435,11 @@ A results file whose header carries `filter` is not reconciled at all: coverage 
 naming the file, because its `registered` list is whatever the pattern kept and every count
 derived from it would describe a subset while reading as the suite.
 
+When the results files register no scene between them — none has a header, every header carries
+`registryError`, or the remaining headers' `registered` lists are empty or absent — coverage is ENV
+as well. Nothing was registered, so nothing can be named uncovered, and "0 of 0 executed" would
+otherwise read as a pass.
+
 The single exemption is declared at the scene, by the author who knows why:
 `@SceneDef(mustSkip = true)`. That is an assertion rather than an excuse — the verdict then
 *requires* the scene to skip and calls the run DEAD if it executes.

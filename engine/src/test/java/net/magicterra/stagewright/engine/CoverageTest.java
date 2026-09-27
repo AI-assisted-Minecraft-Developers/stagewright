@@ -149,6 +149,33 @@ class CoverageTest {
     }
 
     @Test
+    void runsThatAllContributeNothingAreNotACoverageClaim() {
+        // One never armed, one could not assemble its suite: "0 of 0 executed" over them has no
+        // uncovered scene to name, and would read as GREEN over a suite nothing ran.
+        Map<String, Object> broken = suite();
+        broken.put("registryError", "a scene provider threw");
+        Coverage.Result result = Coverage.judge(List.of(
+                run("dead", ran("a")),
+                run("broken", broken)));
+        assertEquals(3, result.code());
+        assertTrue(reports(result, "NO EVIDENCE"), String.join("\n", result.report()));
+        assertFalse(reports(result, "COVERAGE: "));
+    }
+
+    @Test
+    void headersThatRegisterNoSceneAreNoEvidenceEither() {
+        // Both armed cleanly, so neither is set aside above; what they lack is a scene to count.
+        Map<String, Object> noList = suite();
+        noList.remove("registered");
+        Coverage.Result result = Coverage.judge(List.of(
+                run("empty", suite()),
+                run("unlisted", noList)));
+        assertEquals(3, result.code());
+        assertTrue(reports(result, "NO EVIDENCE"), String.join("\n", result.report()));
+        assertFalse(reports(result, "COVERAGE: "));
+    }
+
+    @Test
     void aFilteredRunIsNotACoverageClaim() {
         // Its registered list is whatever the pattern kept, so "N of N executed" over it would be a
         // statement about a subset dressed as one about the suite.
