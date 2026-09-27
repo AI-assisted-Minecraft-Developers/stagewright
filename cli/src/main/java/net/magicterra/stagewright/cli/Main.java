@@ -1146,7 +1146,9 @@ public final class Main {
                                       shared with HMCL through its cache/SHA-1 directory
                   --username <name>   the offline player's name (default StageWright)
                   --mirror bmclapi    try BMCLAPI before the official servers
-                  A client needs a display (DISPLAY or WAYLAND_DISPLAY); this tool does not start one.
+                  A client needs a display, and this tool does not start one: DISPLAY, or
+                  WAYLAND_DISPLAY when DISPLAY is unset. A local DISPLAY must also let the client
+                  in with the cookie in XAUTHORITY or $HOME/.Xauthority, or the run is ENV at once.
                   HTTPS_PROXY is honoured for downloads.
 
                 exit: 0 GREEN / 1 RED / 2 DEAD (the framework is broken, results void)
