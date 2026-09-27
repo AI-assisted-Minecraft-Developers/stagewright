@@ -20,7 +20,7 @@ to write out-of-process tests of their own.
 
 ## The endpoint descriptor
 
-A held run publishes one file, `stagewright-endpoint.json`, in its own run directory. The name
+A held run publishes one file, `stagewright/stagewright-endpoint.json`, in its own run directory. The name
 is defined once, in `RunDirectory.ENDPOINT_FILE`, and repeated nowhere.
 
 **The game writes it, not the launcher.** Only the game's own JVM knows the moment the endpoint

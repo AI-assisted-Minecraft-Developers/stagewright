@@ -179,7 +179,7 @@ only honest thing this process could report about them is that it cannot see the
 ### Reconciling several runs
 
 ```
-java -jar stagewright.jar --coverage run-a/stagewright-results.jsonl,run-b/stagewright-results.jsonl
+java -jar stagewright.jar --coverage run-a/stagewright/stagewright-results.jsonl,run-b/stagewright/stagewright-results.jsonl
 ```
 
 This runs no game and takes no `--game-dir`. It answers the question no single run can be asked: did

@@ -27,22 +27,30 @@ import java.util.stream.Stream;
  */
 public final class RunDirectory {
 
-    /** The TESTKIT_ENDPOINT descriptor a held run publishes, relative to the run directory. Matched
-     *  by the plugin's hold task and by the game's {@code EndpointDescriptor}. */
-    public static final String ENDPOINT_FILE = "stagewright-endpoint.json";
+    /** Every file a run produces goes here, under the run directory — which may be a player's own
+     *  {@code .minecraft}, where a results file at the top level is litter among their files. */
+    public static final String ARTIFACT_DIR = "stagewright";
+
+    /** The TESTKIT_ENDPOINT descriptor's file name, beside each results file. Matched by the game's
+     *  {@code EndpointDescriptor} through the path it is handed. */
+    public static final String ENDPOINT_NAME = "stagewright-endpoint.json";
+
+    /** The TESTKIT_ENDPOINT descriptor a held run publishes, relative to the run directory. */
+    public static final String ENDPOINT_FILE = ARTIFACT_DIR + "/" + ENDPOINT_NAME;
 
     /** Where the run says it has got to, beside each results file. Written in-game by the stall
      *  watchdog's {@code Heartbeat}; the name is repeated there because the game module and this one
      *  share no code — they are different processes and, deliberately, different dependency graphs. */
     public static final String PROGRESS_FILE = "stagewright-progress.json";
 
-    /** The file a run is judged on unless its supervisor renames it. Repeated on the game side
-     *  ({@code StageWrightCommon}) for the same reason {@link #PROGRESS_FILE} is. */
-    public static final String DEFAULT_RESULTS_FILE = "stagewright-results.jsonl";
+    /** The file a run is judged on unless its supervisor renames it, relative to the run directory.
+     *  Repeated on the game side ({@code StageWrightCommon}) for the same reason {@link #PROGRESS_FILE}
+     *  is. */
+    public static final String DEFAULT_RESULTS_FILE = ARTIFACT_DIR + "/stagewright-results.jsonl";
 
     /** What a client joined to a dedicated server writes in its own run directory: the results of
      *  the probes only a client can run. Repeated game-side in {@code ClientProbes}. */
-    public static final String CLIENT_RESULTS_FILE = "stagewright-client-results.jsonl";
+    public static final String CLIENT_RESULTS_FILE = ARTIFACT_DIR + "/stagewright-client-results.jsonl";
 
     /**
      * The system property that carries a renamed results file INTO the game.
@@ -60,6 +68,11 @@ public final class RunDirectory {
      *  header so coverage can refuse to reconcile runs of different code. */
     public static final String BUILD_PROPERTY = "stagewright.build";
 
+    /** The system property naming the directory the game reads a pack's scenes and capability
+     *  descriptors from, instead of copies under {@code config/stagewright/}. Repeated game-side in
+     *  {@code PackFiles}. */
+    public static final String SCENES_DIR_PROPERTY = "stagewright.scenesDir";
+
     private RunDirectory() {}
 
     /**
@@ -72,11 +85,13 @@ public final class RunDirectory {
      *                     companion's own run directory, which is not under this one. The heartbeat
      *                     and endpoint descriptor beside each are deleted with it
      * @param cleanWorld   delete the world before running
-     * @param sceneScripts a directory of {@code .js} scene files to install, or null
+     * @param server       a dedicated server will run here, so write the EULA acceptance and the
+     *                     forced {@code server.properties} keys; never for a client's game directory,
+     *                     which may be a player's own {@code .minecraft}
      * @param log          receives one line per action worth reporting
      */
     public static void provision(Path gameDir, List<Path> staleResults, boolean cleanWorld,
-                                 Path sceneScripts, Consumer<String> log) {
+                                 boolean server, Consumer<String> log) {
         if (!Files.isDirectory(gameDir)) {
             try {
                 Files.createDirectories(gameDir);
@@ -139,7 +154,7 @@ public final class RunDirectory {
         Set<Path> endpoints = new LinkedHashSet<>();
         endpoints.add(gameDir.resolve(ENDPOINT_FILE).toAbsolutePath());
         for (Path results : staleResults) {
-            endpoints.add(results.toAbsolutePath().resolveSibling(ENDPOINT_FILE));
+            endpoints.add(results.toAbsolutePath().resolveSibling(ENDPOINT_NAME));
         }
         for (Path endpoint : endpoints) {
             try {
@@ -151,10 +166,12 @@ public final class RunDirectory {
             }
         }
 
-        seedClientOptions(gameDir.resolve("options.txt"));
-        seedServerEula(gameDir.resolve("eula.txt"));
-        seedOfflineMode(gameDir.resolve("server.properties"));
-        installAuthoredContent(gameDir, sceneScripts, log);
+        // A client's four run settings are not written here: the game sets them in memory (RunOptions),
+        // so that a run in a player's own .minecraft cannot overwrite their options.txt.
+        if (server) {
+            seedServerEula(gameDir.resolve("eula.txt"));
+            seedOfflineMode(gameDir.resolve("server.properties"));
+        }
     }
 
     /**
@@ -177,8 +194,13 @@ public final class RunDirectory {
      * <p>Both targets are cleared first, for the same reason the world is: a file deleted from the
      * source but left in the run directory keeps being loaded, and scenes are reconciled against the
      * manifest like any other, so the suite stays green while testing a file nobody can find.
+     *
+     * <p>The Gradle plugin's route. The CLI copies nothing: it names its scenes directory to the game
+     * with {@code -Dstagewright.scenesDir}, because the game directory may be a player's own.
+     *
+     * @param source a directory of {@code .js} scenes and {@code .json} descriptors, or null for none
      */
-    private static void installAuthoredContent(Path gameDir, Path source, Consumer<String> log) {
+    public static void installAuthoredContent(Path gameDir, Path source, Consumer<String> log) {
         Path scenes = gameDir.resolve("config/stagewright/scenes");
         Path capabilities = gameDir.resolve("config/stagewright/capabilities");
         deleteTree(scenes);
@@ -305,49 +327,6 @@ public final class RunDirectory {
             Files.writeString(eula, "eula=true\n");
         } catch (IOException e) {
             throw new UncheckedIOException("cannot write " + eula, e);
-        }
-    }
-
-    /**
-     * Write the four client settings a scene run cannot be correct without. A dedicated server
-     * never reads this file, so it is written unconditionally rather than guessed at from the run
-     * type.
-     *
-     * <p>Only four, and each earns its place:
-     *
-     * <ul>
-     *   <li>{@code pauseOnLostFocus:false} — vanilla singleplayer pauses when the window is
-     *       deactivated. On a developer's desktop that happens constantly, and the resulting pause
-     *       screen does not merely stall the run: it sits underneath every later assertion, so
-     *       scenes report a world that advanced no ticks and screens that are not what they should
-     *       be. One focus slip turns a clean run into a page of unrelated-looking failures.</li>
-     *   <li>{@code onboardAccessibility:false} — a fresh game directory otherwise opens the
-     *       accessibility onboarding screen before the title screen. The client director dismisses
-     *       it too; this stops it appearing at all, which is cheaper and does not depend on the
-     *       director having started.</li>
-     *   <li>{@code narrator:0} — nothing should attempt text-to-speech on a headless CI box.</li>
-     *   <li>{@code enableVsync:false} — with vsync on, the client's only thread blocks in
-     *       {@code glfwSwapBuffers} waiting for the compositor, and a compositor that is not
-     *       presenting the window (screen asleep, another workspace, a remote session) hands out
-     *       frames at about 1 Hz. Minecraft runs at most ten game ticks per frame, so the client
-     *       falls to ten ticks a second while the integrated server keeps twenty: every body the
-     *       client drives then needs twice the server ticks to do anything, and scenes with a tick
-     *       budget fail in a body-shaped way — arrival late, a climb that "stalls", a craft that
-     *       times out. Measured, not theorised: three jstacks of a 1 fps run sat in
-     *       {@code RenderSystem.flipFrame} having burned 0.04 ms of CPU between them, and the
-     *       failing scenes came in at almost exactly 2x their green tick counts.</li>
-     * </ul>
-     *
-     * <p>Minecraft merges missing keys with its defaults, so a four-line file is a complete one.
-     * Rewritten every provision rather than created once: a run that changed a setting must not
-     * carry it into the next one, which is the same discipline as deleting the world.
-     */
-    private static void seedClientOptions(Path options) {
-        try {
-            Files.writeString(options,
-                    "pauseOnLostFocus:false\nonboardAccessibility:false\nnarrator:0\nenableVsync:false\n");
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot seed the client options at " + options, e);
         }
     }
 

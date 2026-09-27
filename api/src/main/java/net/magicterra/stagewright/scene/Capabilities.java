@@ -42,9 +42,6 @@ final class Capabilities {
     /** The descriptors StageWright ships — the auto-detected ones, needing no configuration. */
     private static final String BUILT_IN_RESOURCE = "/data/stagewright/capabilities.json";
 
-    /** Where a pack keeps its own, beside its scenes ({@code config/stagewright/scenes}). */
-    private static final String PACK_DIR = "config/stagewright/capabilities";
-
     /** Providers that loaded, by name, in discovery order. */
     private static Map<String, CapabilityProvider> providers;
 
@@ -223,7 +220,7 @@ final class Capabilities {
     /** Descriptors the pack itself declared, beside its scenes. Name order, so a name collision
      *  between two pack files resolves the same way on every machine. */
     private static List<CapabilityDescriptor> packDescriptors() {
-        Path dir = Path.of(PACK_DIR);
+        Path dir = PackFiles.capabilities();
         if (!Files.isDirectory(dir)) return List.of();
         List<Path> files = new ArrayList<>();
         try (Stream<Path> walk = Files.list(dir)) {
@@ -235,7 +232,7 @@ final class Capabilities {
 
         List<CapabilityDescriptor> out = new ArrayList<>();
         for (Path file : files) {
-            String source = PACK_DIR + "/" + file.getFileName();
+            String source = file.toString();
             try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                 out.addAll(parseAll(JsonParser.parseReader(reader), source));
             } catch (IOException e) {

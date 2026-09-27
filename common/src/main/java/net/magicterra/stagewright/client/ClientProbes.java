@@ -52,7 +52,7 @@ import net.minecraft.client.Minecraft;
 public final class ClientProbes {
 
     /** Beside the server's {@code stagewright-results.jsonl}, in the CLIENT's run directory. */
-    private static final String OUT_FILE = "stagewright-client-results.jsonl";
+    private static final String OUT_FILE = "stagewright/stagewright-client-results.jsonl";
 
     private static final String PROBE = "client.damageSourceAcrossTheWire";
 

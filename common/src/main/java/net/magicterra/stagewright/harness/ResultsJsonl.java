@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import net.magicterra.stagewright.scene.PackFiles;
 import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.contract.SceneOutcome;
 
@@ -118,6 +119,12 @@ public final class ResultsJsonl {
         sb.append(",\"startedAt\":").append(startedAtMs);
         String build = System.getProperty(BUILD_PROPERTY, "").trim();
         if (!build.isEmpty()) sb.append(",\"build\":\"").append(escape(build)).append('"');
+        // A jar too old to know the property writes no such field, and runs none of the scenes the
+        // supervisor pointed it at: without this, that run judges GREEN over what it did not run.
+        String scenesDir = System.getProperty(PackFiles.SCENES_DIR_PROPERTY, "").trim();
+        if (!scenesDir.isEmpty()) {
+            sb.append(",\"scenesDir\":\"").append(escape(scenesDir)).append('"');
+        }
     }
 
     /**
@@ -233,6 +240,9 @@ public final class ResultsJsonl {
     private synchronized void write(String line, boolean truncate) {
         try {
             if (truncate) {
+                // The header starts the file, so it is also what creates the directory it lives in.
+                Path parent = file.toAbsolutePath().getParent();
+                if (parent != null) Files.createDirectories(parent);
                 Files.writeString(file, line, StandardCharsets.UTF_8,
                         StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
                         StandardOpenOption.WRITE);

@@ -169,14 +169,16 @@ Before every run, the provision step:
 - writes `eula.txt`;
 - forces three keys in `server.properties` and leaves every other line alone: online mode off, a
   fixed level seed, and chunk-write syncing off;
-- writes `options.txt` with focus-pausing, the accessibility onboarding prompt, the narrator and
-  vertical sync all switched off;
 - clears `config/stagewright/scenes` and `config/stagewright/capabilities`, then repopulates them
   from the topology's declared scene-script directory if it has one.
 
 That last step clears those two directories **whether or not** a scene-script directory is declared.
 A project that authors files there by hand should declare the directory they live in rather than
 writing into the run directory directly.
+
+`options.txt` is not written. A client StageWright directs switches off focus-pausing, the
+accessibility onboarding prompt, the narrator and vertical sync in memory as its options load, and
+puts the file's own lines for them back whenever the game saves it.
 
 Vertical sync is on that list for a reason worth knowing. With it on, a client blocks in the buffer
 swap until the compositor presents its window, and a compositor that is not presenting it — screen
@@ -235,7 +237,7 @@ For a pack tested through the standalone command-line runner, the same reconcili
 without a build tool:
 
 ```
-java -jar stagewright.jar --coverage run-a/stagewright-results.jsonl,run-b/stagewright-results.jsonl
+java -jar stagewright.jar --coverage run-a/stagewright/stagewright-results.jsonl,run-b/stagewright/stagewright-results.jsonl
 ```
 
 The runner reconciles exactly the files it is given. List the attached half's

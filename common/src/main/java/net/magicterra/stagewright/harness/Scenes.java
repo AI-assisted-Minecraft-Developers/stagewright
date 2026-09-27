@@ -38,10 +38,6 @@ public final class Scenes {
      *  without linking against a library that may not be present. */
     private static final String RHINO_PROBE = "dev.latvian.mods.rhino.Context";
 
-    /** Where a pack keeps its scenes. Duplicated from {@code JsScenes} deliberately — this side must
-     *  be able to say the path in the message below without loading that class. */
-    private static final String SCENES_DIR = "config/stagewright/scenes";
-
     /**
      * Scenes a modpack contributed as JavaScript files, after the compiled ones.
      *
@@ -55,13 +51,14 @@ public final class Scenes {
      * because the scenes that did not load are not in it to be missed.
      */
     private static List<Scene> scriptScenes() {
-        if (!java.nio.file.Files.isDirectory(java.nio.file.Path.of(SCENES_DIR))) {
+        java.nio.file.Path dir = net.magicterra.stagewright.scene.PackFiles.scenes();
+        if (!java.nio.file.Files.isDirectory(dir)) {
             return List.of();
         }
         try {
             Class.forName(RHINO_PROBE, false, Scenes.class.getClassLoader());
         } catch (ClassNotFoundException e) {
-            throw new IllegalStateException(SCENES_DIR + " holds scene files, but Rhino is not on this"
+            throw new IllegalStateException(dir + " holds scene files, but Rhino is not on this"
                     + " runtime's classpath, so none of them can run. Rhino ships with worlddriver —"
                     + " add it to the pack, or remove the directory if the scenes were not meant to"
                     + " run here.");

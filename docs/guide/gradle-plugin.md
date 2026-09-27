@@ -53,7 +53,7 @@ stagewright {
         dedicatedServerWithClient {
             runTask              = ':fabric:runStagewrightDedicatedServerWithClient'
             companionRunTask     = ':fabric:runStagewrightJoiningClient'
-            companionResultsFile = file('fabric/run-joining-client/stagewright-client-results.jsonl')
+            companionResultsFile = file('fabric/run-joining-client/stagewright/stagewright-client-results.jsonl')
             expectFile           = file('src/testmod/expected-scenes.txt')
         }
     }
@@ -70,7 +70,7 @@ result and how to read what they report.
 |---|---|---|---|
 | `runTask` | `String` | none | **Required.** A plain name for a task in this project, or a full path such as `':neoforge:runDogfoodServer'` for one elsewhere — which is every multi-loader build, where the runs live on loader subprojects and the checks belong on the root. |
 | `gameDirectory` | directory | `<projectDir>/run-stagewright-<topologyName>` | Where the run happens, and the anchor every relative path below resolves against. |
-| `resultsFile` | `String` | `stagewright-results.jsonl` | A file **name**, not a path. Changing it also changes what the game writes, because the plugin passes the name into the run. |
+| `resultsFile` | `String` | `stagewright/stagewright-results.jsonl` | Relative to the run directory. Changing it also changes what the game writes, because the plugin passes the name into the run. |
 | `expectFile` | file | none | The expected-scenes manifest. Present, the run reconciles both directions against it; absent, outcomes are judged and nothing is reconciled. An empty manifest is a hard error rather than a run that reconciles against nothing. |
 | `companionRunTask` | `String` | none | A second run task stood up beside the first and killed afterwards. Must resolve to a `JavaExec`. |
 | `companionResultsFile` | file | none | The companion's own results. Declared, its absence is an environment failure; undeclared, it is not read at all. |

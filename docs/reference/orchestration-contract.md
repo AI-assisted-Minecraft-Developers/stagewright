@@ -33,12 +33,19 @@ because a scene run cannot be correct without it:
 | `server.properties` | `online-mode` | `false` | A dev client has no Mojang session, so an online-mode server rejects its login forever. |
 | `server.properties` | `level-seed` | a fixed value | Without it the world is a different world every run, and any scene standing on generated ground asserts about whichever landscape it got. |
 | `server.properties` | `sync-chunk-writes` | `false` | With the vanilla default every region write is an fsync; the level's IO thread falls behind from the first scene and the backlog is held on the heap until the run dies of `OutOfMemoryError` reported as a scene failure. |
-| `options.txt` | `pauseOnLostFocus` | `false` | Vanilla singleplayer pauses on window deactivation, and the pause screen then sits underneath every later assertion. |
-| `options.txt` | `onboardAccessibility` | `false` | A fresh game directory otherwise opens accessibility onboarding ahead of the title screen. |
-| `options.txt` | `narrator` | `0` | Nothing should attempt text-to-speech on a CI machine. |
-| `options.txt` | `enableVsync` | `false` | With vsync on, a client whose window is not being presented gets frames at about 1 Hz, and Minecraft runs at most ten game ticks per frame — so the client ticks at half the server's rate and tick-budgeted scenes fail in a body-shaped way. |
 
-Every other line in those files is left exactly as it was. The seed constant is written twice —
+These two files are written only for a dedicated server. A client's settings are not written at
+all: a client StageWright directs sets these four in memory as its options load, and puts the
+file's own lines for them back whenever the game saves `options.txt`, which may be a player's.
+
+| Setting | Value | Why |
+|---|---|---|
+| `pauseOnLostFocus` | `false` | Vanilla singleplayer pauses on window deactivation, and the pause screen then sits underneath every later assertion. |
+| `onboardAccessibility` | `false` | A fresh game directory otherwise opens accessibility onboarding ahead of the title screen. |
+| `narrator` | off | Nothing should attempt text-to-speech on a CI machine, and without a speech library a narrator setting opens a modal dialog that waits for a click forever. |
+| `enableVsync` | `false` | With vsync on, a client whose window is not being presented gets frames at about 1 Hz, and Minecraft runs at most ten game ticks per frame — so the client ticks at half the server's rate and tick-budgeted scenes fail in a body-shaped way. |
+
+Every other line in `server.properties` is left exactly as it was. The seed constant is written twice —
 once in `RunDirectory` and once in `ClientDirector` — because the two live in builds that cannot
 see each other, one having no Minecraft on its classpath and the other unable to run outside the
 game. That the two agree is the contract; the value itself is arbitrary.
@@ -46,7 +53,9 @@ game. That the two agree is the contract; the value itself is arbitrary.
 Provisioning also installs authored content by extension: `.js` files from a supervisor-named
 source directory go to `config/stagewright/scenes`, `.json` files to
 `config/stagewright/capabilities`. Both targets are cleared first, so a file deleted from the
-source stops being loaded.
+source stops being loaded. A supervisor that must not write into the game directory — the CLI,
+whose game directory may be a player's — copies nothing and names the source directory with
+`-Dstagewright.scenesDir` instead; the game then reads both kinds of file from there.
 
 ## Starting the game and arming the harness
 
@@ -229,8 +238,8 @@ running scene as TIMEOUT with a thread dump in the reason, writes a matching foo
 
 ## The results file
 
-One JSON object per line, UTF-8, in the run directory. The name is
-`stagewright-results.jsonl` unless the supervisor renamed it with `stagewright.results`.
+One JSON object per line, UTF-8, in the run directory. The path is
+`stagewright/stagewright-results.jsonl` unless the supervisor renamed it with `stagewright.results`.
 
 Renaming has to reach the writer. A supervisor flag that changed only which file the verdict
 opened produced a complete, green results file and a verdict of "the run wrote no results"
@@ -258,6 +267,7 @@ Exactly one, first:
 | `registryError` | string | only when the registry could not be built | Why; `registered` is then empty and nothing ran. See *Scene discovery*. |
 | `startedAt` | number | always | Epoch milliseconds when the run started. The attached runner writes its header last, so this is not when the header was written. |
 | `build` | string | only when the launcher named one | The code this run tested: `git:<HEAD>` or `git:<HEAD>+<digest>` from the Gradle plugin, each part the first 12 hex digits: of the commit, and of a SHA-256 over the uncommitted changes to tracked files. Taken once per build, when its first run starts; compare it whole, not against a full commit hash. Passed in as `-Dstagewright.build`. Neither the command-line runner nor the attached runner names one. |
+| `scenesDir` | string | only when the launcher named one | The directory this run read scenes and capability descriptors from, as passed in with `-Dstagewright.scenesDir`. A named directory that is not there when the suite is assembled is a `registryError`, which this header then carries beside `scenesDir`. A launcher that named one and finds it absent here was running a StageWright too old to read the property, which ran none of those scenes. |
 
 The optional keys appear only when they have a value. A stream that does not pin a world — an
 out-of-process run — states that by omitting the key rather than by writing something untrue.
