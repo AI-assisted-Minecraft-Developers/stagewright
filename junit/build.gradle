@@ -48,11 +48,15 @@ dependencies {
     api 'org.junit.jupiter:junit-jupiter-api'
 
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.platform:junit-platform-testkit'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
 }
 
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        // Canaries.TARGET: wrong on purpose and run only through Canaries; here they would add a skipped entry.
+        excludeTags 'deliberately-wrong'
+    }
     // Pass the ambient TESTKIT_ENDPOINT straight through (empty when unset) so the
     // self-tests run live-free and attach()'s fail-fast is exercised honestly.
     environment 'TESTKIT_ENDPOINT', System.getenv('TESTKIT_ENDPOINT') ?: ''

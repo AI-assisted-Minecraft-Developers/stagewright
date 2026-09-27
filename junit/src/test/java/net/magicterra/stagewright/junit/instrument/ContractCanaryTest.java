@@ -1,13 +1,12 @@
 package net.magicterra.stagewright.junit.instrument;
 
-import net.magicterra.stagewright.contract.StageWrightTimeoutException;
-
-import com.google.gson.JsonObject;
+import net.magicterra.stagewright.junit.Canaries;
 import net.magicterra.stagewright.junit.Face;
 import net.magicterra.stagewright.junit.RequiresFace;
 import net.magicterra.stagewright.junit.StageWright;
 import net.magicterra.stagewright.junit.StageWrightExtension;
 import net.magicterra.stagewright.contract.StageWrightTimeoutException;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,25 +30,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * a clean green over a driver that answers nothing correctly, and the only thing that distinguishes
  * that from real success is a check designed to fail.
  *
- * <p>Each canary bites inside {@code assertThrows}, so the class is GREEN when the teeth work and
- * RED the moment either stops biting.
+ * <p>Kept off the extension so {@link #assertionsBite} can check that the extension reports a real
+ * failure; the other canaries check helpers inside {@code assertThrows}.
  */
-@ExtendWith(StageWrightExtension.class)
 @EnabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT", matches = ".+")
+@ExtendWith(Canaries.FaceGate.class)
 @RequiresFace(Face.SERVER)
 class ContractCanaryTest {
 
-    /** An assertion about a REAL read, made deliberately wrong, must raise. */
+    /** An assertion about a REAL read, made deliberately wrong, must fail the test that makes it. */
     @Test
-    void assertionsBite(StageWright tk) {
-        JsonObject version = tk.call("mc.system.version");
-        assertEquals("worlddriver", str(version, "modid"), "precondition: the endpoint is a driver");
+    void assertionsBite() {
+        assertEquals("worlddriver", str(Canaries.live().call("mc.system.version"), "modid"),
+                "precondition: the endpoint is a driver");
+        Canaries.failOnPurpose(DeliberatelyWrong.class);
+    }
 
-        AssertionError bit = assertThrows(AssertionError.class,
-                () -> assertEquals("definitely-not-the-modid", str(version, "modid"),
-                        "deliberately-wrong: the live read says worlddriver"));
-        assertTrue(bit.getMessage() != null && bit.getMessage().contains("deliberately-wrong"),
-                "the assertion that bit should be our deliberate one, got: " + bit.getMessage());
+    @Tag(Canaries.TARGET)
+    @ExtendWith(Canaries.Armed.class)
+    @ExtendWith(StageWrightExtension.class)
+    @RequiresFace(Face.SERVER)
+    static class DeliberatelyWrong {
+        @Test
+        void claimsTheWrongModid(StageWright tk) {
+            assertEquals("definitely-not-the-modid", str(tk.call("mc.system.version"), "modid"),
+                    "deliberately-wrong: the live read says worlddriver");
+        }
     }
 
     /**
@@ -58,9 +64,9 @@ class ContractCanaryTest {
      * something wrong" apart from "the driver never answered".
      */
     @Test
-    void timeoutsBiteAndAreNotAssertionFailures(StageWright tk) {
+    void timeoutsBiteAndAreNotAssertionFailures() {
         StageWrightTimeoutException ex = assertThrows(StageWrightTimeoutException.class,
-                () -> tk.awaitCondition(() -> false, Duration.ofMillis(200)));
+                () -> Canaries.live().awaitCondition(() -> false, Duration.ofMillis(200)));
         // Reflectively, not with instanceof: the two types are unrelated, so `ex instanceof
         // AssertionError` does not compile. That is the stronger guarantee — the separation this
         // asserts is enforced by the compiler — but it still has to be STATED somewhere a reader
@@ -74,9 +80,9 @@ class ContractCanaryTest {
      * turn every {@code refuses(...)} in this package into a silent pass.
      */
     @Test
-    void refusesBitesWhenTheCallSucceeds(StageWright tk) {
+    void refusesBitesWhenTheCallSucceeds() {
         AssertionError bit = assertThrows(AssertionError.class,
-                () -> Contract.refuses(tk, "mc.system.version", "this call actually succeeds"));
+                () -> Contract.refuses(Canaries.live(), "mc.system.version", "this call actually succeeds"));
         assertTrue(bit.getMessage() != null && bit.getMessage().contains("accepted params it must reject"),
                 "refuses() should have reported an unexpected success, got: " + bit.getMessage());
     }
