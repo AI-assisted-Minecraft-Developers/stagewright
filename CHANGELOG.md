@@ -140,6 +140,15 @@ Xwayland, and an X11-only GLFW passed as `org.lwjgl.glfw.libname` can do nothing
 warning claimed a missing authority let GLFW through and only refused AWT; against a real pack it was
 `glfwInit` that failed.
 
+### The CLI ends a client stuck on a screen before its title screen as ENV at the stall limit, and names the screen · green in unit tests; a plain client run still green
+
+A mod's update prompt standing in front of the title screen held a modpack's client for its whole
+`--timeout`: the director logged "waiting for the title screen, currently on …" every five seconds,
+and a log that keeps growing is never a stall. It now logs that line only when the screen changes,
+so the command-line runner's stall watchdog ends the run after `--stall-timeout` and reports the
+screen's class — where it used to guess from CPU use, and a client rendering a screen looks busy.
+The Gradle plugin has no stall watchdog: a run under it still ends at its `timeoutMinutes`.
+
 ### A CLI client that cannot open a window is ENV in seconds, and the first cause is FML's own failure · green in unit tests and on a Wayland-only client
 
 Under the command-line runner, a client that logs `glfwInit failed` is killed and reported as ENV as

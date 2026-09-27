@@ -561,10 +561,18 @@ public final class Main {
             case CRASHED, PROCESS_DIED -> System.err.println("[stagewright] the " + half
                     + " stopped before the suite finished. This is not a slow run: " + crashes.describe()
                     + ", then " + log + ".");
-            case STALLED -> System.err.println("[stagewright] the " + half + " made no progress for "
-                    + run.stallMinutes() + (run.stallMinutes() == 1 ? " minute" : " minutes")
-                    + " (" + log + " stopped growing) and was killed: "
-                    + Stall.describe(game.toHandle()) + ".");
+            case STALLED -> {
+                String silence = " made no progress for " + run.stallMinutes()
+                        + (run.stallMinutes() == 1 ? " minute" : " minutes");
+                // The client's output, in both topologies that have one.
+                String screen = noWindow.log() == null ? null : Stall.screen(noWindow.log());
+                System.err.println(screen != null
+                        ? "[stagewright] the client" + silence + " and was killed: it never reached"
+                                + " the title screen and is sitting on " + screen + ", a screen nobody is"
+                                + " going to click past (" + noWindow.log() + ")."
+                        : "[stagewright] the " + half + silence + " (" + log + " stopped growing)"
+                                + " and was killed: " + Stall.describe(game.toHandle()) + ".");
+            }
             case TIMED_OUT -> System.err.println("[stagewright] the run exceeded " + run.timeoutMinutes()
                     + " minutes and was killed — see " + log);
         }
@@ -1142,9 +1150,10 @@ public final class Main {
                                       to exit.
                   --stall-timeout <min>
                                       end the run once nothing it writes has grown for this long
-                                      (default 5, at least 1), and say whether the game was spinning
-                                      or asleep. ENV if it wrote no results; else judged on them, so
-                                      RED with no done footer
+                                      (default 5, at least 1), and say which screen a client sits on
+                                      if it never reached its title screen, or else whether the game
+                                      was spinning or asleep. ENV if it wrote no results; else judged
+                                      on them, so RED with no done footer
                   --world reset|keep  what to do with a dedicated server's existing world. Required
                                       when one exists: reset deletes it, keep runs in it as it is
                   --mod <jar>         also load this mod (repeatable — e.g. the driver whose verbs your
