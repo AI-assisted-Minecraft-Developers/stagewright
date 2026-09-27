@@ -642,9 +642,9 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
      * Attach a visible note to a PASS outcome — surfaced verbatim in the results
      * JSONL {@code reason} field (and the harness log line) when the scene resolves
      * PASS. Null (the default) yields the usual empty reason, so every other scene is
-     * byte-unchanged. Use for a deliberate, auditable PASS marker such as a topology
-     * guard that skips a body off its supported topology — this is NOT a swallow: the
-     * scene is still counted entered and the reason records WHY it passed trivially.
+     * byte-unchanged. The PASS still counts as an execution in the cross-run coverage check,
+     * so a body with nothing to do on this topology must {@link #skip} instead: a noted pass
+     * there would cover a subject nothing tested.
      */
     public void passNote(String note) { this.passNote = note; }
 
