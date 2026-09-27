@@ -12,6 +12,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-27
 
+### A PASS whose cleanup threw is a FAIL · compiled
+
+The harness wrote a scene's PASS and then ran its cleanups, logging any that threw. A scene that
+could not undo itself was green while leaving the next scene a different world. Cleanups now run
+first, and one that throws turns a PASS into a FAIL reading `cleanup failed:`, as the attached
+runner already did. A FAIL or TIMEOUT keeps its own reason, and a skip stays marked `skipped`; a
+must-skip scene that skipped and then failed its cleanup is RED rather than correctly skipped. A
+block a cleanup places with `setBlock` where the scene placed a block entity is the restoration and
+stays, rather than being reverted to air after it; nothing a cleanup places with `setBlock` is
+reverted.
+
 ### A TIMEOUT before the body ran no longer counts as coverage · green in unit tests
 
 When the world stopped delivering ticks while a scene was still preparing its arena, the harness,

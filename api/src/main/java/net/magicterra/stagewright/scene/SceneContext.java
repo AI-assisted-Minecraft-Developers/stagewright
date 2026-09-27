@@ -6,6 +6,7 @@ import net.magicterra.stagewright.contract.SceneSkipped;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.function.BooleanSupplier;
@@ -187,13 +188,29 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
      */
     public void cleanup(Runnable r) { cleanups.addFirst(r); }
 
-    /** Harness-internal: drain cleanups; exceptions logged, never thrown. */
-    public void runCleanups(Consumer<String> warn) {
-        for (Runnable r : cleanups) {
-            try { r.run(); } catch (Throwable t) { warn.accept("cleanup failed: " + t); }
+    /** Harness-internal: drain cleanups; exceptions logged and returned, never thrown, so one
+     *  failing cleanup cannot stop the rest. */
+    public List<String> runCleanups(Consumer<String> warn) {
+        List<String> failed = new ArrayList<>();
+        draining = true;
+        try {
+            // Polled, not iterated: a cleanup may register another (a helper that restores state
+            // does), and an iterator would throw out of here and have the whole drain run again.
+            for (Runnable r; (r = cleanups.pollFirst()) != null; ) {
+                try {
+                    r.run();
+                } catch (Throwable t) {
+                    warn.accept("cleanup failed: " + t);
+                    failed.add(t.toString());
+                }
+            }
+        } finally {
+            draining = false;
         }
-        cleanups.clear();
+        return failed;
     }
+
+    private boolean draining;
 
     // ---- world ops (origin-relative; scenes never see absolute coordinates) ----
 
@@ -215,17 +232,32 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
      * <p>Only block-entity placements are tracked. Plain blocks are inert once set, the grid keeps
      * them 512 blocks from the next arena, and reverting every {@code floor()} cell would cost more
      * teardown than it saves.
+     *
+     * <p>Nothing a cleanup places with this is reverted, wherever it goes: what the cleanups leave is
+     * how the scene ends. A revert queued from inside a cleanup would run next and undo it.
      */
     public void setBlock(int dx, int dy, int dz, Block block) {
         BlockPos pos = rel(dx, dy, dz);
         BlockState state = block.defaultBlockState();
-        if (state.hasBlockEntity() && tickingPlacements.add(pos.immutable())) {
-            cleanup(() -> level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState()));
-        }
-        level.setBlockAndUpdate(pos, state);
+        place(pos, state.hasBlockEntity(), () -> level.setBlockAndUpdate(pos, state),
+                () -> level.setBlockAndUpdate(pos, Blocks.AIR.defaultBlockState()));
     }
 
-    /** Positions this scene gave a block entity, so a re-set of one is not queued for cleanup twice. */
+    /** {@link #setBlock}'s bookkeeping, apart from the level it writes to. */
+    void place(BlockPos pos, boolean ticks, Runnable set, Runnable revert) {
+        BlockPos key = pos.immutable();
+        if (draining) {
+            // A cleanup placing here is the restoration. A body revert registered before that
+            // cleanup runs after it, and would set air over what the cleanup put back.
+            tickingPlacements.remove(key);
+        } else if (ticks && tickingPlacements.add(key)) {
+            cleanup(() -> { if (tickingPlacements.remove(key)) revert.run(); });
+        }
+        set.run();
+    }
+
+    /** Positions this scene gave a block entity and has yet to revert, so a re-set of one is not
+     *  queued twice. */
     private final java.util.Set<BlockPos> tickingPlacements = new java.util.HashSet<>();
 
     /** size x size stone-slab floor at dy=0, cleared air 4 above — the minimal clean pad. */

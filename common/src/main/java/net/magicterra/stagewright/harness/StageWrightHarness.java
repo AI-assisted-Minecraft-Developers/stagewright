@@ -425,11 +425,32 @@ public final class StageWrightHarness {
         record(scene, outcome, ticks, reason, false);
     }
 
+    /** How a scene resolved, before and after its cleanups had their say. */
+    record Resolution(SceneOutcome outcome, String reason, boolean skipped) {
+        /** A cleanup that threw turns a PASS into a FAIL. A skip stays a skip, as the attached runner
+         *  keeps it: the scene still tested nothing, and coverage must not count it as executed. */
+        Resolution afterCleanups(List<String> failed) {
+            if (failed.isEmpty() || outcome != SceneOutcome.PASS) return this;
+            return new Resolution(SceneOutcome.FAIL, "cleanup failed: " + String.join("; ", failed), skipped);
+        }
+    }
+
     /** @param skipped the scene never reached its subject. Stated by the two call sites that know
      *                 it rather than inferred downstream from the reason's prefix, so that a reworded
      *                 message cannot quietly turn a skip into a pass in every consumer at once. */
     private void record(Scene scene, SceneOutcome outcome, int ticks, String reason, boolean skipped) {
+        // Before the cleanups: wallMs is the scene's own time, and teardown is not what it measures.
         long wallMs = System.currentTimeMillis() - sceneStartMs;
+        // Before the write: a PASS on disk whose cleanup then threw would be a pass over a scene
+        // that left the world broken for the next one.
+        if (ctx != null) {
+            List<String> failed = ctx.runCleanups(msg -> StageWrightCommon.LOG.warn("[{}] {}: {}",
+                    StageWrightCommon.MOD_ID, scene.name(), msg));
+            Resolution resolved = new Resolution(outcome, reason, skipped).afterCleanups(failed);
+            outcome = resolved.outcome();
+            reason = resolved.reason();
+            skipped = resolved.skipped();
+        }
         StageWrightCommon.LOG.info("[{}] scene '{}' -> {} ({} ticks, {} ms){}", StageWrightCommon.MOD_ID,
                 scene.name(), outcome, ticks, wallMs, reason == null ? "" : " — " + reason);
         // Recorded values travel with EVERY outcome, not just failures. On a PASS they are the
@@ -442,11 +463,9 @@ public final class StageWrightHarness {
         phase = Phase.ADVANCE_DONE;
     }
 
-    /** Single confluence point for every outcome (PASS/FAIL/TIMEOUT/ENV_FAIL): drain the
-     *  scene's cleanups — if it got far enough to have a ctx — before releasing the arena's
-     *  forced chunks. A leaked avatar or dangling cleanup here poisons the next scene, so
-     *  this runs regardless of how the scene resolved. ENV_FAIL fires from PREP before ctx
-     *  is ever constructed, so there is nothing to drain in that case. */
+    /** Every outcome ends here: release the arena's forced chunks. {@link #record} has already drained
+     *  the cleanups so their failures reach the result; draining again is then a no-op, and stays so
+     *  that no path can release the arena with a cleanup still pending. */
     private void teardown(Scene scene, ServerLevel level, BlockPos origin, int radius) {
         if (ctx != null) {
             ctx.runCleanups(msg -> StageWrightCommon.LOG.warn("[{}] {}: {}", StageWrightCommon.MOD_ID, scene.name(), msg));
@@ -483,11 +502,8 @@ public final class StageWrightHarness {
     /**
      * Report what the scene left in the world after its own cleanups had their turn.
      *
-     * <p>Logged rather than folded into the scene's result: the record for this scene is already
-     * written by the time teardown runs, and moving the write after teardown would mean a cleanup
-     * that throws could take the result with it. A leak is a property of the suite anyway — it
-     * matters because of what it does to the NEXT scene — so the count that gets acted on is the
-     * suite total, logged at {@link #finish()}.
+     * <p>Logged, not folded into the scene's result, which is already written: a leak matters for
+     * what it does to the NEXT scene, so the suite total logged at {@link #finish()} is what counts.
      */
     private void auditLeaks(Scene scene, ServerLevel level) {
         if (arenaBefore == null) return;                // ENV_FAIL out of PREP: nothing ever ran
