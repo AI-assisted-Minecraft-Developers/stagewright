@@ -141,9 +141,11 @@ public final class Recipes {
         return out;
     }
 
-    /** Every recipe id in this run, sorted. */
+    /** Every recipe id in this run, sorted — dynamic and special recipes with no fixed result too, so
+     *  its size is {@link #count()}. */
     public List<String> all() {
-        List<String> out = new ArrayList<>(index().values().stream().flatMap(List::stream).toList());
+        indexOnce();
+        List<String> out = new ArrayList<>(byId.keySet());
         out.sort(String::compareTo);
         return out;
     }
