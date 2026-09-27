@@ -1,8 +1,11 @@
 package net.magicterra.stagewright.engine;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -31,6 +34,19 @@ class RunDirectoryTest {
                 false, null, line -> {});
 
         assertFalse(Files.exists(stale), "the companion's stale endpoint descriptor survived provision");
+    }
+
+    @Test
+    void aSceneScriptsDirectoryWithNoSceneFileIsRefused(@TempDir Path tmp) throws IOException {
+        Path gameDir = Files.createDirectories(tmp.resolve("server"));
+        Path source = Files.createDirectories(tmp.resolve("scenes"));
+        Files.writeString(source.resolve("pack-capabilities.json"), "{}");
+
+        UncheckedIOException e = assertThrows(UncheckedIOException.class,
+                () -> RunDirectory.provision(gameDir,
+                        List.of(gameDir.resolve(RunDirectory.DEFAULT_RESULTS_FILE)), false, source,
+                        line -> {}));
+        assertTrue(e.getMessage().contains("no .js"), e.getMessage());
     }
 
     @Test

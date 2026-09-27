@@ -111,7 +111,9 @@ nothing but a timestamp does not re-provision — which would delete the world f
 
 `.js` files are installed into `config/stagewright/scenes` and `.json` files into
 `config/stagewright/capabilities`, both inside the run directory. Both directories are cleared first,
-on every run, whether or not this property is set.
+on every run, whether or not this property is set. A directory holding no `.js` file is refused, and
+so is a `.js` file that registers no scene: either would run the suite without the scenes it was
+pointed at and report green.
 
 Scene files need Rhino on the run's classpath. Where it is absent the run fails loudly rather than
 reporting a suite that quietly contained none of them.

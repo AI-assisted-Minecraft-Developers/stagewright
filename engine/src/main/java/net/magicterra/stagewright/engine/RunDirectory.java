@@ -188,6 +188,12 @@ public final class RunDirectory {
                     "sceneScripts points at " + source + ", which is not a directory"));
         }
         int copiedScenes = copyByExtension(source, scenes, ".js");
+        if (copiedScenes == 0) {
+            // Same silence as a missing directory: the suite runs without the scenes it was
+            // pointed at and reports GREEN.
+            throw new UncheckedIOException(new IOException(
+                    "sceneScripts points at " + source + ", which holds no .js scene file"));
+        }
         int copiedCaps = copyByExtension(source, capabilities, ".json");
         log.accept("installed " + copiedScenes + " scene script(s) and " + copiedCaps
                 + " capability descriptor(s) from " + source);
