@@ -219,6 +219,54 @@ class CoverageTest {
                 String.join("\n", result.report()));
     }
 
+    private static Map<String, Object> built(String build, Map<String, Object>... registered) {
+        Map<String, Object> header = suite(registered);
+        if (build != null) header.put("build", build);
+        return header;
+    }
+
+    @Test
+    void runsOfDifferentCodeAreNotReconciled() {
+        // Last month's integrated run is the only one where 'a' executed; today's code never ran it.
+        Coverage.Result result = Coverage.judge(List.of(
+                run("dedicated", built("git:111111111111", reg("a")), skipped("a", "no player")),
+                run("integrated", built("git:222222222222", reg("a")), ran("a"))));
+        assertEquals(3, result.code());
+        assertTrue(reports(result, "MIXED BUILDS"), String.join("\n", result.report()));
+        assertTrue(reports(result, "dedicated: git:111111111111"));
+        assertTrue(reports(result, "integrated: git:222222222222"));
+        assertFalse(reports(result, "COVERAGE: "));
+    }
+
+    @Test
+    void aRunThatRecordsNoBuildIsNotAssumedToMatch() {
+        Coverage.Result result = Coverage.judge(List.of(
+                run("dedicated", built("git:111111111111", reg("a")), ran("a")),
+                run("old", built(null, reg("a")), ran("a"))));
+        assertEquals(3, result.code());
+        assertTrue(reports(result, "old: no build recorded"), String.join("\n", result.report()));
+    }
+
+    @Test
+    void runsThatAllRecordNoBuildAreReconciledWithEachOther() {
+        // The command-line runner names no build, and its runs still have to reconcile.
+        Coverage.Result result = Coverage.judge(List.of(
+                run("dedicated", built(null, reg("a")), skipped("a", "no player")),
+                run("client", built(null, reg("a")), ran("a"))));
+        assertEquals(0, result.code(), String.join("\n", result.report()));
+        assertFalse(reports(result, "MIXED BUILDS"));
+    }
+
+    @Test
+    void runsOfTheSameCodeAreReconciled() {
+        Coverage.Result result = Coverage.judge(List.of(
+                run("dedicated", built("git:111111111111", reg("a")), skipped("a", "no player")),
+                run("integrated", built("git:111111111111", reg("a")), ran("a"))));
+        assertEquals(0, result.code());
+        assertTrue(reports(result, "ran: integrated (build git:111111111111)"),
+                String.join("\n", result.report()));
+    }
+
     @Test
     void aFailedSceneStillExecuted() {
         Map<String, Object> failed = ran("a");

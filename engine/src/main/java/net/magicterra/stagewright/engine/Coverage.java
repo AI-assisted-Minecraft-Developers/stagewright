@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.engine;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -61,6 +62,7 @@ public final class Coverage {
         Map<String, Map<String, String>> absentIn = new LinkedHashMap<>();   // scene -> run -> why
         Set<String> everRegistered = new TreeSet<>();
         List<String> filtered = new ArrayList<>();
+        Map<String, String> builds = new LinkedHashMap<>();                  // run -> build, "" if none
 
         for (Run run : runs) {
             Map<String, Object> suite = null;
@@ -89,6 +91,7 @@ public final class Coverage {
                 filtered.add("FILTERED: '" + run.label() + "' was FILTERED to '" + filter + "'");
                 continue;
             }
+            builds.put(run.label(), Verdict.str(suite.get("build")));
             for (Map<String, Object> reg : Verdict.registered(suite)) {
                 String name = Verdict.str(reg.get("name"));
                 String canary = Verdict.str(reg.get("canary"));
@@ -141,6 +144,20 @@ public final class Coverage {
             return new Result(3, out);
         }
 
+        // A scene that executed only in a run of other code has not been tested in this code. Runs
+        // that record no build share the one value "", so they reconcile with each other and never
+        // with a run that names its code.
+        if (new HashSet<>(builds.values()).size() > 1) {
+            List<String> out = new ArrayList<>(report);
+            out.add("MIXED BUILDS: these runs did not all test the same code, so coverage across them"
+                    + " is not a claim about any one build:");
+            builds.forEach((label, build) -> out.add("    " + label + ": "
+                    + (build.isBlank() ? "no build recorded" : build)));
+            out.add("Re-run the topologies whose build is not the one you mean to judge, then"
+                    + " reconcile again.");
+            return new Result(3, out);
+        }
+
         int code = 0;
         List<String> uncovered = new ArrayList<>();
         for (String name : new TreeSet<>(absentIn.keySet())) {
@@ -168,7 +185,8 @@ public final class Coverage {
                 + (canaries.isEmpty() ? "" : ", " + canaries.size() + " canary")
                 + (uncovered.isEmpty() ? "" : ", " + uncovered.size() + " UNCOVERED"));
         for (Run run : runs) {
-            report.add("    ran: " + run.label());
+            String build = builds.getOrDefault(run.label(), "");
+            report.add("    ran: " + run.label() + (build.isBlank() ? "" : " (build " + build + ")"));
         }
         return new Result(code, report);
     }

@@ -162,6 +162,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                         topology.getTimeoutMinutes().getOrElse(DEFAULT_TIMEOUT_MINUTES)));
                 applyResultsName(topology, run);
                 applySceneFilter(project, run);
+                applyBuildId(project, topology, run);
                 attachSideProcesses(project, topology, run, sideProcesses);
                 return run;
             }));
@@ -315,6 +316,37 @@ public class StageWrightPlugin implements Plugin<Project> {
             return;
         }
         exec.systemProperty(RunDirectory.RESULTS_PROPERTY, name);
+    }
+
+    /** Tell the game, and its companion, which code this run tests. From the work tree, not the jars:
+     *  Fabric and NeoForge runs of one source are reconciled together, and their jars never match. */
+    private void applyBuildId(Project project, StageWrightTopology topology, Task run) {
+        JavaExec exec = run instanceof JavaExec e ? e : null;
+        if (exec == null) {
+            run.getLogger().warn("[stagewright] run task '{}' is a {}, not a JavaExec, so its results"
+                    + " record no build and stagewrightCoverage reports MIXED BUILDS against any"
+                    + " topology that does", run.getName(), run.getClass().getSimpleName());
+        }
+        String companionName = topology.getCompanionRunTask().getOrNull();
+        JavaExec companion = companionName != null
+                && resolveRunTask(project, companionName) instanceof JavaExec c ? c : null;
+        // A build service, so every run and companion in the build takes one id from one git call,
+        // configuration cache or not.
+        var service = project.getGradle().getSharedServices().registerIfAbsent("stagewrightBuildId",
+                StageWrightBuildIdService.class,
+                spec -> spec.getParameters().getWorkTree().set(project.getRootDir()));
+        BuildIdArgument build = new BuildIdArgument(service);
+        if (exec != null) addOnce(exec, build);
+        if (companion != null) addOnce(companion, build);
+    }
+
+    /** This runs each time the gate's dependencies are resolved, and a run task may serve two
+     *  topologies; a second provider would put the property on the command line twice. */
+    private static void addOnce(JavaExec exec, BuildIdArgument build) {
+        if (exec.getJvmArgumentProviders().stream().noneMatch(p -> p instanceof BuildIdArgument)) {
+            exec.getJvmArgumentProviders().add(build);
+            exec.usesService(build.service());
+        }
     }
 
     private void applySceneFilter(Project project, Task run) {

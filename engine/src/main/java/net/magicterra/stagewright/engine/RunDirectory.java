@@ -56,6 +56,10 @@ public final class RunDirectory {
      */
     public static final String RESULTS_PROPERTY = "stagewright.results";
 
+    /** The system property carrying {@link BuildId} into the game, which writes it into the suite
+     *  header so coverage can refuse to reconcile runs of different code. */
+    public static final String BUILD_PROPERTY = "stagewright.build";
+
     private RunDirectory() {}
 
     /**

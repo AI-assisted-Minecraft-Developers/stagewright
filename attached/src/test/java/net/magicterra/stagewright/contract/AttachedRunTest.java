@@ -98,4 +98,19 @@ class AttachedRunTest {
         assertEquals("skipped: curios is not installed", rec.get("reason"));
         assertTrue(allGood[0]);
     }
+
+    @Test
+    void theHeaderRecordsWhenTheRunStarted(@TempDir Path dir) throws IOException {
+        Path scenes = Files.createDirectories(dir.resolve("scenes"));
+        Files.writeString(scenes.resolve("a.js"), "scene('pack.a', 20, function (s) { });",
+                StandardCharsets.UTF_8);
+        Path results = dir.resolve("attached-results.jsonl");
+        new AttachedRun(Scripts.load(scenes, (cx, scope, file) -> { }, l -> { }),
+                (method, params) -> null, "fabric", l -> { }, () -> 1_750_000_000_000L)
+                .run(results);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> header = GSON.fromJson(Files.readAllLines(results).get(0), Map.class);
+        assertEquals(1.75e12, header.get("startedAt"));
+    }
 }

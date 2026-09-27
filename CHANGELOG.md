@@ -12,6 +12,18 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-27
 
+### Coverage refuses to reconcile runs of different code · green in unit tests
+
+Coverage read whatever results files it was given, however old, so a scene that executed only in a
+topology last run against last month's code counted as covered today. The Gradle plugin now passes
+the game a build id — the git work tree's HEAD plus a digest of uncommitted tracked changes, taken
+once per build, when its first run starts; untracked files are not part of it — and the header of
+every run it launches records it. Every header also records a `startedAt`. A companion client
+records its run's id. Coverage over files whose builds differ is ENV under `MIXED BUILDS`, which
+lists each file's build. Files with no build match each other and are never reconciled with one
+that has a build. The command-line and attached runners record no build, so coverage cannot tell
+their runs apart by code.
+
 ### A PASS whose cleanup threw is a FAIL · compiled
 
 The harness wrote a scene's PASS and then ran its cleanups, logging any that threw. A scene that

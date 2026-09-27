@@ -943,7 +943,9 @@ public final class Main {
                   --coverage <files>  judge nothing but coverage: comma-separated results files from
                                       runs that have already finished, RED if any scene they register
                                       executed in none of them, ENV if any of them was a filtered
-                                      run or none of them registered a scene. Runs no game and
+                                      run, none of them registered a scene, or their headers name
+                                      different builds. This runner's own runs record no build;
+                                      the Gradle plugin's do, in a git work tree. Runs no game and
                                       takes no --game-dir.
                                       A scene skipping is fine in one run and a hole across all of
                                       them, which is a question no single run can be asked.

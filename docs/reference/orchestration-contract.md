@@ -64,6 +64,7 @@ a set of JVM system properties.
 | `stagewright.scenes=<patterns>` | Narrow the run — see *Filtered runs*. |
 | `stagewright.endpoint=<path>` | Publish an endpoint descriptor at that path once the run is genuinely attachable. See the [instrument contract](instrument-contract.md). |
 | `stagewright.topology=<name>` | Recorded verbatim in the descriptor so an attached test knows which face it holds. |
+| `stagewright.build=<id>` | Recorded in the results header as `build`, so coverage never reconciles runs of different code. A supervisor that passes none gets files that match only each other. |
 
 Hold is a separate property rather than `stagewright.autorun=false` because the two are set by
 different people. Autorun belongs to a checked-in line in the host build's run configuration;
@@ -255,11 +256,11 @@ Exactly one, first:
 | `filter` | string | only when narrowed | The pattern this run was narrowed by. |
 | `worldPin` | string | only when pinned | One line naming the world state held still. |
 | `registryError` | string | only when the registry could not be built | Why; `registered` is then empty and nothing ran. See *Scene discovery*. |
+| `startedAt` | number | always | Epoch milliseconds when the run started. The attached runner writes its header last, so this is not when the header was written. |
+| `build` | string | only when the launcher named one | The code this run tested: `git:<HEAD>` or `git:<HEAD>+<digest>` from the Gradle plugin, each part the first 12 hex digits: of the commit, and of a SHA-256 over the uncommitted changes to tracked files. Taken once per build, when its first run starts; compare it whole, not against a full commit hash. Passed in as `-Dstagewright.build`. Neither the command-line runner nor the attached runner names one. |
 
-The optional keys appear only when they have a value, so a run that pins nothing and filters
-nothing produces a byte-identical header to one written before either existed. A stream that
-does not pin a world — an out-of-process run — states that by omitting the key rather than by
-writing something untrue.
+The optional keys appear only when they have a value. A stream that does not pin a world — an
+out-of-process run — states that by omitting the key rather than by writing something untrue.
 
 Every string field is escaped, including the ones that carry a constrained vocabulary today. A
 corrupt header is the worst line to produce, because the verdict drops lines it cannot decode
@@ -446,6 +447,16 @@ A topology that declares a companion results file is reconciled with it, labelle
 topology name plus `-client`. The client's probe is a registered scene like any other, and one
 that skipped on every topology tested nothing. A topology named like another's companion label is
 refused, because the two results files would share one label.
+
+Results files whose headers name different `build`s are not reconciled either: coverage is ENV under
+`MIXED BUILDS`, followed by one line per file naming its build, because a scene that executed only
+in a run of other code has not been tested in this one. Files with no `build` match each other, and
+are never reconciled with a file that has one.
+
+When more than one of these holds, only the first is reported, in this order: `FILTERED`,
+`NO EVIDENCE`, `MIXED BUILDS`. A filtered run's registered list is not counted, so the other two
+would describe the wrong set; and with no scene registered there is nothing for a build to be
+compared over.
 
 The single exemption is declared at the scene, by the author who knows why:
 `@SceneDef(mustSkip = true)`. That is an assertion rather than an excuse — the verdict then

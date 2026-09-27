@@ -54,6 +54,12 @@ public final class ResultsJsonl {
         writeSuiteHeader(loader, scenes, null, null);
     }
 
+    /** For a writer that only writes its header once the run is over, as the client probe does,
+     *  so {@code startedAt} is still when the run started. */
+    public void writeSuiteHeader(String loader, List<Scene> scenes, long startedAtMs) {
+        writeSuiteHeader(loader, scenes, null, null, startedAtMs);
+    }
+
     /**
      * @param filter the scene-name pattern this run was narrowed by, or null when it ran everything.
      *               Recorded so a filtered run can never be read as a full one: {@code Verdict}
@@ -65,6 +71,11 @@ public final class ResultsJsonl {
      */
     public void writeSuiteHeader(String loader, List<Scene> scenes, String filter,
                                  String worldPin) {
+        writeSuiteHeader(loader, scenes, filter, worldPin, System.currentTimeMillis());
+    }
+
+    private void writeSuiteHeader(String loader, List<Scene> scenes, String filter,
+                                  String worldPin, long startedAtMs) {
         StringBuilder sb = new StringBuilder();
         // Every string field goes through escape(), including the ones that happen to hold a
         // constrained vocabulary today (loader is "fabric"|"neoforge", canary is an enum-ish
@@ -90,8 +101,23 @@ public final class ResultsJsonl {
         if (worldPin != null && !worldPin.isBlank()) {
             sb.append(",\"worldPin\":\"").append(escape(worldPin)).append('"');
         }
+        appendProvenance(sb, startedAtMs);
         sb.append("}\n");
         write(sb.toString(), true);
+    }
+
+    /** Named {@code RunDirectory.BUILD_PROPERTY} on the launching side, which this module cannot see. */
+    private static final String BUILD_PROPERTY = "stagewright.build";
+
+    /**
+     * When this run started and, if the launcher said, which code it tested. Coverage refuses to
+     * reconcile runs of different builds, since a scene that executed only in last week's run has
+     * not been tested in this week's code.
+     */
+    private static void appendProvenance(StringBuilder sb, long startedAtMs) {
+        sb.append(",\"startedAt\":").append(startedAtMs);
+        String build = System.getProperty(BUILD_PROPERTY, "").trim();
+        if (!build.isEmpty()) sb.append(",\"build\":\"").append(escape(build)).append('"');
     }
 
     /**
@@ -105,7 +131,9 @@ public final class ResultsJsonl {
         if (filter != null && !filter.isBlank()) {
             sb.append(",\"filter\":\"").append(escape(filter)).append('"');
         }
-        sb.append(",\"registryError\":\"").append(escape(error)).append("\"}\n");
+        sb.append(",\"registryError\":\"").append(escape(error)).append('"');
+        appendProvenance(sb, System.currentTimeMillis());
+        sb.append("}\n");
         write(sb.toString(), true);
         writeDone(0);
     }
