@@ -3,26 +3,50 @@ package net.magicterra.stagewright.cli;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.Consumer;
+
+import net.magicterra.stagewright.engine.Display;
 
 /** What is checked before a client is started, so that a doomed launch fails in a second. */
 final class ClientPreflight {
 
     private ClientPreflight() {}
 
-    /**
-     * A client needs a display, and this tool does not provide one — that is the machine's, the
-     * user's or the CI image's to supply. Without one GLFW fails to initialise within two seconds and
-     * leaves a fourteen-line log ending in "glfwInit failed", which reads like an early crash.
-     */
+    /** Everything checked before a client starts in {@code gameDir}. */
+    static void check(Path gameDir, Consumer<String> log) {
+        String os = System.getProperty("os.name", "");
+        requireDisplay(os, System.getenv());
+        String xauth = xauthorityWarning(os, System.getenv(), Path.of(System.getProperty("user.home")));
+        if (xauth != null) log.accept(xauth);
+        warnIfInUse(gameDir, log);
+    }
+
+    /** A client needs a display, and this tool does not provide one; see {@link Display}. */
     static void requireDisplay(String osName, Map<String, String> env) {
-        if (!osName.toLowerCase(Locale.ROOT).contains("linux")) return;
-        if (isSet(env.get("DISPLAY")) || isSet(env.get("WAYLAND_DISPLAY"))) return;
-        throw new EnvFailure("a client needs a display, and neither DISPLAY nor WAYLAND_DISPLAY is set."
-                + " Run it in a desktop session, or give it one — on a headless machine that is an X"
-                + " server the environment starts, such as Xvfb in the CI image.");
+        String missing = Display.missing(osName, env);
+        if (missing != null) throw new EnvFailure(missing);
+    }
+
+    /**
+     * An X display with no authority file to present to it. Warned rather than refused: a server
+     * started without access control needs none. But one that wants it lets GLFW in and refuses AWT,
+     * so a mod that touches AWT fails to construct, NeoForge stops dispatching lifecycle events, and
+     * the crash lands on the first tick in an unrelated mod reading a config that never loaded.
+     *
+     * @return the warning, or null
+     */
+    static String xauthorityWarning(String osName, Map<String, String> env, Path home) {
+        if (!osName.toLowerCase(java.util.Locale.ROOT).contains("linux")) return null;
+        String display = env.get("DISPLAY");
+        if (display == null || display.isBlank()) return null;
+        String xauthority = env.get("XAUTHORITY");
+        if (xauthority != null && !xauthority.isBlank()) return null;
+        if (Files.isRegularFile(home.resolve(".Xauthority"))) return null;
+        return "WARNING: DISPLAY=" + display + " but XAUTHORITY is unset and there is no "
+                + home.resolve(".Xauthority") + ". If that X server wants authorization, the game's"
+                + " window opens but AWT is refused, and a mod using AWT fails to construct. Export"
+                + " XAUTHORITY from the desktop session (under Xwayland: ls /run/user/$UID/xauth_*).";
     }
 
     /**
@@ -48,9 +72,5 @@ final class ClientPreflight {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-    }
-
-    private static boolean isSet(String value) {
-        return value != null && !value.isBlank();
     }
 }

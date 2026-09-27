@@ -65,8 +65,12 @@ server's directory also gets its EULA acceptance and the forced `server.properti
 | `--world reset\|keep` | What to do with a dedicated server's existing world. Required when one exists. |
 | `--no-install` | Load nothing; the pack already has StageWright in its `mods/`. With `--scenes`, that copy must be new enough to read `-Dstagewright.scenesDir`, or the run is ENV. |
 | `--launch "<command>"` | Start the server this way instead of detecting how. |
+| `-D<key>=<value>`, `-X<option>` | Passed to the game's JVM as given — `-Xmx8G`, or a system GLFW with `-Dorg.lwjgl.glfw.libname=<so>`. |
 
-`--help` is only recognised as the **first** argument. Anywhere else it is an unknown option.
+`--help` and `--version` are only recognised as the **first** argument. Anywhere else they are
+unknown options. Every run also begins by printing what `--version` does — when the jar was built and
+when each engine and framework build inside it was published — so a CLI rebuilt without republishing
+one of them shows it.
 
 An option the CLI does not know is refused with the usage text and exit 3, and so is a value other
 than `reset` or `keep` for `--world`. A mistyped name is therefore an error before anything runs,

@@ -103,6 +103,10 @@ public final class Main {
             usage(System.out);
             return 0;
         }
+        if ("--version".equals(args[0])) {
+            BuildInfo.describe().forEach(System.out::println);
+            return 0;
+        }
 
         Args.Parsed parsed = Args.parse(args);
         Map<String, String> opts = parsed.opts();
@@ -150,6 +154,7 @@ public final class Main {
                 gameDir.resolve(RunDirectory.ARTIFACT_DIR).resolve(resultsName(opts)),
                 timeoutMinutes, stallMinutes,
                 line -> System.out.println("[stagewright] " + line));
+        BuildInfo.describe().forEach(run.log());
 
         if (opts.containsKey("with-client")) {
             if (client == null) {
@@ -213,11 +218,10 @@ public final class Main {
     private static int runClient(Run run, ClientSpec client) throws IOException, InterruptedException {
         // Before the install: a vanilla client is refused without a download.
         String loader = requireModLoader(run, client);
+        ClientPreflight.check(run.gameDir(), run.log());
         Path installDir = installDir(run.opts());
         String javaBinary = javaBinary(run.opts());
         String versionId = install(client, installDir, run, javaBinary);
-        ClientPreflight.requireDisplay(System.getProperty("os.name", ""), System.getenv());
-        ClientPreflight.warnIfInUse(run.gameDir(), run.log());
 
         RunDirectory.provision(run.gameDir(), List.of(run.results()), false, false, run.log());
         ModInjection.Arguments mods = inject(run, run.gameDir(), loader);
@@ -289,6 +293,7 @@ public final class Main {
                     + " for " + clientLoader + " — both halves must run the same loader");
         }
         if (loader == null) loader = clientLoader;
+        ClientPreflight.check(clientDir, run.log());
         Worlds.prepareServer(run.gameDir(), serverWorld, run.log());
         Files.createDirectories(clientDir);
 
@@ -298,8 +303,6 @@ public final class Main {
         Path installDir = installDir(run.opts());
         String javaBinary = javaBinary(run.opts());
         String versionId = install(client, installDir, run, javaBinary);
-        ClientPreflight.requireDisplay(System.getProperty("os.name", ""), System.getenv());
-        ClientPreflight.warnIfInUse(clientDir, run.log());
 
         RunDirectory.provision(run.gameDir(), List.of(run.results()), false, true, run.log());
         ModInjection.Arguments serverMods = inject(run, run.gameDir(), loader);
@@ -566,21 +569,33 @@ public final class Main {
     }
 
     /**
-     * The server's launch command: our JVM arguments directly after the java binary, and the loader's
-     * program arguments at the very end.
+     * The server's launch command: our JVM arguments after the java binary and the pack's own
+     * {@code @user_jvm_args.txt}, and the loader's program arguments at the very end.
      *
-     * <p>Position matters: everything after an {@code @argfile} belongs to the launcher, and a
-     * {@code -D} placed there is passed to Minecraft as a program argument, where it is ignored
+     * <p>Position matters: everything after the loader's {@code @argfile} belongs to the launcher, and
+     * a {@code -D} placed there is passed to Minecraft as a program argument, where it is ignored
      * silently. The run then completes normally and writes no results, which reads as "the mod is
-     * missing" rather than "the property did not apply".
+     * missing" rather than "the property did not apply". See {@link #serverCommand} for the other
+     * side.
      */
     private static List<String> buildCommand(Run run, List<String> base, List<String> systemProps,
                                              List<String> gameArgs) {
-        List<String> command = new ArrayList<>();
-        command.add(base.get(0));
-        command.addAll(armingProps(run));
-        command.addAll(systemProps);
-        command.addAll(base.subList(1, base.size()));
+        List<String> ours = new ArrayList<>(armingProps(run));
+        ours.addAll(systemProps);
+        return serverCommand(base, ours, gameArgs);
+    }
+
+    /**
+     * {@code base} with our JVM arguments after the java binary — and after the pack's own
+     * {@code @user_jvm_args.txt} when it comes next, since the JVM keeps the last {@code -Xmx} or
+     * {@code -D} it is given and the pack's would otherwise silently undo ours.
+     */
+    static List<String> serverCommand(List<String> base, List<String> jvmArgs, List<String> gameArgs) {
+        int at = base.size() > 1 && base.get(1).startsWith("@") && base.get(1).endsWith("user_jvm_args.txt")
+                ? 2 : 1;
+        List<String> command = new ArrayList<>(base.subList(0, at));
+        command.addAll(jvmArgs);
+        command.addAll(base.subList(at, base.size()));
         command.addAll(gameArgs);
         return command;
     }
@@ -1062,6 +1077,7 @@ public final class Main {
                 stagewright — run a modpack's scenes and judge them
 
                   java -jar stagewright.jar --game-dir <dir> [options]
+                  java -jar stagewright.jar --version   what this jar was built from
 
                 Three topologies, picked by what you pass:
                   (neither --client nor --with-client)   the pack's dedicated server in --game-dir
@@ -1115,8 +1131,10 @@ public final class Main {
                                       Not with --mod
                   --launch "<cmd>"    start the server this way instead of detecting it
                   --java <path>       java executable to launch with
-                  -D<key>=<value>     extra system properties for the game; with --with-client,
-                                      for both halves
+                  -D<key>=<value>, -X<option>
+                                      passed to the game's JVM as given (e.g. -Xmx8G,
+                                      -Dorg.lwjgl.glfw.libname=<so>); with --with-client, to both
+                                      halves
 
                 Client:
                   --client <spec>     neoforge:<mc>:<version> | fabric:<mc>:<version> | vanilla:<mc>,

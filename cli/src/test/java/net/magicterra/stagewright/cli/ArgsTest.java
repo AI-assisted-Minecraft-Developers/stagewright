@@ -20,14 +20,26 @@ class ArgsTest {
         Args.Parsed p = Args.parse(new String[] {
                 "--game-dir", "pack", "--expect", "expected.txt", "--no-install",
                 "--mod", "driver.jar", "-Dstagewright.scenes=wd.a", "--world", "keep",
-                "--client", "neoforge:1.21.1:21.1.248"});
+                "-Xmx6G", "--client", "neoforge:1.21.1:21.1.248"});
         assertEquals("pack", p.opts().get("game-dir"));
         assertEquals("expected.txt", p.opts().get("expect"));
         assertEquals("true", p.opts().get("no-install"));
         assertEquals("keep", p.opts().get("world"));
         assertEquals("neoforge:1.21.1:21.1.248", p.opts().get("client"));
-        assertEquals(List.of("-Dstagewright.scenes=wd.a"), p.systemProps());
+        assertEquals(List.of("-Dstagewright.scenes=wd.a", "-Xmx6G"), p.systemProps());
         assertEquals(List.of(Path.of("driver.jar").toAbsolutePath().normalize()), p.extraMods());
+    }
+
+    @Test
+    void theServerGetsOurJvmArgumentsAfterThePacksOwn() {
+        List<String> jvm = List.of("-Dstagewright.autorun=true", "-Xmx8G");
+        assertEquals(List.of("java", "@user_jvm_args.txt", "-Dstagewright.autorun=true", "-Xmx8G",
+                        "@libraries/net/neoforged/neoforge/21.1.248/unix_args.txt", "nogui", "--fml.mods", "x"),
+                Main.serverCommand(List.of("java", "@user_jvm_args.txt",
+                        "@libraries/net/neoforged/neoforge/21.1.248/unix_args.txt", "nogui"),
+                        jvm, List.of("--fml.mods", "x")));
+        assertEquals(List.of("java", "-Dstagewright.autorun=true", "-Xmx8G", "-jar", "fabric-server.jar", "nogui"),
+                Main.serverCommand(List.of("java", "-jar", "fabric-server.jar", "nogui"), jvm, List.of()));
     }
 
     @Test

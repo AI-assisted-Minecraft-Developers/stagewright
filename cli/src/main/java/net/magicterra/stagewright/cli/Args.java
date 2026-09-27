@@ -10,7 +10,10 @@ import java.util.Set;
 /** The command line, split into options, game system properties and extra mod jars. */
 final class Args {
 
-    /** @param opts option name (without the dashes) to its value; a flag maps to {@code "true"} */
+    /**
+     * @param opts        option name (without the dashes) to its value; a flag maps to {@code "true"}
+     * @param systemProps arguments for the game's JVM, as given: {@code -D…} and {@code -X…}
+     */
     record Parsed(Map<String, String> opts, List<String> systemProps, List<Path> extraMods) {}
 
     /**
@@ -31,7 +34,7 @@ final class Args {
         List<Path> extraMods = new ArrayList<>();
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
-            if (a.startsWith("-D")) {
+            if (a.startsWith("-D") || a.startsWith("-X")) {
                 systemProps.add(a);
             } else if ("--no-install".equals(a)) {
                 opts.put("no-install", "true");

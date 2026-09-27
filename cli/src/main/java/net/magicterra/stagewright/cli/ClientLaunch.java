@@ -36,9 +36,9 @@ final class ClientLaunch {
     private ClientLaunch() {}
 
     /**
-     * @param systemProps our own {@code -D} properties: after the version's own JVM args, so one the
-     *                    version also sets is ours (the JVM keeps the last), and before the main
-     *                    class, after which they would be read as game arguments
+     * @param systemProps our own {@code -D}/{@code -X} arguments: after the version's own JVM args, so
+     *                    one the version also sets is ours (the JVM keeps the last), and before the
+     *                    main class, after which they would be read as game arguments
      * @param gameArgs    program arguments appended after the version's own
      */
     static List<String> command(Path installDir, Path gameDir, String versionId, String javaBinary,

@@ -99,6 +99,22 @@ not. Against a player's `.minecraft` that is deleting a file the player put ther
 ledger names is taken back now, and when the pack's `mods/` already has StageWright the CLI loads
 that one instead of handing over a second copy.
 
+### The CLI says what it was built from, and passes `-X` options to the game · green in unit tests
+
+The engine and the framework reach the CLI jar from mavenLocal, published by separate builds, and a
+CLI built after forgetting one of them carried the old code with no sign of it. Every run now starts
+by printing when the jar was built and when each engine and framework jar inside it was published,
+with a SHA-1 prefix; `--version` prints the same and exits. `-X…` arguments now go to the game's JVM
+as `-D…` ones always did, so `-Xmx` needs no wrapper script.
+
+### A client with no X authority is warned about before it starts · green in unit tests
+
+With `DISPLAY` set, no `XAUTHORITY` and no `~/.Xauthority`, an X server that wants authorization
+lets GLFW's window through and refuses AWT: a mod using AWT fails to construct, NeoForge stops
+dispatching lifecycle events, and the run crashes on its first tick in an unrelated mod. The CLI
+warns before launching. The display checks also run before the install now, and before
+`--world reset` deletes anything, so a refused run has downloaded and deleted nothing.
+
 ## 2026-09-27
 
 ### Coverage refuses to reconcile runs of different code · green in unit tests
