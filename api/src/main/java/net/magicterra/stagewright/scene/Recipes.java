@@ -141,6 +141,16 @@ public final class Recipes {
         return out;
     }
 
+    /**
+     * Whether a recipe with this id is loaded — the question "was it disabled" wants, answered
+     * without the failure {@link #resultOf} and the other single-recipe questions raise for an
+     * unknown id.
+     */
+    public boolean registered(String recipeId) {
+        indexOnce();
+        return byId.containsKey(Ids.location(recipeId, "recipe").toString());
+    }
+
     /** Every recipe id in this run, sorted — dynamic and special recipes with no fixed result too, so
      *  its size is {@link #count()}. */
     public List<String> all() {
