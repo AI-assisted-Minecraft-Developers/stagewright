@@ -18,14 +18,20 @@ import java.util.List;
  */
 final class FirstCause {
 
-    private static final List<String> MARKERS =
-            List.of("Failed to create mod instance", "broken mod state");
+    /**
+     * What FML says when a mod fails, earliest first. Its "broken mod state" lines are what every
+     * later lifecycle event says afterwards, so they only stand in when no failure itself was logged —
+     * a pack missing a language provider logged the provider four lines before the first of them.
+     */
+    private static final List<String> CAUSES =
+            List.of("Error during pre-loading phase", "Failed to create mod instance");
+    private static final List<String> SYMPTOMS = List.of("broken mod state");
     private static final int CONTEXT_LINES = 3;
 
     private FirstCause() {}
 
     /**
-     * The first marker line and a few after it, or empty — and empty too when the log predates this
+     * The first cause line and a few after it, or empty — and empty too when the log predates this
      * run, which in a player's own game directory it may well do.
      */
     static List<String> find(Path gameDir, long runStartedMillis) {
@@ -35,20 +41,28 @@ final class FirstCause {
                     || Files.getLastModifiedTime(log).toMillis() < runStartedMillis) {
                 return List.of();
             }
-            List<String> lines = Files.readAllLines(log, StandardCharsets.ISO_8859_1);
-            for (int i = 0; i < lines.size(); i++) {
-                String line = lines.get(i);
-                if (MARKERS.stream().noneMatch(line::contains)) continue;
-                List<String> out = new ArrayList<>();
-                out.add("  first cause, from " + log + ":");
-                for (int j = i; j < Math.min(lines.size(), i + 1 + CONTEXT_LINES); j++) {
-                    out.add("    " + lines.get(j));
-                }
-                return out;
+            // Decoded leniently: the game writes UTF-8, and its dates are localised ("28九月2026").
+            List<String> lines = new String(Files.readAllBytes(log), StandardCharsets.UTF_8).lines().toList();
+            int at = first(lines, CAUSES);
+            if (at < 0) at = first(lines, SYMPTOMS);
+            if (at < 0) return List.of();
+            List<String> out = new ArrayList<>();
+            out.add("  first cause, from " + log + ":");
+            for (int j = at; j < Math.min(lines.size(), at + 1 + CONTEXT_LINES); j++) {
+                out.add("    " + lines.get(j));
             }
+            return out;
         } catch (IOException e) {
             // Unreadable is the same as absent: this only ever adds detail to a failure.
         }
         return List.of();
+    }
+
+    private static int first(List<String> lines, List<String> markers) {
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (markers.stream().anyMatch(line::contains)) return i;
+        }
+        return -1;
     }
 }

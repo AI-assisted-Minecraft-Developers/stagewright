@@ -140,6 +140,17 @@ Xwayland, and an X11-only GLFW passed as `org.lwjgl.glfw.libname` can do nothing
 warning claimed a missing authority let GLFW through and only refused AWT; against a real pack it was
 `glfwInit` that failed.
 
+### A CLI client that cannot open a window is ENV in seconds, and the first cause is FML's own failure · green in unit tests and on a Wayland-only client
+
+Under the command-line runner, a client that logs `glfwInit failed` is killed and reported as ENV as
+soon as the line is written — twelve seconds into a NeoForge boot, where the stall watchdog took five
+minutes. The Gradle plugin does not watch for it: its client run or companion waits on NeoForge's
+dialog until the gate's `timeoutMinutes` ends it, or, in a hold, until it is stopped. The first cause
+quoted from `logs/debug.log` is now FML's earliest failure (`Error during pre-loading phase`,
+`Failed to create mod instance`) ahead of the "broken mod state" lines that follow it — a pack
+missing a language provider had the fourth such line quoted instead — and the log is read as UTF-8,
+so a localised date prints as written.
+
 ### `Recipes.all()` lists every loaded recipe, and `Recipes.registered(id)` asks without failing · compiled
 
 `all()` was built from the by-result index, so dynamic and special recipes, and recipes loaded as
