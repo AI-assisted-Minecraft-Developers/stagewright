@@ -4,6 +4,8 @@ import java.lang.management.LockInfo;
 import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
+import java.util.Map;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 import net.magicterra.stagewright.StageWrightCommon;
@@ -58,15 +60,18 @@ final class StallWatchdog {
     private final ResultsJsonl out;
     private final Heartbeat heartbeat;
     private final Supplier<String> runningScene;
+    private final BooleanSupplier bodyEntered;
     private final Supplier<Long> tickCounter;
     private final Thread thread;
     private volatile boolean stopped;
 
-    StallWatchdog(ResultsJsonl out, Supplier<Long> tickCounter, Supplier<String> runningScene) {
+    StallWatchdog(ResultsJsonl out, Supplier<Long> tickCounter, Supplier<String> runningScene,
+                  BooleanSupplier bodyEntered) {
         this.out = out;
         this.heartbeat = new Heartbeat(out.progressFile());
         this.tickCounter = tickCounter;
         this.runningScene = runningScene;
+        this.bodyEntered = bodyEntered;
         this.thread = new Thread(this::watch, "stagewright-stall-watchdog");
         // Daemon: on a clean run this thread must never be the reason the JVM stays up. That is the
         // failure the exit watchdog exists to force past, and introducing another instance of it
@@ -125,7 +130,8 @@ final class StallWatchdog {
             // One monitor for both lines: the footer must not be able to land without the record it
             // terminates, or the orchestrator reports TRUNCATED and the stall goes unnamed.
             synchronized (out) {
-                out.writeScene(scene, SceneOutcome.TIMEOUT, 0, stalledForMs, reason);
+                out.writeScene(scene, SceneOutcome.TIMEOUT, 0, stalledForMs, reason, Map.of(), false,
+                        bodyEntered.getAsBoolean());
                 out.writeDone(out.sceneRecordCount());
             }
         } catch (RuntimeException e) {

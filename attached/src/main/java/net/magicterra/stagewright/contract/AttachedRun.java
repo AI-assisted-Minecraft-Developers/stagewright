@@ -86,8 +86,10 @@ public final class AttachedRun {
             String outcome = "PASS";
             String reason = "";
             boolean skipped = false;
+            boolean bodyRan = false;
             try {
                 refuseUnhonourableOptions(spec);
+                bodyRan = true;
                 Scripts.run(spec, ctx);
                 List<String> soft = ctx.softViolations();
                 if (!soft.isEmpty()) {
@@ -135,6 +137,8 @@ public final class AttachedRun {
             // that appeared on every line here and only on skips there would be a difference the
             // consistency gate has to explain away rather than one it can assert on.
             if (skipped) record.put("skipped", true);
+            // A refusal is a FAIL that tested nothing; unmarked, coverage would count it.
+            if (!bodyRan) record.put("bodyRan", false);
             record.put("data", data);
             records.add(record);
 

@@ -141,8 +141,17 @@ public final class ResultsJsonl {
      *                verdict has to be able to say what a run actually covered, and a suite whose
      *                skips are invisible reports a GREEN that reads as coverage it does not have.
      */
-    public synchronized void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs,
+    public void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs,
                            String reason, java.util.Map<String, Object> data, boolean skipped) {
+        writeScene(name, outcome, ticks, wallMs, reason, data, skipped, true);
+    }
+
+    /** @param bodyRan whether the body was entered before this record. Emitted only when false: a
+     *                 TIMEOUT out of PREP reads like any other by outcome, and coverage would count a
+     *                 scene nothing tested. */
+    public synchronized void writeScene(String name, SceneOutcome outcome, int ticks, long wallMs,
+                           String reason, java.util.Map<String, Object> data, boolean skipped,
+                           boolean bodyRan) {
         sceneRecords++;
         StringBuilder sb = new StringBuilder();
         sb.append("{\"type\":\"scene\",\"name\":\"").append(escape(name))
@@ -150,6 +159,7 @@ public final class ResultsJsonl {
           .append("\",\"ticks\":").append(ticks).append(",\"wallMs\":").append(wallMs)
           .append(",\"reason\":\"").append(escape(reason == null ? "" : reason)).append('"');
         if (skipped) sb.append(",\"skipped\":true");
+        if (!bodyRan) sb.append(",\"bodyRan\":false");
         if (data != null && !data.isEmpty()) {
             sb.append(",\"data\":{");
             boolean first = true;

@@ -98,6 +98,10 @@ public final class StageWrightHarness {
     /** The scene the tick is inside, so a stall can be blamed on it by name rather than on the run. */
     private volatile String runningScene = "<arming>";
 
+    /** Whether the running scene's body has been entered; volatile for the same reason, since the
+     *  watchdog's record has to say it too. */
+    private volatile boolean bodyEntered;
+
     private final StallWatchdog stallWatchdog;
 
     /**
@@ -128,7 +132,8 @@ public final class StageWrightHarness {
         // Started at arming, not at the first scene: a mod that wedges the tick does it during its
         // own setup as readily as inside a scene, and that stall has to be nameable too.
         this.starvation = TickStarvation.forScene(ticksObserved);
-        this.stallWatchdog = new StallWatchdog(out, () -> ticksObserved, () -> runningScene);
+        this.stallWatchdog = new StallWatchdog(out, () -> ticksObserved, () -> runningScene,
+                () -> bodyEntered);
         this.stallWatchdog.start();
         StageWrightCommon.LOG.info("[{}] harness armed: {} scenes", StageWrightCommon.MOD_ID, scenes.size());
     }
@@ -376,7 +381,10 @@ public final class StageWrightHarness {
                 ServerLevel level = sceneLevel;
                 phaseTicks++;
                 try {
-                    if (phaseTicks == 1) ctx.runBody(scene.body());
+                    if (phaseTicks == 1) {
+                        bodyEntered = true;
+                        ctx.runBody(scene.body());
+                    }
                     SceneContext.Progress p = ctx.advance();
                     if (p == SceneContext.Progress.DONE) {
                         record(scene, SceneOutcome.PASS, ctx.ticks(), ctx.passNote());
@@ -430,7 +438,7 @@ public final class StageWrightHarness {
         // in a failure message is unavailable exactly when the run is healthy.
         // ctx is null when a scene ENV_FAILs out of PREP, before any context exists.
         out.writeScene(scene.name(), outcome, ticks, wallMs, reason,
-                ctx == null ? java.util.Map.of() : ctx.records(), skipped);
+                ctx == null ? java.util.Map.of() : ctx.records(), skipped, bodyEntered);
         phase = Phase.ADVANCE_DONE;
     }
 
@@ -563,6 +571,7 @@ public final class StageWrightHarness {
         prepLevelTicking = -1;
         prepStalledTicks = 0;
         ctx = null;
+        bodyEntered = false;
         sceneLevel = null;
         // A fresh starvation window per scene, for the same reason the clock is applied per scene:
         // one scene's verdict must not be a function of how long its predecessor took.
