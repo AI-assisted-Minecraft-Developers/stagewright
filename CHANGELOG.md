@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-27
 
+### A TIMEOUT before the body ran no longer counts as coverage · green in unit tests
+
+When the world stopped delivering ticks while a scene was still preparing its arena, the harness,
+or the stall watchdog if the tick never came back, recorded a TIMEOUT. Coverage counted any
+TIMEOUT as an execution, so a scene whose body never ran could be the only evidence that it was
+covered. Records written before the body was entered now carry `"bodyRan":false`, and coverage
+treats them like `ENV_FAIL`. So does the companion client's probe when it resolves before it has
+damaged the player, and an attached scene refused because out of process cannot honour its terrain,
+clock or dimension.
+
 ### A dead socket is no longer a `StageWrightRpcException`, nor a refusal to `errorOf` · green in unit tests
 
 **Incompatible:** code that catches `StageWrightRpcException` no longer catches a failed handshake,

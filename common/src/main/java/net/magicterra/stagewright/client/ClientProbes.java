@@ -68,7 +68,7 @@ public final class ClientProbes {
 
     private static final int BUDGET_TICKS = SETTLE_TICKS + WAIT_TICKS;
 
-    private enum Phase { OFF, SETTLING, WAITING, DONE }
+    enum Phase { OFF, SETTLING, WAITING, DONE }
 
     private static Phase phase = Phase.OFF;
     private static int ticks;
@@ -106,7 +106,7 @@ public final class ClientProbes {
                     + " reads the driver's own client event stream and has nothing to read. Absent"
                     + " by design in a pack that does not ship it; if it should be here, check this"
                     + " run's log for the driver's boot lines, because FML lists a mod whose classes"
-                    + " it never attached and constructs nothing.", Map.of(), true);
+                    + " it never attached and constructs nothing.", Map.of(), true, false);
             return;
         }
         DriverFeed.listenForHurts(hurts);
@@ -121,7 +121,8 @@ public final class ClientProbes {
                 hurts.clear();          // anything from the join is not what this measures
                 Minecraft mc = Minecraft.getInstance();
                 if (mc.player == null) {
-                    report(SceneOutcome.FAIL, "no client player to damage", Map.of());
+                    report(SceneOutcome.FAIL, "no client player to damage", Map.of(), false,
+                            bodyEntered(phase));
                     return;
                 }
                 // Through the driver's own client verb rather than the connection directly: it is
@@ -159,11 +160,22 @@ public final class ClientProbes {
     public static synchronized void finishIfUnresolved() {
         if (phase == Phase.OFF || phase == Phase.DONE) return;
         report(SceneOutcome.TIMEOUT, "the client left the world before the probe resolved (phase="
-                + phase + ")", Map.of());
+                + phase + ")", Map.of(), false, bodyEntered(phase));
+    }
+
+    /** SETTLING ends by damaging the player; a record written before then probed nothing, and
+     *  coverage must not count it as an execution. */
+    static boolean bodyEntered(Phase at) {
+        return at != Phase.SETTLING;
     }
 
     private static void report(SceneOutcome outcome, String reason, Map<String, Object> data) {
         report(outcome, reason, data, false);
+    }
+
+    private static void report(SceneOutcome outcome, String reason, Map<String, Object> data,
+                               boolean skipped) {
+        report(outcome, reason, data, skipped, true);
     }
 
     /**
@@ -176,7 +188,7 @@ public final class ClientProbes {
      * be the false green the cross-run coverage gate exists to catch.
      */
     private static void report(SceneOutcome outcome, String reason, Map<String, Object> data,
-                               boolean skipped) {
+                               boolean skipped, boolean bodyRan) {
         phase = Phase.DONE;
         DriverFeed.stopListening();
         ResultsJsonl out = new ResultsJsonl(Path.of(OUT_FILE));
@@ -184,7 +196,7 @@ public final class ClientProbes {
         // than being a bespoke format some second parser has to learn.
         out.writeSuiteHeader(loader, List.of(Scene.of(PROBE, BUDGET_TICKS, ctx -> { })));
         out.writeScene(PROBE, outcome, ticks, System.currentTimeMillis() - startedMs,
-                reason, data, skipped);
+                reason, data, skipped, bodyRan);
         out.writeDone(1);
         StageWrightCommon.LOG.info("[{}] client probe {} -> {}{} {}", StageWrightCommon.MOD_ID,
                 PROBE, outcome, skipped ? " (skipped)" : "", reason);

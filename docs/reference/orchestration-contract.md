@@ -282,6 +282,7 @@ One per executed scene:
 | `wallMs` | number | always | Wall-clock milliseconds. |
 | `reason` | string | always | Free text; empty on an unremarkable pass. |
 | `skipped` | boolean | only when true | The scene resolved without testing its subject. |
+| `bodyRan` | boolean | only when false | The record was written before the body was entered: an `ENV_FAIL`, a dimension skip, a `TIMEOUT` because the world stopped delivering ticks during preparation, the companion client's probe resolving before it damaged the player, or an attached scene refused because out of process cannot honour its terrain, clock or dimension. |
 | `data` | object | only when non-empty | Values the scene attached with `SceneContext.record`. |
 
 `reason` is free text and the harness feeds raw exception messages into it, so it is escaped:
@@ -427,9 +428,10 @@ person who just forgot to. Add a scene and it is covered the moment it exists; a
 the check gets easier to satisfy; delete the only topology that could run something and the check
 REDs naming it.
 
-"Executed" means a record that is neither a skip nor `ENV_FAIL`. `ENV_FAIL` is written out of
-PREP, before a body exists, so a scene that only ever ENV_FAILs has tested nothing. A FAIL or
-TIMEOUT did execute; its run is RED for that on its own.
+"Executed" means a record that is neither a skip, nor `ENV_FAIL`, nor marked `"bodyRan":false`.
+`ENV_FAIL` is written out of PREP, before a body exists, so a scene that only ever ENV_FAILs has
+tested nothing, and the same holds for a TIMEOUT written before its body was entered. Any other
+FAIL or TIMEOUT did execute; its run is RED for that on its own.
 
 A results file whose header carries `filter` is not reconciled at all: coverage over it is ENV,
 naming the file, because its `registered` list is whatever the pattern kept and every count

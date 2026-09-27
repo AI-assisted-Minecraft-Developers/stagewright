@@ -68,6 +68,21 @@ class AttachedRunTest {
     }
 
     @Test
+    void aSceneRefusedBeforeItsBodySaysTheBodyNeverRan(@TempDir Path dir) throws IOException {
+        // A FAIL counts as coverage unless the record says otherwise, and this one tested nothing.
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = run(dir, """
+                scene('pack.refused', 20, function (s) { }, { dimension: 'pack:elsewhere' });
+                scene('pack.failed', 20, function (s) { throw new Error('measured wrong'); });
+                """, new ArrayList<>(), allGood);
+
+        assertEquals("FAIL", records.get(0).get("outcome"));
+        assertEquals(Boolean.FALSE, records.get(0).get("bodyRan"));
+        assertEquals("FAIL", records.get(1).get("outcome"));
+        assertFalse(records.get(1).containsKey("bodyRan"), "a body that ran is the default");
+    }
+
+    @Test
     void aSkipWithNothingFailedBeforeItStaysASkip(@TempDir Path dir) throws IOException {
         boolean[] allGood = new boolean[1];
         List<Map<String, Object>> records = run(dir, """

@@ -204,6 +204,22 @@ class CoverageTest {
     }
 
     @Test
+    void aTimeoutBeforeTheBodyRanIsNotAnExecution() {
+        // A world that stops delivering ticks during PREP ends the scene as TIMEOUT with no body
+        // ever entered; by outcome alone it would count as covered.
+        Map<String, Object> starved = ran("a");
+        starved.put("outcome", "TIMEOUT");
+        starved.put("bodyRan", false);
+        starved.put("reason", "the world delivered 3 ticks in 60s");
+        Coverage.Result result = Coverage.judge(List.of(
+                run("dedicated", suite(reg("a")), starved)));
+        assertEquals(1, result.code());
+        assertTrue(reports(result, "UNCOVERED: 'a'"));
+        assertTrue(reports(result, "TIMEOUT before the body ran — the world delivered 3 ticks"),
+                String.join("\n", result.report()));
+    }
+
+    @Test
     void aFailedSceneStillExecuted() {
         Map<String, Object> failed = ran("a");
         failed.put("outcome", "FAIL");

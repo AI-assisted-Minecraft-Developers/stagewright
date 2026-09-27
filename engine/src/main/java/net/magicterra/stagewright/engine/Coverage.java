@@ -105,14 +105,17 @@ public final class Coverage {
                 // ENV_FAIL is written out of PREP, before any body exists, so it is as much "did
                 // not run" as a skip — unlike FAIL or TIMEOUT, which executed and found something.
                 boolean envFail = rec != null && "ENV_FAIL".equals(Verdict.str(rec.get("outcome")));
-                if (rec != null && !Verdict.skipped(rec) && !envFail) {
+                // Absent on records whose body ran and on files older than the field.
+                boolean beforeBody = rec != null && "false".equals(Verdict.str(rec.get("bodyRan")));
+                if (rec != null && !Verdict.skipped(rec) && !envFail && !beforeBody) {
                     everExecuted.add(name);
                 } else {
                     absentIn.computeIfAbsent(name, k -> new LinkedHashMap<>())
                             .put(run.label(), rec == null
                                     ? "no record — the scene was registered and never ran"
-                                    : envFail
-                                    ? "ENV_FAIL before the body ran — " + Verdict.str(rec.get("reason"))
+                                    : envFail || (beforeBody && !Verdict.skipped(rec))
+                                    ? Verdict.str(rec.get("outcome")) + " before the body ran — "
+                                            + Verdict.str(rec.get("reason"))
                                     : Verdict.str(rec.getOrDefault("reason", "skipped")));
                 }
             }
