@@ -52,7 +52,7 @@ model, and `--help` for the flags not covered here.
 | Flag | What it does |
 |---|---|
 | `--game-dir <dir>` | The pack directory holding `mods/` and `config/`. Required. |
-| `--scenes <dir>` | A folder of scene files. `.js` goes to the scenes directory, `.json` to the capability descriptors directory. |
+| `--scenes <dir>` | A folder of scene files. `.js` goes to the scenes directory, `.json` to the capability descriptors directory. A folder with no `.js` file is refused, and a `.js` file that registers no scene fails the run. |
 | `--mod <jar>` | Install this mod too. Repeatable. |
 | `--expect <file>` | Reconcile the run against an expected-scenes manifest. A manifest that names no scene is refused before the game starts. |
 | `--timeout <min>` | A ceiling, not a duration — the run ends when the results file carries its footer. Defaults to 45. |

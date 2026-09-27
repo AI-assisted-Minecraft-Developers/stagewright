@@ -380,9 +380,13 @@ the cause nor the fix. StageWright's own names are not remapped, which is why ev
 legitimately needs from a Minecraft type is reachable through an accessor — `s.originX()` rather than
 `s.origin().getX()`.
 
-Scene files live in `config/stagewright/scenes/` and are loaded in file-name order. They need Rhino
-on the runtime's classpath; where it is absent, the run fails and says so rather than reporting a
-suite that quietly contained none of them.
+Scene files live in `config/stagewright/scenes/` and are loaded in file-name order. Each file is
+evaluated in its own scope, so a file cannot hold helpers for another; one that registers no scene
+fails to load, like one with a syntax error. Register every scene unconditionally, and let a body
+with nothing to test on this topology skip — `mods().require(id)` for a mod that is not installed —
+so the run records the skip; a `scene()` call behind an `if` leaves no trace where it did not run.
+They need Rhino on the runtime's classpath; where it is absent, the run fails and says so rather than
+reporting a suite that quietly contained none of them.
 
 ## Reaching what the base game has no concept of
 

@@ -125,7 +125,13 @@ public final class Scripts {
             setup.install(cx, scope, name);
             cx.evaluateString(scope, prelude(), "<stagewright-prelude>", 1, null);
             cx.evaluateString(scope, source, name, 1, null);
-            return harvest(cx, scope, name);
+            List<SceneSpec> specs = harvest(cx, scope, name);
+            // Each file gets its own scope, so one that registers nothing cannot be a helper for
+            // another: it is a file its author believes runs, and the suite stays green over it.
+            if (specs.isEmpty()) {
+                throw new IllegalStateException("it registers no scene — call scene(name, budgetTicks, body)");
+            }
+            return specs;
         } catch (RuntimeException e) {
             // Registration failures abort arming rather than dropping the file. A pack author whose
             // scene file has a syntax error must not get a green run over the scenes that happened to

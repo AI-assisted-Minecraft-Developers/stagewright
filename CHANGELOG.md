@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-27
 
+### A scene source that holds no scene is refused · green in unit tests
+
+A `sceneScripts` or `--scenes` directory with no `.js` file in it was installed as nothing and the run
+went ahead, and a `.js` file that never called `scene()` loaded without error. Without a manifest
+naming those scenes, both were a green run over scenes that did not exist. The directory is now
+refused before the game starts, and the file fails to load as a syntax error does.
+
 ### `passNote` is no longer suggested for a body with nothing to do · documentation
 
 The guide and the javadoc recommended a noted PASS for a body that had nothing to do on a topology.
