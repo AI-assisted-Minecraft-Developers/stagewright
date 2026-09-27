@@ -943,7 +943,8 @@ public final class Main {
                   --coverage <files>  judge nothing but coverage: comma-separated results files from
                                       runs that have already finished, RED if any scene they register
                                       executed in none of them, ENV if any of them was a filtered
-                                      run. Runs no game and takes no --game-dir.
+                                      run or none of them registered a scene. Runs no game and
+                                      takes no --game-dir.
                                       A scene skipping is fine in one run and a hole across all of
                                       them, which is a question no single run can be asked.
                   --expect <file>     expected-scenes manifest to reconcile against

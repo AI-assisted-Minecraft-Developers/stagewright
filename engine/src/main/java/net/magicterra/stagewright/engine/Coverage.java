@@ -129,6 +129,15 @@ public final class Coverage {
             return new Result(3, out);
         }
 
+        // Keyed on scenes, not on runs with a header: a header that registers nothing is no more
+        // evidence than a missing one, and either way the census below would read "0 of 0 executed".
+        if (everRegistered.isEmpty()) {
+            List<String> out = new ArrayList<>(report);
+            out.add("NO EVIDENCE: none of the " + runs.size() + " run(s) registered a scene, so there"
+                    + " is nothing to reconcile. Each run's own verdict says why.");
+            return new Result(3, out);
+        }
+
         int code = 0;
         List<String> uncovered = new ArrayList<>();
         for (String name : new TreeSet<>(absentIn.keySet())) {

@@ -19,6 +19,13 @@ went ahead, and a `.js` file that never called `scene()` loaded without error. W
 naming those scenes, both were a green run over scenes that did not exist. The directory is now
 refused before the game starts, and the file fails to load as a syntax error does.
 
+### Coverage over runs that registered nothing is ENV, not GREEN · green in unit tests
+
+A run with no suite header, or whose header carried `registryError`, contributed nothing to the
+reconciliation, which was right while another run did. When none did — or the headers that remained
+registered no scene — nothing could be named uncovered, and the report read "0 of 0 executed" with
+exit 0. It is now ENV with a `NO EVIDENCE` line.
+
 ### `passNote` is no longer suggested for a body with nothing to do · documentation
 
 The guide and the javadoc recommended a noted PASS for a body that had nothing to do on a topology.

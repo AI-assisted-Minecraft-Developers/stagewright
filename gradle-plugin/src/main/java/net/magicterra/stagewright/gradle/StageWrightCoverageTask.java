@@ -85,9 +85,10 @@ public abstract class StageWrightCoverageTask extends DefaultTask {
             getLogger().lifecycle("[stagewright:coverage] {}", line);
         }
         if (result.code() == 3) {
-            throw new GradleException("stagewright coverage: ENV — a topology's results come from a"
-                    + " filtered run, which is not a coverage claim. See the FILTERED lines above,"
-                    + " re-run that topology without -Pstagewright.scenes, and reconcile again.");
+            throw new GradleException("stagewright coverage: ENV — these results cannot support a"
+                    + " coverage claim.\n  FILTERED: re-run that topology without -Pstagewright.scenes,"
+                    + " then reconcile again.\n  NO EVIDENCE: no run registered a scene; each topology's"
+                    + " own verdict (stagewright<Topology>) says why.");
         }
         if (result.code() != 0) {
             throw new GradleException("stagewright coverage: RED — a scene this suite registers"
