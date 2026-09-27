@@ -316,22 +316,32 @@ stopped checking — each of those turns the entire suite green and tells nobody
 be honest, complete, and worthless.
 
 So each mechanism the suite depends on has a test that deliberately triggers it. **"Expected to
-fail" is expressed as an ordinary passing test containing an assertion that the mechanism throws**
-— not as a disabled test, not as an expected-exception annotation, and not through any verdict
-machinery. The canary bites inside the assertion, so the class is green while the teeth work and
-red the moment one stops biting.
+fail" is expressed as an ordinary passing test that checks the mechanism fails** — not as a
+disabled test, not as an expected-exception annotation, and not through the results-file verdict.
+The class is green while the teeth work and red the moment one stops biting.
+
+The timeout and refusal-helper canaries bite inside an assertion that the mechanism throws. The
+wrong-assertion canary cannot, because what a live class depends on is not that JUnit's assertions
+throw but that a failure inside a `StageWrightExtension` class is reported as one. It runs a small
+class that is wrong on purpose — carrying the extension and the face requirement like any live
+class — through the JUnit Platform's `EngineTestKit`, and requires that class to report exactly
+one failed test, with the deliberate message, and nothing skipped or aborted. The canary class
+itself does not carry the extension, since an extension that swallowed failures would swallow the
+canary's verdict along with everything else; it is gated by the extension's face check alone, so a
+wrong hold still reads as one. The wrong-on-purpose classes are tagged `deliberately-wrong`, which
+the module's own test task excludes, and run only when the canary passes them a flag.
 
 Server face:
 
 | Canary | Proves |
 |---|---|
-| A deliberately wrong assertion throws, and the caught message names the deliberate wrongness | Assertions still bite — and that it was *this* assertion that bit, not an unrelated one. |
+| A class asserting the wrong mod id about a real read is reported failed, with the deliberate message | Assertions still bite, the face gate does not skip on the right face, and the extension does not swallow the failure — and it was *this* assertion that failed, not an unrelated one. |
 | A condition that never holds raises a timeout, and that timeout is not an assertion error | Timeouts still fire, and the two kinds of failure remain distinguishable. |
 | The refusal helper, pointed at a call that actually succeeds, itself throws | Without this, a router that accepted every malformed call would turn every refusal assertion in the suite into a silent pass. |
 
-Client face carries its own pair — a wrong assertion made against a real screen read, and a
-timeout — because the server-face canary class is gated to the server and would leave a
-client-face run with no self-check at all.
+Client face carries its own pair — a class asserting a screen is open right after a real screen
+read says none is, and a timeout — because the server-face canary class is gated to the server
+and would leave a client-face run with no self-check at all.
 
 These are distinct from the scene canaries described in the
 [orchestration contract](orchestration-contract.md), which are declared in the results file and
