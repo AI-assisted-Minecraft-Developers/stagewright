@@ -2,6 +2,7 @@ package net.magicterra.stagewright.junit;
 
 import net.magicterra.stagewright.contract.StageWrightRpc;
 import net.magicterra.stagewright.contract.StageWrightRpcException;
+import net.magicterra.stagewright.contract.StageWrightTransportException;
 import net.magicterra.stagewright.contract.StageWrightTimeoutException;
 
 import com.google.gson.JsonElement;
@@ -133,10 +134,18 @@ public final class StageWright implements AutoCloseable {
      * "client only". Returning it instead of throwing lets a test say what it means
      * ({@code assertContains(err, "unexpected key")}) and lets the "it did not fail at all" case be
      * a null check rather than a missing exception.
+     *
+     * @throws StageWrightTransportException when the socket could not carry the call, and
+     *         {@link StageWrightTimeoutException} when the reply did not come in time: neither is a
+     *         refusal, and neither's text may be asserted on as one
      */
     public String errorOf(String method, JsonObject params) {
+        return errorOf(() -> call(method, params));
+    }
+
+    static String errorOf(Runnable call) {
         try {
-            call(method, params);
+            call.run();
             return null;
         } catch (StageWrightRpcException e) {
             return e.error();

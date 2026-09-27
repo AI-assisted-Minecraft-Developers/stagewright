@@ -120,13 +120,22 @@ driving the client's screen, resetting client state, and polling a condition to 
 Everything else is `call(method, params)` straight through, because the point of testing through
 this surface is to test the surface a real consumer uses.
 
-Three behaviours of that facade are contractual:
+Four behaviours of that facade are contractual:
 
 - **A command that Brigadier rejects throws.** Vanilla's own dispatcher reports errors to the
   command source and returns normally, so without this a typo in a test is a line that does
   nothing and passes.
 - **A refused call surfaces as an exception carrying the method and the driver's error string**,
   so a test can assert on the refusal rather than on the absence of a result.
+- **A broken connection is not a refusal.** A call on a socket the client has seen close, even one
+  that closed before the call was made, or whose wait for a reply was interrupted, throws
+  `StageWrightTransportException` at once. A connection that died without the peer closing it (no
+  FIN or RST) still looks open, so the call waits out its time limit and throws
+  `StageWrightTimeoutException`. `StageWrightTransportException` is a `RuntimeException` beside the
+  refusal exception, not a kind of it, so `errorOf` lets it through rather than returning its text
+  as though the driver had said it, and a `catch` or `assertThrows` for a refusal does not take it
+  for one. `StageWrightRpc.connect` throws the same for a handshake that fails, times out or is
+  interrupted; `attach()` reports that as an attach failure, above.
 - **A timeout is not an assertion failure.** `StageWrightTimeoutException` is a
   `RuntimeException` and deliberately not an `AssertionError`, because "the condition never held"
   and "the condition held and was wrong" are different findings, and a canary asserts on exactly

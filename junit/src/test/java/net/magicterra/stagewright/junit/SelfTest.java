@@ -3,12 +3,25 @@ package net.magicterra.stagewright.junit;
 import net.magicterra.stagewright.contract.StageWrightRpc;
 import net.magicterra.stagewright.contract.StageWrightRpcException;
 import net.magicterra.stagewright.contract.StageWrightTimeoutException;
+import net.magicterra.stagewright.contract.StageWrightTransportException;
 
 import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
+import org.opentest4j.AssertionFailedError;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.Base64;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,9 +31,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Pure-JVM self-tests — no game, no socket. Exercises the endpoint parser, the
- * attach fail-fast, the wire codec, and the awaitCondition poll loop. Runs live-free:
- * the gradle {@code test} task passes an empty {@code TESTKIT_ENDPOINT}, and the
+ * Pure-JVM self-tests: no game, and no socket but loopback stand-ins the tests open themselves.
+ * Live-free because the gradle {@code test} task passes an empty {@code TESTKIT_ENDPOINT}, and the
  * attach test additionally clears {@code stagewright.endpoint}.
  */
 class SelfTest {
@@ -183,6 +195,128 @@ class SelfTest {
                 () -> StageWrightRpc.resultOf("mc.no.such", errEnv));
         assertEquals("mc.no.such", ex.method());
         assertEquals("unknown method: mc.no.such", ex.error());
+    }
+
+    @Test
+    void errorOfReturnsTheDriversRefusal() {
+        assertEquals("unexpected key: bogus", StageWright.errorOf(() -> {
+            throw new StageWrightRpcException("mc.query", "unexpected key: bogus");
+        }));
+        assertNull(StageWright.errorOf(() -> { }));
+    }
+
+    @Test
+    void errorOfDoesNotTurnABrokenTransportIntoARefusal() {
+        // Returned as the refusal's text, a dead socket would satisfy any refuses(...) whose
+        // expected fragment it happens to contain, and fail the rest as a wrong message.
+        StageWrightTransportException dead = new StageWrightTransportException("mc.query",
+                "transport error: java.io.IOException: connection reset");
+        assertThrows(StageWrightTransportException.class, () -> StageWright.errorOf(() -> {
+            throw dead;
+        }));
+    }
+
+    @Test
+    void aDeadSocketDoesNotPassForARefusal() {
+        // What ContainerFurnaceTest's assertThrows on exec() relies on: a lost connection there
+        // must fail the test, not satisfy it.
+        StageWrightTransportException dead = new StageWrightTransportException("mc.action.runCommand",
+                "transport error: java.io.IOException: connection reset");
+        assertFalse(StageWrightRpcException.class.isInstance(dead));
+        assertThrows(AssertionFailedError.class,
+                () -> assertThrows(StageWrightRpcException.class, () -> { throw dead; }));
+    }
+
+    @Test
+    @DisabledIfEnvironmentVariable(named = "TESTKIT_ENDPOINT", matches = ".+")
+    void attachReportsAnEndpointThatDropsTheHandshakeAsAnAttachFailure() throws Exception {
+        // Held for the whole test, so no other process can answer on the port; every connection is
+        // dropped before the upgrade, so the handshake fails at once rather than timing out.
+        try (ServerSocket dropping = new ServerSocket(0)) {
+            Thread drop = new Thread(() -> {
+                try {
+                    while (true) dropping.accept().close();
+                } catch (IOException closed) {
+                    // the test is over
+                }
+            });
+            drop.setDaemon(true);
+            drop.start();
+            Path descriptor = Files.createTempFile("testkit-endpoint", ".json");
+            String saved = System.getProperty("stagewright.endpoint");
+            try {
+                Files.writeString(descriptor, "{\"version\":1,\"topology\":\"dedicated\",\"loader\":\"fabric\","
+                        + "\"rpcHost\":\"127.0.0.1\",\"rpcPort\":" + dropping.getLocalPort()
+                        + ",\"worldName\":\"world\",\"holdPid\":1,\"writtenAtEpochMs\":1750000000000}");
+                System.setProperty("stagewright.endpoint", descriptor.toString());
+                long started = System.nanoTime();
+                StageWrightAttachException ex = assertThrows(StageWrightAttachException.class, StageWright::attach);
+                long ms = (System.nanoTime() - started) / 1_000_000;
+                assertTrue(ex.getCause() instanceof StageWrightTransportException, String.valueOf(ex.getCause()));
+                // Well under the 5s handshake timeout: the dropped handshake, not the timeout.
+                assertTrue(ms < 2_000, "took " + ms + "ms: " + ex.getCause());
+                assertTrue(ex.getMessage().contains(StageWrightAttachException.HINT), ex.getMessage());
+            } finally {
+                if (saved != null) {
+                    System.setProperty("stagewright.endpoint", saved);
+                } else {
+                    System.clearProperty("stagewright.endpoint");
+                }
+                Files.deleteIfExists(descriptor);
+            }
+        }
+    }
+
+    @Test
+    void aHandshakeNobodyAnswersIsATransportFailure() throws Exception {
+        // Held open for the whole test, so no other process can take the port; the kernel accepts
+        // the connection into the backlog and nothing ever answers the upgrade request.
+        try (ServerSocket silent = new ServerSocket(0)) {
+            assertThrows(StageWrightTransportException.class,
+                    () -> StageWrightRpc.connect("ws://127.0.0.1:" + silent.getLocalPort() + "/rpc", 2_000));
+        }
+    }
+
+    @Test
+    void aCallOnASocketThatAlreadyClosedIsATransportFailure() throws Exception {
+        try (ServerSocket server = new ServerSocket(0)) {
+            Thread accept = new Thread(() -> acceptThenHangUp(server));
+            accept.start();
+            try (StageWrightRpc rpc = StageWrightRpc.connect(
+                    "ws://127.0.0.1:" + server.getLocalPort() + "/rpc", 5_000)) {
+                // The first call may be in flight when the hang-up lands; the second cannot be, so it
+                // is the one that shows a send on a dead socket is not waited out as a timeout.
+                assertThrows(StageWrightTransportException.class,
+                        () -> rpc.call("mc.system.version", new JsonObject(), 5_000));
+                assertThrows(StageWrightTransportException.class,
+                        () -> rpc.call("mc.system.version", new JsonObject(), 5_000));
+            }
+            accept.join(5_000);
+        }
+    }
+
+    /** Complete one websocket handshake, then drop the connection without a close frame. */
+    private static void acceptThenHangUp(ServerSocket server) {
+        try (Socket s = server.accept()) {
+            BufferedReader in = new BufferedReader(new InputStreamReader(
+                    s.getInputStream(), StandardCharsets.US_ASCII));
+            String key = null;
+            for (String line; (line = in.readLine()) != null && !line.isEmpty(); ) {
+                if (line.toLowerCase(Locale.ROOT).startsWith("sec-websocket-key:")) {
+                    key = line.substring(line.indexOf(':') + 1).trim();
+                }
+            }
+            String accept = Base64.getEncoder().encodeToString(
+                    MessageDigest.getInstance("SHA-1").digest(
+                            (key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+                                    .getBytes(StandardCharsets.US_ASCII)));
+            s.getOutputStream().write(("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                    + "Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + "\r\n\r\n")
+                    .getBytes(StandardCharsets.US_ASCII));
+            s.getOutputStream().flush();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test

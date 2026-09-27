@@ -40,6 +40,8 @@ public final class RpcDriverBinding implements DriverBinding {
         params.forEach((k, v) -> json.add(k, toJson(v)));
         try {
             return fromJson(rpc.call(method, json, timeoutMs));
+        } catch (StageWrightTransportException e) {
+            throw new SceneFailure("driver('" + method + "') " + e.error());
         } catch (StageWrightRpcException e) {
             // The driver refused. That is a scene failure carrying the driver's own words — not a
             // transport problem and not something to translate, because the message is usually the

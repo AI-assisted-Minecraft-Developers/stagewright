@@ -43,15 +43,18 @@ public final class StageWrightRpc implements AutoCloseable {
     private final WebSocket webSocket;
     private final AtomicLong ids = new AtomicLong(0);
     private final ConcurrentHashMap<Long, CompletableFuture<JsonObject>> pending = new ConcurrentHashMap<>();
+    private final Reader reader;
 
-    private StageWrightRpc(HttpClient httpClient, WebSocket webSocket) {
+    StageWrightRpc(HttpClient httpClient, WebSocket webSocket, Reader reader) {
         this.httpClient = httpClient;
         this.webSocket = webSocket;
+        this.reader = reader;
+        reader.bind(pending);
     }
 
     /**
      * Connect to {@code wsUri} (e.g. {@code ws://127.0.0.1:39801/rpc}), completing
-     * the websocket handshake before returning. Throws {@link StageWrightRpcException}
+     * the websocket handshake before returning. Throws {@link StageWrightTransportException}
      * if the connection cannot be established within {@code connectTimeoutMs}.
      */
     public static StageWrightRpc connect(String wsUri, long connectTimeoutMs) {
@@ -64,25 +67,23 @@ public final class StageWrightRpc implements AutoCloseable {
                     .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                     .buildAsync(URI.create(wsUri), reader)
                     .get(connectTimeoutMs, TimeUnit.MILLISECONDS);
-            StageWrightRpc rpc = new StageWrightRpc(client, ws);
-            reader.bind(rpc.pending);
-            return rpc;
+            return new StageWrightRpc(client, ws, reader);
         } catch (TimeoutException e) {
-            throw new StageWrightRpcException("<connect>", "websocket handshake to " + wsUri
+            throw new StageWrightTransportException("<connect>", "websocket handshake to " + wsUri
                     + " timed out after " + connectTimeoutMs + "ms");
         } catch (ExecutionException e) {
-            throw new StageWrightRpcException("<connect>", "websocket handshake to " + wsUri
+            throw new StageWrightTransportException("<connect>", "websocket handshake to " + wsUri
                     + " failed: " + e.getCause());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new StageWrightRpcException("<connect>", "interrupted while connecting to " + wsUri);
+            throw new StageWrightTransportException("<connect>", "interrupted while connecting to " + wsUri);
         }
     }
 
     /**
-     * Issue one request and block for its reply. On an error envelope throws
-     * {@link StageWrightRpcException}; on timeout throws {@link StageWrightTimeoutException}
-     * (never hangs). Ids increase monotonically per call.
+     * Issue one request and block at most {@code timeoutMs} for its reply. Throws the refusal as
+     * {@link StageWrightRpcException}, a broken socket or an interrupt as
+     * {@link StageWrightTransportException}, a timeout as {@link StageWrightTimeoutException}.
      */
     public JsonObject call(String method, JsonObject params, long timeoutMs) {
         long id = ids.incrementAndGet();
@@ -90,16 +91,24 @@ public final class StageWrightRpc implements AutoCloseable {
         pending.put(id, fut);
         try {
             String payload = GSON.toJson(encodeRequest(id, method, params));
-            webSocket.sendText(payload, true);
+            // A send on a socket whose output already closed fails here even before the reader sees
+            // the close; ignored, the call would wait out its timeout and read as a wedged server.
+            webSocket.sendText(payload, true).whenComplete((ws, failed) -> {
+                if (failed != null) fut.completeExceptionally(failed);
+            });
+            // Read after the put: a close that failAll drained before this call registered would
+            // otherwise leave it waiting for an answer from a socket that has gone.
+            Throwable gone = reader.closedBy();
+            if (gone != null) fut.completeExceptionally(gone);
             JsonObject envelope = fut.get(timeoutMs, TimeUnit.MILLISECONDS);
             return resultOf(method, envelope);
         } catch (TimeoutException e) {
             throw new StageWrightTimeoutException("RPC call " + method + " timed out after " + timeoutMs + "ms");
         } catch (ExecutionException e) {
-            throw new StageWrightRpcException(method, "transport error: " + e.getCause());
+            throw new StageWrightTransportException(method, "transport error: " + e.getCause());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new StageWrightRpcException(method, "interrupted while awaiting reply");
+            throw new StageWrightTransportException(method, "interrupted while awaiting reply");
         } finally {
             pending.remove(id);
         }
@@ -172,12 +181,17 @@ public final class StageWrightRpc implements AutoCloseable {
     // -------------------------------------------------------------- reader -----
 
     /** Accumulates (possibly fragmented) text frames and completes pending futures. */
-    private static final class Reader implements WebSocket.Listener {
+    static final class Reader implements WebSocket.Listener {
         private final StringBuilder buf = new StringBuilder();
         private volatile ConcurrentHashMap<Long, CompletableFuture<JsonObject>> pending;
+        private volatile Throwable closedBy;
 
         void bind(ConcurrentHashMap<Long, CompletableFuture<JsonObject>> pending) {
             this.pending = pending;
+        }
+
+        Throwable closedBy() {
+            return closedBy;
         }
 
         @Override
@@ -235,11 +249,16 @@ public final class StageWrightRpc implements AutoCloseable {
         }
 
         private void failAll(Throwable cause) {
+            // Recorded before the drain, and drained by remove, so a call registering meanwhile is
+            // either drained here or sees closedBy; clear() could drop it unfailed.
+            closedBy = cause;
             if (pending == null) {
                 return;
             }
-            pending.values().forEach(f -> f.completeExceptionally(cause));
-            pending.clear();
+            for (Long id : pending.keySet()) {
+                CompletableFuture<JsonObject> f = pending.remove(id);
+                if (f != null) f.completeExceptionally(cause);
+            }
         }
     }
 }

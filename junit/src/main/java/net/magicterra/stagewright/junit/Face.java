@@ -1,6 +1,8 @@
 package net.magicterra.stagewright.junit;
 
 import net.magicterra.stagewright.contract.StageWrightRpcException;
+import net.magicterra.stagewright.contract.StageWrightTimeoutException;
+import net.magicterra.stagewright.contract.StageWrightTransportException;
 
 import com.google.gson.JsonObject;
 
@@ -27,14 +29,9 @@ public enum Face {
     /** This JVM is a dedicated server: {@code mc.client.*} is refused as client-only. */
     SERVER;
 
-    /**
-     * What the driver says when {@code mc.client.*} is asked of a JVM with no client.
-     *
-     * <p>Not the {@code mc.bot.*} wording. The two families render client-absence differently —
-     * bot verbs say "client only; bot impl not registered", client verbs say "no client registered"
-     * — and matching the wrong one turns every SERVER endpoint into a transport error at the
-     * condition stage, which errors the whole container rather than skipping a class.
-     */
+    /** What {@code mc.client.*} says in a JVM with no client. Not the {@code mc.bot.*} wording
+     *  ("client only; bot impl not registered"): matching that one rethrows every SERVER endpoint's
+     *  refusal at the condition stage, erroring the whole container instead of skipping a class. */
     private static final String NO_CLIENT = "no client registered";
 
     private static volatile Face detected;
@@ -42,9 +39,11 @@ public enum Face {
     /**
      * The attached endpoint's face.
      *
-     * @throws StageWrightRpcException if the probe fails for any reason OTHER than there being no
-     *         client — a transport that is broken must not be silently reported as SERVER, because
-     *         that reads as a legitimate face and skips the tests that would have caught it.
+     * @throws StageWrightRpcException if the driver refuses the probe for any reason OTHER than
+     *         there being no client — that must not be reported as SERVER, because it reads as a
+     *         legitimate face and skips the tests that would have caught it.
+     * @throws StageWrightTransportException if the socket could not carry the probe
+     * @throws StageWrightTimeoutException if the driver does not answer the probe in time
      */
     public static Face of(StageWright tk) {
         Face cached = detected;

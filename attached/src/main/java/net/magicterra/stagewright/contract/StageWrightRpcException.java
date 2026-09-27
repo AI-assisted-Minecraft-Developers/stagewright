@@ -1,10 +1,9 @@
 package net.magicterra.stagewright.contract;
 
 /**
- * Thrown when an RPC call returns an error envelope
- * ({@code {"id":N,"error":"<string>"}}) or the transport fails. Carries the method
- * name and the raw error string verbatim so callers can assert on the driver's
- * error shape (mirroring the bare-RPC contract suites).
+ * The driver answered with a failure: an error envelope, or a command {@code StageWright.exec} saw
+ * fail. A call the socket could not carry throws {@link StageWrightTransportException} instead, and
+ * one whose reply does not come in time {@link StageWrightTimeoutException}.
  */
 public class StageWrightRpcException extends RuntimeException {
     private final String method;
@@ -21,7 +20,7 @@ public class StageWrightRpcException extends RuntimeException {
         return method;
     }
 
-    /** The raw error string from the envelope (or a transport-failure description). */
+    /** The envelope's raw error string, or what {@code StageWright.exec} found wrong. */
     public String error() {
         return error;
     }
