@@ -19,9 +19,9 @@ import java.util.function.Predicate;
  *
  * <p><b>This is the only copy.</b> It reports through {@link SceneReport}, which both the in-process
  * {@code SceneContext} and the out-of-process runner implement, so the same assertion means the same
- * thing in both homes and a method that exists in one exists in the other by construction. The
- * alternative — one implementation per home — was tried on paper and produced a design document
- * whose own example called {@code .isAbove(60)}, which has never existed.
+ * thing in both homes and a method that exists in one exists in the other by construction. One
+ * implementation per home would drift unseen: JavaScript resolves a method only when the line runs,
+ * so a method missing from one home fails a scene there and compiles everywhere.
  */
 public final class Expect {
 

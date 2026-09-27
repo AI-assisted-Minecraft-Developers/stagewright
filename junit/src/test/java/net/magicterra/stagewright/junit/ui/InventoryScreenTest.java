@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Live UI scenes over the JUnit attach surface — the player-inventory screen.
  *
- * <p>Two scenes from the P2c list, both on the pure instrument face
+ * <p>Two scenes, both on the pure instrument face
  * ({@code input.key}/{@code screen.info}/{@code screen.tree}/{@code mc.test.reset}):
  * <ul>
  *   <li>{@code ui.inventoryOpenClose} — E opens an InventoryScreen; reset closes it.</li>

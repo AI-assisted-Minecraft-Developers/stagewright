@@ -15,7 +15,7 @@ import java.util.TreeSet;
  * needs a player is not broken because the dedicated topology has none. But the same reasoning that
  * makes a skip acceptable in one run makes it invisible across all of them, and a suite whose player
  * scenes skip on every topology it runs reports GREEN over subjects it has never once exercised.
- * That is not hypothetical: the All the Mods 10 suite named 进度解锁 and 任务领取 among its six
+ * That is not hypothetical: the All the Mods 10 suite named advancement unlocking and quest claiming among its six
  * declared subjects, registered a scene for each, ran exactly one topology, and both scenes skipped
  * for want of a player in every run that has ever existed. Every one of those runs was honestly
  * GREEN. Nothing anywhere said the two subjects were untested.

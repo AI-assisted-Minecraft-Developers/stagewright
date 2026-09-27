@@ -116,8 +116,8 @@ remapJar {
 
 loom {
     runs {
-        // T0 headless shell: a PLAIN dedicated server (no GameTestServer — its
-        // scheduler is the disease the spec §3.1 removes by existence). The
+        // Headless shell: a PLAIN dedicated server (no GameTestServer — its
+        // scheduler is what this harness exists to replace). The
         // testkit harness arms on -Dstagewright.autorun and halts the server when done.
         stagewrightServer {
             server()

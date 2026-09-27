@@ -22,12 +22,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@code ui.containerFurnace} — the first live scene that OPENS a server-backed
- * block-entity container screen (FurnaceScreen), enabled by task#90's instrument-grade
- * {@code mc.test.input.useOnBlock} world right-click. Previously {@code @Disabled}: no
- * instrument-face verb could right-click a world block, and the module discipline forbids
- * the behaviour-face {@code mc.bot.useItem}. {@code mc.test.input.useOnBlock} closes that
- * gap on the pure instrument face (synthetic BlockHitResult → {@code gameMode.useItemOn},
- * no movement/aiming/behaviour-face).
+ * block-entity container screen (FurnaceScreen), through the instrument-grade
+ * {@code mc.test.input.useOnBlock} world right-click. It is the only instrument-face verb that
+ * can right-click a world block, and the module discipline forbids the behaviour-face
+ * {@code mc.bot.useItem}; it stays on the pure instrument face (synthetic BlockHitResult →
+ * {@code gameMode.useItemOn}, no movement/aiming/behaviour-face).
  *
  * <p>This scene doubles as the FIRST live shape-pin of {@link StageWright#exec} (its ok/success
  * parsing had never been driven by a live test): the {@code setblock} that stages the furnace
@@ -70,7 +69,7 @@ class ContainerFurnaceTest {
                     () -> tk.exec("execute if entity @e[type=minecraft:ender_dragon]"),
                     "a dispatched-but-success:false command must raise StageWrightRpcException from exec()");
 
-            // Open the furnace via the instrument-grade world right-click (task#90).
+            // Open the furnace via the instrument-grade world right-click.
             useOnBlock(tk, fx, fy, fz);
             tk.awaitCondition(() -> hasScreen(tk.screenInfo())
                     && screenType(tk.screenInfo()).contains("Furnace"), UI);

@@ -182,7 +182,7 @@ Vertical sync is on that list for a reason worth knowing. With it on, a client b
 swap until the compositor presents its window, and a compositor that is not presenting it — screen
 asleep, another workspace, a remote session — hands out about one frame a second. Minecraft runs at
 most ten game ticks per frame, so the client falls to ten ticks a second while the server keeps
-twenty, and every scene that drives a client body needs twice the server ticks it budgeted for.
+twenty, and every scene that drives a client player needs twice the server ticks it budgeted for.
 
 ## Reconciling the topologies against each other
 
