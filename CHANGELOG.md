@@ -107,13 +107,10 @@ by printing when the jar was built and when each engine and framework jar inside
 with a SHA-1 prefix; `--version` prints the same and exits. `-X…` arguments now go to the game's JVM
 as `-D…` ones always did, so `-Xmx` needs no wrapper script.
 
-### A client with no X authority is warned about before it starts · green in unit tests
+### The display checks run first · green in unit tests
 
-With `DISPLAY` set, no `XAUTHORITY` and no `~/.Xauthority`, an X server that wants authorization
-lets GLFW's window through and refuses AWT: a mod using AWT fails to construct, NeoForge stops
-dispatching lifecycle events, and the run crashes on its first tick in an unrelated mod. The CLI
-warns before launching. The display checks also run before the install now, and before
-`--world reset` deletes anything, so a refused run has downloaded and deleted nothing.
+The display checks run before the install now, and before `--world reset` deletes anything, so a
+refused run has downloaded and deleted nothing.
 
 ### The CLI no longer deletes anything from `mods/`, and says which copy of a mod it loads · green in unit tests
 
@@ -126,12 +123,22 @@ a jar named like a `--mod`, the pack's copy loads instead, and the log names tha
 SHA-1 — and warns when it differs from the one the command line asked for, which before was a
 single line saying the jar was not loaded again.
 
-### A client pointed at an X display nobody listens on is ENV before it starts · green in unit tests and against a dead display
+### A client whose X server would not let it in is ENV before it starts · green in unit tests and against this desktop's Xwayland; TCP, the authority file libXau reads, the host's own entry and the time limit since then in unit tests only
 
-`DISPLAY=:99` with no server on it passed the check, and the game then died in `glfwInit` two
-seconds in. A local display (`:N`, `unix:N`) is now looked up among the machine's listening sockets,
-abstract ones included, and a missing one is ENV from the CLI and from the Gradle plugin alike. A
-remote display, or one where `WAYLAND_DISPLAY` is also set, is not probed.
+`DISPLAY=:99` with no server on it passed the check, and so did `DISPLAY=:0` with no, or a stale,
+`XAUTHORITY`. Either way GLFW failed to initialise, NeoForge opened a dialog nobody would click, and
+the run sat asleep until the stall watchdog killed it five minutes later. A local display (`:N`,
+`unix:N`) is now asked with the X11 connection handshake itself, where libxcb would reach it — its
+socket and, for `:N`, TCP on `localhost:6000+N` — presenting the cookie libxcb would: the entry for
+this host in `XAUTHORITY`, or in `.Xauthority` under the client's `HOME`. A server that is not there
+or refuses is ENV from the CLI and the Gradle plugin alike. A refusal quotes the server's reason and
+names the authority problem: no file to present, a missing file, no entry for that display, or a
+rejected cookie. When nothing answered, the message says what each connection attempt ran into. An
+attempt that gets no answer within three seconds lets the client through. `WAYLAND_DISPLAY` no longer
+excuses a dead `DISPLAY`: in a KDE Wayland session, LWJGL's own GLFW opens Minecraft's window through
+Xwayland, and an X11-only GLFW passed as `org.lwjgl.glfw.libname` can do nothing else. An earlier
+warning claimed a missing authority let GLFW through and only refused AWT; against a real pack it was
+`glfwInit` that failed.
 
 ### `Recipes.all()` lists every loaded recipe, and `Recipes.registered(id)` asks without failing · compiled
 

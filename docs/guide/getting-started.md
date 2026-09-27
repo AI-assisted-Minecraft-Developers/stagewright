@@ -120,8 +120,11 @@ onboarding, no narrator, no vsync — are set in the game's memory and kept out 
 player's own settings survive the run.
 
 **A client needs a display.** On Linux that means `DISPLAY` or `WAYLAND_DISPLAY`; without one the
-run is ENV before anything starts. The runner never starts a virtual framebuffer: a display is the
-environment's to provide — the desktop, a CI image with Xvfb, or `xvfb-run` around the command.
+run is ENV before anything starts. A local `DISPLAY` is also asked whether it lets the client in, with
+the cookie from `XAUTHORITY` or `$HOME/.Xauthority` (none when neither is set), and one that refuses
+is ENV with the server's reason.
+The runner never starts a virtual framebuffer: a display is the environment's to provide — the
+desktop, a CI image with Xvfb, or `xvfb-run` around the command.
 
 > **Note.** A crash on the client's first tick is the pack's, not the runner's. A client ticks
 > throughout its own loading, so every mod's client-tick handler fires while the loading overlay is

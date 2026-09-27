@@ -189,7 +189,8 @@ most ten game ticks per frame, so the client falls to ten ticks a second while t
 twenty, and every scene that drives a client player needs twice the server ticks it budgeted for.
 
 A topology whose run task is a client (`client = true`), and every companion client, is refused
-before it starts on Linux when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set. The plugin does not
+before it starts on Linux when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set, or when the X server
+on a local `DISPLAY` is not there or refuses the cookie in `XAUTHORITY`. The plugin does not
 start a display: on a headless machine, run the build under `xvfb-run` or in an image that provides
 one.
 

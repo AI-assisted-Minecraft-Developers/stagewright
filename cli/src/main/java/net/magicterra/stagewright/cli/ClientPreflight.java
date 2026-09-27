@@ -15,38 +15,17 @@ final class ClientPreflight {
 
     /** Everything checked before a client starts in {@code gameDir}. */
     static void check(Path gameDir, Consumer<String> log) {
-        String os = System.getProperty("os.name", "");
-        requireDisplay(os, System.getenv());
-        String xauth = xauthorityWarning(os, System.getenv(), Path.of(System.getProperty("user.home")));
-        if (xauth != null) log.accept(xauth);
+        requireDisplay(System.getProperty("os.name", ""), System.getenv());
         warnIfInUse(gameDir, log);
     }
 
-    /** A client needs a display, and this tool does not provide one; see {@link Display}. */
+    /**
+     * A client needs a display this tool does not provide, and an X server that lets it in; see
+     * {@link Display}.
+     */
     static void requireDisplay(String osName, Map<String, String> env) {
         String missing = Display.missing(osName, env);
         if (missing != null) throw new EnvFailure(missing);
-    }
-
-    /**
-     * An X display with no authority file to present to it. Warned rather than refused: a server
-     * started without access control needs none. But one that wants it lets GLFW in and refuses AWT,
-     * so a mod that touches AWT fails to construct, NeoForge stops dispatching lifecycle events, and
-     * the crash lands on the first tick in an unrelated mod reading a config that never loaded.
-     *
-     * @return the warning, or null
-     */
-    static String xauthorityWarning(String osName, Map<String, String> env, Path home) {
-        if (!osName.toLowerCase(java.util.Locale.ROOT).contains("linux")) return null;
-        String display = env.get("DISPLAY");
-        if (display == null || display.isBlank()) return null;
-        String xauthority = env.get("XAUTHORITY");
-        if (xauthority != null && !xauthority.isBlank()) return null;
-        if (Files.isRegularFile(home.resolve(".Xauthority"))) return null;
-        return "WARNING: DISPLAY=" + display + " but XAUTHORITY is unset and there is no "
-                + home.resolve(".Xauthority") + ". If that X server wants authorization, the game's"
-                + " window opens but AWT is refused, and a mod using AWT fails to construct. Export"
-                + " XAUTHORITY from the desktop session (under Xwayland: ls /run/user/$UID/xauth_*).";
     }
 
     /**
