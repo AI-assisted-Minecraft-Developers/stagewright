@@ -2,6 +2,7 @@ package net.magicterra.stagewright.gradle;
 
 import java.io.File;
 import java.util.Locale;
+import java.util.Map;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.NamedDomainObjectContainer;
@@ -84,9 +85,19 @@ public class StageWrightPlugin implements Plugin<Project> {
             topology.getGameDirectory().convention(project.getLayout().getProjectDirectory()
                     .dir("run-stagewright-" + topology.getName()));
             registerTopologyTasks(project, topology, sideProcesses);
-            coverage.configure(task -> task.getResultsByTopology().put(topology.getName(),
-                    topology.getGameDirectory().file(topology.getResultsFile())));
+            coverage.configure(task -> {
+                task.getResultsByTopology().put(topology.getName(),
+                        topology.getGameDirectory().file(topology.getResultsFile()));
+                // orElse: an absent provider put into a MapProperty would empty the whole map.
+                task.getCompanionResultsByTopology().putAll(topology.getCompanionResultsFile()
+                        .map(f -> Map.of(companionLabel(topology), f)).orElse(Map.of()));
+            });
         });
+    }
+
+    /** The companion client's topology label, and its key in coverage: one name so the two match. */
+    static String companionLabel(StageWrightTopology topology) {
+        return topology.getName() + "-client";
     }
 
     private void registerTopologyTasks(Project project, StageWrightTopology topology,
@@ -348,7 +359,7 @@ public class StageWrightPlugin implements Plugin<Project> {
         if (companionName == null) return;
         if (!(resolveRunTask(project, companionName) instanceof JavaExec companion)) return;
         companion.systemProperty(HOLD_PROPERTY, "true");
-        companion.systemProperty(TOPOLOGY_PROPERTY, topology.getName() + "-client");
+        companion.systemProperty(TOPOLOGY_PROPERTY, companionLabel(topology));
         File results = topology.getCompanionResultsFile().map(f -> f.getAsFile()).getOrNull();
         if (results == null || results.getParentFile() == null) return;
         File endpoint = new File(results.getParentFile(), RunDirectory.ENDPOINT_FILE);

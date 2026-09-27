@@ -213,12 +213,21 @@ When the results files register no scene between them — none armed, none could
 registry, or the ones that did registered nothing — the reconciliation is ENV too, rather than a
 pass over zero scenes.
 
+A topology with a `companionResultsFile` is reconciled with it, labelled `<topology>-client`, so a
+client probe that skipped on every topology is reported like any other uncovered scene. A topology
+whose own name is another topology's companion label is refused, since one of the two results files
+would otherwise drop out of the reconciliation.
+
 For a pack tested through the standalone command-line runner, the same reconciliation is available
 without a build tool:
 
 ```
 java -jar stagewright.jar --coverage run-a/stagewright-results.jsonl,run-b/stagewright-results.jsonl
 ```
+
+The runner reconciles exactly the files it is given. List the attached half's
+`stagewright-attached-results.jsonl` and any client results file too, or their scenes are not part of
+the claim.
 
 ## Running one scene while you write it
 
