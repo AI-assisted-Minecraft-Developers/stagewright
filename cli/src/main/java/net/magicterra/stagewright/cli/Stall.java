@@ -82,6 +82,38 @@ final class Stall {
         }
     }
 
+    /**
+     * The screen a client stalled on before ever reaching its title screen, from the director's own
+     * report in its output; null when it got past that or never said.
+     *
+     * <p>Asked before {@link #describe}, whose reading is wrong here: a client sitting on a screen
+     * nobody clicks past — a mod's update prompt — keeps rendering, so it looks busy, and "spinning"
+     * would send the reader to GLFW.
+     */
+    static String screen(Path clientLog) {
+        String screen = null;
+        try {
+            for (String line : new String(Files.readAllBytes(clientLog), StandardCharsets.UTF_8).split("\n")) {
+                int at = line.indexOf(WAITING_ON);
+                if (at >= 0) screen = line.substring(at + WAITING_ON.length()).strip();
+                for (String past : PAST_THE_TITLE) {
+                    if (line.contains(past)) screen = null;
+                }
+            }
+        } catch (IOException e) {
+            return null;
+        }
+        // No screen at all is a hang, not a prompt: describe's CPU sample is the useful answer.
+        return "no screen".equals(screen) ? null : screen;
+    }
+
+    /** The ClientDirector lines {@link #screen} reads. Leaving the title screen is recognised by what
+     *  the director does next, since the title screen's class name differs between loaders. */
+    private static final String WAITING_ON = "waiting for the title screen, currently on ";
+    private static final List<String> PAST_THE_TITLE = List.of("[mc_testkit] connecting to ",
+            "[mc_testkit] opening existing world ", "[mc_testkit] creating world ",
+            "[mc_testkit] client is in world after");
+
     /** utime+stime and the state character, from a {@code /proc/<pid>/stat} line. */
     private static long[] cpu(Path stat) throws IOException {
         String line = Files.readString(stat, StandardCharsets.US_ASCII);

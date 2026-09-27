@@ -89,8 +89,9 @@ The server's output goes to `stagewright/stagewright-run.log` in the game direct
 to `stagewright/stagewright-results.jsonl` beside it.
 
 When a run ends without its results, the runner says how: the game crashed, exited, or stalled. A
-stall is reported with whether the process was spinning or asleep, and a mod that failed to construct
-is quoted from `logs/debug.log`, because the crash that follows it is rarely the cause.
+stall is reported with the screen a client sits on if it never reached its title screen, such as a
+mod's update prompt, and otherwise with whether the process was spinning or asleep. A mod that failed
+to construct is quoted from `logs/debug.log`, because the crash that follows it is rarely the cause.
 
 ### Testing what only a client can reach
 
