@@ -71,6 +71,34 @@ done footer is RED, since the scene holding the server may be the code under tes
 the crash that follows is rarely it. A second game already writing to the same game directory is
 warned about. `--timeout` and `--stall-timeout` take whole minutes, at least 1.
 
+### The Gradle plugin no longer starts Xvfb; `virtualDisplay` is replaced by `client` · green on worlddriver's three Fabric topologies, refusal checked on a ModDevGradle fork; a companion's environment in unit tests only
+
+A topology with `virtualDisplay = true` had the plugin probe for a free display, start an Xvfb and
+own its teardown. A display is the environment's to provide — a desktop, a CI image, `xvfb-run` —
+and a build that starts X servers inherits their leaks and their platform quirks. `virtualDisplay`
+is removed and a build that still sets it fails to configure. `client = true` marks a topology whose
+run task is a client; on Linux it, and every companion client, is refused as ENV before it starts
+when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set, instead of failing in GLFW two seconds into a
+boot with a log that reads like a crash. Both are checked against the environment the game gets: the
+run task's own plus what its loader binds at launch. A companion starts with exactly that
+environment, so a variable its task leaves out no longer comes through from the Gradle daemon.
+
+### The Gradle plugin no longer copies the harness into `mods/`; `installMods` is removed · green on three topologies each of a ModDevGradle fork and worlddriver under loom
+
+The framework is declared the way a loader plugin declares any runtime-only mod — `modLocalRuntime`
+under loom, a `localRuntime` that `runtimeClasspath` extends under ModDevGradle (not `runtimeOnly`,
+which is published with the mod) — and reaches the run and its companion from their
+classpath. `installMods` existed because the harness on a ModDevGradle run's classpath was once
+claimed as a plain library; the Twilight Forest fork, the case that needed it, now runs from its
+classpath. Provisioning takes back what an earlier `installMods` copied, once, by its ledger.
+
+### A StageWright jar a pack ships is no longer deleted · green in unit tests
+
+Taking back an earlier install also deleted every `mc_stagewright-*` jar in `mods/`, ledgered or
+not. Against a player's `.minecraft` that is deleting a file the player put there. Only what the
+ledger names is taken back now, and when the pack's `mods/` already has StageWright the CLI loads
+that one instead of handing over a second copy.
+
 ## 2026-09-27
 
 ### Coverage refuses to reconcile runs of different code · green in unit tests

@@ -8,19 +8,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
+import net.magicterra.stagewright.engine.Display;
 import org.gradle.api.GradleException;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.tasks.JavaExec;
 
 /**
- * The two processes a scene run sometimes needs beside the game: a second game, and a display for
- * it to draw into.
+ * The process a scene run sometimes needs beside the game: a second game.
  *
- * <p>Both used to live in the python orchestrators, and both are the reason people believed the
- * orchestration had to be a separate program. Neither is large. What made them look large was that
- * the python had to reconstruct, from the outside, information Gradle already had — where the java
- * binary is, what the classpath is, which run directory to use — and then manage the process tree
- * differently on each platform.
+ * <p>It lives in the plugin because Gradle already knows what starting it takes — the java binary,
+ * the classpath, the run directory. A separate program would have to reconstruct all of that from
+ * the outside, and then manage the process tree differently on each platform.
  */
 final class SideProcesses {
 
@@ -28,10 +26,6 @@ final class SideProcesses {
 
     /** How long to give a companion to die politely before killing it. */
     private static final long COMPANION_STOP_SECONDS = 20;
-
-    /** Displays to try when probing. Starts high to stay clear of a developer's own {@code :0}/{@code :1}. */
-    private static final int DISPLAY_PROBE_FROM = 90;
-    private static final int DISPLAY_PROBE_TO = 120;
 
     /**
      * Start a companion run as a detached process, built from the run task's own resolved
@@ -44,7 +38,7 @@ final class SideProcesses {
      * <p>The caller must already have run the companion's own task dependencies, or the argfiles
      * those tasks generate will not exist yet. {@code StageWrightPlugin} wires that.
      */
-    static Process startCompanion(JavaExec spec, File logFile, String display, Logger logger) {
+    static Process startCompanion(JavaExec spec, File logFile, Logger logger) {
         List<String> command = new ArrayList<>();
         command.add(javaBinary(spec));
         List<String> jvmArgs = new ArrayList<>();
@@ -84,11 +78,8 @@ final class SideProcesses {
                 .redirectErrorStream(true)
                 // Appended, not truncated: writeHeader put the command line in first.
                 .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile));
-        spec.getEnvironment().forEach((k, v) -> builder.environment().put(k, String.valueOf(v)));
-        builder.environment().putAll(lateBoundEnvironment(spec));
-        if (display != null) {
-            builder.environment().put("DISPLAY", display);
-        }
+        useEnvironmentOf(spec, builder);
+        requireDisplay("companion '" + spec.getName() + "'", builder.environment());
 
         try {
             // The command that produced a log is the first thing anyone debugging one wants, and it
@@ -268,6 +259,21 @@ final class SideProcesses {
         return result;
     }
 
+    /** The environment a run task's game gets: the task's own, plus what its loader binds late. */
+    static java.util.Map<String, String> environmentOf(JavaExec spec) {
+        java.util.Map<String, String> env = new java.util.LinkedHashMap<>();
+        spec.getEnvironment().forEach((k, v) -> env.put(k, String.valueOf(v)));
+        env.putAll(lateBoundEnvironment(spec));
+        return env;
+    }
+
+    /** Give {@code builder} the run task's environment plus its loader's late-bound entries, and
+     *  nothing else: a variable the task left out stays out, as it would from the task's own launch. */
+    static void useEnvironmentOf(JavaExec spec, ProcessBuilder builder) {
+        builder.environment().clear();
+        builder.environment().putAll(environmentOf(spec));
+    }
+
     /**
      * The directory the run would execute in — the game directory, not the project directory.
      *
@@ -398,83 +404,18 @@ final class SideProcesses {
         }
     }
 
-    /** A started Xvfb and the display it owns. */
-    record VirtualDisplay(Process process, String display) {}
-
     /**
-     * Start an X virtual framebuffer on a probed-free display, or return null when one is neither
-     * needed nor possible.
+     * Refuse to start a client that has no display to open, before it spends a boot finding out.
      *
-     * <p>Null rather than an exception for every "not applicable" case — a developer on a real
-     * desktop asking for the client topology should get their own screen, not a failure telling them
-     * their machine is not a CI box.
-     */
-    static VirtualDisplay startVirtualDisplay(Logger logger) {
-        if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("linux")) {
-            return null;
-        }
-        String existing = System.getenv("DISPLAY");
-        if (existing != null && !existing.isBlank()) {
-            logger.lifecycle("[stagewright] DISPLAY={} is already set — using it rather than"
-                    + " starting an Xvfb", existing);
-            return null;
-        }
-
-        int number = probeFreeDisplay();
-        if (number < 0) {
-            throw new GradleException("virtualDisplay was requested but every display between :"
-                    + DISPLAY_PROBE_FROM + " and :" + DISPLAY_PROBE_TO + " is taken");
-        }
-        String display = ":" + number;
-        try {
-            Process process = new ProcessBuilder(
-                    "Xvfb", display, "-screen", "0", "1280x720x24", "-nolisten", "tcp")
-                    .redirectErrorStream(true)
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .start();
-            // Xvfb exits immediately if the display is taken by something that left no socket
-            // behind, and a client pointed at a dead display hangs rather than failing — so the
-            // cheap check here saves a timeout later.
-            if (process.waitFor(1, TimeUnit.SECONDS)) {
-                throw new GradleException("Xvfb exited immediately on " + display
-                        + " (code " + process.exitValue() + ")");
-            }
-            logger.lifecycle("[stagewright] Xvfb on {} (pid {})", display, process.pid());
-            return new VirtualDisplay(process, display);
-        } catch (IOException e) {
-            throw new GradleException("virtualDisplay was requested but Xvfb could not be started"
-                    + " — install it, or drop the flag and provide a DISPLAY", e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new GradleException("interrupted while starting Xvfb", e);
-        }
-    }
-
-    static void stopVirtualDisplay(VirtualDisplay virtualDisplay, Logger logger) {
-        if (virtualDisplay == null) return;
-        virtualDisplay.process().destroy();
-        try {
-            if (!virtualDisplay.process().waitFor(5, TimeUnit.SECONDS)) {
-                virtualDisplay.process().destroyForcibly();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            virtualDisplay.process().destroyForcibly();
-        }
-        logger.lifecycle("[stagewright] Xvfb on {} stopped", virtualDisplay.display());
-    }
-
-    /**
-     * The lowest display with no X socket under {@code /tmp/.X11-unix}.
+     * <p>The display itself is the environment's to provide; see {@link Display} for why the check
+     * still belongs here.
      *
-     * <p>Probed, never pinned. The orchestrators this replaces originally hardcoded {@code :99} and
-     * the note explaining why that was wrong — "the live dev client may own it" — outlived several
-     * rewrites of everything around it.
+     * @param env the environment the client will be started with
      */
-    private static int probeFreeDisplay() {
-        for (int n = DISPLAY_PROBE_FROM; n <= DISPLAY_PROBE_TO; n++) {
-            if (!new File("/tmp/.X11-unix/X" + n).exists()) return n;
+    static void requireDisplay(String what, java.util.Map<String, ?> env) {
+        String missing = Display.missing(System.getProperty("os.name", ""), env);
+        if (missing != null) {
+            throw new GradleException("[stagewright] ENV — " + what + ": " + missing);
         }
-        return -1;
     }
 }

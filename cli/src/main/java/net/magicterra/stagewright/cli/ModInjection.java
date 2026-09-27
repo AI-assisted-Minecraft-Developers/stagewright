@@ -60,7 +60,12 @@ final class ModInjection {
         Path staged = gameDir.resolve(RunDirectory.ARTIFACT_DIR).resolve("mods");
         deleteTree(staged);
         List<Path> jars = new ArrayList<>();
-        jars.add(unpackFramework(loader, staged));
+        if (net.magicterra.stagewright.engine.ModInstall.frameworkPresent(gameDir)) {
+            // The pack's own, left where it is: a second copy would be a duplicate mod.
+            log.accept("not loading this CLI's StageWright: the pack's mods/ already has one");
+        } else {
+            jars.add(unpackFramework(loader, staged));
+        }
         for (Path extra : extras) {
             if (!Files.isRegularFile(extra)) {
                 throw new IllegalArgumentException("--mod " + extra + " is not a file");
@@ -72,6 +77,7 @@ final class ModInjection {
             jars.add(extra);
         }
 
+        if (jars.isEmpty()) return Arguments.NONE;
         return switch (loader) {
             case "fabric" -> fabric(jars, log);
             case "neoforge" -> neoforge(jars, staged, log);

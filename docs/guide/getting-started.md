@@ -247,8 +247,11 @@ dependencies {
 }
 ```
 
-Under ModDevGradle, use the plugin's `installMods` instead. [Gates](gates.md#how-the-harness-reaches-the-game)
-explains why the classpath route does not work.
+Under ModDevGradle, `localRuntime 'net.magicterra:mc_stagewright-neoforge:0.1.0+1.21.1'`, with
+`runtimeClasspath.extendsFrom localRuntime` as the NeoForge MDK declares it — not `runtimeOnly`,
+which is published with your mod. Either way
+the jar reaches the run the way any runtime-only mod does, and nothing is copied into `mods/`; see
+[Gates](gates.md#how-the-harness-reaches-the-game).
 
 ### 4. Declare a topology
 
