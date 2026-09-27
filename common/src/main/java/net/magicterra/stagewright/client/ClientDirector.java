@@ -81,7 +81,8 @@ public final class ClientDirector {
 
     private static Phase phase = Phase.WAITING_FOR_TITLE;
     private static int settleTicks;
-    private static int waitingTicks;
+    /** The screen last reported while waiting for the title screen. */
+    private static String waitingOn;
     private static int driveTicks;
     private static int exitCountdown = -1;
     /** Set once the loading window has closed, so the log says so exactly once. */
@@ -133,14 +134,14 @@ public final class ClientDirector {
         }
         switch (phase) {
             case WAITING_FOR_TITLE -> {
-                // Report what we ARE looking at every few seconds. A director that waits forever for
-                // a screen the client never shows is indistinguishable from a hung client from the
-                // outside, and the log is the only place that distinction can be made cheaply. This
-                // line is what identified the onboarding screen below within one run.
-                if (++waitingTicks % 100 == 0) {
+                // Name the screen we are stuck behind, since from outside that looks like a hang. Only
+                // when it changes: a repeated line would keep a stuck client's log growing, and a
+                // supervisor reads a silent log as the stall it is.
+                String screen = mc.screen == null ? "no screen" : mc.screen.getClass().getName();
+                if (!screen.equals(waitingOn)) {
+                    waitingOn = screen;
                     StageWrightCommon.LOG.info("[{}] waiting for the title screen, currently on {}",
-                            StageWrightCommon.MOD_ID,
-                            mc.screen == null ? "no screen" : mc.screen.getClass().getName());
+                            StageWrightCommon.MOD_ID, screen);
                 }
                 // The accessibility onboarding screen stands in front of the title screen on every
                 // first launch — which, now that each topology provisions a clean game directory, is
