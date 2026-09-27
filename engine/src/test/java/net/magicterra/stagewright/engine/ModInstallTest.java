@@ -58,6 +58,17 @@ class ModInstallTest {
     }
 
     @Test
+    void ledgeredNamesOnlyWhatIsStillThereAndDeletesNothing(@TempDir Path tmp) throws IOException {
+        Path gameDir = tmp.resolve("pack");
+        Path mods = gameDir.resolve("mods");
+        jar(mods, "worlddriver.jar", "whoever put it there last");
+        Files.writeString(mods.resolve(".stagewright-installed"), "worlddriver.jar\ngone.jar\n");
+
+        assertEquals(List.of(mods.resolve("worlddriver.jar")), ModInstall.ledgered(gameDir));
+        assertTrue(Files.isRegularFile(mods.resolve("worlddriver.jar")));
+    }
+
+    @Test
     void aLedgerEntryCannotReachOutsideMods(@TempDir Path tmp) throws IOException {
         Path gameDir = tmp.resolve("pack");
         Path mods = gameDir.resolve("mods");

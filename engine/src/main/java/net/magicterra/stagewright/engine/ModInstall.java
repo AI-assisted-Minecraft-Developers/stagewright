@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -15,9 +16,10 @@ import java.util.function.Consumer;
  * <p>Neither supervisor copies anything there. The CLI hands its jars to the loader
  * ({@code -Dfabric.addMods}, {@code --fml.mods}), because its game directory may be a player's own
  * {@code .minecraft}; the Gradle plugin leaves the harness to the build's own run dependencies
- * ({@code modLocalRuntime} under loom, {@code localRuntime} under ModDevGradle). What is left is
- * taking back the copies older versions made — recorded in {@link #LEDGER} — since they would load
- * beside the harness handed over now, as a duplicate mod.
+ * ({@code modLocalRuntime} under loom, {@code localRuntime} under ModDevGradle). What is left is the
+ * copies older versions made, recorded by name in {@link #LEDGER}. The plugin owns its run
+ * directories and takes them back ({@link #uninstall}); the CLI only names them ({@link #ledgered}),
+ * because a name is all the ledger kept, and a pack may since have put its own jar under it.
  */
 public final class ModInstall {
 
@@ -30,11 +32,9 @@ public final class ModInstall {
     private ModInstall() {}
 
     /**
-     * Take back what an earlier version put in mods/.
-     *
-     * <p>Only what the ledger names. A StageWright jar the ledger does not name is left alone: this
-     * runs against a player's own {@code .minecraft}, and a jar no run of ours put there is the
-     * pack's or the player's.
+     * Take back what an earlier version put in mods/ — for a run directory the caller owns, which is
+     * why the Gradle plugin calls this and the CLI does not. Only what the ledger names; a StageWright
+     * jar the ledger does not name is left alone.
      */
     public static void uninstall(Path gameDir, Consumer<String> log) {
         Path mods = gameDir.resolve("mods");
@@ -48,6 +48,17 @@ public final class ModInstall {
             Files.deleteIfExists(mods.resolve(LEDGER));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot clean StageWright's jars out of " + mods, e);
+        }
+    }
+
+    /** The files an earlier version's ledger names that are still in {@code gameDir/mods}. */
+    public static List<Path> ledgered(Path gameDir) {
+        Path mods = gameDir.resolve("mods");
+        if (!Files.isDirectory(mods)) return List.of();
+        try {
+            return previouslyInstalled(mods).stream().filter(Files::isRegularFile).toList();
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot read the ledger in " + mods, e);
         }
     }
 
@@ -68,21 +79,25 @@ public final class ModInstall {
     }
 
     /**
-     * Whether a StageWright jar is sitting in this run directory's mods folder — the pack ships it.
+     * The StageWright jars sitting in this run directory's mods folder — the pack ships them.
      *
      * <p>Asked before handing the CLI's own build over, which would be a duplicate mod, and after a
      * failed run, to turn "one of these things went wrong" into a statement about which.
      */
-    public static boolean frameworkPresent(Path gameDir) {
+    public static List<Path> frameworkJars(Path gameDir) {
         Path mods = gameDir.resolve("mods");
-        if (!Files.isDirectory(mods)) return false;
+        if (!Files.isDirectory(mods)) return List.of();
         try (var files = Files.list(mods)) {
-            return files.anyMatch(p -> {
+            return files.filter(p -> {
                 String n = p.getFileName().toString();
                 return n.startsWith(FRAMEWORK_PREFIX) && n.endsWith(".jar");
-            });
+            }).sorted().toList();
         } catch (IOException e) {
             throw new UncheckedIOException("cannot list " + mods, e);
         }
+    }
+
+    public static boolean frameworkPresent(Path gameDir) {
+        return !frameworkJars(gameDir).isEmpty();
     }
 }

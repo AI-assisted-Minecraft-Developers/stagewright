@@ -59,20 +59,35 @@ class ModInjectionTest {
     }
 
     @Test
-    void whatAnOlderCliCopiedIntoModsIsTakenBack(@TempDir Path tmp) throws IOException {
+    void whatAnOlderCliCopiedIntoModsIsNamedAndLeftAlone(@TempDir Path tmp) throws IOException {
+        // The ledger kept only a name, and the pack has since put its own jar under it.
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));
-        Files.writeString(mods.resolve("mc_stagewright-neoforge.jar"), "old");
-        Files.writeString(mods.resolve("worlddriver-old.jar"), "old");
-        Files.writeString(mods.resolve(".stagewright-installed"),
-                "mc_stagewright-neoforge.jar\nworlddriver-old.jar\n");
-        Files.writeString(mods.resolve("jei.jar"), "the pack's");
+        Files.writeString(mods.resolve("worlddriver-neoforge.jar"), "the pack's, same name");
+        Files.writeString(mods.resolve(".stagewright-installed"), "worlddriver-neoforge.jar\n");
 
-        ModInjection.prepare(gameDir, "neoforge", List.of(), l -> {});
+        List<String> log = new java.util.ArrayList<>();
+        ModInjection.prepare(gameDir, "neoforge", List.of(), log::add);
 
-        try (Stream<Path> left = Files.list(mods)) {
-            assertEquals(List.of(mods.resolve("jei.jar")), left.toList());
-        }
+        assertEquals("the pack's, same name", Files.readString(mods.resolve("worlddriver-neoforge.jar")));
+        assertTrue(Files.exists(mods.resolve(".stagewright-installed")));
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("NOTE:") && l.contains("worlddriver-neoforge.jar")),
+                log.toString());
+    }
+
+    @Test
+    void aPackCopyWithOtherBytesIsUsedAndWarnedAbout(@TempDir Path tmp) throws IOException {
+        Path gameDir = tmp.resolve("pack");
+        Path mods = Files.createDirectories(gameDir.resolve("mods"));
+        Files.writeString(mods.resolve("worlddriver.jar"), "last week's build");
+        Path mine = Files.writeString(Files.createDirectories(tmp.resolve("build")).resolve("worlddriver.jar"),
+                "today's build");
+
+        List<String> log = new java.util.ArrayList<>();
+        ModInjection.prepare(gameDir, "fabric", List.of(mine), log::add);
+
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("WARNING: using the pack's own")
+                && l.contains(mods.resolve("worlddriver.jar").toString())), log.toString());
     }
 
     @Test
