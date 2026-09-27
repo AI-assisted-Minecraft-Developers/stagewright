@@ -89,6 +89,26 @@ def stageBundledMods = tasks.register('stageBundledMods', Copy) {
 }
 tasks.named('processResources') { into('mods') { from stageBundledMods } }
 
+// What this jar was built from, printed by `--version` and at the start of every run: a stale engine
+// or framework in mavenLocal is otherwise invisible.
+def buildInfo = tasks.register('buildInfo') {
+    def out = layout.buildDirectory.file('generated/build-info/stagewright-cli-build.properties')
+    def parts = configurations.runtimeClasspath.incoming.files + configurations.bundledMods
+    inputs.files(parts)
+    outputs.file(out)
+    outputs.upToDateWhen { false }
+    doLast {
+        def lines = ["built=${java.time.Instant.now()}"]
+        parts.files.findAll { it.name.startsWith('stagewright-engine') || it.name.startsWith('mc_stagewright-') }
+                .sort { it.name }.each { f ->
+            def sha1 = java.security.MessageDigest.getInstance('SHA-1').digest(f.bytes).encodeHex().toString()
+            lines << "${f.name}=${java.time.Instant.ofEpochMilli(f.lastModified())} ${sha1.take(8)}"
+        }
+        out.get().asFile.text = lines.join('\n') + '\n'
+    }
+}
+tasks.named('processResources') { from buildInfo }
+
 application {
     mainClass = 'net.magicterra.stagewright.cli.Main'
 }
