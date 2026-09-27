@@ -482,7 +482,8 @@ The canary rules that produce DEAD:
 - A `MUST_SKIP` canary that executed instead of skipping. What broke is the absence detection
   every other suite's skips are trusted through, so no skip anywhere in the run can be believed.
   (A `MUST_SKIP` canary with no record at all is RED, not DEAD: a skip *is* a record, so no
-  record means it never ran.)
+  record means it never ran. So is one that skipped and then failed, as a cleanup that throws
+  after the skip makes it: the skip was right, and the failure is reported as one.)
 
 When a topology declares a companion client that writes its own results, the two files are judged
 separately — each is a self-contained stream with its own header, footer and scene list, and

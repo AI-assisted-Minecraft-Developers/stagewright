@@ -19,7 +19,9 @@ scene's first tick, and then calls `advance()` once per tick until the scene res
    already true fires immediately and the next step is examined in the same tick.
 4. When the last step has drained, any deferred `check` violations are collected into a single
    failure. Otherwise the scene passes.
-5. Teardown registered with `cleanup` runs, in reverse order of registration, whatever the outcome.
+5. Teardown registered with `cleanup` runs, in reverse order of registration, whatever the outcome,
+   before the outcome is recorded. The one exception is a run the stall watchdog ends: the server
+   thread is wedged, so it records a TIMEOUT and stops the process without running any.
 
 Two consequences follow from "the body runs inline on the server tick", and they are the rules that
 matter most:
@@ -147,7 +149,9 @@ reported as such rather than vanishing into an unloaded chunk.
 For simpler needs, `setBlock(dx, dy, dz, block)` places one block and `floor(size, block)` lays a
 `size × size` pad at `dy = 0` with four layers of air above it. `setBlock` registers teardown for
 anything carrying a block entity: releasing the force-load does not stop a hopper, and one left in a
-resolved scene's arena spends tick budget for the rest of the suite.
+resolved scene's arena spends tick budget for the rest of the suite. What a cleanup places with
+`setBlock` is the exception, since it is how the scene ends; a cleanup that places a block entity
+owns removing it.
 
 `command("setblock ~ ~ ~ minecraft:diamond_block")` runs a command at the scene's origin, so `~ ~ ~`
 is this arena and not the world origin. It returns the command's numeric result and the lines it
@@ -227,8 +231,15 @@ the entity's last state instead of only its first.
 registration. Anything server-wide that outlives the scene's own chunks belongs here: a database row,
 a player's inventory, a config override, a spawned entity. Without it, the next scene inherits it.
 
+A cleanup that throws does not stop the others, and it turns a PASS into a FAIL reading
+`cleanup failed:`, because a scene that could not undo itself has broken the world the next scene
+starts in. A FAIL or TIMEOUT keeps its own reason, and a skip stays marked as one, so coverage still
+counts it as untested.
+
 Two cleanups are automatic. `playerHere()` restores the player to where they were, and `setBlock`
-reverts any block entity it placed.
+reverts any block entity the body placed — unless a cleanup then calls `setBlock` there, which is
+the restoration and stays. Restore with `setBlock`: a block a cleanup puts back through `command`
+can still be set to air by that revert. Nothing a cleanup places with `setBlock` is reverted.
 
 ## Players, and what a skip means
 
@@ -257,7 +268,8 @@ for the check that stops a suite whose every player scene skips everywhere from 
 
 `@SceneDef(mustSkip = true)` inverts the rule: the scene's subject *is* the skip, the run requires
 it, and a scene that executes instead is judged as a framework failure rather than a pass. What broke
-in that case is the absence detection every other scene's skips are trusted through.
+in that case is the absence detection every other scene's skips are trusted through. One that skips
+and whose cleanup then throws is a plain FAIL.
 
 Only for scenes that can never be satisfied where they live — a deliberately non-existent mod id, a
 facet whose mod the suite's own runtime excludes. It is not a way to excuse a scene that skips

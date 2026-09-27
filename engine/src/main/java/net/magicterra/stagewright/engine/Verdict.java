@@ -240,6 +240,12 @@ public final class Verdict {
                     return new Result(2, List.of("DEAD: must-skip '" + name + "' EXECUTED instead of"
                             + " skipping — the absence it asks about was answered as present, so no"
                             + " skip anywhere in this run can be believed"));
+                } else if (!"PASS".equals(str(rec.get("outcome")))) {
+                    // Skipped as it must, then failed after — a cleanup that threw. The skip is
+                    // right; the failure is still a failure.
+                    code = Math.max(code, 1);
+                    report.add("FAIL: must-skip '" + name + "' skipped, then -> "
+                            + str(rec.get("outcome")) + " — " + str(rec.getOrDefault("reason", "")));
                 } else {
                     report.add("must-skip '" + name + "': correctly skipped — "
                             + str(rec.getOrDefault("reason", "")));

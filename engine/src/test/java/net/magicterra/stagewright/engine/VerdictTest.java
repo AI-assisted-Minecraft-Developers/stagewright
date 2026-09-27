@@ -256,6 +256,18 @@ class VerdictTest {
     }
 
     @Test
+    void aMustSkipSceneWhoseCleanupFailedIsRed() {
+        // The harness keeps `skipped` on a FAIL from a cleanup, so the flag alone reads as correct.
+        Map<String, Object> rec = scene("cap.absent", "FAIL");
+        rec.put("skipped", true);
+        rec.put("reason", "cleanup failed: boom");
+        Verdict.Result result = Verdict.judge(
+                records(suite(reg("cap.absent", "MUST_SKIP")), rec, done(1)), null);
+        assertEquals(1, result.code(), String.join("\n", result.report()));
+        assertTrue(reports(result, "skipped, then -> FAIL — cleanup failed: boom"));
+    }
+
+    @Test
     void aMustSkipSceneWithNoRecordIsRed() {
         // A skip is a RECORD. No record means the scene never reached the harness at all, which is
         // the ordinary SWALLOWED hole and not evidence that the skip gate broke.
