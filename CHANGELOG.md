@@ -126,6 +126,7 @@ a jar named like a `--mod`, the pack's copy loads instead, and the log names tha
 SHA-1 — and warns when it differs from the one the command line asked for, which before was a
 single line saying the jar was not loaded again.
 
+### A client pointed at an X display nobody listens on is ENV before it starts · green in unit tests and against a dead display
 
 `DISPLAY=:99` with no server on it passed the check, and the game then died in `glfwInit` two
 seconds in. A local display (`:N`, `unix:N`) is now looked up among the machine's listening sockets,
@@ -133,6 +134,13 @@ abstract ones included, and a missing one is ENV from the CLI and from the Gradl
 remote display, or one where `WAYLAND_DISPLAY` is also set, is not probed.
 
 ### `Recipes.all()` lists every loaded recipe, and `Recipes.registered(id)` asks without failing · compiled
+
+`all()` was built from the by-result index, so dynamic and special recipes, and recipes loaded as
+placeholders with no result, were missing from it and its size disagreed with `count()`. It now
+lists every recipe id the run loaded. `registered(id)` answers whether a recipe is loaded; before,
+the only way to assert a recipe was disabled was to catch the failure `resultOf` raises and match
+its wording.
+
 ## 2026-09-27
 
 ### Coverage refuses to reconcile runs of different code · green in unit tests

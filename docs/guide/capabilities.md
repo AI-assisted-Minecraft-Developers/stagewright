@@ -258,7 +258,7 @@ cover it, and every one is on `SceneContext`.
 
 | Facet | Reads | Drives |
 |---|---|---|
-| `s.recipes()` | `producing`, `resultOf`, `ingredientsOf`, `ingredientSlotsOf`, `uncraftable`, `mentionedBy`, `closureOf` | `crafts(id)`, `craftAudit()` |
+| `s.recipes()` | `registered`, `all`, `count`, `producing`, `resultOf`, `ingredientsOf`, `ingredientSlotsOf`, `uncraftable`, `mentionedBy`, `closureOf` | `crafts(id)`, `craftAudit()` |
 | `s.menu()` | `hasMenuAt`, `isOpen`, `title`, `slotCount`, `item`, `count`, `contents` | `openAt`, `openInventory`, `put`, `clear`, `click`, `shiftClick`, `close` |
 | `s.advancements()` | `registered`, `has`, `parentOf`, `remaining`, `completed`, `all`, `allIn` | `grant`, `revoke`, `awaitEarned` |
 | `s.quests()` | `loaded`, `chapters`, `questCount`, `allQuests`, `questsInChapter`, `dependenciesOf`, `isComplete`, `canStart` | `complete` |
