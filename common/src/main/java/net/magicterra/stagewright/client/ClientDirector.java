@@ -104,6 +104,11 @@ public final class ClientDirector {
         return true;
     }
 
+    /** Whether this client is driven by a director — readable before {@link #arm} has run. */
+    public static boolean directed() {
+        return directive() != null;
+    }
+
     private static String directive() {
         String connect = System.getProperty(P_CONNECT);
         if (connect != null && !connect.isBlank()) return "connect=" + connect.trim();
