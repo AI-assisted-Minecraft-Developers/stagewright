@@ -47,8 +47,8 @@ Scenes run on the server, write the server's results file, and their outcome is 
 
 Anything whose subject is the **boundary** cannot be a scene, because a scene body runs in the
 server's JVM and the client is a different process. It runs in the client's JVM instead, as a
-**client probe**, and writes its own one-scene results file, `stagewright-client-results.jsonl`,
-into the client's run directory.
+**client probe**, and writes its own one-scene results file,
+`stagewright/stagewright-client-results.jsonl`, into the client's run directory.
 
 The consuming project points its topology's verdict at that file, and **the worse of the two verdicts
 wins**. A green server with a red client is a red run — which is the point, since the server cannot

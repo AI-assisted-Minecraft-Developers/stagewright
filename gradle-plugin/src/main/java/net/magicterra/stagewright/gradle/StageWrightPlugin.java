@@ -394,7 +394,7 @@ public class StageWrightPlugin implements Plugin<Project> {
         companion.systemProperty(TOPOLOGY_PROPERTY, companionLabel(topology));
         File results = topology.getCompanionResultsFile().map(f -> f.getAsFile()).getOrNull();
         if (results == null || results.getParentFile() == null) return;
-        File endpoint = new File(results.getParentFile(), RunDirectory.ENDPOINT_FILE);
+        File endpoint = new File(results.getParentFile(), RunDirectory.ENDPOINT_NAME);
         companion.systemProperty(ENDPOINT_PROPERTY, endpoint.getAbsolutePath());
         project.getLogger().lifecycle("[stagewright] companion held — client face at TESTKIT_ENDPOINT={}",
                 endpoint.getAbsolutePath());

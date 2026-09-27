@@ -81,8 +81,9 @@ public abstract class StageWrightProvisionTask extends DefaultTask {
                 gameDir,
                 stale,
                 Boolean.TRUE.equals(getCleanWorld().getOrElse(true)),
-                scripts == null ? null : scripts.toPath(),
+                true,
                 log);
+        RunDirectory.installAuthoredContent(gameDir, scripts == null ? null : scripts.toPath(), log);
 
         // After provisioning, not before: provisioning is what creates the run directory on a first
         // run, and installing into a directory that does not exist yet would have to create it in a

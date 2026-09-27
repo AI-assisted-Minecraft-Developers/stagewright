@@ -37,7 +37,9 @@ class StageWrightCoverageTaskTest {
         File game = dir.resolve("run-" + name).toFile();
         Files.createDirectories(game.toPath());
         topology.getGameDirectory().set(game);
-        Files.writeString(new File(game, topology.getResultsFile().get()).toPath(), results);
+        Path file = new File(game, topology.getResultsFile().get()).toPath();
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, results);
         return topology;
     }
 

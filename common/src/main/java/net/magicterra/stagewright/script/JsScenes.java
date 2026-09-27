@@ -1,12 +1,12 @@
 package net.magicterra.stagewright.script;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.contract.SceneSpec;
 import net.magicterra.stagewright.contract.Scripts;
+import net.magicterra.stagewright.scene.PackFiles;
 import net.magicterra.stagewright.scene.Scene;
 
 /**
@@ -34,15 +34,12 @@ import net.magicterra.stagewright.scene.Scene;
  */
 public final class JsScenes {
 
-    /** Where a pack keeps its scenes, relative to the game directory. */
-    private static final String SCENES_DIR = "config/stagewright/scenes";
-
     private JsScenes() {}
 
     /** Load every {@code .js} file under the scenes directory, as in-process scenes. */
     public static List<Scene> load() {
         List<SceneSpec> specs = Scripts.load(
-                Path.of(SCENES_DIR),
+                PackFiles.scenes(),
                 // The globals only this home has: the file-scoped bridge, and driver access that
                 // reflects into worlddriver in this very JVM rather than crossing a socket.
                 (cx, scope, fileName) -> {

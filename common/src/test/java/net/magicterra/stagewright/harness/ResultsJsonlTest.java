@@ -42,6 +42,21 @@ class ResultsJsonlTest {
     }
 
     @Test
+    void theHeaderNamesTheScenesDirectoryItRead(@TempDir Path dir) throws IOException {
+        Path file = dir.resolve("results.jsonl");
+        String before = System.getProperty("stagewright.scenesDir");
+        System.setProperty("stagewright.scenesDir", "/packs/scenes");
+        try {
+            new ResultsJsonl(file).writeSuiteHeader("fabric", List.of());
+        } finally {
+            if (before == null) System.clearProperty("stagewright.scenesDir");
+            else System.setProperty("stagewright.scenesDir", before);
+        }
+        String header = Files.readString(file);
+        assertTrue(header.contains("\"scenesDir\":\"/packs/scenes\""), header);
+    }
+
+    @Test
     void aHeaderWrittenAfterTheRunStillSaysWhenItStarted(@TempDir Path dir) throws IOException {
         Path file = dir.resolve("results.jsonl");
         new ResultsJsonl(file).writeSuiteHeader("fabric", List.of(), 1_700_000_000_000L);

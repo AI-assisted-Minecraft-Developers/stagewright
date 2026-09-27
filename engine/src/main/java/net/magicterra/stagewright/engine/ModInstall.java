@@ -97,6 +97,23 @@ public final class ModInstall {
     }
 
     /**
+     * Take back what an earlier {@link #install} put in mods/, and install nothing.
+     *
+     * <p>For a supervisor that hands its jars to the loader directly instead: a copy an older run
+     * left in mods/ would otherwise load beside the one it hands over, as a duplicate mod.
+     */
+    public static void uninstall(Path gameDir, Consumer<String> log) {
+        Path mods = gameDir.resolve("mods");
+        if (!Files.isDirectory(mods)) return;
+        try {
+            sweep(mods, previouslyInstalled(mods), log);
+            Files.deleteIfExists(mods.resolve(LEDGER));
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot clean StageWright's jars out of " + mods, e);
+        }
+    }
+
+    /**
      * Delete what the last install left, plus any StageWright build however it got there.
      *
      * <p>Two rules, because two different things are being claimed. The ledger covers jars the

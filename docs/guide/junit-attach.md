@@ -42,12 +42,12 @@ Two terminals. One holds a game, one runs the tests against it.
 ```bash
 # terminal 1 — in the consuming project, any topology
 ./gradlew stagewrightIntegratedServerHold
-# … endpoint descriptor written to <abs>/stagewright-endpoint.json
+# … endpoint descriptor written to <abs>/stagewright/stagewright-endpoint.json
 ```
 
 ```bash
 # terminal 2 — in stagewright
-TESTKIT_ENDPOINT=<abs>/stagewright-endpoint.json \
+TESTKIT_ENDPOINT=<abs>/stagewright/stagewright-endpoint.json \
   ./gradlew :stagewright-junit:test --rerun-tasks
 ```
 

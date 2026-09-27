@@ -24,10 +24,11 @@ public final class StageWrightCommon {
     public static final String MOD_ID = "mc_testkit";
     public static final Logger LOG = LogUtils.getLogger();
 
-    /** Results file, relative to the server's working directory (the loom runDir). Repeated in the
-     *  engine's {@code RunDirectory.DEFAULT_RESULTS_FILE}: that module judges runs and never sees a
-     *  Minecraft classpath, so the two processes agree on the literal rather than on a class. */
-    private static final String DEFAULT_OUT_FILE = "stagewright-results.jsonl";
+    /** Results file, relative to the server's working directory (the loom runDir), in the
+     *  {@code stagewright/} directory every artifact of a run goes to. Repeated in the engine's
+     *  {@code RunDirectory.DEFAULT_RESULTS_FILE}: that module judges runs and never sees a Minecraft
+     *  classpath, so the two processes agree on the literal rather than on a class. */
+    private static final String DEFAULT_OUT_FILE = "stagewright/stagewright-results.jsonl";
 
     /** The property a supervisor renames the results file with; see {@link #outFile()}. */
     private static final String RESULTS_PROPERTY = "stagewright.results";
