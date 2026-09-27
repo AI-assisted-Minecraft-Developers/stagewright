@@ -10,6 +10,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-09-27
+
+### `passNote` is no longer suggested for a body with nothing to do · documentation
+
+The guide and the javadoc recommended a noted PASS for a body that had nothing to do on a topology.
+Coverage counts any PASS as an execution, so following that advice reported the subject as covered.
+Such a body must `skip(why)`.
+
 ## 2026-09-22
 
 ### A WorldDriver StageWright cannot link against is refused by the loader · green in unit tests over the processed metadata

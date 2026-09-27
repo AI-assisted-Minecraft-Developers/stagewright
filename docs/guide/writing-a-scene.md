@@ -197,8 +197,10 @@ continuation to record from, so a scene that only reports on success reports "it
 nothing else — which is the same line whether the thing never started or ran perfectly and was
 undone by something else.
 
-`passNote(note)` attaches a visible note to a PASS. Use it for a deliberate, auditable trivial pass,
-such as a body that has nothing to do on this topology. It is not a way to hide one.
+`passNote(note)` attaches a visible note to a PASS, such as which of two equivalent paths the body
+took. A noted PASS is still an execution, and coverage counts it as one. A body that has nothing to
+do on this topology must `skip(why)` instead: a noted pass there reports a subject as covered that
+nothing tested.
 
 ## Waiting for something to happen
 
