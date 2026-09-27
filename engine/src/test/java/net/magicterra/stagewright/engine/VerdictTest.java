@@ -329,6 +329,7 @@ class VerdictTest {
                         scene("wd.a", "PASS"), scene("wd.new", "PASS"), done(2)),
                 List.of("wd.a"));
         assertEquals(1, result.code());
+        assertTrue(reports(result, "UNDECLARED: wd.new"), String.join("\n", result.report()));
     }
 
     @Test
@@ -342,11 +343,22 @@ class VerdictTest {
         assertEquals(0, result.code());
     }
 
+    /** The same registry a manifest turns RED, judged with no manifest at all: an un-namespaced
+     *  scene would stay out of reconciliation even with one, so only namespaced scenes can show
+     *  that nothing was reconciled. */
     @Test
     void noManifestMeansNoReconciliation() {
-        Verdict.Result result = Verdict.judge(
-                records(suite(reg("a")), scene("a", "PASS"), done(1)), null);
+        List<Map<String, Object>> run = records(suite(reg("wd.a"), reg("wd.new")),
+                scene("wd.a", "PASS"), scene("wd.new", "PASS"), done(2));
+        Verdict.Result withManifest = Verdict.judge(run, List.of("wd.a"));
+        assertEquals(1, withManifest.code(), "precondition: a manifest turns this run RED");
+        assertTrue(reports(withManifest, "UNDECLARED: wd.new"),
+                "precondition: for wd.new\n" + String.join("\n", withManifest.report()));
+
+        Verdict.Result result = Verdict.judge(run, null);
         assertEquals(0, result.code());
+        assertFalse(reports(result, "UNDECLARED"), String.join("\n", result.report()));
+        assertFalse(reports(result, "MISSING-EXPECTED"), String.join("\n", result.report()));
     }
 
     // ---- filtered runs -------------------------------------------------------------------------

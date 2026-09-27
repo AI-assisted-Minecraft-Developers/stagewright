@@ -26,8 +26,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SelfTest {
 
     @Test
-    void endpointParseRoundTripAllKeys() {
-        // A T1 (integrated_plus_client) descriptor: the frozen eight keys, NO serverRpcPort.
+    void endpointParseReadsAllEightKeys() {
+        // An integrated_plus_client descriptor: the frozen eight keys, NO serverRpcPort.
         String json = "{"
                 + "\"version\":1,"
                 + "\"topology\":\"integrated_plus_client\","
@@ -48,13 +48,13 @@ class SelfTest {
         assertEquals(12345L, e.holdPid());
         assertEquals(1750000000000L, e.writtenAtEpochMs());
         assertEquals("ws://127.0.0.1:39843/rpc", e.wsUri());
-        // Optional serverRpcPort ABSENT on a T1 endpoint -> null (must still parse cleanly).
-        assertNull(e.serverRpcPort(), "T1 endpoint must parse with serverRpcPort == null");
+        // Optional serverRpcPort ABSENT on an integrated endpoint -> null (must still parse cleanly).
+        assertNull(e.serverRpcPort(), "an integrated_plus_client endpoint must parse with serverRpcPort == null");
     }
 
     @Test
-    void endpointParseT2WithServerRpcPort() {
-        // A T2 (dedicated_plus_client) descriptor: rpcPort=CLIENT face, serverRpcPort=SERVER.
+    void endpointParseDedicatedPlusClientWithServerRpcPort() {
+        // A dedicated_plus_client descriptor: rpcPort=CLIENT face, serverRpcPort=SERVER.
         String json = "{"
                 + "\"version\":1,"
                 + "\"topology\":\"dedicated_plus_client\","
