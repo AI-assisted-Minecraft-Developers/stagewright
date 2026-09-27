@@ -440,6 +440,11 @@ When the results files register no scene between them — none has a header, eve
 as well. Nothing was registered, so nothing can be named uncovered, and "0 of 0 executed" would
 otherwise read as a pass.
 
+A topology that declares a companion results file is reconciled with it, labelled with the
+topology name plus `-client`. The client's probe is a registered scene like any other, and one
+that skipped on every topology tested nothing. A topology named like another's companion label is
+refused, because the two results files would share one label.
+
 The single exemption is declared at the scene, by the author who knows why:
 `@SceneDef(mustSkip = true)`. That is an assertion rather than an excuse — the verdict then
 *requires* the scene to skip and calls the run DEAD if it executes.

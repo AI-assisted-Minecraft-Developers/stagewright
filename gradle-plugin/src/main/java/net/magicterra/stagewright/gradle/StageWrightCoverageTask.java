@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -43,12 +44,29 @@ public abstract class StageWrightCoverageTask extends DefaultTask {
     @Internal
     public abstract MapProperty<String, RegularFile> getResultsByTopology();
 
+    /**
+     * Companion client results, keyed like the descriptor labels the client: topology name plus
+     * {@code -client}. Its probe is a registered scene like any other, and a probe that skipped on
+     * every topology is as untested as a server scene that did.
+     */
+    @Internal
+    public abstract MapProperty<String, RegularFile> getCompanionResultsByTopology();
+
     @TaskAction
     public void judge() {
-        Map<String, RegularFile> declared = getResultsByTopology().get();
+        Map<String, RegularFile> declared = new LinkedHashMap<>(getResultsByTopology().get());
         if (declared.isEmpty()) {
             throw new GradleException("stagewright coverage: no topologies are declared, so there is"
                     + " nothing to reconcile. Coverage over zero runs is not a pass.");
+        }
+        for (Map.Entry<String, RegularFile> companion : getCompanionResultsByTopology().get().entrySet()) {
+            // A plain put would drop one of the two results files from the union without a word.
+            if (declared.containsKey(companion.getKey())) {
+                throw new GradleException("stagewright coverage: a topology is named '" + companion.getKey()
+                        + "', which is also the label of another topology's companion client results."
+                        + " Rename that topology so both results files are reconciled.");
+            }
+            declared.put(companion.getKey(), companion.getValue());
         }
 
         List<String> missing = new ArrayList<>();
@@ -92,7 +110,7 @@ public abstract class StageWrightCoverageTask extends DefaultTask {
         }
         if (result.code() != 0) {
             throw new GradleException("stagewright coverage: RED — a scene this suite registers"
-                    + " executed in none of its " + runs.size() + " topologies. See the UNCOVERED"
+                    + " executed in none of its " + runs.size() + " results files. See the UNCOVERED"
                     + " lines above for which, and what each run said instead.");
         }
     }

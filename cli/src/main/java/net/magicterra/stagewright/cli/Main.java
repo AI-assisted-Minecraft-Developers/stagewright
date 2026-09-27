@@ -947,6 +947,8 @@ public final class Main {
                                       takes no --game-dir.
                                       A scene skipping is fine in one run and a hole across all of
                                       them, which is a question no single run can be asked.
+                                      Only the files given are reconciled: list each run's
+                                      stagewright-attached-results.jsonl and client results too.
                   --expect <file>     expected-scenes manifest to reconcile against
                   --results <name>    results file name, relative to --game-dir (default
                                       stagewright-results.jsonl). Passed into the game as
