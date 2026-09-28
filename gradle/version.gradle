@@ -1,0 +1,18 @@
+// The version every StageWright artifact carries, for all four builds (root, engine, gradle-plugin,
+// cli): <base>-build.<n>+<minecraft>. CI sets BUILD_NUMBER to its run number, and a build published
+// by hand sets it to 0; without it the build is `local`, which is never published to the Nexus.
+// See docs/reference/publishing.md.
+def base = '0.1.0'
+def buildNumber = providers.environmentVariable('BUILD_NUMBER').orNull
+// Refused rather than spliced in: `build.<n>` has to be a SemVer numeric identifier, digits with no
+// leading zero, for the version to be valid SemVer and order by run number.
+if (buildNumber != null && !(buildNumber ==~ /0|[1-9][0-9]*/)) {
+    throw new GradleException("BUILD_NUMBER is '${buildNumber}', but it must be a whole number"
+            + " without leading zeros; unset it for a local build")
+}
+def build = buildNumber ?: 'local'
+
+// The Minecraft line is the root gradle.properties' own.
+def rootProperties = new Properties()
+new File(buildscript.sourceFile.parentFile.parentFile, 'gradle.properties').withInputStream { rootProperties.load(it) }
+ext.stagewrightVersion = "${base}-build.${build}+${rootProperties.minecraft_version}".toString()

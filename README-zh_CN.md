@@ -20,7 +20,7 @@ Minecraft 自带游戏内测试设施，两个加载器也都把它暴露了出�
   失败，一个必须被报成超时，一个必须从不执行。哨兵落错位置的运行会被判为「测量坏了」，这与「模组坏了」
   不是一回事，也绝不该被当成后者来读。
 - **同一套场景可以在几种进程形态下运行**，因为每一种都能确立另外两种确立不了的事实。
-- **skip 不等于覆盖。** 一个在当前环境下跑不了的场景会记录一条 skip；另有一项检查会在某个场景在本项目
+- **skip 不等于覆盖。** 一个在当前环境下无法运行的场景会记录一条 skip；另有一项检查会在某个场景在本项目
   运行的每一种拓扑下都被 skip 时让构建失败。
 - **整合包不需要构建工具也能用。** 场景可以就是整合包 config 目录里的 JavaScript 文件；另有一个能力
   （capability）接缝，让模组或整合包把原版没有概念的东西教给框架。
@@ -55,18 +55,33 @@ java -jar stagewright.jar --game-dir <整合包的服务端目录> --scenes <一
 
 ```groovy
 // settings.gradle
-pluginManagement { repositories { mavenLocal(); gradlePluginPortal() } }
+pluginManagement {
+    repositories {
+        maven {
+            url 'https://nexus.gardel.top/repository/maven-releases'
+            content { includeGroupByRegex 'net\\.magicterra(\\..*)?' }
+        }
+        gradlePluginPortal()
+    }
+}
 
 // build.gradle
 plugins {
     id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0'
+    id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1'
+}
+
+repositories {
+    maven {
+        url 'https://nexus.gardel.top/repository/maven-releases'
+        content { includeGroup 'net.magicterra' }
+    }
 }
 
 dependencies {
     // 放在存放你的场景的那个 source set 上 —— 见指南
-    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0+1.21.1:dev'
-    modLocalRuntime       'net.magicterra:mc_stagewright-fabric:0.1.0+1.21.1'
+    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-build.0+1.21.1:dev'
+    modLocalRuntime       'net.magicterra:mc_stagewright-fabric:0.1.0-build.0+1.21.1'
 }
 
 stagewright {
@@ -81,7 +96,7 @@ stagewright {
 
 这会注册出 `./gradlew stagewrightDedicatedServer`：它准备一个干净的运行目录，运行你的 dev-run 任务，
 再判读结果。[Getting started](docs/guide/getting-started.md) 完整走了这两条路线，包括该写的第一个场景，
-以及在写的过程中如何只跑它一个。
+以及在写的过程中如何只运行这一个场景。
 
 ## 一个场景长什么样
 
@@ -117,7 +132,7 @@ public final class MagnetScenes implements SceneProvider {
 
 ## 进程拓扑
 
-三种拓扑都把场景跑在**服务器**上；不同的是跑在哪个服务器上，以及是否有一个真实客户端连着它。
+三种拓扑都在**服务器**上运行场景；不同的是运行在哪个服务器上，以及是否有一个真实客户端连着它。
 
 | 拓扑 | 启动了什么 | 适合什么 |
 |---|---|---|
@@ -150,31 +165,9 @@ public final class MagnetScenes implements SceneProvider {
 两者互相依赖，但方向相反、位置不同：StageWright 的运行时模块编译时依赖 WorldDriver 的 common 模块，
 而 WorldDriver 以已发布的 Maven 制品消费 StageWright，并应用它的 Gradle 插件。这不是循环——它被模块
 和 source set 切断了，因为 StageWright 的场景 API 不依赖任何东西，而 WorldDriver 的生产代码从不依赖
-StageWright——但这确实意味着从零开始的引导只有一条可行顺序，共四步：
-
-```bash
-# 1. StageWright —— WorldDriver 在能完成配置之前所需要的四样东西
-./gradlew -p engine publishToMavenLocal
-./gradlew -p gradle-plugin publishToMavenLocal
-./gradlew :stagewright-api:publishToMavenLocal :stagewright-attached:publishToMavenLocal
-
-# 2. WorldDriver —— 它的 common 模块，StageWright 的运行时编译时依赖它
-./gradlew -PworlddriverBootstrap :common:publishToMavenLocal
-
-# 3. StageWright —— 其余全部
-./gradlew publishToMavenLocal
-
-# 4. WorldDriver —— 构建
-./gradlew build
-```
-
-第 1 步之所以必须在最前面，是因为 WorldDriver 的根构建**应用**了这个 Gradle 插件，所以在插件 marker
-出现在本地仓库之前，那边什么都配置不起来；而这四样制品没有一样碰到 WorldDriver。第 2 步的
-`-PworlddriverBootstrap` 在一台干净的机器上不是可选项：它去掉了加载器模块对 StageWright 加载器 jar 的
-开发期运行时依赖——Gradle 会在**配置**阶段解析它，而那些制品要到第 3 步才存在。
-
-[`build.gradle`](build.gradle) 的头部注释给出了同一套顺序，并逐步写明了理由。只有场景 API 发生改动才会
-迫使整套流程重走一遍，而那个模块只有接口与值类型，变动很少。
+StageWright。两边各自把对方锁定到一个已发布到 Nexus 的版本——这里是 `worlddriver_version`，那边是
+`stagewright_version`——所以构建任何一边都不需要另一边的源码。如何升级锁定的版本、如何改用对方的本地构建，
+以及两边都还没有发布过任何版本时需要执行一次的初始化顺序，见[发布](docs/reference/publishing.md)。
 
 ## 许可证
 

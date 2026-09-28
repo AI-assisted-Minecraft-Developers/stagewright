@@ -3,8 +3,8 @@
 // worlddriver is a separate repository and build; it consumes these modules only as published
 // artifacts (see RELEASE ORDER in build.gradle), so nothing here has to resolve inside its build.
 pluginManagement {
-    // The gradle plugin is its own build. worlddriver, its first consumer, resolves it from
-    // mavenLocal by version instead.
+    // The gradle plugin is its own build. worlddriver, its first consumer, resolves a published
+    // build of it by version instead.
     includeBuild('gradle-plugin')
 
     repositories {

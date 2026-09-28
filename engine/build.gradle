@@ -26,10 +26,13 @@ plugins {
     id 'maven-publish'
 }
 
+apply from: '../gradle/version.gradle'
+
 group = 'net.magicterra'
-version = '0.1.0'
+version = stagewrightVersion
 
 apply from: '../gradle/license.gradle'
+apply from: '../gradle/nexus.gradle'
 
 java {
     toolchain {

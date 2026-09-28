@@ -8,11 +8,11 @@ import java.util.Properties;
 import java.util.TreeMap;
 
 /**
- * What this jar was built from: when, and which engine and framework builds it carries.
+ * What this jar was built from: its version, and which engine and framework builds it carries.
  *
- * <p>Printed at the start of every run. The engine and the framework are published to mavenLocal by
- * separate builds, and a CLI built after forgetting one of them carries the old code without any
- * sign of it — the publish times printed here are that sign.
+ * <p>Printed at the start of every run. The framework comes from mavenLocal, published there by
+ * the root build, and a CLI built before republishing it carries the old code without any sign of
+ * it — the times printed here are that sign.
  */
 final class BuildInfo {
 
@@ -20,7 +20,7 @@ final class BuildInfo {
 
     private BuildInfo() {}
 
-    /** One line per part, the first saying when the jar was built. */
+    /** One line per part, the first naming the jar's version. */
     static List<String> describe() {
         Properties p = new Properties();
         try (InputStream in = BuildInfo.class.getResourceAsStream(RESOURCE)) {
@@ -30,9 +30,9 @@ final class BuildInfo {
             return List.of("build info unreadable: " + e);
         }
         List<String> out = new ArrayList<>();
-        out.add("stagewright CLI built " + p.getProperty("built", "?"));
+        out.add("stagewright CLI " + p.getProperty("version", "?"));
         TreeMap<String, String> parts = new TreeMap<>();
-        p.stringPropertyNames().stream().filter(k -> !k.equals("built"))
+        p.stringPropertyNames().stream().filter(k -> !k.equals("version"))
                 .forEach(k -> parts.put(k, p.getProperty(k)));
         // Each value is "<published instant> <sha1 prefix>".
         parts.forEach((jar, value) -> out.add("  " + jar + " published " + value.replace(" ", ", sha1 ")));

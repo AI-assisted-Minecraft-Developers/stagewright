@@ -144,8 +144,8 @@ configurations {
     runtimeClasspath.extendsFrom localRuntime   // ModDevGradle; the NeoForge MDK declares it so
 }
 dependencies {
-    modLocalRuntime 'net.magicterra:mc_stagewright-fabric:0.1.0+1.21.1'   // architectury-loom
-    localRuntime    'net.magicterra:mc_stagewright-neoforge:0.1.0+1.21.1' // ModDevGradle
+    modLocalRuntime 'net.magicterra:mc_stagewright-fabric:0.1.0-build.0+1.21.1'   // architectury-loom
+    localRuntime    'net.magicterra:mc_stagewright-neoforge:0.1.0-build.0+1.21.1' // ModDevGradle
 }
 ```
 

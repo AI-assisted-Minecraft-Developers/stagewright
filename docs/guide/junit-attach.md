@@ -174,10 +174,13 @@ restart it, rather than looking like a regression in the code under test.
 
 ```groovy
 repositories {
-    mavenLocal()
+    maven {
+        url 'https://nexus.gardel.top/repository/maven-releases'
+        content { includeGroup 'net.magicterra' }
+    }
 }
 dependencies {
-    testImplementation 'net.magicterra:mc_stagewright-junit:0.1.0+1.21.1'
+    testImplementation 'net.magicterra:mc_stagewright-junit:0.1.0-build.0+1.21.1'
 }
 ```
 

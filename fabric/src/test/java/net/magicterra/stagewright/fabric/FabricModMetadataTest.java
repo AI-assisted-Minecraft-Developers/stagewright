@@ -126,11 +126,15 @@ class FabricModMetadataTest {
         String base = v.group();
         String nextBreaking = major == 0 ? "0." + (minor + 1) + ".0" : (major + 1) + ".0.0";
         String laterCompatible = major + "." + minor + "." + (Integer.parseInt(v.group(3)) + 1);
-        for (String version : List.of(built, base, laterCompatible)) {
+        // Every build is published as a pre-release of its line, which SemVer orders below the line.
+        String earlierLine = major == 0 ? "0." + (minor - 1) + ".9" : (major - 1) + ".9.9";
+        for (String version : List.of(built, base, laterCompatible, base + "-build.1+1.21.1",
+                base + "-build.local+1.21.1")) {
             assertTrue(matches(suggests, version), "suggests should cover " + version);
             assertFalse(matches(breaks, version), "breaks must not refuse " + version);
         }
-        for (String version : List.of(base + "-alpha", nextBreaking, nextBreaking + "+1.21.1")) {
+        for (String version : List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1",
+                nextBreaking + "-build.1+1.21.1")) {
             assertFalse(matches(suggests, version), "suggests should not cover " + version);
             assertTrue(matches(breaks, version), "breaks must refuse " + version);
         }
