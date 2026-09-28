@@ -62,12 +62,15 @@ public final class StageWrightRpc implements AutoCloseable {
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                 .build();
         Reader reader = new Reader();
+        boolean connected = false;
         try {
             WebSocket ws = client.newWebSocketBuilder()
                     .connectTimeout(Duration.ofMillis(connectTimeoutMs))
                     .buildAsync(URI.create(wsUri), reader)
                     .get(connectTimeoutMs, TimeUnit.MILLISECONDS);
-            return new StageWrightRpc(client, ws, reader);
+            StageWrightRpc rpc = new StageWrightRpc(client, ws, reader);
+            connected = true;
+            return rpc;
         } catch (TimeoutException e) {
             throw new StageWrightTransportException("<connect>", "websocket handshake to " + wsUri
                     + " timed out after " + connectTimeoutMs + "ms");
@@ -77,6 +80,10 @@ public final class StageWrightRpc implements AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new StageWrightTransportException("<connect>", "interrupted while connecting to " + wsUri);
+        } finally {
+            // Otherwise each failed attempt keeps a selector thread until the client is collected,
+            // and attach retries many times. shutdownNow, as close waits out a handshake in flight.
+            if (!connected) client.shutdownNow();
         }
     }
 
