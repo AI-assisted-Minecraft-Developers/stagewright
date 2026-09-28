@@ -60,9 +60,11 @@ public final class AttachedRun {
     }
 
     /**
-     * Run every scene in order and write {@code resultsFile}.
+     * Run every scene in order and write {@code resultsFile}. Once the connection to the driver is
+     * lost, the scenes after that one are recorded as not run rather than run against it.
      *
-     * @return true when nothing failed — the caller turns that into an exit code
+     * @return true when no required scene failed and the connection to the driver held — the caller
+     *         turns that into an exit code
      */
     public boolean run(Path resultsFile) {
         startedAt = clockMs.getAsLong();
@@ -82,9 +84,29 @@ public final class AttachedRun {
             return false;
         }
 
+        // Watched at the binding rather than read from the scene's outcome: a body may catch the
+        // failure and carry on, and the connection is gone all the same.
+        StageWrightTransportException[] lost = new StageWrightTransportException[1];
+        DriverBinding watched = (method, params) -> {
+            try {
+                return driver.route(method, params);
+            } catch (SceneFailure e) {
+                if (lost[0] == null && e.getCause() instanceof StageWrightTransportException t) lost[0] = t;
+                throw e;
+            }
+        };
+        String lostDuring = null;
+
         for (SceneSpec spec : scenes) {
+            if (lostDuring != null) {
+                // Each would fail on its first call without testing anything; recorded as not run,
+                // so coverage counts it as a hole instead of as executed.
+                records.add(record(spec, "FAIL", 0, "not run: the connection to the driver was lost"
+                        + " during '" + lostDuring + "' (" + lost[0].error() + ")", false, false, Map.of()));
+                continue;
+            }
             long started = clockMs.getAsLong();
-            AttachedContext ctx = new AttachedContext(spec.name(), driver, spec.wallMsHint(), clockMs);
+            AttachedContext ctx = new AttachedContext(spec.name(), watched, spec.wallMsHint(), clockMs);
             String outcome = "PASS";
             String reason = "";
             boolean skipped = false;
@@ -123,34 +145,59 @@ public final class AttachedRun {
                 outcome = "FAIL";
                 reason = "cleanup failed: " + String.join("; ", teardown);
             }
+            if (lost[0] != null) {
+                // A pass here was measured over a dead connection, its body having caught the failure
+                // or taken it for an answer; a failure for another reason still has to name it.
+                String loss = "the connection to the driver was lost during this scene (" + lost[0].error() + ")";
+                if ("PASS".equals(outcome)) reason = loss;
+                else if (!reason.contains(lost[0].error())) reason = reason + "; " + loss;
+                outcome = "FAIL";
+                skipped = false;
+            }
 
             long wallMs = clockMs.getAsLong() - started;
-            Map<String, Object> data = new LinkedHashMap<>(ctx.records());
-            data.put("wallMs", wallMs);
-
-            Map<String, Object> record = new LinkedHashMap<>();
-            record.put("type", "scene");
-            record.put("name", spec.name());
-            record.put("outcome", outcome);
-            record.put("ticks", 0);          // frozen field; there are no ticks out here — see above
-            record.put("wallMs", wallMs);
-            record.put("reason", reason);
-            // Omitted when false, matching ResultsJsonl: the two homes write one schema, and a key
-            // that appeared on every line here and only on skips there would be a difference the
-            // consistency gate has to explain away rather than one it can assert on.
-            if (skipped) record.put("skipped", true);
-            // A refusal is a FAIL that tested nothing; unmarked, coverage would count it.
-            if (!bodyRan) record.put("bodyRan", false);
-            record.put("data", data);
-            records.add(record);
+            records.add(record(spec, outcome, wallMs, reason, skipped, bodyRan, ctx.records()));
 
             if ("FAIL".equals(outcome) && !spec.optional()) allGood = false;
             log.accept(outcome.toLowerCase(java.util.Locale.ROOT) + ": '" + spec.name() + "' ("
                     + wallMs + " ms)" + (reason.isEmpty() ? "" : " — " + reason));
+
+            if (lost[0] != null) {
+                // RED even if what failed or went unrun was optional: the run did not do what it was given.
+                lostDuring = spec.name();
+                allGood = false;
+                int left = scenes.size() - records.size();
+                String rest = left == 0 ? "no scene was left to run."
+                        : "the " + left + " scene(s) after it are recorded as not run.";
+                log.accept("RED: the connection to the driver was lost during '" + lostDuring + "' ("
+                        + lost[0].error() + "); " + rest);
+            }
         }
 
         write(resultsFile, records);
         return allGood;
+    }
+
+    private static Map<String, Object> record(SceneSpec spec, String outcome, long wallMs, String reason,
+                                              boolean skipped, boolean bodyRan, Map<String, Object> recorded) {
+        Map<String, Object> data = new LinkedHashMap<>(recorded);
+        data.put("wallMs", wallMs);
+
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("type", "scene");
+        record.put("name", spec.name());
+        record.put("outcome", outcome);
+        record.put("ticks", 0);          // frozen field; there are no ticks out here — see above
+        record.put("wallMs", wallMs);
+        record.put("reason", reason);
+        // Omitted when false, matching ResultsJsonl: the two homes write one schema, and a key
+        // that appeared on every line here and only on skips there would be a difference the
+        // consistency gate has to explain away rather than one it can assert on.
+        if (skipped) record.put("skipped", true);
+        // A refusal is a FAIL that tested nothing; unmarked, coverage would count it.
+        if (!bodyRan) record.put("bodyRan", false);
+        record.put("data", data);
+        return record;
     }
 
     /**

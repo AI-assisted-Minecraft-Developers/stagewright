@@ -221,8 +221,9 @@ filtered — the last run of that topology was a `-Pstagewright.scenes` iteratio
 reconciliation ENV, naming the file: its registered list is whatever the pattern kept, so any count
 over it describes a subset. And a scene recorded `ENV_FAIL` did not execute, because that outcome is
 written before the body runs; it counts as a hole exactly as a skip does. So does any record written
-before the body was entered — a `TIMEOUT` during preparation, or an attached scene refused because
-out of process cannot honour its terrain, clock or dimension — which the record marks with
+before the body was entered — a `TIMEOUT` during preparation, an attached scene refused because
+out of process cannot honour its terrain, clock or dimension, or an attached scene left unrun because
+the connection to the driver was lost during an earlier one — which the record marks with
 `"bodyRan":false`.
 
 When the results files register no scene between them — none armed, none could assemble its

@@ -68,6 +68,16 @@ argument's position could run. The gate now stops with that message.
 
 ## 2026-09-28
 
+### An attached run stops at a lost driver connection · green in unit tests
+
+Once the RPC socket closed, the attached runner still ran every remaining scene. Each failed on its
+first driver call, and each was a FAIL whose body had run, so coverage counted all of them as
+executed. The runner now stops at the scene during which the connection was lost, including when
+that scene's body caught the failure. That scene fails even if its body went on to pass or skip, and
+its reason names the loss. It records every scene after it as a FAIL marked `"bodyRan":false`, whose
+reason names that scene, so coverage counts them as holes. The run is RED, even when the scenes
+involved are optional.
+
 ### Builds are numbered, tested by CI and published to a public Nexus · the four builds and WorldDriver's run in order against build 0 on this machine
 
 Every artifact of all four builds is now `0.1.0-build.<n>+1.21.1`, where `<n>` is the CI run number,

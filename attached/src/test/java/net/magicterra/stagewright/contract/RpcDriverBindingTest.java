@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.contract;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -25,6 +26,8 @@ class RpcDriverBindingTest {
             SceneFailure failure = assertThrows(SceneFailure.class,
                     () -> new RpcDriverBinding(rpc, 2_000).route("mc.system.version", Map.of()));
             assertTrue(failure.getMessage().contains("transport error"), failure.getMessage());
+            // What lets the attached runner stop there instead of running the rest against it.
+            assertInstanceOf(StageWrightTransportException.class, failure.getCause());
         }
     }
 }

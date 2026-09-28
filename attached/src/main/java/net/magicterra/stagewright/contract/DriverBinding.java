@@ -27,7 +27,9 @@ public interface DriverBinding {
      * @param params the verb's parameters; may be empty, never null
      * @return whatever the verb answered, already converted to plain JVM types (maps, lists,
      *         strings, numbers, booleans) so a script sees the same shape in both homes
-     * @throws SceneFailure if the driver refused the call, with the driver's own message
+     * @throws SceneFailure if the call failed, with the driver's own message for a refusal; when the
+     *         connection to the driver is gone, its cause is a {@link StageWrightTransportException},
+     *         which is how a runner knows to stop rather than run the rest against it
      */
     Object route(String method, Map<String, Object> params);
 }

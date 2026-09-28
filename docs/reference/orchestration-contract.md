@@ -278,7 +278,7 @@ and the run then reports "the game never armed" instead of naming the real probl
 
 ### Scene records
 
-One per executed scene:
+One per scene the run recorded, including one whose body never ran, which `bodyRan` marks:
 
 ```json
 {"type":"scene","name":"...","outcome":"PASS","ticks":41,"wallMs":2130,"reason":""}
@@ -293,7 +293,7 @@ One per executed scene:
 | `wallMs` | number | always | Wall-clock milliseconds. |
 | `reason` | string | always | Free text; empty on an unremarkable pass. |
 | `skipped` | boolean | only when true | The scene resolved without testing its subject. |
-| `bodyRan` | boolean | only when false | The record was written before the body was entered: an `ENV_FAIL`, a dimension skip, a `TIMEOUT` because the world stopped delivering ticks during preparation, the companion client's probe resolving before it damaged the player, or an attached scene refused because out of process cannot honour its terrain, clock or dimension. |
+| `bodyRan` | boolean | only when false | The record was written before the body was entered: an `ENV_FAIL`, a dimension skip, a `TIMEOUT` because the world stopped delivering ticks during preparation, the companion client's probe resolving before it damaged the player, an attached scene refused because out of process cannot honour its terrain, clock or dimension, or an attached scene left unrun because the connection to the driver was lost during an earlier one. |
 | `data` | object | only when non-empty | Values the scene attached with `SceneContext.record`. |
 
 `reason` is free text and the harness feeds raw exception messages into it, so it is escaped:
@@ -488,7 +488,7 @@ results files can take the worse of the two.
 | Code | Label | Meaning |
 |---|---|---|
 | 0 | GREEN | Header and footer present, every required non-canary scene passed or failed while optional, every canary landed on the outcome it declared. |
-| 1 | RED | A required scene failed, a scene was never recorded, records drifted or duplicated, the footer disagreed with the file, or reconciliation against the manifest failed. Also: no footer, and a header carrying `registryError` — the game armed but could not assemble the suite. |
+| 1 | RED | A required scene failed, a scene was never recorded, records drifted or duplicated, the footer disagreed with the file, or reconciliation against the manifest failed. Also: no footer, and a header carrying `registryError` — the game armed but could not assemble the suite. For the attached half, also a connection to the driver lost partway, which the runner decides: the reasons of the scenes involved name the loss, but no field marks it, so judged by its records alone a file whose scenes are all optional would read GREEN. |
 | 2 | DEAD | A canary landed on the wrong outcome. The framework can no longer be trusted to catch failures, so the whole run's results are void rather than merely bad. |
 | 3 | ENV | No suite header — the game never armed. Also reported when the results file is absent entirely. |
 

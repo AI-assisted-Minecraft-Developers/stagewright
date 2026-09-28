@@ -27,14 +27,19 @@ class AttachedRunTest {
 
     private static List<Map<String, Object>> run(Path dir, String js, List<String> log,
                                                  boolean[] allGood) throws IOException {
-        Path scenes = Files.createDirectories(dir.resolve("scenes"));
-        Files.writeString(scenes.resolve("scenes.js"), js, StandardCharsets.UTF_8);
-        List<SceneSpec> specs = Scripts.load(scenes, (cx, scope, file) -> { }, log::add);
         DriverBinding none = (method, params) -> {
             throw new SceneFailure("no driver in this test: " + method);
         };
+        return run(dir, js, none, log, allGood);
+    }
+
+    private static List<Map<String, Object>> run(Path dir, String js, DriverBinding driver, List<String> log,
+                                                 boolean[] allGood) throws IOException {
+        Path scenes = Files.createDirectories(dir.resolve("scenes"));
+        Files.writeString(scenes.resolve("scenes.js"), js, StandardCharsets.UTF_8);
+        List<SceneSpec> specs = Scripts.load(scenes, (cx, scope, file) -> { }, log::add);
         Path results = dir.resolve("attached-results.jsonl");
-        allGood[0] = new AttachedRun(specs, none, "fabric", log::add, System::currentTimeMillis)
+        allGood[0] = new AttachedRun(specs, driver, "fabric", log::add, System::currentTimeMillis)
                 .run(results);
 
         List<Map<String, Object>> records = new ArrayList<>();
@@ -42,8 +47,114 @@ class AttachedRunTest {
             @SuppressWarnings("unchecked")
             Map<String, Object> rec = GSON.fromJson(line, Map.class);
             if ("scene".equals(rec.get("type"))) records.add(rec);
+            if ("done".equals(rec.get("type"))) assertEquals((double) records.size(), rec.get("scenes"));
         }
         return records;
+    }
+
+    /** A driver whose socket has gone, as {@link RpcDriverBinding} reports it; counts what reached it. */
+    private static DriverBinding gone(List<String> calls) {
+        return (method, params) -> {
+            calls.add(method);
+            throw new SceneFailure("driver('" + method + "') transport error: closed",
+                    new StageWrightTransportException(method, "transport error: closed"));
+        };
+    }
+
+    private static final String TWO_SCENES_AFTER = """
+            scene('pack.second', 20, function (s) { s.driver('mc.second'); });
+            scene.optional('pack.third', 20, function (s) { s.driver('mc.third'); });
+            """;
+
+    @Test
+    void aLostConnectionEndsTheRunAndWhatWasLeftIsRecordedAsNotRun(@TempDir Path dir) throws IOException {
+        List<String> calls = new ArrayList<>();
+        List<String> log = new ArrayList<>();
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = run(dir, """
+                scene('pack.first', 20, function (s) { s.driver('mc.first'); });
+                """ + TWO_SCENES_AFTER, gone(calls), log, allGood);
+
+        assertEquals(List.of("mc.first"), calls, "nothing is sent on a connection known to be gone");
+        assertEquals(3, records.size());
+        assertEquals("FAIL", records.get(0).get("outcome"));
+        assertEquals("driver('mc.first') transport error: closed", records.get(0).get("reason"),
+                "a failure that already names the loss is not told it twice");
+        assertFalse(records.get(0).containsKey("bodyRan"), "the scene that lost it did run");
+        for (Map<String, Object> rec : records.subList(1, 3)) {
+            assertEquals("FAIL", rec.get("outcome"));
+            assertEquals(Boolean.FALSE, rec.get("bodyRan"), "coverage must count it as a hole");
+            assertEquals("not run: the connection to the driver was lost during 'pack.first'"
+                    + " (transport error: closed)", rec.get("reason"));
+        }
+        assertFalse(allGood[0]);
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("RED: the connection to the driver was lost during"
+                + " 'pack.first'") && l.contains("the 2 scene(s) after it")), log.toString());
+    }
+
+    @Test
+    void aLostConnectionABodyCaughtStillEndsTheRun(@TempDir Path dir) throws IOException {
+        List<String> calls = new ArrayList<>();
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = run(dir, """
+                scene.optional('pack.first', 20, function (s) {
+                    try { s.driver('mc.first'); } catch (e) { }
+                });
+                """ + TWO_SCENES_AFTER, gone(calls), new ArrayList<>(), allGood);
+
+        assertEquals("FAIL", records.get(0).get("outcome"), "a pass over a dead connection measured nothing");
+        assertEquals(Boolean.FALSE, records.get(1).get("bodyRan"));
+        assertEquals(Boolean.FALSE, records.get(2).get("bodyRan"));
+        assertFalse(allGood[0], "a run that lost its driver did not do what it was given");
+    }
+
+    @Test
+    void theSceneThatLostTheConnectionFailsThoughItCaughtTheFailureAndWasLast(@TempDir Path dir) throws IOException {
+        // Caught and taken for "absent", the failure would otherwise leave a pass, and a GREEN run.
+        List<String> log = new ArrayList<>();
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = run(dir, """
+                scene.optional('pack.only', 20, function (s) {
+                    try { s.driver('mc.only'); } catch (e) { s.skip('nothing there'); }
+                });
+                """, gone(new ArrayList<>()), log, allGood);
+
+        assertEquals("FAIL", records.get(0).get("outcome"));
+        assertNull(records.get(0).get("skipped"), "a skip decided over a dead connection is no skip");
+        assertEquals("the connection to the driver was lost during this scene (transport error: closed)",
+                records.get(0).get("reason"));
+        assertFalse(allGood[0]);
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("RED: the connection to the driver was lost")
+                && l.endsWith("no scene was left to run.")), log.toString());
+    }
+
+    @Test
+    void aSceneThatFailedForAnotherReasonAlsoSaysTheConnectionWasLost(@TempDir Path dir) throws IOException {
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = run(dir, """
+                scene('pack.only', 20, function (s) {
+                    try { s.driver('mc.only'); } catch (e) { }
+                    s.check('iron').as('the ore underfoot').isEqualTo('gold');
+                });
+                """, gone(new ArrayList<>()), new ArrayList<>(), allGood);
+
+        String reason = String.valueOf(records.get(0).get("reason"));
+        assertTrue(reason.contains("the ore underfoot"), reason);
+        assertTrue(reason.endsWith("; the connection to the driver was lost during this scene"
+                + " (transport error: closed)"), reason);
+    }
+
+    @Test
+    void aCallTheDriverRefusedDoesNotEndTheRun(@TempDir Path dir) throws IOException {
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = run(dir, """
+                scene('pack.first', 20, function (s) { s.driver('mc.first'); });
+                """ + TWO_SCENES_AFTER, new ArrayList<>(), allGood);
+
+        assertEquals(3, records.size());
+        for (Map<String, Object> rec : records) {
+            assertFalse(rec.containsKey("bodyRan"), String.valueOf(rec));
+        }
     }
 
     @Test
