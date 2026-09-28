@@ -195,7 +195,9 @@ record no build and a Gradle gate's in a git work tree do, so listing both toget
 than in-process. It needs a driver mod in the pack to provide the socket, and it switches the run to
 a hold, because an autorun suite halts the server when it drains — which would take the socket down
 under the attached half mid-call. Attached scenes run first, then the in-process suite; both results
-are judged and the worse wins.
+are judged and the worse wins. If the socket closes partway, the scene it closed during fails, the
+scenes after it are recorded as not run, and the run is RED, even when the scenes involved are
+optional.
 
 ## Adding StageWright to a Gradle project
 
