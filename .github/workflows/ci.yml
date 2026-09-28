@@ -1,0 +1,71 @@
+name: CI
+
+# Pull requests and pushes to master are built and tested; a master push that passes is published to
+# the Nexus as 0.1.0-build.<run number>+<minecraft>. See docs/reference/publishing.md.
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# Every step runs the pushed code, so the token it can read gets nothing it could write with.
+permissions:
+  contents: read
+
+# Keyed by event as well: a queued run is replaced by the next one in its group, and a manual run,
+# which publishes nothing, must not take the place of a master push waiting to publish.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Only the CLI takes another build's output from mavenLocal: the framework jars the root build
+      # publishes there, so it follows Framework. The engine reaches the plugin and the CLI through
+      # includeBuild, which leaves the order of the first three free.
+      - name: Engine
+        run: ./gradlew -p engine check publishToMavenLocal
+
+      - name: Gradle plugin
+        run: ./gradlew -p gradle-plugin check publishToMavenLocal
+
+      - name: Framework
+        run: ./gradlew build publishToMavenLocal
+
+      - name: CLI
+        run: ./gradlew -p cli check jar
+
+      - name: Packaging
+        run: python3 scripts/check_packaging.py --build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stagewright-cli-0.1.0-build.${{ github.run_number }}
+          path: cli/build/libs/stagewright.jar
+
+      - name: Publish to Nexus
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
+        run: |
+          ./gradlew -p engine publishAllPublicationsToGardelNexusRepository
+          ./gradlew -p gradle-plugin publishAllPublicationsToGardelNexusRepository
+          ./gradlew publishAllPublicationsToGardelNexusRepository
+          ./gradlew -p cli publishAllPublicationsToGardelNexusRepository

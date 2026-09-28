@@ -22,8 +22,10 @@ it unconsumable by the CLI.
 
 ## Where builds are published
 
-`publishAllPublicationsToGardelNexusRepository` publishes a numbered build to the Nexus at
-`https://nexus.gardel.top/repository/maven-releases`, which anyone can read. A consumer adds the Nexus
+CI (`.github/workflows/ci.yml`) builds and tests every pull request and every push to `master`, and
+publishes a push to `master` to the Nexus at `https://nexus.gardel.top/repository/maven-releases`,
+which anyone can read, once its build passes. A `master` run still queued when a newer push arrives
+is cancelled, so that push is never published under a number of its own. A consumer adds the Nexus
 to both its `repositories` and its `pluginManagement { repositories }`, limited to this project's
 groups so that Gradle does not look there for anything else:
 

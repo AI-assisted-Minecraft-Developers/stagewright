@@ -12,6 +12,25 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-28
 
+### Builds are numbered, tested by CI and published to a public Nexus · the four builds and WorldDriver's run in order against build 0 on this machine
+
+Every artifact of all four builds is now `0.1.0-build.<n>+1.21.1`, where `<n>` is the CI run number,
+or 0 for a build published by hand, in place of `0.1.0+1.21.1` for the mod jars and `0.1.0`
+for the engine and the Gradle plugin. A build without `BUILD_NUMBER` is `0.1.0-build.local+1.21.1`.
+Every pull request and every push to `master` is built and tested. A push to `master` is also
+published to `https://nexus.gardel.top/repository/maven-releases`, the command-line runner with it
+as `net.magicterra:stagewright-cli`, unless a newer push arrives while its build is queued. Before,
+everything was published to `mavenLocal` only, so consuming StageWright meant building it and
+WorldDriver from source in a fixed order. Only a numbered build can be published to the Nexus, and a
+`BUILD_NUMBER` that is not a whole number without leading zeros stops the build. The command-line
+runner's `--version` names its version where it used to say when it was built, so the jar CI tests
+is byte for byte the one it publishes.
+
+StageWright now depends on the one WorldDriver version on the Nexus set by `worlddriver_version`. WorldDriver's
+version range is written `[0.1.0-0,0.2.0-0)`: every build is a pre-release of `0.1.0`, which Fabric
+Loader, following SemVer, orders below `0.1.0` itself — so `[0.1.0,0.2.0)` would have refused every
+build of WorldDriver published this way.
+
 ### The CLI installs and launches its own offline client; HeadlessMC is gone · green on NeoForge and Fabric clients and a server-with-client pair, run by hand; the launch command's argument order since then in unit tests only
 
 `--headlessmc`, `--display-client`, `--loader`, `--mc-version`, `--online`, `--account` and
