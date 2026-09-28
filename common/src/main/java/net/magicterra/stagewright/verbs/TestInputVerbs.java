@@ -19,16 +19,17 @@ import static net.magicterra.worlddriver.mcp.schema.Schemas.tool;
  *
  * <ul>
  *   <li>{@code mc.test.input.heldKeys} — a client-thread {@link net.minecraft.client.KeyMapping#isDown()}
- *       readback for the eight keymappings {@code BotInteract.releaseKeys()} clears. Closes the
- *       {@code reset.behavior} keys sub-assertion gap: the unconditional {@code reset[]} "keys" token
- *       proves {@code releaseKeys()} RAN, not that a key was actually down and got cleared. With this
- *       verb the instrument contract can press W → assert {@code up==true} → {@code mc.test.reset} →
- *       assert every key false, catching a real {@code releaseKeys()} no-op regression.</li>
+ *       readback for the eight keymappings {@code BotInteract.releaseKeys()} clears. It gives
+ *       the reset assertion's keys check in {@code docs/reference/instrument-contract.md} something
+ *       to assert: the unconditional {@code reset[]} "keys" token proves {@code releaseKeys()} RAN,
+ *       not that a key was actually down and got cleared. With this verb the instrument contract can
+ *       press W → assert {@code up==true} → {@code mc.test.reset} → assert every key false, catching
+ *       a real {@code releaseKeys()} no-op regression.</li>
  *   <li>{@code mc.test.input.useOnBlock} — an instrument-grade world right-click: synthesize a
  *       {@code BlockHitResult} at the target block and call {@code gameMode.useItemOn}, with NO
  *       movement / aiming / behaviour-face involvement. The only instrument route that opens a
- *       block-entity container screen (the {@code ui.containerFurnace} scene that was
- *       {@code @Disabled} for lack of exactly this verb — see that test's history).</li>
+ *       block-entity container screen, which is what the {@code ui.containerFurnace} scene
+ *       drives it for.</li>
  * </ul>
  *
  * <h2>Boot placement &amp; client-only discipline</h2>

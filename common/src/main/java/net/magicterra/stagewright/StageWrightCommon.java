@@ -107,8 +107,8 @@ public final class StageWrightCommon {
     /**
      * Arm the runtime when the server reaches STARTED. Two confluent paths meet here:
      * <ul>
-     *   <li><b>autorun</b> ({@code -Dstagewright.autorun=true}) — build the harness immediately, exactly
-     *       (the path every dedicated and integrated gate run takes);</li>
+     *   <li><b>autorun</b> ({@code -Dstagewright.autorun=true}) — build the harness immediately
+     *       (every gate run that is not a hold; a hold arms on-demand and waits for its caller);</li>
      *   <li><b>on-demand</b> ({@code stagewright.autorun} unset) — arm but do NOT execute: record
      *       "armed, awaiting mc.test.run" and wait for the {@code mc.test.run} RPC verb to trigger
      *       {@link #triggerOnDemandRun()}.</li>
