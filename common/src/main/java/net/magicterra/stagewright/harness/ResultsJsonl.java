@@ -18,8 +18,9 @@ import net.magicterra.stagewright.contract.SceneOutcome;
  * after a scene completes, suite end. Never write during a scene's RUN ticks:
  * synchronous server-thread IO shifts tick timing enough to break a
  * byte-deterministic arena. Boundary writes still shift wall-clock for the NEXT
- * scene; a scene that is sensitive to that needs an async off-thread writer that
- * drains a queue instead of doing IO inline.
+ * scene. One writer serves the whole suite, so no scene can opt out: before the
+ * suite hosts a determinism-sensitive arena, this class must become an async
+ * off-thread writer that drains a queue instead of doing IO inline.
  *
  * Names/reasons are escaped (quote+backslash+control chars) — scene names are
  * ordinarily Java identifiers, but reasons are free text: the harness's

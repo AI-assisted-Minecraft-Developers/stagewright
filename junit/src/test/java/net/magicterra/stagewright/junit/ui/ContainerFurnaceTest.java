@@ -21,18 +21,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code ui.containerFurnace} — the first live scene that OPENS a server-backed
+ * {@code ui.containerFurnace} — the live scene that OPENS a server-backed
  * block-entity container screen (FurnaceScreen), through the instrument-grade
  * {@code mc.test.input.useOnBlock} world right-click. It is the only instrument-face verb that
  * can right-click a world block, and the module discipline forbids the behaviour-face
  * {@code mc.bot.useItem}; it stays on the pure instrument face (synthetic BlockHitResult →
  * {@code gameMode.useItemOn}, no movement/aiming/behaviour-face).
  *
- * <p>This scene doubles as the FIRST live shape-pin of {@link StageWright#exec} (its ok/success
- * parsing had never been driven by a live test): the {@code setblock} that stages the furnace
- * pins the SUCCESS path (must not throw), and a Brigadier {@code success:false} command
- * (a predicate that matches nothing) pins the FAILURE path (must raise
- * {@link StageWrightRpcException} — {@code ok:true, success:false}).
+ * <p>This scene doubles as the live shape-pin of {@link StageWright#exec}'s ok/success parsing:
+ * the {@code setblock} that stages the furnace pins the SUCCESS path (must not throw), and a
+ * Brigadier {@code success:false} command (a predicate that matches nothing) pins the FAILURE path
+ * (must raise {@link StageWrightRpcException} — {@code ok:true, success:false}).
  *
  * <p><b>Live gate.</b> {@code @EnabledIfEnvironmentVariable(TESTKIT_ENDPOINT)} — without the
  * env the class is skipped; with it, a broken attach is a LOUD container error (never a silent

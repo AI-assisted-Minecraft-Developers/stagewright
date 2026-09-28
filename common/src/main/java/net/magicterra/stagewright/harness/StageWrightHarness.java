@@ -25,15 +25,17 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
- * Serial scheduler on a PLAIN dedicated server. One scene at a time, each on
- * its own grid-allocated origin in force-loaded chunks; per-scene tick budget;
- * results to the contract-v0 JSONL; halts the server when the registry is drained.
+ * Serial scheduler, on a dedicated or an integrated server alike. One scene at a time,
+ * each on its own grid-allocated origin in force-loaded chunks; per-scene tick budget;
+ * results to the contract-v0 JSONL; halts the server when the registry is drained,
+ * unless the run is a hold.
  *
  * Grid allocation: origin i = (GRID_X0 + i*GRID_STEP, GRID_Y, GRID_Z0), far from
  * spawn so a flat world's spawn chunks never overlap an arena. Chunks are
- * force-loaded for the scene's lifetime and released afterwards — serial
- * execution + per-scene origins is the harness's whole isolation; anything a scene
- * changes outside its arena is for the scene's own cleanup to undo.
+ * force-loaded for the scene's lifetime and released afterwards. Serial execution +
+ * per-scene origins keep arenas apart; teardown then sweeps leftover entities from the
+ * arena, restores the suite clock and logs what the scene leaked. The audit reports,
+ * it does not undo — anything else a scene changes is for its own cleanup to reverse.
  */
 public final class StageWrightHarness {
     private static final int GRID_X0 = 100_000;
