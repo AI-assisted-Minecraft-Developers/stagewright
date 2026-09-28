@@ -157,11 +157,10 @@ the handler runs, so registering them on a server does not drag client classes o
 classpath.
 
 The reason `mc.test.input.heldKeys` exists is worth stating, because it is the shape of problem
-this whole document is about. `mc.test.reset` reports what it did as a list of tokens, and the
-`keys` token is appended unconditionally — it proves the release routine *ran*, not that any key
-was *cleared*. A release routine that had become a no-op would produce exactly the same token,
-so the assertion built on it asserted nothing. Reading the keys back turns it into a real
-assertion.
+this whole document is about. `mc.test.reset` reports what it did as a list of tokens, and those
+tokens are the reset's own account of itself: a test that asserts only on them trusts the code
+under test to report its own failure. `mc.test.input.heldKeys` reads `KeyMapping.isDown()` from
+outside the reset, so a test can press a key, see it held, reset, and see every key released.
 
 ## Faces
 

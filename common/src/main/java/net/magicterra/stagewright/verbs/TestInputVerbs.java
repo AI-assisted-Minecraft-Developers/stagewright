@@ -19,12 +19,10 @@ import static net.magicterra.worlddriver.mcp.schema.Schemas.tool;
  *
  * <ul>
  *   <li>{@code mc.test.input.heldKeys} — a client-thread {@link net.minecraft.client.KeyMapping#isDown()}
- *       readback for the eight keymappings {@code BotInteract.releaseKeys()} clears. It gives
- *       the reset assertion's keys check in {@code docs/reference/instrument-contract.md} something
- *       to assert: the unconditional {@code reset[]} "keys" token proves {@code releaseKeys()} RAN,
- *       not that a key was actually down and got cleared. With this verb the instrument contract can
- *       press W → assert {@code up==true} → {@code mc.test.reset} → assert every key false, catching
- *       a real {@code releaseKeys()} no-op regression.</li>
+ *       readback for the eight keymappings {@code BotInteract.releaseKeys()} clears. The
+ *       {@code reset[]} tokens are the reset's own account of what it released; this reads the keys
+ *       from outside it, so a test can press W → see {@code up==true} → {@code mc.test.reset} → see
+ *       every key false, and a {@code releaseKeys()} that stopped working cannot vouch for itself.</li>
  *   <li>{@code mc.test.input.useOnBlock} — an instrument-grade world right-click: synthesize a
  *       {@code BlockHitResult} at the target block and call {@code gameMode.useItemOn}, with NO
  *       movement / aiming / behaviour-face involvement. The only instrument route that opens a
