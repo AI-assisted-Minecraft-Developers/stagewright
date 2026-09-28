@@ -34,9 +34,11 @@ Minecraft 自带游戏内测试设施，两个加载器也都把它暴露了出�
 | Fabric | Loader 0.16 或更新，需要 Fabric API |
 | NeoForge | 21 |
 
-制品发布到本地 Maven 仓库，group 为 `net.magicterra`。Gradle 插件是 `net.magicterra.stagewright`。
+推送到 `master` 的提交会构建、测试，并以 `0.1.0-build.<构建编号>+1.21.1` 发布到
+`https://nexus.gardel.top/repository/maven-releases`，group 为 `net.magicterra`；如果某次推送的构建还在排队时又来了新的推送，这次推送会被跳过。命令行运行器在那里是
+`net.magicterra:stagewright-cli`。Gradle 插件是 `net.magicterra.stagewright`。
 
-## 跑通第一趟的最短路径
+## 第一次运行通过的最短路径
 
 ### 测试一个整合包，不需要构建工具
 

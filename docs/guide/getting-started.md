@@ -14,8 +14,14 @@ API, or NeoForge 21.
 
 One jar, one command. No Gradle, no test source set, no version matching by hand.
 
-The runner is its own build, so it is not produced by building the rest of the repository. Build it
-once, after publishing the engine and the loader jars it bundles:
+Every build of `master` publishes the runner to the Nexus. This fetches the newest:
+
+```bash
+curl -fLo stagewright.jar 'https://nexus.gardel.top/service/rest/v1/search/assets/download?repository=maven-releases&maven.groupId=net.magicterra&maven.artifactId=stagewright-cli&maven.extension=jar&maven.classifier=&sort=version'
+```
+
+To build it from a checkout instead: it is its own build, so it is not produced by building the rest
+of the repository. Build it after publishing the engine and the loader jars it bundles:
 
 ```bash
 cd engine && ../gradlew publishToMavenLocal
