@@ -68,9 +68,9 @@ server's directory also gets its EULA acceptance and the forced `server.properti
 | `-D<key>=<value>`, `-X<option>` | Passed to the game's JVM as given — `-Xmx8G`, or a system GLFW with `-Dorg.lwjgl.glfw.libname=<so>`. |
 
 `--help` and `--version` are only recognised as the **first** argument. Anywhere else they are
-unknown options. Every run also begins by printing what `--version` does — when the jar was built and
-when each engine and framework build inside it was published — so a CLI rebuilt without republishing
-one of them shows it.
+unknown options. Every run also begins by printing what `--version` does — the jar's version, and
+the time and hash of each engine and framework jar inside it — so a CLI rebuilt without
+republishing the framework shows it.
 
 An option the CLI does not know is refused with the usage text and exit 3, and so is a value other
 than `reset` or `keep` for `--world`. A mistyped name is therefore an error before anything runs,
@@ -195,14 +195,17 @@ are judged and the worse wins.
 
 ### 1. Resolve the plugin
 
-StageWright publishes to your local Maven repository. Build and publish it once, in the order at the
-top of [the root build script](../../build.gradle), then:
+StageWright's builds are on a public Nexus; see [Publishing](../reference/publishing.md) for the
+version scheme. Use the newest `0.1.0-build.<build number>+1.21.1` there:
 
 ```groovy
 // settings.gradle
 pluginManagement {
     repositories {
-        mavenLocal()
+        maven {
+            url 'https://nexus.gardel.top/repository/maven-releases'
+            content { includeGroupByRegex 'net\\.magicterra(\\..*)?' }
+        }
         gradlePluginPortal()
     }
 }
@@ -212,7 +215,7 @@ pluginManagement {
 // build.gradle
 plugins {
     id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0'
+    id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1'
 }
 ```
 
@@ -223,11 +226,14 @@ vocabulary module:
 
 ```groovy
 repositories {
-    mavenLocal()
+    maven {
+        url 'https://nexus.gardel.top/repository/maven-releases'
+        content { includeGroup 'net.magicterra' }
+    }
 }
 
 dependencies {
-    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0+1.21.1:dev'
+    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-build.0+1.21.1:dev'
 }
 ```
 
@@ -253,11 +259,11 @@ architectury-loom:
 
 ```groovy
 dependencies {
-    modLocalRuntime 'net.magicterra:mc_stagewright-fabric:0.1.0+1.21.1'      // or -neoforge
+    modLocalRuntime 'net.magicterra:mc_stagewright-fabric:0.1.0-build.0+1.21.1'      // or -neoforge
 }
 ```
 
-Under ModDevGradle, `localRuntime 'net.magicterra:mc_stagewright-neoforge:0.1.0+1.21.1'`, with
+Under ModDevGradle, `localRuntime 'net.magicterra:mc_stagewright-neoforge:0.1.0-build.0+1.21.1'`, with
 `runtimeClasspath.extendsFrom localRuntime` as the NeoForge MDK declares it — not `runtimeOnly`,
 which is published with your mod. Either way
 the jar reaches the run the way any runtime-only mod does, and nothing is copied into `mods/`; see

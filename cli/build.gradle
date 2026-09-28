@@ -4,10 +4,13 @@ plugins {
     id 'maven-publish'
 }
 
+apply from: '../gradle/version.gradle'
+
 group = 'net.magicterra'
-version = '0.1.0'
+version = stagewrightVersion
 
 apply from: '../gradle/license.gradle'
+apply from: '../gradle/nexus.gradle'
 
 java {
     toolchain {
@@ -32,24 +35,15 @@ repositories {
 // The Minecraft-side jars this CLI installs into a pack, carried as resources rather than
 // downloaded. A pack author gets one file; making them also fetch a matching loader build for a
 // matching Minecraft version is the step that fails, and it fails looking exactly like the mod not
-// working. `frameworkVersion` must track the root build's — publishing the mods and rebuilding this
-// are one release, not two (see RELEASE ORDER in ../build.gradle).
-def frameworkVersion = '0.1.0+1.21.1'
+// working. Publishing the mods and rebuilding this are one release, not two, which
+// gradle/version.gradle holds to one version.
+def frameworkVersion = stagewrightVersion
 configurations { bundledMods { transitive = false } }
 dependencies {
-    // A PUBLISHED artifact, and engine/ is its own standalone build — so the root
-    // `./gradlew publishToMavenLocal` does NOT rebuild it, and neither does building this jar.
-    // Change anything under engine/ and the release is three steps, in order:
-    //
-    //     cd engine && ../gradlew publishToMavenLocal
-    //     cd ../     && ./gradlew publishToMavenLocal      # the Minecraft-side jars
-    //     cd cli     && ../gradlew jar
-    //
-    // Skip the first and this jar keeps shipping the engine it was built against, silently. It cost
-    // a full ATM10 run: the provisioning step had learned to install capability descriptors, the
-    // rebuilt CLI still had the version that did not, and the pack ran perfectly while the scenes
-    // depending on those descriptors failed as though the pack were missing them.
-    implementation 'net.magicterra:stagewright-engine:0.1.0'
+    // Built from engine/ through the includeBuild in settings.gradle, so this jar always carries
+    // the engine in the tree. The framework jars below come from mavenLocal instead: after
+    // changing them, run the root `publishToMavenLocal` before building this.
+    implementation "net.magicterra:stagewright-engine:${stagewrightVersion}"
     bundledMods "net.magicterra:mc_stagewright-neoforge:${frameworkVersion}"
     bundledMods "net.magicterra:mc_stagewright-fabric:${frameworkVersion}"
 
@@ -89,16 +83,19 @@ def stageBundledMods = tasks.register('stageBundledMods', Copy) {
 }
 tasks.named('processResources') { into('mods') { from stageBundledMods } }
 
-// What this jar was built from, printed by `--version` and at the start of every run: a stale engine
-// or framework in mavenLocal is otherwise invisible.
+// What this jar was built from, printed by `--version` and at the start of every run: a stale
+// framework in mavenLocal is otherwise invisible.
 def buildInfo = tasks.register('buildInfo') {
     def out = layout.buildDirectory.file('generated/build-info/stagewright-cli-build.properties')
     def parts = configurations.runtimeClasspath.incoming.files + configurations.bundledMods
+    // No build time here: CI publishes the jar it tested because each later Gradle run in the job
+    // finds this file up to date. A part's time is its file's, which the job writes only once.
+    def version = stagewrightVersion
     inputs.files(parts)
+    inputs.property('version', version)
     outputs.file(out)
-    outputs.upToDateWhen { false }
     doLast {
-        def lines = ["built=${java.time.Instant.now()}"]
+        def lines = ["version=${version}"]
         parts.files.findAll { it.name.startsWith('stagewright-engine') || it.name.startsWith('mc_stagewright-') }
                 .sort { it.name }.each { f ->
             def sha1 = java.security.MessageDigest.getInstance('SHA-1').digest(f.bytes).encodeHex().toString()
@@ -134,4 +131,16 @@ tasks.named('jar', Jar) {
                 'pack.mcmeta', 'rhino_logo.png'
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+// The fat jar alone, with no dependencies in its POM: everything it needs is inside it.
+publishing {
+    publications {
+        cli(MavenPublication) {
+            artifactId = 'stagewright-cli'
+            artifact(tasks.named('jar'))
+        }
+    }
 }

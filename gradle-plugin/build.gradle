@@ -13,16 +13,19 @@ plugins {
     id 'java-gradle-plugin'
     // java-gradle-plugin only CREATES the plugin-marker publication once maven-publish is
     // present; without this the plugin was reachable exclusively through includeBuild, i.e.
-    // only from inside this repo. An external consumer resolves it from mavenLocal:
-    //   pluginManagement { repositories { mavenLocal(); gradlePluginPortal() } }
-    //   plugins { id 'net.magicterra.stagewright' version '0.1.0' }
+    // only from inside this repo. An external consumer resolves it from the Nexus, as
+    // docs/reference/publishing.md shows:
+    //   plugins { id 'net.magicterra.stagewright' version '0.1.0-build.<n>+1.21.1' }
     id 'maven-publish'
 }
 
+apply from: '../gradle/version.gradle'
+
 group = 'net.magicterra'
-version = '0.1.0'
+version = stagewrightVersion
 
 apply from: '../gradle/license.gradle'
+apply from: '../gradle/nexus.gradle'
 
 java {
     toolchain {
@@ -50,7 +53,7 @@ dependencies {
     // third-party libraries colliding on a consumer's buildscript classpath; this artifact exists
     // so the CLI and this plugin judge a results file by the same code, and it pulls in nothing
     // itself for exactly that reason.
-    api 'net.magicterra:stagewright-engine:0.1.0'
+    api "net.magicterra:stagewright-engine:${stagewrightVersion}"
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'

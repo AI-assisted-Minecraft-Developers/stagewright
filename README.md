@@ -63,18 +63,33 @@ into the official launcher's `.minecraft`; `--help` lists the rest.
 
 ```groovy
 // settings.gradle
-pluginManagement { repositories { mavenLocal(); gradlePluginPortal() } }
+pluginManagement {
+    repositories {
+        maven {
+            url 'https://nexus.gardel.top/repository/maven-releases'
+            content { includeGroupByRegex 'net\\.magicterra(\\..*)?' }
+        }
+        gradlePluginPortal()
+    }
+}
 
 // build.gradle
 plugins {
     id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0'
+    id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1'
+}
+
+repositories {
+    maven {
+        url 'https://nexus.gardel.top/repository/maven-releases'
+        content { includeGroup 'net.magicterra' }
+    }
 }
 
 dependencies {
     // on whichever source set holds your scenes — see the guide
-    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0+1.21.1:dev'
-    modLocalRuntime       'net.magicterra:mc_stagewright-fabric:0.1.0+1.21.1'
+    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-build.0+1.21.1:dev'
+    modLocalRuntime       'net.magicterra:mc_stagewright-fabric:0.1.0-build.0+1.21.1'
 }
 
 stagewright {
@@ -164,34 +179,11 @@ The two depend on each other, in opposite directions and at different points: St
 modules compile against WorldDriver's common module, while WorldDriver consumes StageWright as
 published Maven artifacts and applies its Gradle plugin. That is not a cycle — it is broken by module
 and by source set, since StageWright's scene API depends on nothing at all and WorldDriver's
-production code never depends on StageWright — but it does mean a cold bootstrap has exactly one
-working order, in four steps:
-
-```bash
-# 1. StageWright — the four things WorldDriver needs before it can configure at all
-./gradlew -p engine publishToMavenLocal
-./gradlew -p gradle-plugin publishToMavenLocal
-./gradlew :stagewright-api:publishToMavenLocal :stagewright-attached:publishToMavenLocal
-
-# 2. WorldDriver — its common module, which StageWright's runtime compiles against
-./gradlew -PworlddriverBootstrap :common:publishToMavenLocal
-
-# 3. StageWright — everything else
-./gradlew publishToMavenLocal
-
-# 4. WorldDriver — build
-./gradlew build
-```
-
-Step 1 comes first because WorldDriver's root build *applies* the Gradle plugin, so nothing there
-configures until the plugin marker exists locally; none of those four artifacts touches WorldDriver.
-`-PworlddriverBootstrap` in step 2 is not optional on a clean machine: it drops the loader modules'
-development-runtime dependency on StageWright's loader jars, which Gradle resolves at *configuration*
-time, and which do not exist until step 3.
-
-The header of [`build.gradle`](build.gradle) carries the same sequence with the reasoning for each
-step. Only a change to the scene API forces the whole sequence again, and that module is interfaces
-and value types, so it changes rarely.
+production code never depends on StageWright. Each side depends on one exact published version of
+the other, set in `gradle.properties` — `worlddriver_version` here, `stagewright_version` there — so
+neither needs the other's source to build. [Publishing](docs/reference/publishing.md) explains how to
+move to a newer version, how to build against your own local build of the other side, and the order
+to publish in when neither side has published anything yet.
 
 ## Licence
 

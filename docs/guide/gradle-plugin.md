@@ -15,7 +15,10 @@ build service owns both so Gradle tears them down on every exit path, including 
 // settings.gradle
 pluginManagement {
     repositories {
-        mavenLocal()
+        maven {
+            url 'https://nexus.gardel.top/repository/maven-releases'
+            content { includeGroupByRegex 'net\\.magicterra(\\..*)?' }
+        }
         gradlePluginPortal()
     }
 }
@@ -25,7 +28,7 @@ pluginManagement {
 // build.gradle
 plugins {
     id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0'
+    id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1'
 }
 ```
 

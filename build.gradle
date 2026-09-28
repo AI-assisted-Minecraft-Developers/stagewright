@@ -4,31 +4,9 @@
 // framework, and consumes the driver it drives as a published artifact.
 //
 // RELEASE ORDER. The two repos depend on each other, in opposite directions and at different
-// points, so a from-scratch bootstrap has exactly one working sequence:
-//
-//   0. here:         ./gradlew -p engine publishToMavenLocal
-//                    ./gradlew -p gradle-plugin publishToMavenLocal
-//                    ./gradlew :stagewright-api:publishToMavenLocal :stagewright-attached:publishToMavenLocal
-//        -> worlddriver's root build applies the plugin, so nothing there configures before
-//           the marker exists, and its testmod compiles against api + attached. None of the
-//           four touches worlddriver.
-//   1. worlddriver:  ./gradlew -PworlddriverBootstrap :common:publishToMavenLocal
-//        -> net.magicterra:worlddriver-common:<ver>:dev, which stagewright-common compiles
-//           against. The property drops the loaders' `modLocalRuntime mc_stagewright-*`, which
-//           loom resolves at CONFIGURATION time; without it a clean box cannot get this far.
-//   2. here:         ./gradlew publishToMavenLocal
-//        -> mc_stagewright-{api,common,fabric,neoforge,junit}, stagewright-engine, and the
-//           plugin marker. The engine comes BEFORE the plugin: the plugin declares it as an
-//           `api` dependency, so a consumer resolving the plugin from a repository resolves the
-//           engine from the same one. Locally the plugin's includeBuild('../engine') covers this,
-//           which is exactly why the ordering only bites someone building from a clean checkout.
-//   3. worlddriver:  ./gradlew build
-//        -> its TESTMOD compiles against mc_stagewright-api:dev, and its dev runs put
-//           mc_stagewright-<loader> on the classpath.
-//
-// The cycle is only apparent: it is broken by source set (worlddriver's main never depends on
-// StageWright) and by module (the api module depends on nothing at all). Bumping either side's
-// version means walking the three steps again in order.
+// points. Each pins a build of the other on the Nexus (worlddriver_version here), so neither needs
+// the other's source; a clean start has one working bootstrap sequence, written out with its
+// reasons in docs/reference/publishing.md.
 //
 // Differences from worlddriver's root, and why:
 //   - no `id 'net.magicterra.stagewright'` applied here. That plugin is StageWright's own
@@ -50,23 +28,31 @@ architectury {
 // worlddriver stays optional, but one that is present must be a release StageWright links against:
 // the line of worlddriver_version up to its next breaking release (the next minor while it is 0.x).
 // Both loaders' metadata declare it, so the loader refuses the pair instead of the mc.test.* verbs
-// failing to link at server start.
+// failing to link at server start. Both bounds end in `-0`, the lowest pre-release of that version:
+// every build is published as a pre-release (0.1.0-build.N), which SemVer — and so Fabric — orders
+// below 0.1.0 itself.
 ext.worlddriverVersionRange = {
     def m = worlddriver_version =~ /^(\d+)\.(\d+)\.(\d+)/
     if (!m.find()) throw new GradleException("worlddriver_version is not major.minor.patch: '$worlddriver_version'")
     int major = m.group(1) as int
     int minor = m.group(2) as int
-    "[${m.group()},${major == 0 ? "0.${minor + 1}.0" : "${major + 1}.0.0"})".toString()
+    "[${m.group()}-0,${major == 0 ? "0.${minor + 1}.0" : "${major + 1}.0.0"}-0)".toString()
 }()
+
+apply from: 'gradle/version.gradle'
 
 allprojects {
     group = rootProject.maven_group
-    version = rootProject.mod_version
+    version = rootProject.stagewrightVersion
 }
 
 subprojects {
     // Before the pure-JVM early return below: those two modules publish too.
     apply from: rootProject.file('gradle/license.gradle')
+    def module = project
+    plugins.withId('maven-publish') {
+        module.apply from: rootProject.file('gradle/nexus.gradle')
+    }
 
     // Two pure-JVM modules — no Minecraft, no loader, no loom — each providing its own
     // java-library setup. Scope them out of the loom/architectury/MC pipeline that every other
@@ -88,10 +74,15 @@ subprojects {
     }
 
     repositories {
-        // mavenLocal is REQUIRED, not a convenience: stagewright-common compiles against
-        // net.magicterra:worlddriver-common:<v>:dev, and worlddriver publishes nowhere else
-        // yet. This is the bootstrap cost of separate repos — see the release-order note below.
+        // stagewright-common compiles against net.magicterra:worlddriver-common:<v>:dev, which
+        // worlddriver's CI publishes to the Nexus below. mavenLocal comes first, so a worlddriver
+        // published locally for development is found without it.
         mavenLocal()
+        maven {
+            name = 'gardelNexus'
+            url = 'https://nexus.gardel.top/repository/maven-releases'
+            content { includeGroup 'net.magicterra' }
+        }
         mavenCentral()
         // Rhino (KubeJS fork), compile-only, for the JavaScript scene loader. Not on Maven Central.
         // Fenced to its own group: Gradle takes the first repository that answers, and a third-party

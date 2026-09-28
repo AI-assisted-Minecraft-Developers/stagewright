@@ -1,0 +1,28 @@
+// Where CI publishes each development build. Applied beside `maven-publish`; the credentials are
+// taken from the environment as it is applied, and only a task that publishes here needs them.
+publishing {
+    repositories {
+        maven {
+            name = 'gardelNexus'
+            url = 'https://nexus.gardel.top/repository/maven-releases'
+            credentials {
+                username = System.getenv('MAVEN_USERNAME')
+                password = System.getenv('MAVEN_PASSWORD')
+            }
+        }
+    }
+}
+
+// A release version cannot be deployed twice, so a local build that got here would stay forever
+// under a name no CI build can replace. Failed loudly: skipping would read as a published build.
+def published = project.version.toString()
+tasks.withType(PublishToMavenRepository)
+        .matching { it.name.endsWith('ToGardelNexusRepository') }.configureEach {
+    doFirst {
+        if (!(published ==~ /.*-build\.[0-9]+\+.*/)) {
+            throw new GradleException("${published} is not published to the Nexus: only a build"
+                    + " numbered by BUILD_NUMBER goes there."
+                    + " Use publishToMavenLocal for a local build.")
+        }
+    }
+}
