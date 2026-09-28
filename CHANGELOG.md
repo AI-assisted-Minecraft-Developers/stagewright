@@ -68,6 +68,13 @@ argument's position could run. The gate now stops with that message.
 
 ## 2026-09-28
 
+### A failed RPC handshake no longer leaves a thread behind · green in unit tests
+
+`StageWrightRpc.connect` kept the `HttpClient` of a handshake that was refused, timed out or was
+interrupted, and with it a selector thread that lived until the client was garbage-collected. The
+CLI's `--attached` retries the handshake while the pack starts, so a slow boot piled up one per
+attempt. A failed handshake now shuts its client down before throwing.
+
 ### An attached run stops at a lost driver connection · green in unit tests
 
 Once the RPC socket closed, the attached runner still ran every remaining scene. Each failed on its
