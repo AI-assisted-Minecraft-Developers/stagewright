@@ -327,9 +327,10 @@ class that is wrong on purpose — carrying the extension and the face requireme
 class — through the JUnit Platform's `EngineTestKit`, and requires that class to report exactly
 one failed test, with the deliberate message, and nothing skipped or aborted. The canary class
 itself does not carry the extension, since an extension that swallowed failures would swallow the
-canary's verdict along with everything else; it is gated by the extension's face check alone, so a
-wrong hold still reads as one. The wrong-on-purpose classes are tagged `deliberately-wrong`, which
-the module's own test task excludes, and run only when the canary passes them a flag.
+canary's verdict along with everything else; it is gated by the extension's face check alone, so
+against the other face's hold it is skipped with the same reason as any live class. The
+wrong-on-purpose classes are tagged `deliberately-wrong`, which the module's own test task
+excludes, and run only when the canary passes them a flag.
 
 Server face:
 
