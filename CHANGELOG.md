@@ -127,6 +127,15 @@ reason names that scene, so coverage counts them as holes. The run is RED, even 
 involved are optional, and the results file says so: its done footer carries `cutShort` with the
 loss, which the verdict judges RED, so the file read on its own does not come out GREEN.
 
+### A cleanup registered by a cleanup no longer runs · green in unit tests
+
+Both homes ran any cleanup registered while the cleanups drained. A restoring helper called from a
+cleanup, one that sets a value and registers putting the old one back, then undid the restoration
+that cleanup had just made. A helper that registers on every call looped forever: cleanups have no
+instruction budget, so in-process the server stopped ticking, and an attached run never ended. A
+cleanup registered during teardown is now not run, in either home, and the log says how many were
+dropped.
+
 ### Builds are numbered, tested by CI and published to a public Nexus · the four builds and WorldDriver's run in order against build 0 on this machine
 
 Every artifact of all four builds is now `0.1.0-build.<n>+1.21.1`, where `<n>` is the CI run number,

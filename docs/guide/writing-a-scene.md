@@ -236,6 +236,11 @@ A cleanup that throws does not stop the others, and it turns a PASS into a FAIL 
 starts in. A FAIL or TIMEOUT keeps its own reason, and a skip stays marked as one, so coverage still
 counts it as untested.
 
+A cleanup registered while the cleanups run does not run, in either home: what the cleanups leave is
+how the scene ends. In-process, a restoring helper such as `playerHere()` called from a cleanup
+would otherwise undo that cleanup; in either home, one that registers on every call would keep
+teardown from ever ending. The log says how many were dropped.
+
 Two cleanups are automatic. `playerHere()` restores the player to where they were, and `setBlock`
 reverts any block entity the body placed — unless a cleanup then calls `setBlock` there, which is
 the restoration and stays. Restore with `setBlock`: a block a cleanup puts back through `command`

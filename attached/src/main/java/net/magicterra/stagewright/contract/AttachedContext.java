@@ -191,8 +191,14 @@ public final class AttachedContext implements SceneReport {
         throw new SceneSkipped(reason);
     }
 
+    /** One registered by a cleanup does not run, as in-process: what the cleanups leave is how the
+     *  scene ends, and a helper that re-registers on every call would otherwise never let it end. */
     @Override
     public void cleanup(Runnable action) {
+        if (draining) {
+            unrunCleanups++;
+            return;
+        }
         cleanups.addFirst(action);
     }
 
@@ -271,15 +277,27 @@ public final class AttachedContext implements SceneReport {
     public long budgetMs() { return budgetMs; }
 
     /** Run teardown in reverse registration order, swallowing nothing quietly. */
-    public List<String> runCleanups() {
+    public List<String> runCleanups(java.util.function.Consumer<String> warn) {
         List<String> problems = new ArrayList<>();
-        while (!cleanups.isEmpty()) {
-            try {
-                cleanups.removeFirst().run();
-            } catch (RuntimeException e) {
-                problems.add(Scripts.message(e));
+        draining = true;
+        try {
+            while (!cleanups.isEmpty()) {
+                try {
+                    cleanups.removeFirst().run();
+                } catch (RuntimeException e) {
+                    problems.add(Scripts.message(e));
+                }
             }
+        } finally {
+            draining = false;
+        }
+        if (unrunCleanups > 0) {
+            warn.accept(unrunCleanups + " cleanup(s) registered by a cleanup did not run");
+            unrunCleanups = 0;
         }
         return problems;
     }
+
+    private boolean draining;
+    private int unrunCleanups;
 }

@@ -43,18 +43,26 @@ class SceneContextCleanupTest {
     }
 
     @Test
-    void aCleanupThatRegistersAnotherRunsEachOnce() {
-        // What a restoring helper does when a cleanup calls it.
+    void aCleanupACleanupRegistersDoesNotRun() {
+        // A restoring helper called from a cleanup: its "put the old value back" would undo the
+        // restoration, and one that re-registers on every call would never let the drain end.
         SceneContext ctx = new SceneContext(null, BlockPos.ZERO);
         List<String> ran = new ArrayList<>();
-        ctx.cleanup(() -> {
-            ran.add("outer");
-            ctx.cleanup(() -> ran.add("inner"));
-        });
+        Runnable[] helper = new Runnable[1];
+        helper[0] = () -> {
+            ran.add("restore");
+            // Bounded only so that a drain which runs it fails this test rather than hanging it.
+            if (ran.size() < 100) ctx.cleanup(helper[0]);
+        };
+        ctx.cleanup(helper[0]);
 
-        assertEquals(List.of(), ctx.runCleanups(msg -> { }));
-        assertEquals(List.of("outer", "inner"), ran);
-        assertEquals(List.of(), ctx.runCleanups(msg -> { }));
-        assertEquals(List.of("outer", "inner"), ran, "a drained cleanup must not run a second time");
+        List<String> warned = new ArrayList<>();
+        assertEquals(List.of(), ctx.runCleanups(warned::add));
+        assertEquals(List.of("restore"), ran);
+        assertEquals(List.of("1 cleanup(s) registered by a cleanup did not run"), warned);
+
+        ctx.cleanup(() -> ran.add("after"));
+        ctx.runCleanups(msg -> { });
+        assertEquals(List.of("restore", "after"), ran, "registering works again once the drain is over");
     }
 }
