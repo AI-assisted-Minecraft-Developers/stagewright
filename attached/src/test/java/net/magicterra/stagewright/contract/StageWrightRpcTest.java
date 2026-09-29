@@ -1,12 +1,14 @@
 package net.magicterra.stagewright.contract;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
 import java.net.ServerSocket;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
+import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -20,10 +22,7 @@ class StageWrightRpcTest {
     void aCallAfterTheReaderSawTheCloseIsATransportFailure() {
         // A send that still succeeds after the reader saw the close: the peer's FIN arrived before
         // the output side noticed. Nothing will ever answer, and waiting for one reads as a wedge.
-        WebSocket sendsIntoTheVoid = (WebSocket) Proxy.newProxyInstance(
-                WebSocket.class.getClassLoader(), new Class<?>[] {WebSocket.class},
-                (proxy, method, args) -> method.getReturnType() == CompletableFuture.class
-                        ? CompletableFuture.completedFuture(proxy) : null);
+        WebSocket sendsIntoTheVoid = sendsIntoTheVoid();
         StageWrightRpc.Reader reader = new StageWrightRpc.Reader();
         try (StageWrightRpc rpc = new StageWrightRpc(HttpClient.newHttpClient(), sendsIntoTheVoid,
                 reader)) {
@@ -31,6 +30,16 @@ class StageWrightRpcTest {
             assertThrows(StageWrightTransportException.class,
                     () -> rpc.call("mc.system.version", new JsonObject(), 2_000));
         }
+    }
+
+    @Test
+    void aCallAfterCloseIsATransportFailureAtOnce() {
+        StageWrightRpc rpc = new StageWrightRpc(HttpClient.newHttpClient(), sendsIntoTheVoid(),
+                new StageWrightRpc.Reader());
+        rpc.close();
+        // Well inside the call's own limit, which is what a close that went unrecorded would cost.
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertThrows(StageWrightTransportException.class,
+                () -> rpc.call("mc.system.version", new JsonObject(), 30_000)));
     }
 
     @Test
@@ -53,6 +62,14 @@ class StageWrightRpcTest {
             while (selectorThreads() > before && System.nanoTime() < deadline) Thread.sleep(50);
             assertTrue(selectorThreads() <= before, (selectorThreads() - before) + " selector threads left behind");
         }
+    }
+
+    /** A socket whose every send succeeds and which never answers. */
+    private static WebSocket sendsIntoTheVoid() {
+        return (WebSocket) Proxy.newProxyInstance(
+                WebSocket.class.getClassLoader(), new Class<?>[] {WebSocket.class},
+                (proxy, method, args) -> method.getReturnType() == CompletableFuture.class
+                        ? CompletableFuture.completedFuture(proxy) : null);
     }
 
     private static long selectorThreads() {

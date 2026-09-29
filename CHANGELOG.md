@@ -68,6 +68,12 @@ argument's position could run. The gate now stops with that message.
 
 ## 2026-09-28
 
+### A call on a closed `StageWrightRpc` fails at once · green in unit tests
+
+`close()` failed the calls already waiting but did not record that the client was closed, so a
+call made afterwards was sent and waited out its whole time limit, then read as a wedged server.
+It now throws `StageWrightTransportException` at once, as a call on a socket the peer closed does.
+
 ### A failed RPC handshake no longer leaves a thread behind · green in unit tests
 
 `StageWrightRpc.connect` kept the `HttpClient` of a handshake that was refused, timed out or was
