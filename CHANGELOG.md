@@ -68,6 +68,14 @@ argument's position could run. The gate now stops with that message.
 
 ## 2026-09-28
 
+### Half of a surrogate pair no longer reads as a lost connection · green in unit tests
+
+A string holding half of a surrogate pair, such as a script's `substring` through an emoji, cannot
+be sent raw as WebSocket text. The socket failed the send with the same `IOException` as a broken
+connection, so `StageWrightRpc` threw `StageWrightTransportException` and the attached runner
+stopped as if the connection had been lost. Surrogates are now sent as JSON unicode escapes, which
+the driver decodes to the same string the in-process home passes.
+
 ### `--attached` reports an in-process suite it could not start instead of exiting without a verdict · green in unit tests
 
 After its attached scenes the CLI asks the held server to run the in-process suite. When that call
