@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.magicterra.stagewright.contract.SceneFailure;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
@@ -61,6 +62,16 @@ class SceneContextCleanupTest {
         ctx.cleanup(() -> ctx.place(BlockPos.ZERO.above(), true, () -> world.add("hopper"), () -> world.add("air")));
         ctx.runCleanups(msg -> { });
         assertEquals(List.of("hopper"), world, "a revert queued in the drain would run next and undo it");
+    }
+
+    @Test
+    void aCleanupFailureReadsAsTheAttachedHomeReportsIt() {
+        // The same scene file runs in both homes, and its teardown must fail with the same words.
+        SceneContext ctx = new SceneContext(null, BlockPos.ZERO);
+        ctx.cleanup(() -> { throw new IllegalStateException("the override stuck"); });
+        ctx.cleanup(() -> { throw new RuntimeException("Wrapped", new SceneFailure("the chest is still there")); });
+        assertEquals(List.of("the chest is still there", "unexpected IllegalStateException: the override stuck"),
+                ctx.runCleanups(msg -> { }));
     }
 
     @Test

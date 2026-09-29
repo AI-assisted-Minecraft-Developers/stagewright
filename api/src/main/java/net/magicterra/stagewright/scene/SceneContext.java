@@ -207,8 +207,9 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
                 try {
                     r.run();
                 } catch (Throwable t) {
-                    warn.accept("cleanup failed: " + t);
-                    failed.add(t.toString());
+                    String reason = net.magicterra.stagewright.contract.Cleanups.reasonOf(t);
+                    warn.accept("cleanup failed: " + reason);
+                    failed.add(reason);
                 }
             }
         } finally {

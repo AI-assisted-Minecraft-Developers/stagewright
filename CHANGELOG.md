@@ -127,18 +127,23 @@ reason names that scene, so coverage counts them as holes. The run is RED, even 
 involved are optional, and the results file says so: its done footer carries `cutShort` with the
 loss, which the verdict judges RED, so the file read on its own does not come out GREEN.
 
+### A cleanup's failure reads the same in both homes, in its author's words · green in unit tests
+
+Each home built a failed cleanup's reason its own way, and neither read as the author wrote it.
+In-process it was the exception's `toString()`, so a `.js` cleanup's `fail` read `cleanup failed:
+dev.latvian.mods.rhino.WrappedException: Wrapped net.magicterra.stagewright.contract.SceneFailure:
+<reason> (<file>#<line>)`; out of process it was the same without the first class name, and a skip
+read like any other failure. Both homes now give the cleanup's own message for `fail` or `expect`,
+`skipped mid-teardown: <reason>` for a `skip`, and `unexpected <exception>: <message>` for anything
+else. Out of process each failure is also logged, as it is in-process, so one behind a scene that
+had already failed is not lost.
+
 ### A plain block set over a block entity is no longer reverted to air · green in unit tests
 
 `setBlock` queues a revert to air for a block entity the body places, and kept it when the body then
 set a plain block at the same position, so teardown removed the plain block. The revert is now
 dropped, as it already was when a cleanup placed there; a block entity placed there again is
 reverted once.
-
-### An attached cleanup's failure reads as its author wrote it · green in unit tests
-
-A `.js` cleanup that failed out of process was reported as `cleanup failed: Wrapped
-net.magicterra.stagewright.contract.SceneFailure: <reason> (<file>#<line>)`, Rhino's wrapper
-around the failure. It now reads `cleanup failed: <reason>`, as a body's failure does.
 
 ### An `Error` in an attached scene is a failed scene · green in unit tests
 
