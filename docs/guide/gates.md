@@ -261,6 +261,31 @@ each time matches from the next gate on, once the tree already holds them; one r
 each time, as `server.properties` is with the date the game writes into it, keeps coverage ENV
 however often the gate is re-run. Keep game directories and generated files out of git.
 
+A topology whose run task is not a `JavaExec` records no build: the plugin has no JVM command line
+to put the id on, and says so when it wires the run. A `JavaExec` companion of that run still records
+one, so the topology's own two results files never reconcile, and neither does its run's file with
+that of any topology that records a build: coverage over them is ENV under `MIXED BUILDS` however
+often they are re-run. Make the run task a `JavaExec` to reconcile it. It is not exempted from the
+comparison, because that would count a run of unknown code as a run of this one.
+
+The build id does not see everything. These can give two different trees one id:
+
+- A submodule's changes are printed without the pinned flags, so a diff driver or `diff.external`
+  configured for it can give two different edits there one id, and a file marked
+  `assume-unchanged` or `skip-worktree` inside it is not read at all.
+- A marked symlink pointed elsewhere, or a marked file whose executable bit alone changed, does not
+  change the id; a marked file replaced by a symlink changes it, whatever the link points to.
+- A `skip-worktree` file missing from a sparse checkout is taken as left out, even where the sparse
+  rules include it.
+- A gate started from a git hook takes the id of the repository the hook exported to it, such as
+  the index a commit is being built in, rather than that of the project.
+
+These only give one tree a second id, or none, which reads as ENV: the diff settings a submodule's
+changes are printed with, and the commits naming a moved submodule, which `core.abbrev` or the size
+of the repository shortens; `GIT_DIFF_OPTS` in the environment; a marked file whose name is not
+UTF-8, or which the JVM cannot encode or Windows cannot hold, which gives no build; and a git from
+MSYS or Cygwin, whose work-tree path the JVM cannot use.
+
 For a pack tested through the standalone command-line runner, the same reconciliation is available
 without a build tool:
 
