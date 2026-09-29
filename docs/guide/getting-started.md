@@ -196,8 +196,8 @@ than in-process. It needs a driver mod in the pack to provide the socket, and it
 a hold, because an autorun suite halts the server when it drains — which would take the socket down
 under the attached half mid-call. Attached scenes run first, then the in-process suite; both results
 are judged and the worse wins. If the socket closes partway, the scene it closed during fails, the
-scenes after it are recorded as not run, and the run is RED, even when the scenes involved are
-optional.
+scenes after it are recorded as not run, and the attached half is RED, even when the scenes involved
+are optional; the in-process suite then cannot be started, so that half is ENV, and with it the run.
 
 ## Adding StageWright to a Gradle project
 

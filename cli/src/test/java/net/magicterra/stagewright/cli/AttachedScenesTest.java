@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -57,5 +58,35 @@ class AttachedScenesTest {
         Main.runAttachedScenes(scenes, NO_DRIVER, "fabric", results, l -> { });
         String header = Files.readAllLines(results).get(0);
         assertTrue(header.contains("\"startedAt\":") && !header.contains("\"build\""), header);
+    }
+
+    @Test
+    void anInProcessSuiteThatCannotBeStartedIsReportedNotThrown() {
+        // Thrown, it would reach main and exit 3 before either verdict line was printed.
+        List<String> err = new ArrayList<>();
+        assertFalse(Main.triggerInProcessSuite(NO_DRIVER, err::add));
+        assertTrue(err.stream().anyMatch(l -> l.contains("did not go through")
+                && l.contains("mc.test.run")), err.toString());
+        assertTrue(Main.triggerInProcessSuite((method, params) -> null, err::add));
+    }
+
+    @Test
+    void anInProcessSuiteThatWasNotStartedIsEnvWithoutBeingJudged(@TempDir Path dir) throws IOException {
+        // Judged, a missing results file draws guesses about a jar that never loaded.
+        Main.Judgement neverJudged = () -> {
+            throw new AssertionError("judged a suite that never started");
+        };
+        Path log = dir.resolve("stagewright-run.log");
+        List<String> out = new ArrayList<>();
+        assertEquals(3, Main.inProcessCode(false, neverJudged, null, log, out::add));
+        assertTrue(out.contains("[stagewright] log: " + log), out.toString());
+
+        // A crash report is the game's own account, and what a reader should open first.
+        Path crash = dir.resolve("crash-reports/crash-server.txt");
+        out.clear();
+        assertEquals(3, Main.inProcessCode(false, neverJudged, crash, log, out::add));
+        assertTrue(out.stream().anyMatch(l -> l.endsWith(crash.toString())), out.toString());
+
+        assertEquals(1, Main.inProcessCode(true, () -> 1, null, log, out::add));
     }
 }

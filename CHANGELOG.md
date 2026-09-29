@@ -68,6 +68,15 @@ argument's position could run. The gate now stops with that message.
 
 ## 2026-09-28
 
+### `--attached` reports an in-process suite it could not start instead of exiting without a verdict · green in unit tests
+
+After its attached scenes the CLI asks the held server to run the in-process suite. When that call
+failed, because the connection was lost, the driver refused it or it went unanswered, the exception
+ended the CLI with exit 3 before either verdict line was printed. The CLI now says the call did not
+go through, reports the in-process half as ENV without judging its missing results, points at a
+crash report if the game left one or at the run log if not, and prints both verdict lines; the
+attached half keeps its own verdict.
+
 ### Closing `StageWrightRpc` no longer hangs on a server that stopped reading · green in unit tests
 
 `close()` waited for every send still in flight, and a request queued to a server that had stopped

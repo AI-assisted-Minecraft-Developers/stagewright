@@ -18,6 +18,7 @@ import net.magicterra.stagewright.cli.install.Mirror;
 import net.magicterra.stagewright.contract.AttachedRun;
 import net.magicterra.stagewright.contract.DriverBinding;
 import net.magicterra.stagewright.contract.RpcDriverBinding;
+import net.magicterra.stagewright.contract.SceneFailure;
 import net.magicterra.stagewright.contract.SceneSpec;
 import net.magicterra.stagewright.contract.Scripts;
 import net.magicterra.stagewright.contract.StageWrightRpc;
@@ -777,6 +778,7 @@ public final class Main {
         long started = System.currentTimeMillis();
         Process game = startServer(run, launch, List.of(), mods, runLog);
         int attachedCode;
+        boolean triggered;
         Waited waited;
         try {
             EndpointDescriptor descriptor = awaitEndpoint(endpoint, game, runLog, run.timeoutMinutes());
@@ -795,18 +797,22 @@ public final class Main {
                         attachedResults, line -> System.out.println("[stagewright] " + line));
 
                 // Now the in-process half, on the same live server.
-                System.out.println("[stagewright] triggering the in-process suite (mc.test.run)");
-                binding.route("mc.test.run", java.util.Map.of());
-                waited = awaitDoneFooter(run, game, crashes,
-                        new Stall(List.of(runLog, run.results(), run.progress()), run.stallMinutes()));
-                explain(waited, run, "server", game, crashes, runLog, run.gameDir(), started);
+                triggered = triggerInProcessSuite(binding, System.err::println);
+                waited = null;
+                if (triggered) {
+                    waited = awaitDoneFooter(run, game, crashes,
+                            new Stall(List.of(runLog, run.results(), run.progress()), run.stallMinutes()));
+                    explain(waited, run, "server", game, crashes, runLog, run.gameDir(), started);
+                }
             }
         } finally {
             game.destroyForcibly();
             game.waitFor(30, TimeUnit.SECONDS);
         }
 
-        int inProcess = judge(run, runLog, crashes, waited).code();
+        Waited finished = waited;
+        int inProcess = inProcessCode(triggered, () -> judge(run, runLog, crashes, finished).code(),
+                crashes.fresh(), runLog, System.out::println);
         // Worst-wins across the two files, the same rule the companion client already gets:
         // GREEN 0 < RED 1 < DEAD 2 < ENV 3. Reporting only the in-process verdict would let a red
         // attached half ride home on a green suite.
@@ -838,6 +844,38 @@ public final class Main {
         }
         AttachedRun run = new AttachedRun(specs, binding, loader, log, System::currentTimeMillis);
         return run.run(attachedResults) ? 0 : 1;
+    }
+
+    /** Ask the held server to run its in-process suite; false when the call did not go through.
+     *  Returned rather than thrown, so the run still ends on both verdict lines. */
+    static boolean triggerInProcessSuite(DriverBinding binding, Consumer<String> err) {
+        System.out.println("[stagewright] triggering the in-process suite (mc.test.run)");
+        try {
+            binding.route("mc.test.run", java.util.Map.of());
+            return true;
+        } catch (SceneFailure e) {
+            err.accept("[stagewright] mc.test.run did not go through, so the in-process suite is not"
+                    + " judged — " + e.getMessage());
+            return false;
+        }
+    }
+
+    /** What judging the in-process results yields. */
+    interface Judgement {
+        int code() throws IOException;
+    }
+
+    /** The in-process half's code: judged when mc.test.run went through, ENV when it did not. */
+    static int inProcessCode(boolean triggered, Judgement judgement, Path crashReport, Path log,
+                             Consumer<String> out) throws IOException {
+        if (triggered) return judgement.code();
+        // Not judged: without the call there is no suite this run asked for, and judging whatever file
+        // is there would guess at causes — a jar that did not load, a server that never ticked.
+        out.accept("[stagewright] VERDICT: " + Verdict.LABELS[3] + " (mc.test.run did not go through)");
+        out.accept(crashReport != null
+                ? "[stagewright] the game crashed during the run, and said why itself: " + crashReport
+                : "[stagewright] log: " + log);
+        return 3;
     }
 
     /**
@@ -1129,7 +1167,8 @@ public final class Main {
                                       an autorun suite halts the server when it drains, which would
                                       take the socket down underneath the attached half mid-call.
                                       Attached scenes run first, then the in-process suite; both
-                                      results are judged, worst wins.
+                                      results are judged, worst wins. If mc.test.run does not go
+                                      through, the in-process half is ENV, unjudged.
                   --coverage <files>  judge nothing but coverage: comma-separated results files from
                                       runs that have already finished, RED if any scene they register
                                       executed in none of them, ENV if any of them was a filtered
