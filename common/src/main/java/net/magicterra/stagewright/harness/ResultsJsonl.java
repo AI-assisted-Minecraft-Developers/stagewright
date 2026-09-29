@@ -56,7 +56,7 @@ public final class ResultsJsonl {
     }
 
     /** For a writer that only writes its header once the run is over, as the client probe does,
-     *  so {@code startedAt} is still when the run started. */
+     *  so {@code startedAt} is still when it armed. */
     public void writeSuiteHeader(String loader, List<Scene> scenes, long startedAtMs) {
         writeSuiteHeader(loader, scenes, null, null, startedAtMs);
     }
