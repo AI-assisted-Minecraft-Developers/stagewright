@@ -39,6 +39,8 @@ import java.util.function.BooleanSupplier;
  */
 public final class StageWrightRpc implements AutoCloseable {
     private static final Gson GSON = new Gson();
+    /** How long {@link #close} lets the close handshake and anything in flight finish. */
+    private static final Duration CLOSE_GRACE = Duration.ofSeconds(2);
 
     private final HttpClient httpClient;
     private final WebSocket webSocket;
@@ -144,9 +146,15 @@ public final class StageWrightRpc implements AutoCloseable {
         } catch (RuntimeException ignored) {
             // best-effort close
         }
-        // release the HttpClient selector thread (Java 21 AutoCloseable); without
-        // this it lives until JVM exit — blocks briefly while in-flight ops drain
-        httpClient.close();
+        // Not httpClient.close(): it waits for every send in flight, and one queued to a server that
+        // stopped reading never finishes, so the caller would hang with it.
+        httpClient.shutdown();
+        try {
+            if (!httpClient.awaitTermination(CLOSE_GRACE)) httpClient.shutdownNow();
+        } catch (InterruptedException e) {
+            httpClient.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     // ---------------------------------------------------------------- codec ----
