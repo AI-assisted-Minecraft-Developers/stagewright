@@ -68,6 +68,17 @@ argument's position could run. The gate now stops with that message.
 
 ## 2026-09-28
 
+### A send still in progress no longer reads as a lost connection · green in unit tests
+
+The socket refuses a send while the one before it is unfinished. `StageWrightRpc` reported that
+refusal as a `StageWrightTransportException`, which reads as a lost connection, and the attached
+runner stops at one of those. It happened when a server that stopped reading left a timed-out call's
+request unsent, and could happen when a reply arrived before its own request's send had finished.
+Each send now waits for the one before it. Behind a request the server never read, the call waits
+out its time limit and throws `StageWrightTimeoutException`, the same as any call the server does
+not answer. A request whose call has given up by the time its turn comes is not sent, so it cannot
+act on a later scene; one already on its way when its call gave up can still arrive late.
+
 ### A call on a closed `StageWrightRpc` fails at once · green in unit tests
 
 `close()` failed the calls already waiting but did not record that the client was closed, so a
