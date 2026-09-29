@@ -179,6 +179,8 @@ final class SideProcesses {
      */
     private static boolean alreadyHasClasspath(List<String> args) {
         for (String arg : args) {
+            // Left for startCompanion to name, which it cannot do after a bare NullPointerException.
+            if (arg == null) continue;
             if (arg.equals("-cp") || arg.equals("-classpath") || arg.equals("--class-path")) {
                 return true;
             }
