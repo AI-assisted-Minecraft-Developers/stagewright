@@ -127,6 +127,14 @@ reason names that scene, so coverage counts them as holes. The run is RED, even 
 involved are optional, and the results file says so: its done footer carries `cutShort` with the
 loss, which the verdict judges RED, so the file read on its own does not come out GREEN.
 
+### An `Error` in an attached scene is a failed scene · green in unit tests
+
+The attached runner caught only `RuntimeException`, from a scene body and from its cleanups, where
+the in-process harness catches everything. An `Error` from either skipped the cleanups after it and
+ended the run before the results file was written, so the CLI reported a crash instead of RED. It
+now fails that scene, with `unexpected <Error>:` for a body and `cleanup failed:` for a cleanup, and
+the run goes on.
+
 ### A cleanup registered by a cleanup no longer runs · green in unit tests
 
 Both homes ran any cleanup registered while the cleanups drained. A restoring helper called from a
