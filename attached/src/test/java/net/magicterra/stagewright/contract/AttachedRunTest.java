@@ -296,6 +296,21 @@ class AttachedRunTest {
     }
 
     @Test
+    void aSkipFromACleanupIsNamedAsOne(@TempDir Path dir) throws IOException {
+        // Unmarked, it would read as the author's own account of a restore that failed.
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = run(dir, """
+                scene('pack.skipInCleanup', 20, function (s) {
+                    s.cleanup(function () { s.skip('curios is not installed'); });
+                });
+                """, new ArrayList<>(), allGood);
+
+        assertEquals("FAIL", records.get(0).get("outcome"));
+        assertEquals("cleanup failed: skipped mid-teardown: curios is not installed",
+                records.get(0).get("reason"));
+    }
+
+    @Test
     void anErrorFromABodyOrACleanupIsAFailedScene(@TempDir Path dir) throws IOException {
         // Escaping, it would end the run with no results file, and the CLI would report a crash.
         DriverBinding broken = (method, params) -> {
@@ -315,7 +330,8 @@ class AttachedRunTest {
         assertEquals("FAIL", records.get(0).get("outcome"));
         assertEquals("unexpected AssertionError: the driver broke on mc.body", records.get(0).get("reason"));
         assertEquals("FAIL", records.get(1).get("outcome"));
-        assertEquals("cleanup failed: the driver broke on mc.cleanup", records.get(1).get("reason"));
+        assertEquals("cleanup failed: unexpected AssertionError: the driver broke on mc.cleanup",
+                records.get(1).get("reason"));
         assertEquals(Map.of("restored", true), withoutWallMs(records.get(1).get("data")),
                 "the cleanup after the one that threw still ran");
         assertEquals("PASS", records.get(2).get("outcome"));

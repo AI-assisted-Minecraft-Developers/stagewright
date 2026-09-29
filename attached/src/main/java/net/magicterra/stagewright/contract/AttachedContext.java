@@ -286,9 +286,9 @@ public final class AttachedContext implements SceneReport {
                     cleanups.removeFirst().run();
                 } catch (Throwable t) {
                     // Throwable, as in-process: one Error must not skip the cleanups after it.
-                    // Unwrapped as a body's failure is: Rhino's wrapper would lead the reason.
-                    RuntimeException own = t instanceof RuntimeException e ? Scripts.unwrapOurs(e) : null;
-                    problems.add(own != null ? own.getMessage() : Scripts.message(t));
+                    String reason = Cleanups.reasonOf(t);
+                    warn.accept("cleanup failed: " + reason);
+                    problems.add(reason);
                 }
             }
         } finally {
