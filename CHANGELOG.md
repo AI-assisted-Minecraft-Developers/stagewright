@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-29
 
+### An edit to a file git is told to overlook changes the build id · green in unit tests
+
+`git diff` takes a tracked file marked `assume-unchanged` or `skip-worktree` at its index content,
+so editing or deleting one left the build id of the unedited tree, and coverage could reconcile runs
+of the two as one build. Such a file whose content differs from the index now changes the id, and so
+does one deleted or replaced by something that is not a file. A `skip-worktree` file missing from a
+sparse checkout does not, since leaving it out is what the sparse checkout is for; missing from a
+work tree that is not sparse, it counts as deleted.
+
 ### One change gets one build id whatever the machine's diff settings, and is hashed as it is read · green in unit tests
 
 The build id's digest is taken over the bytes `git diff` prints, and a machine's diff settings
