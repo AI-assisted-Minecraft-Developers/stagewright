@@ -243,7 +243,7 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
      *
      * <p>Only block-entity placements are tracked. Plain blocks are inert once set, the grid keeps
      * them 512 blocks from the next arena, and reverting every {@code floor()} cell would cost more
-     * teardown than it saves.
+     * teardown than it saves. A plain block set where a block entity was is left standing too.
      *
      * <p>Nothing a cleanup places with this is reverted, wherever it goes: what the cleanups leave is
      * how the scene ends.
@@ -258,11 +258,11 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
     /** {@link #setBlock}'s bookkeeping, apart from the level it writes to. */
     void place(BlockPos pos, boolean ticks, Runnable set, Runnable revert) {
         BlockPos key = pos.immutable();
-        if (draining) {
-            // A cleanup placing here is the restoration. A body revert registered before that
-            // cleanup runs after it, and would set air over what the cleanup put back.
+        if (draining || !ticks) {
+            // What stands here now is not reverted: a cleanup's placement is the restoration, and a
+            // plain block the body set is inert. A pending revert would set air over either.
             tickingPlacements.remove(key);
-        } else if (ticks && tickingPlacements.add(key)) {
+        } else if (tickingPlacements.add(key)) {
             cleanup(() -> { if (tickingPlacements.remove(key)) revert.run(); });
         }
         set.run();

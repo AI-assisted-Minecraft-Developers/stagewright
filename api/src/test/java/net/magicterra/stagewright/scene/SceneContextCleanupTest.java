@@ -21,6 +21,27 @@ class SceneContextCleanupTest {
     }
 
     @Test
+    void aPlainBlockTheBodyPlacesOverABlockEntityIsNotRevertedToAir() {
+        SceneContext ctx = new SceneContext(null, BlockPos.ZERO);
+        List<String> world = new ArrayList<>();
+        ctx.place(BlockPos.ZERO, true, () -> world.add("chest"), () -> world.add("air"));
+        ctx.place(BlockPos.ZERO, false, () -> world.add("stone"), () -> world.add("air"));
+        ctx.runCleanups(msg -> { });
+        assertEquals(List.of("chest", "stone"), world);
+    }
+
+    @Test
+    void aBlockEntityPlacedAgainOverAPlainBlockIsRevertedOnce() {
+        SceneContext ctx = new SceneContext(null, BlockPos.ZERO);
+        List<String> world = new ArrayList<>();
+        ctx.place(BlockPos.ZERO, true, () -> world.add("chest"), () -> world.add("air"));
+        ctx.place(BlockPos.ZERO, false, () -> world.add("stone"), () -> world.add("air"));
+        ctx.place(BlockPos.ZERO, true, () -> world.add("hopper"), () -> world.add("air"));
+        ctx.runCleanups(msg -> { });
+        assertEquals(List.of("chest", "stone", "hopper", "air"), world);
+    }
+
+    @Test
     void whatACleanupPutsBackIsNotRevertedAfterIt() {
         // A restoring helper: place the block under test, then register putting the old one back.
         SceneContext ctx = new SceneContext(null, BlockPos.ZERO);

@@ -242,9 +242,10 @@ would otherwise undo that cleanup; in either home, one that registers on every c
 teardown from ever ending. The log says how many were dropped.
 
 Two cleanups are automatic. `playerHere()` restores the player to where they were, and `setBlock`
-reverts any block entity the body placed — unless a cleanup then calls `setBlock` there, which is
-the restoration and stays. Restore with `setBlock`: a block a cleanup puts back through `command`
-can still be set to air by that revert. Nothing a cleanup places with `setBlock` is reverted.
+reverts any block entity the body placed — unless a later `setBlock` there sets a plain block, which
+stays, or comes from a cleanup, which is the restoration and stays. Restore with `setBlock`: a block
+a cleanup puts back through `command` can still be set to air by that revert. Nothing a cleanup
+places with `setBlock` is reverted.
 
 ## Players, and what a skip means
 
