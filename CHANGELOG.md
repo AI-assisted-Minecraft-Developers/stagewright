@@ -127,6 +127,12 @@ reason names that scene, so coverage counts them as holes. The run is RED, even 
 involved are optional, and the results file says so: its done footer carries `cutShort` with the
 loss, which the verdict judges RED, so the file read on its own does not come out GREEN.
 
+### An attached cleanup's failure reads as its author wrote it · green in unit tests
+
+A `.js` cleanup that failed out of process was reported as `cleanup failed: Wrapped
+net.magicterra.stagewright.contract.SceneFailure: <reason> (<file>#<line>)`, Rhino's wrapper
+around the failure. It now reads `cleanup failed: <reason>`, as a body's failure does.
+
 ### An `Error` in an attached scene is a failed scene · green in unit tests
 
 The attached runner caught only `RuntimeException`, from a scene body and from its cleanups, where
