@@ -127,6 +127,13 @@ reason names that scene, so coverage counts them as holes. The run is RED, even 
 involved are optional, and the results file says so: its done footer carries `cutShort` with the
 loss, which the verdict judges RED, so the file read on its own does not come out GREEN.
 
+### A plain block set over a block entity is no longer reverted to air · green in unit tests
+
+`setBlock` queues a revert to air for a block entity the body places, and kept it when the body then
+set a plain block at the same position, so teardown removed the plain block. The revert is now
+dropped, as it already was when a cleanup placed there; a block entity placed there again is
+reverted once.
+
 ### An attached cleanup's failure reads as its author wrote it · green in unit tests
 
 A `.js` cleanup that failed out of process was reported as `cleanup failed: Wrapped
