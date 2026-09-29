@@ -153,8 +153,13 @@ public final class Coverage {
                     + " is not a claim about any one build:");
             builds.forEach((label, build) -> out.add("    " + label + ": "
                     + (build.isBlank() ? "no build recorded" : build)));
-            out.add("Re-run the topologies whose build is not the one you mean to judge, then"
-                    + " reconcile again.");
+            if (builds.values().stream().anyMatch(b -> b.startsWith(BuildId.CHANGED_DURING_BUILD))) {
+                out.add("A run that says '" + BuildId.CHANGED_DURING_BUILD.trim() + "' matches no"
+                        + " other run, so re-run the whole gate on a tree nobody edits meanwhile.");
+            } else {
+                out.add("Re-run the topologies whose build is not the one you mean to judge, then"
+                        + " reconcile again.");
+            }
             return new Result(3, out);
         }
 

@@ -51,7 +51,43 @@ class BuildIdArgumentTest {
     }
 
     @Test
-    void aCompanionWiredAfterItsRunSharesTheRunsArgument() {
+    void eachRunIsCheckedAgainstWhatItLoadsItselfIncludingWhatItsLoaderBindsLate() throws Exception {
+        Project project = ProjectBuilder.builder().withProjectDir(dir.toFile()).build();
+        project.getPluginManager().apply(StageWrightPlugin.class);
+        JavaExec run = project.getTasks().register("runServer", JavaExec.class).get();
+        run.classpath(project.file("server-classes"));
+        LateRun client = project.getTasks().register("runClient", LateRun.class).get();
+        client.getClasspathProvider().from(project.file("client-classes"));
+        client.getInternalEnvironmentVars().put("MOD_CLASSES", "scenes%%" + project.file("scene-classes"));
+        project.getExtensions().getByType(StageWrightExtension.class).getTopologies().create("dedicated", t -> {
+            t.getRunTask().set("runServer");
+            t.getCompanionRunTask().set("runClient");
+        });
+        var gate = project.getTasks().getByName("stagewrightDedicated");
+        gate.getTaskDependencies().getDependencies(gate);
+
+        assertEquals(List.of(project.file("server-classes")), argument(run).loaded());
+        assertEquals(List.of(project.file("client-classes"), project.file("scene-classes")),
+                argument(client).loaded());
+    }
+
+    /** A loader's run task that, like ModDevGradle and loom, stages its classpath and environment late. */
+    public abstract static class LateRun extends JavaExec {
+        private final org.gradle.api.file.ConfigurableFileCollection late = getProject().files();
+        private final org.gradle.api.provider.MapProperty<String, String> env =
+                getProject().getObjects().mapProperty(String.class, String.class);
+
+        public org.gradle.api.file.ConfigurableFileCollection getClasspathProvider() {
+            return late;
+        }
+
+        public org.gradle.api.provider.MapProperty<String, String> getInternalEnvironmentVars() {
+            return env;
+        }
+    }
+
+    @Test
+    void aCompanionWiredAfterItsRunSharesTheRunsService() {
         Project project = ProjectBuilder.builder().withProjectDir(dir.toFile()).build();
         project.getPluginManager().apply(StageWrightPlugin.class);
         JavaExec run = project.getTasks().register("runServer", JavaExec.class).get();
@@ -66,12 +102,12 @@ class BuildIdArgumentTest {
             var gate = project.getTasks().getByName(name);
             gate.getTaskDependencies().getDependencies(gate);
         }
-        // One object, so both sides take one id from one git call rather than two at different moments.
+        // One object, so both sides are checked against the one id the build's first run took.
         assertSame(only(run), only(client));
     }
 
     @Test
-    void aCompanionThatIsAnotherTopologysRunStillSharesItsRunsArgument() {
+    void aCompanionThatIsAnotherTopologysRunStillSharesItsRunsService() {
         // runClient is wired as integrated's run before dedicated names it as a companion.
         Project project = ProjectBuilder.builder().withProjectDir(dir.toFile()).build();
         project.getPluginManager().apply(StageWrightPlugin.class);
@@ -91,12 +127,16 @@ class BuildIdArgumentTest {
         assertSame(only(server), only(client));
     }
 
-    /** The service behind the one build-id argument this task carries: sharing it is what makes one
-     *  git call serve every task, including across a configuration cache round trip. */
+    /** The service behind the one build-id argument this task carries: sharing it is what checks every
+     *  task against one first id, including across a configuration cache round trip. */
     private static StageWrightBuildIdService only(JavaExec exec) {
+        return argument(exec).service().get();
+    }
+
+    private static BuildIdArgument argument(JavaExec exec) {
         List<CommandLineArgumentProvider> found = exec.getJvmArgumentProviders().stream()
                 .filter(p -> p instanceof BuildIdArgument).toList();
         assertEquals(1, found.size());
-        return ((BuildIdArgument) found.get(0)).service().get();
+        return (BuildIdArgument) found.get(0);
     }
 }

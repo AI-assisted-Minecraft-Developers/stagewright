@@ -1,9 +1,12 @@
 package net.magicterra.stagewright.engine;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
@@ -18,6 +21,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 /**
  * Names the code a run tested, so results from different code are never reconciled as one suite.
@@ -27,6 +31,9 @@ import java.util.concurrent.TimeUnit;
 public final class BuildId {
 
     private static final Duration GIT_TIMEOUT = Duration.ofSeconds(30);
+
+    /** How the build of a run that started after the tree changed within its build begins. */
+    public static final String CHANGED_DURING_BUILD = "changed during build ";
 
     /** Pins what config would otherwise change in the bytes a diff prints for one change, so one tree
      *  would get another id on another machine. Flags where git has them, since only a flag also
@@ -235,6 +242,38 @@ public final class BuildId {
         } finally {
             deleteQuietly(out);
             deleteQuietly(in);
+        }
+    }
+
+    /**
+     * The first file or directory under {@code classpath} last modified after {@code since} (epoch
+     * milliseconds), or null when there is none. What a run loads, as against the whole tree: an edit
+     * to a file no build reads changes the tree and writes nothing here. A directory counts too, since
+     * deleting a class changes only its directory. Entries that do not exist are skipped, and one that
+     * cannot be read counts as written, so a failure never reads as nothing having changed.
+     */
+    public static Path writtenSince(Iterable<File> classpath, long since) {
+        for (File entry : classpath) {
+            Path root = entry.toPath();
+            if (!Files.exists(root, LinkOption.NOFOLLOW_LINKS)) continue;
+            // Through symlinks: an output directory linked in from elsewhere is still loaded.
+            try (Stream<Path> walk = Files.walk(root, FileVisitOption.FOLLOW_LINKS)) {
+                var newer = walk.filter(p -> modifiedAfter(p, since)).findFirst();
+                if (newer.isPresent()) return newer.get();
+            } catch (IOException | UncheckedIOException e) {
+                return root;
+            }
+        }
+        return null;
+    }
+
+    /** The link itself, pointed elsewhere, or what it points to, rewritten. */
+    private static boolean modifiedAfter(Path p, long since) {
+        try {
+            return Files.getLastModifiedTime(p, LinkOption.NOFOLLOW_LINKS).toMillis() > since
+                    || Files.getLastModifiedTime(p).toMillis() > since;
+        } catch (IOException e) {
+            return true;
         }
     }
 

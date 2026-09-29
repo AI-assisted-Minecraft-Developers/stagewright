@@ -239,6 +239,18 @@ class CoverageTest {
     }
 
     @Test
+    void aRunTakenAfterTheTreeChangedAsksForTheWholeGateAgain() {
+        // No topology re-run alone can match it, so the usual advice would never reach a verdict.
+        Coverage.Result result = Coverage.judge(List.of(
+                run("dedicated", built("git:111111111111", reg("a")), ran("a")),
+                run("client", built("changed during build 1a2b3c4d: git:111111111111 -> git:111111111111+"
+                        + "222222222222", reg("a")), ran("a"))));
+        assertEquals(3, result.code());
+        assertTrue(reports(result, "re-run the whole gate"), String.join("\n", result.report()));
+        assertFalse(reports(result, "Re-run the topologies"));
+    }
+
+    @Test
     void aRunThatRecordsNoBuildIsNotAssumedToMatch() {
         Coverage.Result result = Coverage.judge(List.of(
                 run("dedicated", built("git:111111111111", reg("a")), ran("a")),

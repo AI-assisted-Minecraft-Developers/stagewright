@@ -151,7 +151,7 @@ final class SideProcesses {
      * {@code Could not find or load main class java.base.java.lang.invoke=cpw.mods.securejarhandler},
      * which names the symptom and hides the cause completely.
      */
-    private static List<String> jvmArgs(JavaExec spec) {
+    static List<String> jvmArgs(JavaExec spec) {
         List<String> args = new ArrayList<>(spec.getAllJvmArgs());
         appendUnlessPresent(args, spec.getJvmArguments().getOrElse(List.of()));
         for (org.gradle.process.CommandLineArgumentProvider provider : spec.getJvmArgumentProviders()) {
@@ -218,7 +218,7 @@ final class SideProcesses {
      * unknown loader loses nothing, since a plugin that assembles its classpath the ordinary way is
      * already covered by {@code getClasspath()}.
      */
-    private static org.gradle.api.file.FileCollection resolveClasspath(JavaExec spec) {
+    static org.gradle.api.file.FileCollection resolveClasspath(JavaExec spec) {
         org.gradle.api.file.FileCollection classpath = spec.getClasspath();
         Object staged = readProperty(spec, "getClasspathProvider");
         if (staged instanceof org.gradle.api.file.FileCollection extra) {
@@ -249,16 +249,42 @@ final class SideProcesses {
      * <p>Read both and merge rather than picking one, so a task that somehow has both is not
      * silently half-configured.
      */
-    @SuppressWarnings("unchecked")
     private static java.util.Map<String, String> lateBoundEnvironment(JavaExec spec) {
-        java.util.Map<String, String> result = new java.util.LinkedHashMap<>();
+        return merged(lateBoundEnvironmentProperties(spec));
+    }
+
+    /** Where {@link #lateBoundEnvironment} reads from, unread, so a caller can hold them until the run. */
+    static List<org.gradle.api.provider.MapProperty<?, ?>> lateBoundEnvironmentProperties(JavaExec spec) {
+        List<org.gradle.api.provider.MapProperty<?, ?>> found = new ArrayList<>();
         for (String getter : new String[] {"getEnvironmentProperty", "getInternalEnvironmentVars"}) {
-            if (readProperty(spec, getter) instanceof org.gradle.api.provider.MapProperty<?, ?> p) {
-                ((java.util.Map<Object, Object>) p.get())
-                        .forEach((k, v) -> result.put(String.valueOf(k), String.valueOf(v)));
-            }
+            if (readProperty(spec, getter) instanceof org.gradle.api.provider.MapProperty<?, ?> p) found.add(p);
+        }
+        return found;
+    }
+
+    static java.util.Map<String, String> merged(List<org.gradle.api.provider.MapProperty<?, ?>> properties) {
+        java.util.Map<String, String> result = new java.util.LinkedHashMap<>();
+        for (org.gradle.api.provider.MapProperty<?, ?> p : properties) {
+            p.get().forEach((k, v) -> result.put(String.valueOf(k), String.valueOf(v)));
         }
         return result;
+    }
+
+    /**
+     * The class directories {@code MOD_CLASSES} hands a NeoForge game in dev, as
+     * {@code <mod>%%<path>} entries separated by the path separator. A run loads them without their
+     * being on its classpath: worlddriver keeps its scene classes off the classpath this way.
+     */
+    static List<File> modClasses(java.util.Map<String, String> environment) {
+        String value = environment.get("MOD_CLASSES");
+        List<File> dirs = new ArrayList<>();
+        if (value == null || value.isBlank()) return dirs;
+        for (String entry : value.split(java.util.regex.Pattern.quote(File.pathSeparator))) {
+            int mod = entry.indexOf("%%");
+            String path = mod < 0 ? entry : entry.substring(mod + 2);
+            if (!path.isBlank()) dirs.add(new File(path));
+        }
+        return dirs;
     }
 
     /** The environment a run task's game gets: the task's own, plus what its loader binds late. */
