@@ -68,6 +68,12 @@ argument's position could run. The gate now stops with that message.
 
 ## 2026-09-28
 
+### Closing `StageWrightRpc` no longer hangs on a server that stopped reading · green in unit tests
+
+`close()` waited for every send still in flight, and a request queued to a server that had stopped
+reading never finished. The CLI closes its client before it stops the game, so it hung there for
+good. `close()` now gives the close handshake two seconds and then shuts the client down.
+
 ### A send still in progress no longer reads as a lost connection · green in unit tests
 
 The socket refuses a send while the one before it is unfinished. `StageWrightRpc` reported that

@@ -165,10 +165,7 @@ class StageWrightRpcTest {
                 assertThrows(StageWrightTransportException.class,
                         () -> StageWrightRpc.connect("ws://127.0.0.1:" + silent.getLocalPort() + "/rpc", 300));
             }
-            // A shut-down client's selector thread ends on its own schedule, so give it a moment.
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-            while (selectorThreads() > before && System.nanoTime() < deadline) Thread.sleep(50);
-            assertTrue(selectorThreads() <= before, (selectorThreads() - before) + " selector threads left behind");
+            awaitSelectorThreads(before);
         }
     }
 
@@ -212,6 +209,23 @@ class StageWrightRpcTest {
             } finally {
                 stopped.get(5, TimeUnit.SECONDS).close();
                 rpc.close();
+            }
+        }
+    }
+
+    @Test
+    void closeDoesNotWaitForASendTheServerNeverReads() throws Exception {
+        try (ServerSocket server = new ServerSocket(0)) {
+            CompletableFuture<Socket> stopped = stopsReading(server);
+            long before = selectorThreads();
+            StageWrightRpc rpc = StageWrightRpc.connect("ws://127.0.0.1:" + server.getLocalPort() + "/rpc", 5_000);
+            try {
+                fillTheSocket(rpc);
+                assertTimeoutPreemptively(Duration.ofSeconds(10), rpc::close);
+                // And lets go of the client, though the server still holds the socket and reads nothing.
+                awaitSelectorThreads(before);
+            } finally {
+                stopped.get(5, TimeUnit.SECONDS).close();
             }
         }
     }
@@ -271,6 +285,13 @@ class StageWrightRpcTest {
                 WebSocket.class.getClassLoader(), new Class<?>[] {WebSocket.class},
                 (proxy, method, args) -> method.getReturnType() == CompletableFuture.class
                         ? CompletableFuture.completedFuture(proxy) : null);
+    }
+
+    /** A shut-down client's selector thread ends on its own schedule, so this gives it a moment. */
+    private static void awaitSelectorThreads(long before) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (selectorThreads() > before && System.nanoTime() < deadline) Thread.sleep(50);
+        assertTrue(selectorThreads() <= before, (selectorThreads() - before) + " selector threads left behind");
     }
 
     private static long selectorThreads() {
