@@ -6,14 +6,20 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.lang.reflect.Proxy;
+import java.net.http.HttpClient;
+import java.net.http.WebSocket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -126,6 +132,43 @@ class AttachedRunTest {
         assertFalse(allGood[0]);
         assertTrue(log.stream().anyMatch(l -> l.startsWith("RED: the connection to the driver was lost")
                 && l.endsWith("no scene was left to run.")), log.toString());
+    }
+
+    @Test
+    void halfASurrogatePairReachesTheDriverAndDoesNotEndTheRun(@TempDir Path dir) throws IOException {
+        StageWrightRpc.Reader reader = new StageWrightRpc.Reader();
+        List<String> said = new ArrayList<>();
+        // Fails text it cannot encode as the JDK's socket does, with an IOException; answers the rest.
+        WebSocket likeTheJdks = (WebSocket) Proxy.newProxyInstance(
+                WebSocket.class.getClassLoader(), new Class<?>[] {WebSocket.class},
+                (proxy, method, args) -> {
+                    if (!method.getName().equals("sendText")) {
+                        return method.getReturnType() == CompletableFuture.class
+                                ? CompletableFuture.completedFuture(proxy) : null;
+                    }
+                    String text = args[0].toString();
+                    if (!StandardCharsets.UTF_8.newEncoder().canEncode(text)) {
+                        return CompletableFuture.failedFuture(new IOException("Malformed text message"));
+                    }
+                    JsonObject request = JsonParser.parseString(text).getAsJsonObject();
+                    said.add(request.getAsJsonObject("params").get("text").getAsString());
+                    reader.onText((WebSocket) proxy, "{\"id\":" + request.get("id") + ",\"result\":{}}", true);
+                    return CompletableFuture.completedFuture(proxy);
+                });
+        boolean[] allGood = new boolean[1];
+        try (StageWrightRpc rpc = new StageWrightRpc(HttpClient.newHttpClient(), likeTheJdks, reader)) {
+            List<Map<String, Object>> records = run(dir, """
+                    scene('pack.first', 20, function (s) {
+                        s.driver('mc.chat.say', { text: '\\uD83D\\uDCA5'.substring(0, 1) });
+                    });
+                    scene('pack.second', 20, function (s) { s.driver('mc.chat.say', { text: 'ok' }); });
+                    """, new RpcDriverBinding(rpc, 2_000), new ArrayList<>(), allGood);
+
+            assertEquals(List.of("\uD83D", "ok"), said, "the driver gets the same string in both homes");
+            assertEquals("PASS", records.get(0).get("outcome"), String.valueOf(records.get(0)));
+            assertEquals("PASS", records.get(1).get("outcome"));
+            assertTrue(allGood[0]);
+        }
     }
 
     @Test

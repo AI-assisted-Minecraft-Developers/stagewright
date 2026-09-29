@@ -214,6 +214,35 @@ class StageWrightRpcTest {
     }
 
     @Test
+    void halfASurrogatePairIsSentRatherThanFailingAsALostConnection() throws Exception {
+        try (ServerSocket server = new ServerSocket(0)) {
+            CompletableFuture<Socket> stopped = stopsReading(server);
+            StageWrightRpc rpc = StageWrightRpc.connect("ws://127.0.0.1:" + server.getLocalPort() + "/rpc", 5_000);
+            try {
+                JsonObject params = new JsonObject();
+                // Half of an emoji, as a script's substring can leave it.
+                params.addProperty("text", "\uD83D");
+                // Unanswered, because this server reads nothing: sent, not refused by the socket.
+                assertThrows(StageWrightTimeoutException.class, () -> rpc.call("mc.chat.say", params, 1_000));
+            } finally {
+                stopped.get(5, TimeUnit.SECONDS).close();
+                rpc.close();
+            }
+        }
+    }
+
+    @Test
+    void anEscapedSurrogateDecodesToTheStringThatWasPassed() {
+        for (String text : new String[] {"\uD83D", "\uDCA5", "a\uD83Db", "\uD83D\uDCA5", "\uDCA5\uD83D", "plain"}) {
+            JsonObject params = new JsonObject();
+            params.addProperty("text", text);
+            String sent = StageWrightRpc.escapeSurrogates(new com.google.gson.Gson().toJson(params));
+            assertTrue(StandardCharsets.UTF_8.newEncoder().canEncode(sent), sent);
+            assertEquals(text, JsonParser.parseString(sent).getAsJsonObject().get("text").getAsString());
+        }
+    }
+
+    @Test
     void closeDoesNotWaitForASendTheServerNeverReads() throws Exception {
         try (ServerSocket server = new ServerSocket(0)) {
             CompletableFuture<Socket> stopped = stopsReading(server);

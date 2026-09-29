@@ -101,7 +101,7 @@ public final class StageWrightRpc implements AutoCloseable {
         CompletableFuture<JsonObject> fut = new CompletableFuture<>();
         pending.put(id, fut);
         try {
-            String payload = GSON.toJson(encodeRequest(id, method, params));
+            String payload = escapeSurrogates(GSON.toJson(encodeRequest(id, method, params)));
             // A send on a socket whose output already closed fails here even before the reader sees
             // the close; ignored, the call would wait out its timeout and read as a wedged server.
             sendAfterTheLast(payload, () -> pending.containsKey(id)).whenComplete((ws, failed) -> {
@@ -134,6 +134,23 @@ public final class StageWrightRpc implements AutoCloseable {
                         : CompletableFuture.completedFuture(webSocket));
         lastSend = sent;
         return sent;
+    }
+
+    /** {@code json} with every surrogate as a JSON unicode escape: raw, half a pair makes the socket
+     *  fail the send with the IOException of a broken connection; escaped, any string decodes to what
+     *  was passed. Only a JSON string can hold one, and there the escape is valid. */
+    static String escapeSurrogates(String json) {
+        StringBuilder out = null;
+        for (int i = 0; i < json.length(); i++) {
+            char c = json.charAt(i);
+            if (Character.isSurrogate(c)) {
+                if (out == null) out = new StringBuilder(json.length() + 16).append(json, 0, i);
+                out.append("\\u").append(Integer.toHexString(c));
+            } else if (out != null) {
+                out.append(c);
+            }
+        }
+        return out == null ? json : out.toString();
     }
 
     @Override
