@@ -123,14 +123,14 @@ public final class StageWrightRpc implements AutoCloseable {
 
     @Override
     public void close() {
+        // The reader's own drain: a call made after this sees closedBy and fails at once, and one
+        // registering meanwhile is either drained here or sees closedBy.
+        reader.failAll(new IllegalStateException("rpc closed"));
         try {
             webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "bye");
         } catch (RuntimeException ignored) {
             // best-effort close
         }
-        // fail any still-pending calls so a blocked caller does not hang
-        pending.values().forEach(f -> f.completeExceptionally(new IllegalStateException("rpc closed")));
-        pending.clear();
         // release the HttpClient selector thread (Java 21 AutoCloseable); without
         // this it lives until JVM exit — blocks briefly while in-flight ops drain
         httpClient.close();
