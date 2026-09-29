@@ -4,18 +4,25 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.lang.reflect.Proxy;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.Base64;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import com.google.gson.JsonObject;
 import org.junit.jupiter.api.Test;
 
-/** The client's side of a socket that went away, and of a handshake that never completed. */
+/** The client's side of a socket: one that went away, and a handshake that never completed. */
 class StageWrightRpcTest {
 
     @Test
@@ -61,6 +68,58 @@ class StageWrightRpcTest {
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
             while (selectorThreads() > before && System.nanoTime() < deadline) Thread.sleep(50);
             assertTrue(selectorThreads() <= before, (selectorThreads() - before) + " selector threads left behind");
+        }
+    }
+
+    @Test
+    void aHandshakeNobodyAnswersIsATransportFailure() throws Exception {
+        // Held open for the whole test, so no other process can take the port; the kernel accepts
+        // the connection into the backlog and nothing ever answers the upgrade request.
+        try (ServerSocket silent = new ServerSocket(0)) {
+            assertThrows(StageWrightTransportException.class,
+                    () -> StageWrightRpc.connect("ws://127.0.0.1:" + silent.getLocalPort() + "/rpc", 2_000));
+        }
+    }
+
+    @Test
+    void aCallOnASocketThatAlreadyClosedIsATransportFailure() throws Exception {
+        try (ServerSocket server = new ServerSocket(0)) {
+            Thread accept = new Thread(() -> acceptThenHangUp(server));
+            accept.start();
+            try (StageWrightRpc rpc = StageWrightRpc.connect(
+                    "ws://127.0.0.1:" + server.getLocalPort() + "/rpc", 5_000)) {
+                // The first call may be in flight when the hang-up lands; the second cannot be, so it
+                // is the one that shows a send on a dead socket is not waited out as a timeout.
+                assertThrows(StageWrightTransportException.class,
+                        () -> rpc.call("mc.system.version", new JsonObject(), 5_000));
+                assertThrows(StageWrightTransportException.class,
+                        () -> rpc.call("mc.system.version", new JsonObject(), 5_000));
+            }
+            accept.join(5_000);
+        }
+    }
+
+    /** Complete one websocket handshake, then drop the connection without a close frame. */
+    private static void acceptThenHangUp(ServerSocket server) {
+        try (Socket s = server.accept()) {
+            BufferedReader in = new BufferedReader(new InputStreamReader(
+                    s.getInputStream(), StandardCharsets.US_ASCII));
+            String key = null;
+            for (String line; (line = in.readLine()) != null && !line.isEmpty(); ) {
+                if (line.toLowerCase(Locale.ROOT).startsWith("sec-websocket-key:")) {
+                    key = line.substring(line.indexOf(':') + 1).trim();
+                }
+            }
+            String accept = Base64.getEncoder().encodeToString(
+                    MessageDigest.getInstance("SHA-1").digest(
+                            (key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11")
+                                    .getBytes(StandardCharsets.US_ASCII)));
+            s.getOutputStream().write(("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\n"
+                    + "Connection: Upgrade\r\nSec-WebSocket-Accept: " + accept + "\r\n\r\n")
+                    .getBytes(StandardCharsets.US_ASCII));
+            s.getOutputStream().flush();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
         }
     }
 
