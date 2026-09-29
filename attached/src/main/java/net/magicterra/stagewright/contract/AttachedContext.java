@@ -284,8 +284,9 @@ public final class AttachedContext implements SceneReport {
             while (!cleanups.isEmpty()) {
                 try {
                     cleanups.removeFirst().run();
-                } catch (RuntimeException e) {
-                    problems.add(Scripts.message(e));
+                } catch (Throwable t) {
+                    // Throwable, as in-process: one Error must not skip the cleanups after it.
+                    problems.add(Scripts.message(t));
                 }
             }
         } finally {

@@ -134,7 +134,9 @@ public final class AttachedRun {
             } catch (SceneFailure e) {
                 outcome = "FAIL";
                 reason = e.getMessage();
-            } catch (RuntimeException e) {
+            } catch (Throwable e) {
+                // Throwable, as in-process: an Error escaping here would end the run before the
+                // results file is written, and the CLI would report a crash instead of RED.
                 outcome = "FAIL";
                 reason = "unexpected " + e.getClass().getSimpleName() + ": " + Scripts.message(e);
             }

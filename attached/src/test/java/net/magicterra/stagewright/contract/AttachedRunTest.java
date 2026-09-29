@@ -277,6 +277,39 @@ class AttachedRunTest {
     }
 
     @Test
+    void anErrorFromABodyOrACleanupIsAFailedScene(@TempDir Path dir) throws IOException {
+        // Escaping, it would end the run with no results file, and the CLI would report a crash.
+        DriverBinding broken = (method, params) -> {
+            throw new AssertionError("the driver broke on " + method);
+        };
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = run(dir, """
+                scene('pack.bodyError', 20, function (s) { s.driver('mc.body'); });
+                scene('pack.cleanupError', 20, function (s) {
+                    s.cleanup(function () { s.record('restored', true); });
+                    s.cleanup(function () { s.driver('mc.cleanup'); });
+                });
+                scene('pack.after', 20, function (s) { });
+                """, broken, new ArrayList<>(), allGood);
+
+        assertEquals(3, records.size());
+        assertEquals("FAIL", records.get(0).get("outcome"));
+        assertEquals("unexpected AssertionError: the driver broke on mc.body", records.get(0).get("reason"));
+        assertEquals("FAIL", records.get(1).get("outcome"));
+        assertEquals("cleanup failed: the driver broke on mc.cleanup", records.get(1).get("reason"));
+        assertEquals(Map.of("restored", true), withoutWallMs(records.get(1).get("data")),
+                "the cleanup after the one that threw still ran");
+        assertEquals("PASS", records.get(2).get("outcome"));
+        assertFalse(allGood[0]);
+    }
+
+    private static Map<?, ?> withoutWallMs(Object data) {
+        Map<?, ?> copy = new java.util.HashMap<>((Map<?, ?>) data);
+        copy.remove("wallMs");
+        return copy;
+    }
+
+    @Test
     void theHeaderRecordsWhenTheRunStarted(@TempDir Path dir) throws IOException {
         Path scenes = Files.createDirectories(dir.resolve("scenes"));
         Files.writeString(scenes.resolve("a.js"), "scene('pack.a', 20, function (s) { });",
