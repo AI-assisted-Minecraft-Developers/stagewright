@@ -10,6 +10,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-09-29
+
+### A companion whose loader left a JVM argument unset says so · green in unit tests
+
+A `null` among a companion's JVM arguments stopped the gate with a bare `NullPointerException`,
+thrown while the plugin looked for a classpath among them, before the check that names the
+argument's position could run. The gate now stops with that message.
+
 ## 2026-09-28
 
 ### Builds are numbered, tested by CI and published to a public Nexus · the four builds and WorldDriver's run in order against build 0 on this machine
