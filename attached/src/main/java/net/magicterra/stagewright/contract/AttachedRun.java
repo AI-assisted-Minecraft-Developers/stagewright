@@ -48,7 +48,6 @@ public final class AttachedRun {
     private final String loader;
     private final Consumer<String> log;
     private final java.util.function.LongSupplier clockMs;
-    private long startedAt;
 
     public AttachedRun(List<SceneSpec> scenes, DriverBinding driver, String loader,
                        Consumer<String> log, java.util.function.LongSupplier clockMs) {
@@ -67,7 +66,7 @@ public final class AttachedRun {
      *         turns that into an exit code
      */
     public boolean run(Path resultsFile) {
-        startedAt = clockMs.getAsLong();
+        long startedAt = clockMs.getAsLong();
         List<Map<String, Object>> records = new ArrayList<>();
         boolean allGood = true;
 
@@ -78,7 +77,7 @@ public final class AttachedRun {
         // them. Writing the file first and failing after keeps the evidence: the empty file is on
         // disk, so the diagnosis is "it found no scenes" rather than "it produced nothing".
         if (scenes.isEmpty()) {
-            write(resultsFile, records);
+            write(resultsFile, records, startedAt);
             log.accept("RED: no attached scenes were registered — a run that tested nothing is not a"
                     + " pass. Check that --attached points at a directory containing .js files.");
             return false;
@@ -174,7 +173,7 @@ public final class AttachedRun {
             }
         }
 
-        write(resultsFile, records);
+        write(resultsFile, records, startedAt);
         return allGood;
     }
 
@@ -227,7 +226,7 @@ public final class AttachedRun {
                 + " gives it the world it asked for.");
     }
 
-    private void write(Path resultsFile, List<Map<String, Object>> records) {
+    private void write(Path resultsFile, List<Map<String, Object>> records, long startedAt) {
         try {
             Path parent = resultsFile.toAbsolutePath().getParent();
             if (parent != null) Files.createDirectories(parent);
