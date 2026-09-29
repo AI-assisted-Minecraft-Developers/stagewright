@@ -179,7 +179,7 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
     public int originZ() { return origin.getZ(); }
 
     private final net.magicterra.stagewright.contract.Cleanups cleanups =
-            new net.magicterra.stagewright.contract.Cleanups();
+            new net.magicterra.stagewright.contract.Cleanups(this);
 
     /**
      * Register teardown to run when the scene resolves — on PASS, FAIL and

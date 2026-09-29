@@ -92,6 +92,7 @@ class SceneContextCleanupTest {
         assertEquals(List.of(), ctx.runCleanups(warned::add));
         assertEquals(List.of("restore"), ran);
         assertEquals(List.of("1 cleanup(s) registered by a cleanup did not run"), warned);
+        assertEquals(1, ctx.records().get("cleanupsNotRun"), "the results say so too, not only the log");
 
         ctx.cleanup(() -> ran.add("after"));
         ctx.runCleanups(msg -> { });

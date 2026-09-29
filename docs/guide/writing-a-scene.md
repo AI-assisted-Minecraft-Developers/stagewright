@@ -241,7 +241,8 @@ its message for anything else, in both homes.
 A cleanup registered while the cleanups run does not run, in either home: what the cleanups leave is
 how the scene ends. In-process, a restoring helper such as `playerHere()` called from a cleanup
 would otherwise undo that cleanup; in either home, one that registers on every call would keep
-teardown from ever ending. The log says how many were dropped.
+teardown from ever ending. The log says how many were dropped, and so does the scene's line in the
+results file, as `cleanupsNotRun` in its `data`.
 
 Two cleanups are automatic. `playerHere()` restores the player to where they were, and `setBlock`
 reverts any block entity the body placed — unless a later `setBlock` there sets a plain block, which
