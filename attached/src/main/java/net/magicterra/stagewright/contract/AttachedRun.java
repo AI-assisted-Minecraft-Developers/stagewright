@@ -139,7 +139,7 @@ public final class AttachedRun {
                 reason = "unexpected " + e.getClass().getSimpleName() + ": " + Scripts.message(e);
             }
 
-            List<String> teardown = ctx.runCleanups();
+            List<String> teardown = ctx.runCleanups(line -> log.accept("'" + spec.name() + "': " + line));
             if (!teardown.isEmpty() && "PASS".equals(outcome)) {
                 outcome = "FAIL";
                 reason = "cleanup failed: " + String.join("; ", teardown);

@@ -185,8 +185,17 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
      * Register teardown to run when the scene resolves — on PASS, FAIL and
      * TIMEOUT alike (LIFO). Use for avatar discard, config unpin, entity kill:
      * anything that must not leak into the next scene.
+     *
+     * <p>One registered by a cleanup does not run: what the cleanups leave is how the scene ends.
+     * A restoring helper called from a cleanup would otherwise undo that cleanup, or loop forever.
      */
-    public void cleanup(Runnable r) { cleanups.addFirst(r); }
+    public void cleanup(Runnable r) {
+        if (draining) {
+            unrunCleanups++;
+            return;
+        }
+        cleanups.addFirst(r);
+    }
 
     /** Harness-internal: drain cleanups; exceptions logged and returned, never thrown, so one
      *  failing cleanup cannot stop the rest. */
@@ -194,8 +203,6 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
         List<String> failed = new ArrayList<>();
         draining = true;
         try {
-            // Polled, not iterated: a cleanup may register another (a helper that restores state
-            // does), and an iterator would throw out of here and have the whole drain run again.
             for (Runnable r; (r = cleanups.pollFirst()) != null; ) {
                 try {
                     r.run();
@@ -207,10 +214,15 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
         } finally {
             draining = false;
         }
+        if (unrunCleanups > 0) {
+            warn.accept(unrunCleanups + " cleanup(s) registered by a cleanup did not run");
+            unrunCleanups = 0;
+        }
         return failed;
     }
 
     private boolean draining;
+    private int unrunCleanups;
 
     // ---- world ops (origin-relative; scenes never see absolute coordinates) ----
 
@@ -234,7 +246,7 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
      * teardown than it saves.
      *
      * <p>Nothing a cleanup places with this is reverted, wherever it goes: what the cleanups leave is
-     * how the scene ends. A revert queued from inside a cleanup would run next and undo it.
+     * how the scene ends.
      */
     public void setBlock(int dx, int dy, int dz, Block block) {
         BlockPos pos = rel(dx, dy, dz);
