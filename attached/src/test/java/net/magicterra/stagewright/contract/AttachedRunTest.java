@@ -277,6 +277,25 @@ class AttachedRunTest {
     }
 
     @Test
+    void aSkipWhoseCleanupFailsIsAFailThatStillSaysItSkipped(@TempDir Path dir) throws IOException {
+        // FAIL, because the scene broke the world the next one starts in; still skipped, because
+        // it tested nothing and coverage must not count it. The reason is the author's own words.
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = run(dir, """
+                scene('pack.skipThenBrokenCleanup', 20, function (s) {
+                    s.cleanup(function () { s.fail('the config override would not come off'); });
+                    s.skip('curios is not installed');
+                });
+                """, new ArrayList<>(), allGood);
+
+        Map<String, Object> rec = records.get(0);
+        assertEquals("FAIL", rec.get("outcome"));
+        assertEquals(Boolean.TRUE, rec.get("skipped"));
+        assertEquals("cleanup failed: the config override would not come off", rec.get("reason"));
+        assertFalse(allGood[0]);
+    }
+
+    @Test
     void anErrorFromABodyOrACleanupIsAFailedScene(@TempDir Path dir) throws IOException {
         // Escaping, it would end the run with no results file, and the CLI would report a crash.
         DriverBinding broken = (method, params) -> {
