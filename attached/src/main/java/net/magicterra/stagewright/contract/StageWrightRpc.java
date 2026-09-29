@@ -16,6 +16,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 
 /**
  * Synchronous bare-RPC client over a plain {@link WebSocket} (path {@code /rpc}).
@@ -44,6 +45,7 @@ public final class StageWrightRpc implements AutoCloseable {
     private final AtomicLong ids = new AtomicLong(0);
     private final ConcurrentHashMap<Long, CompletableFuture<JsonObject>> pending = new ConcurrentHashMap<>();
     private final Reader reader;
+    private CompletableFuture<?> lastSend = CompletableFuture.completedFuture(null);
 
     StageWrightRpc(HttpClient httpClient, WebSocket webSocket, Reader reader) {
         this.httpClient = httpClient;
@@ -100,7 +102,7 @@ public final class StageWrightRpc implements AutoCloseable {
             String payload = GSON.toJson(encodeRequest(id, method, params));
             // A send on a socket whose output already closed fails here even before the reader sees
             // the close; ignored, the call would wait out its timeout and read as a wedged server.
-            webSocket.sendText(payload, true).whenComplete((ws, failed) -> {
+            sendAfterTheLast(payload, () -> pending.containsKey(id)).whenComplete((ws, failed) -> {
                 if (failed != null) fut.completeExceptionally(failed);
             });
             // Read after the put: a close that failAll drained before this call registered would
@@ -119,6 +121,17 @@ public final class StageWrightRpc implements AutoCloseable {
         } finally {
             pending.remove(id);
         }
+    }
+
+    /** Send {@code payload} after the send before it, unless its call has given up by then: the socket
+     *  refuses a send while one is unfinished, a reply can beat its own request's send, and a request
+     *  sent after its call gave up would act on whatever scene is running by then. */
+    private synchronized CompletableFuture<WebSocket> sendAfterTheLast(String payload, BooleanSupplier wanted) {
+        CompletableFuture<WebSocket> sent = lastSend.handle((ws, failed) -> null)
+                .thenCompose(ignored -> wanted.getAsBoolean() ? webSocket.sendText(payload, true)
+                        : CompletableFuture.completedFuture(webSocket));
+        lastSend = sent;
+        return sent;
     }
 
     @Override
