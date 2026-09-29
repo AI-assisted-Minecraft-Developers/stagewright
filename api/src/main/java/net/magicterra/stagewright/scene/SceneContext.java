@@ -568,9 +568,9 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
      *   <li><b>{@code @p} is rarely what you want.</b> The {@code dedicatedServer} topology has no
      *       player at all, and in the client topologies the player is wherever the client left it,
      *       not in this arena. Prefer {@code @e[…]} with a range, or {@link #playerHere()}.</li>
-     *   <li><b>Nothing a command does is reverted.</b> {@link #setBlock} records what it overwrote
-     *       and puts it back; a command goes through the game's own paths and leaves no such
-     *       record, so what it placed outlives the scene unless the scene {@link #cleanup}s it.</li>
+     *   <li><b>Nothing a command does is reverted.</b> {@link #setBlock} reverts a block entity it
+     *       placed, to air; a command goes through the game's own paths and leaves no such record,
+     *       so what it placed outlives the scene unless the scene {@link #cleanup}s it.</li>
      * </ul>
      *
      * <p>Note that {@code execute if …} reports a false condition as a command error, so through

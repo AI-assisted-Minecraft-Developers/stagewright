@@ -208,11 +208,9 @@ public final class Scenes {
                  * nothing and passes.
                  */
                 Scene.of("commandsRunAtTheArena", 100, ctx -> {
-                    // Reverted by hand: setBlock records what it overwrote and puts it back, a
-                    // command does not, and nothing downstream of this line would notice a diamond
-                    // block left in an arena nobody visits again. Through the Java call rather than
-                    // another command, because cleanups also run on the failure path — where the
-                    // block may never have been placed, and `/setblock` refuses to set air on air.
+                    // Reverted by hand, as nothing reverts what a command placed. Through setBlock,
+                    // not a command: cleanups also run on failure, where the block may never have
+                    // been placed, and `/setblock` refuses to set air on air.
                     ctx.cleanup(() -> ctx.setBlock(0, 0, 0, Blocks.AIR));
                     ctx.command("setblock ~ ~ ~ minecraft:diamond_block");
                     ctx.expectBlock(0, 0, 0).as("a block placed by a relative command")
