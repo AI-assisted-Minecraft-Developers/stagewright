@@ -490,7 +490,7 @@ results files can take the worse of the two.
 | 0 | GREEN | Header and footer present, every required non-canary scene passed or failed while optional, every canary landed on the outcome it declared. |
 | 1 | RED | A required scene failed, a scene was never recorded, records drifted or duplicated, the footer disagreed with the file, or reconciliation against the manifest failed. Also: no footer, and a header carrying `registryError` — the game armed but could not assemble the suite. For the attached half, also a connection to the driver lost partway, which the runner decides: the reasons of the scenes involved name the loss, but no field marks it, so judged by its records alone a file whose scenes are all optional would read GREEN. |
 | 2 | DEAD | A canary landed on the wrong outcome. The framework can no longer be trusted to catch failures, so the whole run's results are void rather than merely bad. |
-| 3 | ENV | No suite header — the game never armed. Also reported when the results file is absent entirely. |
+| 3 | ENV | No suite header — the game never armed. Also reported when the results file is absent entirely, and under `--attached` when `mc.test.run` did not go through, which leaves the in-process half unjudged. |
 
 DEAD is not a louder RED. **A RED says the code is broken; a DEAD says the measurement is.** ENV
 is never reported as RED for the same kind of reason: "the server did not start" must not read
