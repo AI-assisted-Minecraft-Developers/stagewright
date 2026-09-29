@@ -1,8 +1,6 @@
 package net.magicterra.stagewright.contract;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +45,7 @@ public final class AttachedContext implements SceneReport {
     private final long budgetMs;
     private final Map<String, Object> records = new LinkedHashMap<>();
     private final List<String> softViolations = new ArrayList<>();
-    private final Deque<Runnable> cleanups = new ArrayDeque<>();
+    private final Cleanups cleanups = new Cleanups();
     private final long startedAtMs;
     private final java.util.function.LongSupplier clockMs;
     private int pollCount;
@@ -191,15 +189,10 @@ public final class AttachedContext implements SceneReport {
         throw new SceneSkipped(reason);
     }
 
-    /** One registered by a cleanup does not run, as in-process: what the cleanups leave is how the
-     *  scene ends, and a helper that re-registers on every call would otherwise never let it end. */
+    /** One registered by a cleanup does not run, as in-process. */
     @Override
     public void cleanup(Runnable action) {
-        if (draining) {
-            unrunCleanups++;
-            return;
-        }
-        cleanups.addFirst(action);
+        cleanups.add(action);
     }
 
     // ---- everything the out-of-process home structurally cannot do --------------
@@ -276,31 +269,8 @@ public final class AttachedContext implements SceneReport {
 
     public long budgetMs() { return budgetMs; }
 
-    /** Run teardown in reverse registration order, swallowing nothing quietly. */
+    /** Run teardown in reverse registration order; each failure is warned about and returned. */
     public List<String> runCleanups(java.util.function.Consumer<String> warn) {
-        List<String> problems = new ArrayList<>();
-        draining = true;
-        try {
-            while (!cleanups.isEmpty()) {
-                try {
-                    cleanups.removeFirst().run();
-                } catch (Throwable t) {
-                    // Throwable, as in-process: one Error must not skip the cleanups after it.
-                    String reason = Cleanups.reasonOf(t);
-                    warn.accept("cleanup failed: " + reason);
-                    problems.add(reason);
-                }
-            }
-        } finally {
-            draining = false;
-        }
-        if (unrunCleanups > 0) {
-            warn.accept(unrunCleanups + " cleanup(s) registered by a cleanup did not run");
-            unrunCleanups = 0;
-        }
-        return problems;
+        return cleanups.run(warn);
     }
-
-    private boolean draining;
-    private int unrunCleanups;
 }

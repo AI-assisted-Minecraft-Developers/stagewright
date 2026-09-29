@@ -1,9 +1,61 @@
 package net.magicterra.stagewright.contract;
 
-/** Scene teardown as both homes report it. */
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.List;
+import java.util.function.Consumer;
+
+/** A scene's teardown, one implementation for both homes so their rules cannot drift apart. */
 public final class Cleanups {
 
-    private Cleanups() {}
+    private final Deque<Runnable> queue = new ArrayDeque<>();
+    private boolean draining;
+    private int unrun;
+
+    /**
+     * Queue teardown, to run last-registered first.
+     *
+     * <p>One registered by a cleanup does not run: what the cleanups leave is how the scene ends. A
+     * restoring helper called from a cleanup would otherwise undo that cleanup, or loop forever.
+     */
+    public void add(Runnable action) {
+        if (draining) {
+            unrun++;
+            return;
+        }
+        queue.addFirst(action);
+    }
+
+    /** True while {@link #run} is draining, so a caller can tell a cleanup's work from the body's. */
+    public boolean draining() {
+        return draining;
+    }
+
+    /** Run everything queued; each failure is warned about and returned, never thrown, so one failing
+     *  cleanup cannot stop the rest. */
+    public List<String> run(Consumer<String> warn) {
+        List<String> failed = new ArrayList<>();
+        draining = true;
+        try {
+            for (Runnable r; (r = queue.pollFirst()) != null; ) {
+                try {
+                    r.run();
+                } catch (Throwable t) {
+                    String reason = reasonOf(t);
+                    warn.accept("cleanup failed: " + reason);
+                    failed.add(reason);
+                }
+            }
+        } finally {
+            draining = false;
+        }
+        if (unrun > 0) {
+            warn.accept(unrun + " cleanup(s) registered by a cleanup did not run");
+            unrun = 0;
+        }
+        return failed;
+    }
 
     /**
      * A cleanup's failure as its reason reads, the same in both homes: the author's own words rather

@@ -6,7 +6,6 @@ import net.magicterra.stagewright.contract.SceneSkipped;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.function.BooleanSupplier;
@@ -179,51 +178,21 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
 
     public int originZ() { return origin.getZ(); }
 
-    private final Deque<Runnable> cleanups = new ArrayDeque<>();
+    private final net.magicterra.stagewright.contract.Cleanups cleanups =
+            new net.magicterra.stagewright.contract.Cleanups();
 
     /**
      * Register teardown to run when the scene resolves — on PASS, FAIL and
      * TIMEOUT alike (LIFO). Use for avatar discard, config unpin, entity kill:
-     * anything that must not leak into the next scene.
-     *
-     * <p>One registered by a cleanup does not run: what the cleanups leave is how the scene ends.
-     * A restoring helper called from a cleanup would otherwise undo that cleanup, or loop forever.
+     * anything that must not leak into the next scene. One registered by a cleanup does not run.
      */
-    public void cleanup(Runnable r) {
-        if (draining) {
-            unrunCleanups++;
-            return;
-        }
-        cleanups.addFirst(r);
-    }
+    public void cleanup(Runnable r) { cleanups.add(r); }
 
     /** Harness-internal: drain cleanups; exceptions logged and returned, never thrown, so one
      *  failing cleanup cannot stop the rest. */
     public List<String> runCleanups(Consumer<String> warn) {
-        List<String> failed = new ArrayList<>();
-        draining = true;
-        try {
-            for (Runnable r; (r = cleanups.pollFirst()) != null; ) {
-                try {
-                    r.run();
-                } catch (Throwable t) {
-                    String reason = net.magicterra.stagewright.contract.Cleanups.reasonOf(t);
-                    warn.accept("cleanup failed: " + reason);
-                    failed.add(reason);
-                }
-            }
-        } finally {
-            draining = false;
-        }
-        if (unrunCleanups > 0) {
-            warn.accept(unrunCleanups + " cleanup(s) registered by a cleanup did not run");
-            unrunCleanups = 0;
-        }
-        return failed;
+        return cleanups.run(warn);
     }
-
-    private boolean draining;
-    private int unrunCleanups;
 
     // ---- world ops (origin-relative; scenes never see absolute coordinates) ----
 
@@ -259,7 +228,7 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
     /** {@link #setBlock}'s bookkeeping, apart from the level it writes to. */
     void place(BlockPos pos, boolean ticks, Runnable set, Runnable revert) {
         BlockPos key = pos.immutable();
-        if (draining || !ticks) {
+        if (cleanups.draining() || !ticks) {
             // What stands here now is not reverted: a cleanup's placement is the restoration, and a
             // plain block the body set is inert. A pending revert would set air over either.
             tickingPlacements.remove(key);
