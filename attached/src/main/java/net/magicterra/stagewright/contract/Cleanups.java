@@ -9,9 +9,15 @@ import java.util.function.Consumer;
 /** A scene's teardown, one implementation for both homes so their rules cannot drift apart. */
 public final class Cleanups {
 
+    private final SceneReport owner;
     private final Deque<Runnable> queue = new ArrayDeque<>();
     private boolean draining;
     private int unrun;
+
+    /** @param owner the scene whose record carries how many cleanups did not run */
+    public Cleanups(SceneReport owner) {
+        this.owner = owner;
+    }
 
     /**
      * Queue teardown, to run last-registered first.
@@ -33,7 +39,7 @@ public final class Cleanups {
     }
 
     /** Run everything queued; each failure is warned about and returned, never thrown, so one failing
-     *  cleanup cannot stop the rest. */
+     *  cleanup cannot stop the rest. How many a cleanup registered is recorded on the owner. */
     public List<String> run(Consumer<String> warn) {
         List<String> failed = new ArrayList<>();
         draining = true;
@@ -52,6 +58,9 @@ public final class Cleanups {
         }
         if (unrun > 0) {
             warn.accept(unrun + " cleanup(s) registered by a cleanup did not run");
+            // In the results too: a dropped cleanup may have been undoing something, and the log
+            // is not what a reader of a green run looks at.
+            owner.record("cleanupsNotRun", unrun);
             unrun = 0;
         }
         return failed;

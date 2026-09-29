@@ -45,7 +45,7 @@ public final class AttachedContext implements SceneReport {
     private final long budgetMs;
     private final Map<String, Object> records = new LinkedHashMap<>();
     private final List<String> softViolations = new ArrayList<>();
-    private final Cleanups cleanups = new Cleanups();
+    private final Cleanups cleanups = new Cleanups(this);
     private final long startedAtMs;
     private final java.util.function.LongSupplier clockMs;
     private int pollCount;

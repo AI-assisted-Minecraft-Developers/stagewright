@@ -159,8 +159,9 @@ Both homes ran any cleanup registered while the cleanups drained. A restoring he
 cleanup, one that sets a value and registers putting the old one back, then undid the restoration
 that cleanup had just made. A helper that registers on every call looped forever: cleanups have no
 instruction budget, so in-process the server stopped ticking, and an attached run never ended. A
-cleanup registered during teardown is now not run, in either home, and the log says how many were
-dropped.
+cleanup registered during teardown is now not run, in either home. The log says how many were
+dropped, and so does the scene's line in the results, as `cleanupsNotRun` in its `data`, since one
+of them may have been undoing something.
 
 ### Builds are numbered, tested by CI and published to a public Nexus · the four builds and WorldDriver's run in order against build 0 on this machine
 
