@@ -239,13 +239,17 @@ git work tree once per build, when its first run starts — HEAD, plus a digest 
 to tracked files — and the header records it; every run and companion in one build gets the same id.
 When the files disagree, the reconciliation is ENV and lists each file's build, so a topology last
 run a week ago is re-run rather than counted. The id covers what git tracks, including edits inside
-submodules, and one change gets one id on every machine, whatever diff settings the project's
-repository has there, except what a machine's own attributes say about a file: a diff driver's
-function-name pattern, or a `-diff` or `binary` attribute, can still make git print one change its
-own way, which gives that change a second id and so reads as MIXED BUILDS, never as a match. A
-change only to an untracked file does not change it. A project git does not track records no build,
-so coverage cannot tell its runs apart by code: files with no build match each other, and a file
-with no build is never reconciled with one that has a build.
+submodules and edits to or deletions of files marked `assume-unchanged` or `skip-worktree`, and one
+change gets one id on every machine, whatever diff settings the project's repository has there,
+except what a machine's own attributes say about a file: a diff driver's function-name pattern, or a
+`-diff` or `binary` attribute, can still make git print one change its own way, which gives that
+change a second id and so reads as MIXED BUILDS, never as a match. So can a file marked
+`assume-unchanged` or `skip-worktree` on one machine and not on another, as `core.ignoreStat` marks
+every file: an edit to a marked file is named by its content's hash rather than by its diff. A
+`skip-worktree` file a sparse checkout leaves out is not a deletion. A change only to an untracked
+file does not change it. A project git does not track records no build, so coverage cannot tell its
+runs apart by code: files with no build match each other, and a file with no build is never
+reconciled with one that has a build.
 
 For a pack tested through the standalone command-line runner, the same reconciliation is available
 without a build tool:
