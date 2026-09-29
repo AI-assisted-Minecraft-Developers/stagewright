@@ -11,6 +11,7 @@ import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
@@ -328,22 +329,27 @@ public class StageWrightPlugin implements Plugin<Project> {
         String companionName = topology.getCompanionRunTask().getOrNull();
         JavaExec companion = companionName != null
                 && resolveRunTask(project, companionName) instanceof JavaExec c ? c : null;
-        // A build service, so every run and companion in the build takes one id from one git call,
+        // A build service, so every run and companion in the build is checked against one first id,
         // configuration cache or not.
         var service = project.getGradle().getSharedServices().registerIfAbsent("stagewrightBuildId",
                 StageWrightBuildIdService.class,
                 spec -> spec.getParameters().getWorkTree().set(project.getRootDir()));
-        BuildIdArgument build = new BuildIdArgument(service);
-        if (exec != null) addOnce(exec, build);
-        if (companion != null) addOnce(companion, build);
+        if (exec != null) addOnce(exec, service);
+        if (companion != null) addOnce(companion, service);
     }
 
     /** This runs each time the gate's dependencies are resolved, and a run task may serve two
-     *  topologies; a second provider would put the property on the command line twice. */
-    private static void addOnce(JavaExec exec, BuildIdArgument build) {
+     *  topologies; a second provider would put the property on the command line twice. Its own
+     *  provider per task, since each is checked against its own classpath. */
+    private static void addOnce(JavaExec exec, Provider<StageWrightBuildIdService> service) {
         if (exec.getJvmArgumentProviders().stream().noneMatch(p -> p instanceof BuildIdArgument)) {
-            exec.getJvmArgumentProviders().add(build);
-            exec.usesService(build.service());
+            // MOD_CLASSES alone: the rest of the environment would be stored in the configuration cache.
+            Object modClasses = exec.getEnvironment().get("MOD_CLASSES");
+            exec.getJvmArgumentProviders().add(new BuildIdArgument(service, exec.getPath(),
+                    SideProcesses.resolveClasspath(exec),
+                    modClasses == null ? Map.of() : Map.of("MOD_CLASSES", String.valueOf(modClasses)),
+                    SideProcesses.lateBoundEnvironmentProperties(exec)));
+            exec.usesService(service);
         }
     }
 

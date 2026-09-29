@@ -266,7 +266,7 @@ Exactly one, first:
 | `worldPin` | string | only when pinned | One line naming the world state held still. |
 | `registryError` | string | only when the registry could not be built | Why; `registered` is then empty and nothing ran. See *Scene discovery*. |
 | `startedAt` | number | always | Epoch milliseconds when the run started. The attached runner writes its header last, so this is not when the header was written. |
-| `build` | string | only when the launcher named one | The code this run tested: `git:<HEAD>` or `git:<HEAD>+<digest>` from the Gradle plugin, each part the first 12 hex digits: of the commit, and of a SHA-256 over the uncommitted changes to tracked files. Taken once per build, when its first run starts; compare it whole, not against a full commit hash. Passed in as `-Dstagewright.build`. Neither the command-line runner nor the attached runner names one. |
+| `build` | string | only when the launcher named one | The code this run tested: `git:<HEAD>` or `git:<HEAD>+<digest>` from the Gradle plugin, each part the first 12 hex digits: of the commit, and of a SHA-256 over the uncommitted changes to tracked files. Taken once per build, when its first run that git gives one to starts; a run started after the tree changed within the build records `changed during build <nonce>: <first> -> <now>` instead, `<now>` being `unknown` when git could not read the tree, with a nonce drawn for that run, so it matches no other run. Compare it whole, not against a full commit hash. Passed in as `-Dstagewright.build`. Neither the command-line runner nor the attached runner names one. |
 | `scenesDir` | string | only when the launcher named one | The directory this run read scenes and capability descriptors from, as passed in with `-Dstagewright.scenesDir`. A named directory that is not there when the suite is assembled is a `registryError`, which this header then carries beside `scenesDir`. A launcher that named one and finds it absent here was running a StageWright too old to read the property, which ran none of those scenes. |
 
 The optional keys appear only when they have a value. A stream that does not pin a world — an
@@ -461,7 +461,9 @@ refused, because the two results files would share one label.
 Results files whose headers name different `build`s are not reconciled either: coverage is ENV under
 `MIXED BUILDS`, followed by one line per file naming its build, because a scene that executed only
 in a run of other code has not been tested in this one. Files with no `build` match each other, and
-are never reconciled with a file that has one.
+are never reconciled with a file that has one. The last line says what to re-run: the topologies
+whose build is not the one being judged, or the whole gate on a tree nobody edits meanwhile when a
+build starts `changed during build`, which no re-run of one topology can match.
 
 When more than one of these holds, only the first is reported, in this order: `FILTERED`,
 `NO EVIDENCE`, `MIXED BUILDS`. A filtered run's registered list is not counted, so the other two

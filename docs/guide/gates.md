@@ -235,10 +235,13 @@ whose own name is another topology's companion label is refused, since one of th
 would otherwise drop out of the reconciliation.
 
 Results from different code are not reconciled. Each gate passes the game a build id taken from the
-git work tree once per build, when its first run starts — HEAD, plus a digest of uncommitted changes
-to tracked files — and the header records it; every run and companion in one build gets the same id.
-When the files disagree, the reconciliation is ENV and lists each file's build, so a topology last
-run a week ago is re-run rather than counted. The id covers what git tracks, including edits inside
+git work tree once per build, when its first run that git gives one to starts — HEAD, plus a digest
+of uncommitted changes to tracked files — and the header records it; every run and companion in one
+build gets the same id. One that starts after the tree changed since then, or when git cannot read
+it, may have compiled a change or not, so it records a build that names both states and matches no
+other run, and coverage stays ENV until the gate is re-run on a tree nobody edits meanwhile. When
+the files disagree, the reconciliation is ENV and lists each file's build, so a topology last run a
+week ago is re-run rather than counted. The id covers what git tracks, including edits inside
 submodules and edits to or deletions of files marked `assume-unchanged` or `skip-worktree`, and one
 change gets one id on every machine, whatever diff settings the project's repository has there,
 except what a machine's own attributes say about a file: a diff driver's function-name pattern, or a
@@ -250,6 +253,13 @@ every file: an edit to a marked file is named by its content's hash rather than 
 file does not change it. A project git does not track records no build, so coverage cannot tell its
 runs apart by code: files with no build match each other, and a file with no build is never
 reconciled with one that has a build.
+
+A tracked file that the game or a build task rewrites once the build's first run has started, such
+as `server.properties` under a game directory or a checked-in source a task generates, changes the
+tree under every run after it, so coverage is ENV for that gate. One rewritten with the same bytes
+each time matches from the next gate on, once the tree already holds them; one rewritten differently
+each time, as `server.properties` is with the date the game writes into it, keeps coverage ENV
+however often the gate is re-run. Keep game directories and generated files out of git.
 
 For a pack tested through the standalone command-line runner, the same reconciliation is available
 without a build tool:

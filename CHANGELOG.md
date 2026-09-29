@@ -12,6 +12,18 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-29
 
+### A run started after the tree changed in its build matches no other run · green in a Gradle TestKit build
+
+The Gradle plugin took the build id once per build, when the first run started, and handed that id
+to every later run too. A later run in a long gate that compiled a source edited meanwhile then
+recorded the id of code it did not test, and coverage reconciled it with the runs before the edit.
+Each run now takes the tree again as it starts. One that finds it changed since the build's id was
+taken records `changed during build <nonce>: <first> -> <now>`, which no other run in this build or
+any other matches, and so does one git cannot read the tree for once the build has an id, with
+`unknown` as `<now>`; the plugin warns, and coverage is ENV under `MIXED BUILDS`, advising a re-run
+of the whole gate on a tree nobody edits meanwhile. The tree alone cannot say whether that run
+compiled the change, so neither id is right for it. A companion takes the id once, as it starts.
+
 ### An edit to a file git is told to overlook changes the build id · green in unit tests
 
 `git diff` takes a tracked file marked `assume-unchanged` or `skip-worktree` at its index content,

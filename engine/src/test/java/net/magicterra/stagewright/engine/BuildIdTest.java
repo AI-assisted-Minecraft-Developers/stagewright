@@ -308,6 +308,44 @@ class BuildIdTest {
                 List.of("git", "ls-files", "-v")), java.nio.charset.StandardCharsets.UTF_8).trim());
     }
 
+    @Test
+    void writtenSinceFindsWhatARunLoadsThatChangedAndNothingElse(@TempDir Path root) throws Exception {
+        Path classes = Files.createDirectories(root.resolve("classes/pkg"));
+        Path jar = Files.writeString(root.resolve("lib.jar"), "jar");
+        Path klass = Files.writeString(classes.resolve("A.class"), "a");
+        long t = System.currentTimeMillis() - 60_000;
+        for (Path p : List.of(klass, classes, classes.getParent(), jar)) {
+            Files.setLastModifiedTime(p, java.nio.file.attribute.FileTime.fromMillis(t - 1_000));
+        }
+        List<java.io.File> classpath = List.of(classes.getParent().toFile(), jar.toFile(),
+                root.resolve("missing").toFile());
+        assertNull(BuildId.writtenSince(classpath, t));
+
+        Files.setLastModifiedTime(klass, java.nio.file.attribute.FileTime.fromMillis(t + 1_000));
+        assertEquals(klass, BuildId.writtenSince(classpath, t));
+        Files.setLastModifiedTime(klass, java.nio.file.attribute.FileTime.fromMillis(t - 1_000));
+        Files.setLastModifiedTime(jar, java.nio.file.attribute.FileTime.fromMillis(t + 1_000));
+        assertEquals(jar, BuildId.writtenSince(classpath, t));
+    }
+
+    @Test
+    void writtenSinceLooksThroughAClasspathEntryThatIsASymlink(@TempDir Path root) throws Exception {
+        assumeTrue(!System.getProperty("os.name").startsWith("Windows"), "needs symlinks");
+        Path real = Files.createDirectories(root.resolve("real"));
+        Path klass = Files.writeString(real.resolve("A.class"), "a");
+        Path link = Files.createSymbolicLink(root.resolve("classes"), real);
+        long t = System.currentTimeMillis() - 60_000;
+        for (Path p : List.of(klass, real)) {
+            Files.setLastModifiedTime(p, java.nio.file.attribute.FileTime.fromMillis(t - 1_000));
+        }
+        Files.getFileAttributeView(link, java.nio.file.attribute.BasicFileAttributeView.class,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS).setTimes(
+                java.nio.file.attribute.FileTime.fromMillis(t - 1_000), null, null);
+        assertNull(BuildId.writtenSince(List.of(link.toFile()), t));
+        Files.setLastModifiedTime(klass, java.nio.file.attribute.FileTime.fromMillis(t + 1_000));
+        assertTrue(BuildId.writtenSince(List.of(link.toFile()), t) != null);
+    }
+
     private static int sh(Path dir, String script) throws Exception {
         return new ProcessBuilder("sh", "-c", script).directory(dir.toFile()).inheritIO().start().waitFor();
     }
