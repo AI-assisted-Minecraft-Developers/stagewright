@@ -124,7 +124,8 @@ executed. The runner now stops at the scene during which the connection was lost
 that scene's body caught the failure. That scene fails even if its body went on to pass or skip, and
 its reason names the loss. It records every scene after it as a FAIL marked `"bodyRan":false`, whose
 reason names that scene, so coverage counts them as holes. The run is RED, even when the scenes
-involved are optional.
+involved are optional, and the results file says so: its done footer carries `cutShort` with the
+loss, which the verdict judges RED, so the file read on its own does not come out GREEN.
 
 ### Builds are numbered, tested by CI and published to a public Nexus · the four builds and WorldDriver's run in order against build 0 on this machine
 

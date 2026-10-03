@@ -333,6 +333,15 @@ reached the disk.
 A verdict implementation that finds no `scenes` field in the footer skips that check rather than
 failing: the contract does not oblige a third-party harness to carry it.
 
+A footer may carry `cutShort`, a string, when the writer stopped before running everything it was
+given and wrote the rest as not run; the attached runner writes it when the connection to the
+driver is lost. Present and non-empty, it is RED whatever the records say, since the scenes left
+unrun may all be optional. Absent, nothing was cut short.
+
+```json
+{"type":"done","scenes":3,"cutShort":"the connection to the driver was lost during 'pack.first' (transport error: closed)"}
+```
+
 Failure to write the results file throws. A run whose outcomes are not being recorded must never
 be allowed to look green.
 
@@ -488,7 +497,7 @@ results files can take the worse of the two.
 | Code | Label | Meaning |
 |---|---|---|
 | 0 | GREEN | Header and footer present, every required non-canary scene passed or failed while optional, every canary landed on the outcome it declared. |
-| 1 | RED | A required scene failed, a scene was never recorded, records drifted or duplicated, the footer disagreed with the file, or reconciliation against the manifest failed. Also: no footer, and a header carrying `registryError` — the game armed but could not assemble the suite. For the attached half, also a connection to the driver lost partway, which the runner decides: the reasons of the scenes involved name the loss, but no field marks it, so judged by its records alone a file whose scenes are all optional would read GREEN. |
+| 1 | RED | A required scene failed, a scene was never recorded, records drifted or duplicated, the footer disagreed with the file, or reconciliation against the manifest failed. Also: no footer, and a header carrying `registryError` — the game armed but could not assemble the suite. Also a footer carrying `cutShort`, which the attached half writes when the connection to the driver is lost partway, even if every scene involved is optional. |
 | 2 | DEAD | A canary landed on the wrong outcome. The framework can no longer be trusted to catch failures, so the whole run's results are void rather than merely bad. |
 | 3 | ENV | No suite header — the game never armed. Also reported when the results file is absent entirely, and under `--attached` when `mc.test.run` did not go through, which leaves the in-process half unjudged. |
 

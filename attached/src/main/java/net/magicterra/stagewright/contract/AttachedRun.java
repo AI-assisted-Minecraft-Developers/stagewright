@@ -77,7 +77,7 @@ public final class AttachedRun {
         // them. Writing the file first and failing after keeps the evidence: the empty file is on
         // disk, so the diagnosis is "it found no scenes" rather than "it produced nothing".
         if (scenes.isEmpty()) {
-            write(resultsFile, records, startedAt);
+            write(resultsFile, records, startedAt, null);
             log.accept("RED: no attached scenes were registered — a run that tested nothing is not a"
                     + " pass. Check that --attached points at a directory containing .js files.");
             return false;
@@ -173,7 +173,10 @@ public final class AttachedRun {
             }
         }
 
-        write(resultsFile, records, startedAt);
+        // In the file as well as in the return value: judged from its records alone, a run whose scenes
+        // are all optional would otherwise read GREEN however early the connection went.
+        write(resultsFile, records, startedAt, lostDuring == null ? null
+                : "the connection to the driver was lost during '" + lostDuring + "' (" + lost[0].error() + ")");
         return allGood;
     }
 
@@ -226,7 +229,7 @@ public final class AttachedRun {
                 + " gives it the world it asked for.");
     }
 
-    private void write(Path resultsFile, List<Map<String, Object>> records, long startedAt) {
+    private void write(Path resultsFile, List<Map<String, Object>> records, long startedAt, String cutShort) {
         try {
             Path parent = resultsFile.toAbsolutePath().getParent();
             if (parent != null) Files.createDirectories(parent);
@@ -255,6 +258,7 @@ public final class AttachedRun {
                 Map<String, Object> done = new LinkedHashMap<>();
                 done.put("type", "done");
                 done.put("scenes", records.size());
+                if (cutShort != null) done.put("cutShort", cutShort);
                 w.write(GSON.toJson(done));
                 w.write('\n');
             }

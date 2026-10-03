@@ -138,6 +138,14 @@ public final class Verdict {
 
         int code = 0;
 
+        // The writer stopped before running everything it was given, and said why. RED whatever the
+        // records say: the scenes it never reached may all be optional, and the run still did not happen.
+        String cutShort = str(done.get("cutShort"));
+        if (!cutShort.isBlank()) {
+            code = 1;
+            report.add("CUT SHORT: " + cutShort);
+        }
+
         for (String name : new TreeSet<>(counts.keySet())) {
             if (counts.get(name) > 1) {
                 code = Math.max(code, 1);
