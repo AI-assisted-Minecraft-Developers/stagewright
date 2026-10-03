@@ -127,7 +127,7 @@ Only these, and only in the cases named:
 | `stagewright.results` | Only when `resultsFile` differs from the default. |
 | `stagewright.scenes` | Only when `-Pstagewright.scenes=<patterns>` is on the command line. |
 | `stagewright.hold`, `stagewright.topology`, `stagewright.endpoint` | Only on a hold task. |
-| `stagewright.build` | On every run task that is a `JavaExec`, and its companion, when the project is a git work tree. Taken once per build, when its first run that git gives one to starts, so every run in the build carries the same id, unless the tree changed, or git could not read it, before it started: then it carries one that matches no other run. |
+| `stagewright.build` | On every run task that is a `JavaExec`, and its companion, when the project is a git work tree. Taken once per build, when its first run that git gives one to starts, so every run in the build carries the same id, unless the tree changed, or git could not read it, before it started and something on its classpath, or in the class directories its `MOD_CLASSES` names, was written since the tree last read as that id: then it carries one that matches no other run. |
 
 No environment variable is added. The display check reads the environment the game gets: the run
 task's own plus what its loader binds at launch. A companion starts with exactly that environment of
