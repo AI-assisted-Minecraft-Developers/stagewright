@@ -86,11 +86,25 @@ public final class StageWrightCommon {
     private static int consecutiveCadenceTicks;
     private static long lastTickNanos;
 
+    /** Why the client's verbs last failed to register, so a tick-by-tick retry logs each reason once. */
+    private static volatile String clientVerbFailure;
+
     private StageWrightCommon() {}
 
-    /** A joining client has its own API and never receives a local SERVER_STARTED event. */
+    /**
+     * A joining client has its own API and never receives a local SERVER_STARTED event. Called every
+     * client tick, so a failure is logged and retried rather than thrown into the game's tick.
+     */
     public static void onClientWorldReady() {
-        DriverRuntime.registerVerbs();
+        try {
+            DriverRuntime.registerVerbs();
+            clientVerbFailure = null;
+        } catch (RuntimeException e) {
+            String why = e.toString();
+            if (why.equals(clientVerbFailure)) return;
+            clientVerbFailure = why;
+            LOG.error("[{}] the mc.test.* verbs are not registered on this client; retrying each tick", MOD_ID, e);
+        }
     }
 
     /**
