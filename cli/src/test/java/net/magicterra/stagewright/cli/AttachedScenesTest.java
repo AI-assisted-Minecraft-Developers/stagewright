@@ -78,15 +78,18 @@ class AttachedScenesTest {
         };
         Path log = dir.resolve("stagewright-run.log");
         List<String> out = new ArrayList<>();
-        assertEquals(3, Main.inProcessCode(false, neverJudged, null, log, out::add));
+        assertEquals(3, Main.inProcessCode(false, neverJudged, () -> null, log, out::add));
         assertTrue(out.contains("[stagewright] log: " + log), out.toString());
 
         // A crash report is the game's own account, and what a reader should open first.
         Path crash = dir.resolve("crash-reports/crash-server.txt");
         out.clear();
-        assertEquals(3, Main.inProcessCode(false, neverJudged, crash, log, out::add));
+        assertEquals(3, Main.inProcessCode(false, neverJudged, () -> crash, log, out::add));
         assertTrue(out.stream().anyMatch(l -> l.endsWith(crash.toString())), out.toString());
 
-        assertEquals(1, Main.inProcessCode(true, () -> 1, null, log, out::add));
+        // Judged, the crash directory is the judge's to read, not listed again here.
+        assertEquals(1, Main.inProcessCode(true, () -> 1, () -> {
+            throw new AssertionError("looked for a crash report for a suite that was judged");
+        }, log, out::add));
     }
 }

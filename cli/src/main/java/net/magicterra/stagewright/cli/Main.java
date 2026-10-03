@@ -812,7 +812,7 @@ public final class Main {
 
         Waited finished = waited;
         int inProcess = inProcessCode(triggered, () -> judge(run, runLog, crashes, finished).code(),
-                crashes.fresh(), runLog, System.out::println);
+                crashes::fresh, runLog, System.out::println);
         // Worst-wins across the two files, the same rule the companion client already gets:
         // GREEN 0 < RED 1 < DEAD 2 < ENV 3. Reporting only the in-process verdict would let a red
         // attached half ride home on a green suite.
@@ -866,12 +866,13 @@ public final class Main {
     }
 
     /** The in-process half's code: judged when mc.test.run went through, ENV when it did not. */
-    static int inProcessCode(boolean triggered, Judgement judgement, Path crashReport, Path log,
-                             Consumer<String> out) throws IOException {
+    static int inProcessCode(boolean triggered, Judgement judgement, java.util.function.Supplier<Path> crashes,
+                             Path log, Consumer<String> out) throws IOException {
         if (triggered) return judgement.code();
         // Not judged: without the call there is no suite this run asked for, and judging whatever file
         // is there would guess at causes — a jar that did not load, a server that never ticked.
         out.accept("[stagewright] VERDICT: " + Verdict.LABELS[3] + " (mc.test.run did not go through)");
+        Path crashReport = crashes.get();
         out.accept(crashReport != null
                 ? "[stagewright] the game crashed during the run, and said why itself: " + crashReport
                 : "[stagewright] log: " + log);
