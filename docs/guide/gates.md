@@ -238,28 +238,33 @@ Results from different code are not reconciled. Each gate passes the game a buil
 git work tree once per build, when its first run that git gives one to starts — HEAD, plus a digest
 of uncommitted changes to tracked files — and the header records it; every run and companion in one
 build gets the same id. One that starts after the tree changed since then, or when git cannot read
-it, may have compiled a change or not, so it records a build that names both states and matches no
-other run, and coverage stays ENV until the gate is re-run on a tree nobody edits meanwhile. When
+it, is judged by what it loads: if nothing on its classpath or in the class directories its
+`MOD_CLASSES` names was written since the tree last read as
+the build's id, its code was built from that tree, and it gets the build's id. Otherwise it may
+have loaded a change or not, so it records a build that names both states and matches no other run,
+and coverage stays ENV until the gate is re-run on a tree nobody edits meanwhile. So an edit to a
+note or a doc mid-gate costs nothing, while one followed by a compile the later run loads does. When
 the files disagree, the reconciliation is ENV and lists each file's build, so a topology last run a
 week ago is re-run rather than counted. The id covers what git tracks, including edits inside
-submodules and edits to or deletions of files marked `assume-unchanged` or `skip-worktree`, and one
-change gets one id on every machine, whatever diff settings the project's repository has there,
-except what a machine's own attributes say about a file: a diff driver's function-name pattern, or a
-`-diff` or `binary` attribute, can still make git print one change its own way, which gives that
-change a second id and so reads as MIXED BUILDS, never as a match. So can a file marked
-`assume-unchanged` or `skip-worktree` on one machine and not on another, as `core.ignoreStat` marks
-every file: an edit to a marked file is named by its content's hash rather than by its diff. A
-`skip-worktree` file a sparse checkout leaves out is not a deletion. A change only to an untracked
-file does not change it. A project git does not track records no build, so coverage cannot tell its
+submodules and edits to or deletions of files marked `assume-unchanged` or `skip-worktree`, which
+are compared as though unmarked, and one change gets one id on every machine whatever the settings
+the build id pins, except where a hunk's function-name context or a file's diffability comes from
+the machine: a function-name pattern a machine's config gives a diff driver, the built-in patterns
+of another git version, or a machine's own `-diff` or `binary` attribute can still make git print
+one change its own way, which gives that change a second id and so reads as MIXED BUILDS, never as
+a match. A `skip-worktree` file a sparse checkout leaves out is not a deletion. A change only to an
+untracked file does not change it. A project git does not track records no build, so coverage cannot tell its
 runs apart by code: files with no build match each other, and a file with no build is never
 reconciled with one that has a build.
 
-A tracked file that the game or a build task rewrites once the build's first run has started, such
-as `server.properties` under a game directory or a checked-in source a task generates, changes the
-tree under every run after it, so coverage is ENV for that gate. One rewritten with the same bytes
-each time matches from the next gate on, once the tree already holds them; one rewritten differently
-each time, as `server.properties` is with the date the game writes into it, keeps coverage ENV
-however often the gate is re-run. Keep game directories and generated files out of git.
+A tracked file that the game or a build task rewrites, such as `server.properties` under a game
+directory or a checked-in source a task generates, changes the tree each gate starts from. Within a
+build that costs nothing unless a later run's classpath was written since, as it is when the file is
+a generated source. Across gates, one rewritten with the same bytes each time matches from the next
+gate on, once the tree already holds them; one rewritten differently each time, as
+`server.properties` is with the date the game writes into it, gives every gate an id of its own and
+keeps coverage across them ENV however often they are re-run. Keep game directories and generated
+files out of git.
 
 A topology whose run task is not a `JavaExec` records no build: the plugin has no JVM command line
 to put the id on, and says so when it wires the run. A `JavaExec` companion of that run still records
@@ -273,18 +278,24 @@ The build id does not see everything. These can give two different trees one id:
 - A submodule's changes are printed without the pinned flags, so a diff driver or `diff.external`
   configured for it can give two different edits there one id, and a file marked
   `assume-unchanged` or `skip-worktree` inside it is not read at all.
-- A marked symlink pointed elsewhere, or a marked file whose executable bit alone changed, does not
-  change the id; a marked file replaced by a symlink changes it, whatever the link points to.
 - A `skip-worktree` file missing from a sparse checkout is taken as left out, even where the sparse
   rules include it.
 - A gate started from a git hook takes the id of the repository the hook exported to it, such as
   the index a commit is being built in, rather than that of the project.
+- A run started after the tree changed is checked against its classpath and the class directories
+  `MOD_CLASSES` names, so code it loads from anywhere else, a mods folder named on its command line
+  say, can change unseen.
+- An edit compiled into a later run's classes and then undone before any run read the tree is not
+  seen: the next read finds the tree as it was, and vouches for everything written until then.
 
 These only give one tree a second id, or none, which reads as ENV: the diff settings a submodule's
 changes are printed with, and the commits naming a moved submodule, which `core.abbrev` or the size
-of the repository shortens; `GIT_DIFF_OPTS` in the environment; a marked file whose name is not
-UTF-8, or which the JVM cannot encode or Windows cannot hold, which gives no build; and a git from
-MSYS or Cygwin, whose work-tree path the JVM cannot use.
+of the repository shortens; `GIT_DIFF_OPTS` in the environment; a clean filter a marked file's
+attributes name, which the diff now runs as for any file, failing on a machine without it, which
+gives no build; a `skip-worktree` file of a sparse checkout whose name is not UTF-8, taken as present
+and so, left out, read as deleted; a run started after the tree changed whose classpath was written
+since for some other reason, such as a compile of a file the edit did not touch; and a git from MSYS
+or Cygwin, whose work-tree path the JVM cannot use.
 
 For a pack tested through the standalone command-line runner, the same reconciliation is available
 without a build tool:

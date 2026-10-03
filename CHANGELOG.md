@@ -12,40 +12,53 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-29
 
-### A run started after the tree changed in its build matches no other run · green in a Gradle TestKit build
+### A run that may have loaded a change made during its build matches no other run · green in a Gradle TestKit build
 
 The Gradle plugin took the build id once per build, when the first run started, and handed that id
 to every later run too. A later run in a long gate that compiled a source edited meanwhile then
 recorded the id of code it did not test, and coverage reconciled it with the runs before the edit.
-Each run now takes the tree again as it starts. One that finds it changed since the build's id was
-taken records `changed during build <nonce>: <first> -> <now>`, which no other run in this build or
-any other matches, and so does one git cannot read the tree for once the build has an id, with
-`unknown` as `<now>`; the plugin warns, and coverage is ENV under `MIXED BUILDS`, advising a re-run
-of the whole gate on a tree nobody edits meanwhile. The tree alone cannot say whether that run
-compiled the change, so neither id is right for it. A companion takes the id once, as it starts.
+Each run now takes the tree again as it starts. Where it is unchanged, the run takes the build's id.
+Where it changed, or git cannot read it, the run is judged by what it loads rather than by the tree:
+if nothing on its classpath, or in the class directories `MOD_CLASSES` hands a NeoForge game, was
+written since the tree last read as the build's id, before any read found it otherwise, its code was
+built from that tree and it takes the build's id, so an edit to a file no build reads, such as a
+note or a doc another session saves mid-gate, or git timing out once, costs nothing. Otherwise it
+records `changed during build <nonce>: <first> -> <now>`, `<now>` being `unknown` when git could
+not read the tree, which no other run in this build or any other matches; the plugin warns, naming
+the run and a file written since, and coverage is ENV under `MIXED BUILDS`, advising a re-run of the
+whole gate on a tree nobody edits meanwhile. A run and its companion each take the id once, as they
+start, however often their command line is asked for.
 
 ### An edit to a file git is told to overlook changes the build id · green in unit tests
 
 `git diff` takes a tracked file marked `assume-unchanged` or `skip-worktree` at its index content,
 so editing or deleting one left the build id of the unedited tree, and coverage could reconcile runs
-of the two as one build. Such a file whose content differs from the index now changes the id, and so
-does one deleted or replaced by something that is not a file. A `skip-worktree` file missing from a
-sparse checkout does not, since leaving it out is what the sparse checkout is for; missing from a
-work tree that is not sparse, it counts as deleted.
+of the two as one build. The diff is now taken against a copy of the index with those marks removed,
+so a marked file is compared the way every other file is: its content, line endings, executable bit
+and symlink target count, and a file committed with CRLF is no edit where `core.autocrlf` is on,
+just as `git diff` has it. The repository's own index keeps its marks. A `skip-worktree` file
+missing from a sparse checkout keeps its mark too, since leaving it out is what the sparse checkout
+is for; missing from a work tree that is not sparse, it counts as deleted.
 
-### One change gets one build id whatever the machine's diff settings, and is hashed as it is read · green in unit tests
+### One change gets one build id whatever the diff settings a machine has · green in unit tests
 
 The build id's digest is taken over the bytes `git diff` prints, and a machine's diff settings
 change those bytes for the same change: `diff.noprefix`, `diff.mnemonicPrefix`, `diff.srcPrefix` and
 `diff.dstPrefix`, `diff.context`, `diff.interHunkContext`, `diff.algorithm`, `diff.indentHeuristic`,
-`diff.renames`, `diff.orderFile`, `diff.suppressBlankEmpty`, `core.quotePath` and `core.abbrev`. Two
-machines with the same uncommitted change then recorded different builds, and coverage across their
-runs was ENV under `MIXED BUILDS`. All of them are now pinned for the project's own files, and so is
-the algorithm a diff driver bound by attributes sets for itself. A binary change is named by the
-hash of its new content rather than by its patch, which `core.compression` and the zlib git was
-built with each made different. The diff was also read into memory whole before it was hashed, so a
-work tree with large changed binaries could run the Gradle daemon out of heap; it is now hashed a
-chunk at a time.
+`diff.renames`, `diff.orderFile`, `diff.suppressBlankEmpty`, `core.quotePath`, `core.abbrev` and
+`core.bigFileThreshold`, above which a text file prints as binary. Two machines with the same
+uncommitted change then recorded different builds, and coverage across their runs was ENV under
+`MIXED BUILDS`. All of them are now pinned for the project's own files, and so is the algorithm a
+diff driver bound by attributes sets for itself. A binary change is named by the hash of its new
+content rather than by its patch, which `core.compression` and the zlib git was built with each made
+different. A hunk's function-name context is not pinned: a pattern one machine's config gives a diff
+driver, or another git version's built-in one, still gives the change a second id, read as ENV.
+
+### A diff larger than the heap no longer runs the Gradle daemon out of memory · green in unit tests
+
+The diff the build id is taken over was read into memory whole before it was hashed, so a work tree
+with large changed binaries could run the Gradle daemon out of heap. It is now hashed a chunk at a
+time from the temporary file git writes it to, which needs disk for the diff rather than heap.
 
 ### A companion whose loader left a JVM argument unset says so · green in unit tests
 
