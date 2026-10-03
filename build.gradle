@@ -46,6 +46,12 @@ allprojects {
     version = rootProject.stagewrightVersion
 }
 
+// One Architectury transform at a time: they pass their classpath through JVM-wide system
+// properties. See docs/reference/publishing.md, "The Architectury transforms run one at a time".
+def architecturyTransforms = gradle.sharedServices.registerIfAbsent('architecturyTransforms', BuildService) {
+    maxParallelUsages = 1
+}
+
 subprojects {
     // Before the pure-JVM early return below: those two modules publish too.
     apply from: rootProject.file('gradle/license.gradle')
@@ -68,6 +74,10 @@ subprojects {
     apply plugin: 'dev.architectury.loom'
     apply plugin: 'architectury-plugin'
     apply plugin: 'maven-publish'
+
+    tasks.withType(dev.architectury.plugin.TransformingTask).configureEach {
+        usesService(architecturyTransforms)
+    }
 
     base {
         archivesName = "$rootProject.archives_name-$project.name"
