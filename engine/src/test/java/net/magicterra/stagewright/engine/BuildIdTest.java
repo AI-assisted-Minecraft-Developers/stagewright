@@ -94,6 +94,18 @@ class BuildIdTest {
     }
 
     @Test
+    void outputLargerThanOneChunkIsHashedWhole() throws Exception {
+        // Hashed a chunk at a time rather than read whole, so every chunk has to reach the digest.
+        byte[] output = new byte[5_000_007];
+        new java.util.Random(7).nextBytes(output);
+        java.security.MessageDigest streamed = BuildId.digest();
+        assertEquals(output.length,
+                BuildId.hashingInto(streamed).read(new java.io.ByteArrayInputStream(output)));
+        assertEquals(java.util.HexFormat.of().formatHex(BuildId.digest().digest(output)),
+                java.util.HexFormat.of().formatHex(streamed.digest()));
+    }
+
+    @Test
     void aCommandThatHangsIsGivenUpOnAtTheTimeout(@TempDir Path dir) {
         long start = System.nanoTime();
         assertNull(BuildId.run(dir, Duration.ofMillis(500), List.of("sleep", "30")));

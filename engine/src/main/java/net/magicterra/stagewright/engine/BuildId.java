@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.engine;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,11 +35,15 @@ public final class BuildId {
         if (git(dir, "ls-files", "--error-unmatch", "--", ".") == null) return null;
         // Every flag pins something user config or a submodule could otherwise hide, making a real
         // change read as clean: a diff driver, a relative diff, a submodule collapsed to "-dirty".
-        byte[] diff = git(dir, "-c", "diff.relative=false", "diff", "HEAD", "--binary", "--no-ext-diff",
-                "--no-textconv", "--no-color", "--submodule=diff", "--ignore-submodules=untracked");
-        if (diff == null) return null;
+        List<String> diff = List.of("git", "-c", "diff.relative=false", "diff", "HEAD", "--binary",
+                "--no-ext-diff", "--no-textconv", "--no-color", "--submodule=diff", "--ignore-submodules=untracked");
+        MessageDigest digest = digest();
+        // Not held in memory, since a diff can be larger than the heap: git writes it to a temporary
+        // file, which is hashed a chunk at a time.
+        Long length = run(dir, GIT_TIMEOUT, diff, hashingInto(digest));
+        if (length == null) return null;
         String id = "git:" + new String(head, StandardCharsets.UTF_8).trim().substring(0, 12);
-        return diff.length == 0 ? id : id + "+" + hex(digest().digest(diff));
+        return length == 0 ? id : id + "+" + hex(digest.digest());
     }
 
     /** Stdout of a git command that exited 0, or null for any failure, including git being absent. */
@@ -54,6 +59,27 @@ public final class BuildId {
      * timeout would only start counting after a hung command had already been waited out.
      */
     static byte[] run(Path dir, Duration timeout, List<String> command) {
+        return run(dir, timeout, command, InputStream::readAllBytes);
+    }
+
+    /** Feeds stdout to {@code digest} a chunk at a time and answers how many bytes there were. */
+    static Output<Long> hashingInto(MessageDigest digest) {
+        return stdout -> {
+            long length = 0;
+            byte[] chunk = new byte[64 * 1024];
+            for (int n; (n = stdout.read(chunk)) > 0; length += n) digest.update(chunk, 0, n);
+            return length;
+        };
+    }
+
+    /** What to make of a command's stdout, read from the start. */
+    @FunctionalInterface
+    interface Output<T> {
+        T read(InputStream stdout) throws IOException;
+    }
+
+    /** {@link #run} handing stdout to {@code output} rather than reading it whole. */
+    static <T> T run(Path dir, Duration timeout, List<String> command, Output<T> output) {
         Path out = null;
         try {
             out = Files.createTempFile("stagewright-build-id", ".out");
@@ -64,24 +90,30 @@ public final class BuildId {
                 p.destroyForcibly();
                 return null;
             }
-            return p.exitValue() == 0 ? Files.readAllBytes(out) : null;
+            if (p.exitValue() != 0) return null;
+            try (InputStream stdout = Files.newInputStream(out)) {
+                return output.read(stdout);
+            }
         } catch (IOException e) {
             return null;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;
         } finally {
-            if (out != null) {
-                try {
-                    Files.deleteIfExists(out);
-                } catch (IOException ignored) {
-                    // a leftover temp file is not worth failing the run over
-                }
-            }
+            deleteQuietly(out);
         }
     }
 
-    private static MessageDigest digest() {
+    private static void deleteQuietly(Path temporary) {
+        if (temporary == null) return;
+        try {
+            Files.deleteIfExists(temporary);
+        } catch (IOException ignored) {
+            // a leftover temp file is not worth failing the run over
+        }
+    }
+
+    static MessageDigest digest() {
         try {
             return MessageDigest.getInstance("SHA-256");
         } catch (NoSuchAlgorithmException e) {
