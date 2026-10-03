@@ -44,6 +44,32 @@ class DriverRequirementTest {
     }
 
     @Test
+    void anUnrelatedModsMetadataIsLeftToItsLoader(@TempDir Path tmp) throws IOException {
+        TestModJar.driver(tmp.resolve("mods/driver.jar"), "driver");
+        List<String> shapes = List.of("{\"schemaVersion\":1}", "[]", "{\"id\":null}", "{\"id\":7}", "{not json",
+                "{\"id\":\"other\",\"depends\":[\"worlddriver\"]}", "﻿{\"id\":\"other\"}");
+        for (int i = 0; i < shapes.size(); i++) {
+            TestModJar.withMetadata(tmp.resolve("mods/odd" + i + ".jar"), shapes.get(i), false);
+        }
+        assertDoesNotThrow(() -> DriverRequirement.check(tmp, "fabric", List.of(), true));
+    }
+
+    @Test
+    void ourOwnMetadataIsReadPastAByteOrderMark(@TempDir Path tmp) throws IOException {
+        TestModJar.withMetadata(tmp.resolve("mods/driver.jar"), "﻿{\"schemaVersion\":1,\"id\":\"worlddriver\","
+                + "\"version\":\"0.1.0-build.1+1.21.1\"}", false);
+        assertDoesNotThrow(() -> DriverRequirement.check(tmp, "fabric", List.of(), true));
+    }
+
+    @Test
+    void aJarThatOnlyReadsThroughItsDirectoryIsStillRead(@TempDir Path tmp) throws IOException {
+        // A stored entry flagged with a data descriptor: ZipInputStream refuses it, ZipFile does not.
+        TestModJar.withMetadata(tmp.resolve("mods/driver.jar"), "{\"schemaVersion\":1,\"id\":\"worlddriver\","
+                + "\"version\":\"0.1.0-build.1+1.21.1\"}", true);
+        assertDoesNotThrow(() -> DriverRequirement.check(tmp, "fabric", List.of(), true));
+    }
+
+    @Test
     void generatedRangesAcceptPublishedAndLocalCandidates() {
         for (String range : List.of(">=0.1.0-0 <0.2.0-0", "[0.1.0-0,0.2.0-0)")) {
             for (String version : List.of("0.1.0", "0.1.0-build.12+1.21.1", "0.1.0-build.local+1.21.1", "0.1.12")) {
