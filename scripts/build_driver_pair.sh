@@ -26,6 +26,11 @@ VERSION
 }
 stagewright_candidate="$(candidate_version "$stagewright_root")"
 worlddriver_candidate="$(candidate_version "$worlddriver_root")"
+# A CI step that builds against the pair afterwards reads the versions here instead of deriving them.
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    printf 'stagewright_version=%s\nworlddriver_version=%s\n' \
+        "$stagewright_candidate" "$worlddriver_candidate" >> "$GITHUB_OUTPUT"
+fi
 
 run_step() {
     local repository="$1" label="$2"
