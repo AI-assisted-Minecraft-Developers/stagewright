@@ -70,6 +70,24 @@ class DriverRequirementTest {
     }
 
     @Test
+    void aPackWhoseLoaderCannotBeToldIsReadByItsOwnMetadata(@TempDir Path tmp) throws IOException {
+        TestModJar.create(tmp.resolve("mods/stagewright.jar"), "mc_testkit", "0.1.0-build.1+1.21.1", "framework");
+        IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
+                () -> DriverRequirement.check(tmp, null, List.of(), false));
+        assertTrue(missing.getMessage().contains("requires one compatible WorldDriver"), missing.getMessage());
+        assertFalse(missing.getMessage().contains("null"), missing.getMessage());
+        TestModJar.driver(tmp.resolve("mods/driver.jar"), "driver");
+        assertDoesNotThrow(() -> DriverRequirement.check(tmp, null, List.of(), false));
+    }
+
+    @Test
+    void aLoaderWithNoStageWrightBuildIsRefusedByNameEvenWithoutInstalling(@TempDir Path tmp) {
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> DriverRequirement.check(tmp, "forge", List.of(), false));
+        assertTrue(error.getMessage().contains("not forge"), error.getMessage());
+    }
+
+    @Test
     void generatedRangesAcceptPublishedAndLocalCandidates() {
         for (String range : List.of(">=0.1.0-0 <0.2.0-0", "[0.1.0-0,0.2.0-0)")) {
             for (String version : List.of("0.1.0", "0.1.0-build.12+1.21.1", "0.1.0-build.local+1.21.1", "0.1.12")) {

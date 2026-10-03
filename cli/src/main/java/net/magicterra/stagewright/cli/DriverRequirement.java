@@ -27,8 +27,14 @@ final class DriverRequirement {
     private static final String NEOFORGE_METADATA = "META-INF/neoforge.mods.toml";
     private DriverRequirement() {}
 
+    /**
+     * A null {@code loader} is a pack whose loader could not be told, which only --no-install lets
+     * through: each jar is then read by whichever metadata file it carries. A loader that is told
+     * and has no StageWright build is refused either way.
+     */
     static void check(Path gameDir, String loader, List<Path> extras, boolean bundledFramework) {
-        ModInjection.requireLoader(loader);
+        if (loader != null || bundledFramework) ModInjection.requireLoader(loader);
+        String loaderName = loader == null ? "this pack's loader" : loader;
         List<Mod> mods = new ArrayList<>();
         Path dir = gameDir.resolve("mods");
         if (Files.isDirectory(dir)) {
@@ -51,13 +57,13 @@ final class DriverRequirement {
             } catch (IOException e) { throw new UncheckedIOException(e); }
         }
         if (frameworks.size() != 1) throw new IllegalArgumentException("expected one StageWright mod for "
-                + loader + ", found " + frameworks.size());
+                + loaderName + ", found " + frameworks.size());
         Mod framework = frameworks.get(0);
         if (framework.driverRange() == null) throw new IllegalArgumentException(framework.source()
                 + " does not declare a required WorldDriver dependency; install the current StageWright");
         List<Mod> drivers = mods.stream().filter(m -> m.id().equals("worlddriver")).toList();
-        if (drivers.size() != 1) throw new IllegalArgumentException("StageWright requires one compatible WorldDriver "
-                + loader + " mod, found " + drivers.size() + ". Install it in " + dir + " or pass --mod <worlddriver.jar>");
+        if (drivers.size() != 1) throw new IllegalArgumentException("StageWright requires one compatible WorldDriver mod for "
+                + loaderName + ", found " + drivers.size() + ". Install it in " + dir + " or pass --mod <worlddriver.jar>");
         Mod driver = drivers.get(0);
         if (!accepts(framework.driverRange(), driver.version())) throw new IllegalArgumentException(
                 "WorldDriver " + driver.version() + " in " + driver.source() + " is incompatible with "
@@ -116,6 +122,7 @@ final class DriverRequirement {
     }
 
     private static List<String> metadataPaths(String loader) {
+        if (loader == null) return List.of(FABRIC_METADATA, NEOFORGE_METADATA);
         return List.of(loader.equals("fabric") ? FABRIC_METADATA : NEOFORGE_METADATA);
     }
 
