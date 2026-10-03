@@ -3,6 +3,7 @@ package net.magicterra.stagewright.cli;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,6 +34,18 @@ class DriverRequirementTest {
         Path extra = TestModJar.driver(tmp.resolve("candidate/driver.jar"), "candidate");
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> DriverRequirement.check(tmp, "fabric", List.of(extra), true));
+        assertTrue(error.getMessage().contains("incompatible"), error.getMessage());
+    }
+
+    @Test
+    void aJarReplacedBetweenTwoChecksIsReadAgain(@TempDir Path tmp) throws IOException {
+        Path jar = TestModJar.driver(tmp.resolve("mods/driver.jar"), "driver");
+        assertDoesNotThrow(() -> DriverRequirement.check(tmp, "fabric", List.of(), true));
+        FileTime before = Files.getLastModifiedTime(jar);
+        TestModJar.create(jar, "worlddriver", "0.2.0-build.1+1.21.1", "newer");
+        Files.setLastModifiedTime(jar, FileTime.fromMillis(before.toMillis() + 1000));
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> DriverRequirement.check(tmp, "fabric", List.of(), true));
         assertTrue(error.getMessage().contains("incompatible"), error.getMessage());
     }
 
