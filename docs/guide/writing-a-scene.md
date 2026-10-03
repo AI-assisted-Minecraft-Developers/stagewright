@@ -235,8 +235,10 @@ A cleanup that throws does not stop the others, and it turns a PASS into a FAIL 
 `cleanup failed:`, because a scene that could not undo itself has broken the world the next scene
 starts in. A FAIL or TIMEOUT keeps its own reason, and a skip stays marked as one, so coverage still
 counts it as untested. After `cleanup failed:` comes the cleanup's own `fail` or `expect` message,
-`skipped mid-teardown:` and the reason for a cleanup that skipped, or `unexpected <exception>:` and
-its message for anything else, in both homes.
+`skipped mid-teardown:` and the reason for a cleanup that skipped, a script's own error as it would
+read from the body (`throw new Error('boom')` gives `boom (<file>#<line>)`), or
+`unexpected <exception>:` and the message of the exception the cleanup threw, not of its cause, for
+anything else, in both homes.
 
 A cleanup registered while the cleanups run does not run, in either home: what the cleanups leave is
 how the scene ends. In-process, a restoring helper such as `playerHere()` called from a cleanup
