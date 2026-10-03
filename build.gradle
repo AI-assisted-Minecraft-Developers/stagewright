@@ -25,7 +25,7 @@ architectury {
     minecraft = project.minecraft_version
 }
 
-// worlddriver stays optional, but one that is present must be a release StageWright links against:
+// WorldDriver is required and must be a release StageWright links against:
 // the line of worlddriver_version up to its next breaking release (the next minor while it is 0.x).
 // Both loaders' metadata declare it, so the loader refuses the pair instead of the mc.test.* verbs
 // failing to link at server start. Both bounds end in `-0`, the lowest pre-release of that version:

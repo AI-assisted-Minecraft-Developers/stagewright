@@ -10,7 +10,7 @@ import java.util.Map;
  * RPC websocket and the in-JVM Rhino sandbox all funnel into, with a validation suite asserting all
  * three return byte-identical results. The out-of-process home is a FOURTH caller of that same
  * route, so it inherits the discipline rather than re-deriving a verb surface: in-process the
- * binding reflects into the driver in the same JVM, out-of-process it is a websocket round trip, and
+ * binding directly calls the driver in the same JVM, out-of-process it is a websocket round trip, and
  * the scene cannot tell.
  *
  * <p>That is also why this interface must never grow a second method. A verb that exists here but

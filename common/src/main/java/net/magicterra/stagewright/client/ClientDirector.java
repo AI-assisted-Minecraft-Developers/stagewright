@@ -1,6 +1,8 @@
 package net.magicterra.stagewright.client;
 
 import net.magicterra.stagewright.StageWrightCommon;
+import net.magicterra.stagewright.driver.endpoint.DriverEndpoint;
+import net.magicterra.stagewright.driver.client.ClientProbes;
 import net.magicterra.stagewright.harness.EndpointDescriptor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
@@ -38,12 +40,11 @@ import net.minecraft.world.level.levelgen.presets.WorldPresets;
  *       does, which is what makes the run a production-shaped test rather than a single-JVM one.</li>
  * </ul>
  *
- * <p>With neither property set {@link #arm()} returns false, no tick hook is registered, and an
- * ordinary {@code runClient} is untouched.
+ * <p>With neither property set {@link #arm(String)} returns false and the launcher does not drive
+ * the client. Endpoint publication still follows each world entry when explicitly requested.
  *
- * <p><b>Client-only.</b> This is the one class in {@code :common} that imports
- * {@code net.minecraft.client.*} — everything else there is careful not to, so that the shared
- * module stays loadable on a dedicated server. The rule is about LOADING, not presence: each loader
+ * <p><b>Client-only.</b> This class imports {@code net.minecraft.client.*}. The rule is about
+ * LOADING, not presence: each loader
  * module reaches this class from a client-only branch, so a dedicated server never resolves it. Do
  * not reference it from anything a server touches.
  */
@@ -173,10 +174,6 @@ public final class ClientDirector {
                         // and write a results file no gate is going to read.
                         ClientProbes.arm(loader);
                     }
-                    // Published here rather than at client init because "in a world" is what an
-                    // attaching test needs — mc.client.screen.tree answers at the title screen too,
-                    // and every UI test would then race the world it assumes it is standing in.
-                    EndpointDescriptor.writeIfRequested(loader, worldLabel(connect));
                 } else if (++driveTicks > DRIVE_TIMEOUT_TICKS) {
                     StageWrightCommon.LOG.error("[{}] client never reached a world within {} ticks ({})",
                             StageWrightCommon.MOD_ID, DRIVE_TIMEOUT_TICKS, directive());
@@ -264,10 +261,19 @@ public final class ClientDirector {
                 || mc.screen instanceof JoinMultiplayerScreen;
     }
 
-    /** What to record as the endpoint's world: the singleplayer level, or the address we joined. */
-    private static String worldLabel(String connect) {
-        if (connect != null && !connect.isBlank()) return connect.trim();
-        return System.getProperty(P_WORLD, "").trim();
+    /** Independent of the launcher: bind this client's API and publish each world's endpoint. */
+    public static void onWorldReady(String loaderName) {
+        Minecraft mc = Minecraft.getInstance();
+        var connection = mc.getConnection();
+        if (mc.level == null || mc.player == null || connection == null
+                || !connection.getConnection().isConnected()) return;
+        StageWrightCommon.onClientWorldReady();
+        if (System.getProperty(EndpointDescriptor.PROPERTY, "").isBlank()) return;
+        var server = mc.getSingleplayerServer();
+        ServerData remote = mc.getCurrentServer();
+        String world = server != null ? server.getWorldData().getLevelName()
+                : remote == null ? "" : remote.ip;
+        DriverEndpoint.publish(loaderName, world);
     }
 
     private static boolean exitWhenDone() {

@@ -56,7 +56,7 @@ Version 1. Eight required keys, three optional.
 | `writtenAtEpochMs` | long | required | When it was written. Not a freshness test — see below. |
 | `serverRpcPort` | int | optional | Reserved for a descriptor that carries both faces. Nothing writes it today. |
 | `mcpPort` | int | optional | The MCP HTTP port, written when the driver bound one. |
-| `mcpHost` | string | optional | Host the MCP server bound to, written with `mcpPort` when `worlddriver.mcpHost` was set. Absent, the MCP server is on `rpcHost`'s default too. |
+| `mcpHost` | string | optional | Host the MCP server bound to, written with `mcpPort` using the current driver's configured host. |
 
 A missing required key throws, naming the key, rather than defaulting. **Unknown keys are
 tolerated**, so a future key does not break an older reader.

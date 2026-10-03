@@ -36,23 +36,63 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # A same-named branch in the companion repository identifies a candidate pair.
+      # Pin its commit before checkout; other PRs keep using their published dependency.
+      - name: Find companion candidate
+        id: companion
+        if: github.event_name == 'pull_request'
+        env:
+          COMPANION_BRANCH: ${{ github.head_ref }}
+          COMPANION_REPOSITORY: ${{ github.repository_owner }}/worlddriver
+        run: |
+          status=0
+          tip="$(git ls-remote --exit-code --heads \
+            "$GITHUB_SERVER_URL/$COMPANION_REPOSITORY.git" \
+            "refs/heads/$COMPANION_BRANCH")" || status=$?
+          if [ "$status" -eq 2 ]; then exit 0; fi
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          printf 'sha=%s\n' "${tip%%[[:space:]]*}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout companion candidate
+        if: steps.companion.outputs.sha != ''
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/worlddriver
+          ref: ${{ steps.companion.outputs.sha }}
+          path: .ci/worlddriver
+          persist-credentials: false
+
+      - name: Build and inspect candidate pair
+        if: steps.companion.outputs.sha != ''
+        run: ./scripts/build_driver_pair.sh .ci/worlddriver
+
       # Only the CLI takes another build's output from mavenLocal: the framework jars the root build
       # publishes there, so it follows Framework. The engine reaches the plugin and the CLI through
       # includeBuild, which leaves the order of the first three free.
       - name: Engine
+        if: steps.companion.outputs.sha == ''
         run: ./gradlew -p engine check publishToMavenLocal
 
       - name: Gradle plugin
+        if: steps.companion.outputs.sha == ''
         run: ./gradlew -p gradle-plugin check publishToMavenLocal
 
+      - name: Architecture boundaries
+        run: python3 scripts/check_architecture.py
+
       - name: Framework
+        if: steps.companion.outputs.sha == ''
         run: ./gradlew build publishToMavenLocal
 
       - name: CLI
+        if: steps.companion.outputs.sha == ''
         run: ./gradlew -p cli check jar
 
       - name: Packaging
-        run: python3 scripts/check_packaging.py --build
+        if: steps.companion.outputs.sha == ''
+        run: |
+          python3 scripts/check_packaging.py --build
+          python3 scripts/check_architecture.py --jars
 
       - uses: actions/upload-artifact@v4
         with:

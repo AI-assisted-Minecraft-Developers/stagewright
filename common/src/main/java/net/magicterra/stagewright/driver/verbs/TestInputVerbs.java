@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.verbs;
+package net.magicterra.stagewright.driver.verbs;
 
 import java.util.Map;
 
@@ -31,7 +31,7 @@ import static net.magicterra.worlddriver.mcp.schema.Schemas.tool;
  * </ul>
  *
  * <h2>Boot placement &amp; client-only discipline</h2>
- * Registered from {@code WorldDriverCommon.ensureRpcUp}, right after {@link TestResetVerb#register()},
+ * Registered from StageWright's DriverRuntime, right after {@link TestResetVerb#register()},
  * for the same reasons: {@link #register()} must run after the route sink is wired (a pre-boot
  * {@code registerVerb} throws) and it must run on the COMMON path so a dedicated server also carries
  * the route + schema. Each handler delegates through {@link BotHooks#impl()} — null on a dedicated
@@ -71,16 +71,13 @@ public final class TestInputVerbs {
                     .prop("hand", stringEnum("main", "off"))
                     .additionalProperties(false)).asHidden();
 
-    private static volatile boolean registered;
 
     /**
-     * Register both {@code mc.test.input.*} verbs through the paired SPI. Idempotent (guarded).
+     * Register both {@code mc.test.input.*} verbs through the paired SPI, guarded by DriverRuntime.
      * Must run after the route sink is wired (see class javadoc) — a pre-boot call throws from
      * {@code registerVerb}.
      */
     public static synchronized void register() {
-        if (registered) return;
-        registered = true;
         ToolCatalog.registerVerb(HELD_KEYS, TestInputVerbs::handleHeldKeys);
         ToolCatalog.registerVerb(USE_ON_BLOCK, TestInputVerbs::handleUseOnBlock);
     }

@@ -58,6 +58,7 @@ final class ModInjection {
      */
     static Arguments prepare(Path gameDir, String loader, List<Path> extras, Consumer<String> log) {
         requireLoader(loader);
+        DriverRequirement.check(gameDir, loader, extras, true);
         for (Path left : ModInstall.ledgered(gameDir)) {
             log.accept("NOTE: an older StageWright CLI copied " + left.getFileName() + " into mods/."
                     + " It is left there and loads as the pack's own; delete it if the pack did not"
@@ -68,8 +69,9 @@ final class ModInjection {
         deleteTree(staged);
         List<Path> jars = new ArrayList<>();
         Path ours = unpackFramework(loader, staged);
-        List<Path> packs = ModInstall.frameworkJars(gameDir);
-        if (packs.isEmpty()) {
+        List<Path> packs = DriverRequirement.frameworkJars(gameDir, loader);
+        boolean extraFramework = extras.stream().anyMatch(p -> DriverRequirement.isFramework(p, loader));
+        if (packs.isEmpty() && !extraFramework) {
             jars.add(ours);
         } else {
             for (Path pack : packs) log.accept(usingThePacks(pack, ours, "this CLI's StageWright"));

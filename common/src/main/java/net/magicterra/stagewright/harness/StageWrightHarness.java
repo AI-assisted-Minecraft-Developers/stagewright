@@ -595,6 +595,21 @@ public final class StageWrightHarness {
         if (index >= scenes.size()) finish();
     }
 
+    /** Cancel resources on world shutdown without writing a successful completion footer. */
+    public void stop() {
+        stallWatchdog.stop();
+        try {
+            prepSampler = ServerThreadSampler.stop(prepSampler);
+            if (!finished && index < scenes.size() && sceneLevel != null) {
+                Scene scene = scenes.get(index);
+                teardown(scene, sceneLevel, originFor(slotByName.get(scene.name())), scene.chunkRadius());
+            }
+        } finally {
+            WorldPin.release(server);
+            finished = true;
+        }
+    }
+
     private void finish() {
         if (finished) return;
         finished = true;

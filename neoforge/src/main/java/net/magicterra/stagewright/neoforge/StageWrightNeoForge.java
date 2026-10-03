@@ -10,6 +10,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 @Mod("mc_testkit")
@@ -39,6 +40,11 @@ public final class StageWrightNeoForge {
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
         StageWrightCommon.onServerStarted(event.getServer(), "neoforge");
+    }
+
+    @SubscribeEvent
+    public void onServerStopping(ServerStoppingEvent event) {
+        StageWrightCommon.onServerStopping(event.getServer());
     }
 
     @SubscribeEvent

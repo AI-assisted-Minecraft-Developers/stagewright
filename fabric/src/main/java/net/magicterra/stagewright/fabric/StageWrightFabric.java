@@ -16,6 +16,7 @@ public final class StageWrightFabric implements ModInitializer {
         installModList();
         ServerLifecycleEvents.SERVER_STARTED.register(server ->
                 StageWrightCommon.onServerStarted(server, "fabric"));
+        ServerLifecycleEvents.SERVER_STOPPING.register(StageWrightCommon::onServerStopping);
         ServerTickEvents.END_SERVER_TICK.register(StageWrightCommon::onServerTick);
     }
 

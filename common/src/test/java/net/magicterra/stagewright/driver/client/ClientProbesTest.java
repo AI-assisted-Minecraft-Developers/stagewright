@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.client;
+package net.magicterra.stagewright.driver.client;
 
 import org.junit.jupiter.api.Test;
 

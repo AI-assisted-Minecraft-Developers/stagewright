@@ -10,6 +10,31 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-03
+
+### WorldDriver is required and integration belongs to `common/driver` · compiled and green in the paired self-test suite
+
+StageWright now requires a compatible WorldDriver on both Fabric and NeoForge. Missing or
+incompatible drivers fail installation preflight or loader dependency checks instead of dropping
+scene-driving capabilities. The CLI checks the effective mod inventory before resetting worlds or
+downloading a client, including renamed and explicitly supplied mod jars.
+
+Driver verbs, script bindings, client event probes and endpoint integration live under
+`common/driver`. In-process and RPC bindings share JSON conversion, including exact long integers
+and native JavaScript result objects. API, attached, engine and Gradle plugin modules do not acquire
+a WorldDriver dependency, and loader jars do not bundle its classes, Rhino or Netty.
+
+Client route registration and endpoint publication also work when joining a dedicated server;
+they no longer require a local server-start event or an automatic director run. Leaving a world
+clears listeners and publication state, and entering another world publishes its current name and
+actual ports. Six Fabric/NeoForge runtime topologies, cross-topology scene coverage and 32 live
+external contract tests passed against the candidate pair. Internal package aliases and the
+optional-driver mode are removed.
+
+PR CI builds a companion repository's same-named branch when available, pinned to its discovered
+commit, and otherwise uses the configured published version. `scripts/build_driver_pair.sh`
+reproduces the ordered local candidate build and packaging checks.
+
 ## 2026-09-29
 
 ### A run that may have loaded a change made during its build matches no other run · green in a Gradle TestKit build

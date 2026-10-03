@@ -104,20 +104,12 @@ class FabricModMetadataTest {
     }
 
     @Test
-    void worlddriverIsOptionalButRefusedOutsideTheLineStageWrightLinksAgainst() throws VersionParsingException {
-        for (String kind : List.of("depends", "recommends")) {
-            JsonObject deps = META.getAsJsonObject(kind);
-            assertTrue(deps == null || !deps.has("worlddriver"), "worlddriver must stay optional, found in " + kind);
-        }
-        assertTrue(META.has("suggests") && META.getAsJsonObject("suggests").has("worlddriver"),
-                "no suggests entry for worlddriver");
-        assertTrue(META.has("breaks") && META.getAsJsonObject("breaks").has("worlddriver"),
-                "no breaks entry for worlddriver");
-        JsonElement suggests = META.getAsJsonObject("suggests").get("worlddriver");
-        JsonElement breaks = META.getAsJsonObject("breaks").get("worlddriver");
+    void worlddriverIsRequiredWithinTheLineStageWrightLinksAgainst() throws VersionParsingException {
+        JsonElement required = META.getAsJsonObject("depends").get("worlddriver");
+        assertNotNull(required, "WorldDriver must be required");
+        assertFalse(META.has("suggests"));
+        assertFalse(META.has("breaks"));
 
-        // suggests is advisory only; breaks is what makes Fabric Loader refuse the pair, so the two
-        // must be exact complements around the release line of worlddriver_version.
         String built = prop("worlddriver_version");
         Matcher v = Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)").matcher(built);
         assertTrue(v.find(), built);
@@ -130,13 +122,11 @@ class FabricModMetadataTest {
         String earlierLine = major == 0 ? "0." + (minor - 1) + ".9" : (major - 1) + ".9.9";
         for (String version : List.of(built, base, laterCompatible, base + "-build.1+1.21.1",
                 base + "-build.local+1.21.1")) {
-            assertTrue(matches(suggests, version), "suggests should cover " + version);
-            assertFalse(matches(breaks, version), "breaks must not refuse " + version);
+            assertTrue(matches(required, version), "required range should cover " + version);
         }
         for (String version : List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1",
                 nextBreaking + "-build.1+1.21.1")) {
-            assertFalse(matches(suggests, version), "suggests should not cover " + version);
-            assertTrue(matches(breaks, version), "breaks must refuse " + version);
+            assertFalse(matches(required, version), "required range should not cover " + version);
         }
     }
 }

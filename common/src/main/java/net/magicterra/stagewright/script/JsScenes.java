@@ -2,6 +2,7 @@ package net.magicterra.stagewright.script;
 
 import java.util.ArrayList;
 import java.util.List;
+import net.magicterra.stagewright.contract.DriverBinding;
 
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.contract.SceneSpec;
@@ -28,24 +29,22 @@ import net.magicterra.stagewright.scene.Scene;
  * indirection, the thing it buys is that a {@code .js} file cannot mean two different things — which
  * is not a property that survives two hand-maintained interpreters.
  *
- * <p><b>Requires Rhino</b>, which arrives with worlddriver. Absent it, this class is never loaded
- * and scene files are reported as ignored rather than silently skipped — a pack author who wrote
- * scenes and got a green run that never executed them has been told nothing at all.
+ * <p>Rhino is provided by the required WorldDriver runtime.
  */
 public final class JsScenes {
 
     private JsScenes() {}
 
     /** Load every {@code .js} file under the scenes directory, as in-process scenes. */
-    public static List<Scene> load() {
+    public static List<Scene> load(DriverBinding binding) {
         List<SceneSpec> specs = Scripts.load(
                 PackFiles.scenes(),
                 // The globals only this home has: the file-scoped bridge, and driver access that
-                // reflects into worlddriver in this very JVM rather than crossing a socket.
+                // uses the injected in-process binding.
                 (cx, scope, fileName) -> {
                     dev.latvian.mods.rhino.ScriptableObject.putProperty(scope, "__bridge",
                             cx.javaToJS(new JsBridge(fileName), scope), cx);
-                    DriverAccess.install(cx, scope);
+                    DriverAccess.install(cx, scope, binding);
                 },
                 line -> StageWrightCommon.LOG.info("[{}] {}", StageWrightCommon.MOD_ID, line));
 

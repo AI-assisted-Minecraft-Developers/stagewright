@@ -5,14 +5,14 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.magicterra.stagewright.driver.DriverRuntime;
+import net.magicterra.stagewright.driver.script.InProcessDriverBinding;
+import net.magicterra.stagewright.driver.endpoint.DriverEndpoint;
 import net.magicterra.stagewright.harness.EndpointDescriptor;
 import net.magicterra.stagewright.harness.ResultsJsonl;
 import net.magicterra.stagewright.harness.StageWrightHarness;
 import net.magicterra.stagewright.harness.SuiteRegistry;
 import net.magicterra.stagewright.scene.Scene;
-import net.magicterra.stagewright.verbs.TestInputVerbs;
-import net.magicterra.stagewright.verbs.TestResetVerb;
-import net.magicterra.stagewright.verbs.TestRunVerb;
 import net.magicterra.stagewright.harness.SceneFilter;
 import net.magicterra.stagewright.harness.Scenes;
 import net.minecraft.server.MinecraftServer;
@@ -61,7 +61,6 @@ public final class StageWrightCommon {
     // Volatile for the same lock-free per-tick read as `harness`.
     private static volatile boolean registryFailureRecorded;
     private static boolean armed;
-    private static boolean verbHooksInstalled;
     private static boolean onDemandRequested;
 
     // ---- Startup tick-debt settle barrier ----
@@ -88,6 +87,11 @@ public final class StageWrightCommon {
     private static long lastTickNanos;
 
     private StageWrightCommon() {}
+
+    /** A joining client has its own API and never receives a local SERVER_STARTED event. */
+    public static void onClientWorldReady() {
+        DriverRuntime.registerVerbs();
+    }
 
     /**
      * True when this run is a HOLD: stand the topology up and leave it standing, for whatever
@@ -124,6 +128,7 @@ public final class StageWrightCommon {
             LOG.warn("[{}] harness already armed — ignoring duplicate onServerStarted", MOD_ID);
             return;
         }
+        DriverRuntime.registerVerbs();
         armed = true;
         armedServer = server;
         armedLoader = loader;
@@ -136,7 +141,7 @@ public final class StageWrightCommon {
         // list is the filtered one and every downstream rule (SWALLOWED, DRIFTED, the canary gates)
         // keeps working against what this run actually meant to do.
         String filter = SceneFilter.pattern();
-        SuiteRegistry.Resolved registry = SuiteRegistry.resolve(Scenes::all, filter);
+        SuiteRegistry.Resolved registry = SuiteRegistry.resolve(() -> Scenes.all(new InProcessDriverBinding()), filter);
         resolvedScenes = registry.scenes();
         registryError = registry.error();
         if (registryError != null) {
@@ -148,7 +153,6 @@ public final class StageWrightCommon {
         }
         // Register the mc.test.* verbs — BOTH autorun states, so the hidden-verb contract is
         // topology-uniform.
-        installVerbHooks();
 
         if (holding()) {
             LOG.info("[{}] HELD — the suite will not run itself ({} scenes registered, mc.test.run"
@@ -172,68 +176,29 @@ public final class StageWrightCommon {
         // Only where no client shares this JVM. An integrated server has one, and its ClientDirector
         // publishes the same port later, once there is a world to attach to.
         if (server.isDedicatedServer()) {
-            EndpointDescriptor.writeIfRequested(loader, server.getWorldData().getLevelName());
+            DriverEndpoint.publish(loader, server.getWorldData().getLevelName());
         }
     }
 
-    /** Fully-qualified probe for the driver's verb registry, resolved BY NAME and deliberately not
-     *  imported: the whole point is to answer "is worlddriver on this classpath" without linking
-     *  against it. */
-    private static final String DRIVER_PROBE = "net.magicterra.worlddriver.mcp.ToolCatalog";
-
-    /** Register StageWright's own {@code mc.test.*} verbs into the driver's ToolCatalog (idempotent),
-     *  when a driver is present at all. A verb that throws is logged but must not abort arming — the
-     *  suite (autorun or on-demand) is independent of any single verb registration.
-     *
-     *  <p>This used to go through a {@code StageWrightVerbHook} ServiceLoader SPI implemented on the
-     *  worlddriver side, because stagewright-common could not import {@code ToolCatalog} without a
-     *  circular module dependency. StageWright now depends on the driver it drives, so it registers
-     *  its own verbs and the SPI is deleted.
-     *
-     *  <p><b>Why the presence probe.</b> The three classes under {@code verbs/} are the ONLY part of
-     *  StageWright that touches worlddriver; the scene API, the harness and the loader entries need
-     *  nothing but Minecraft. That separation only buys anything if arming survives worlddriver's
-     *  ABSENCE — which is the normal case the moment StageWright is loaded into a third-party mod's
-     *  dev runtime, since such a mod depends on neither repo.
-     *
-     *  <p>The probe must come first, and must go by name. {@code List.of(TestRunVerb::register, …)}
-     *  resolves all three classes at the lambda-metafactory bootstrap, i.e. while building the list
-     *  and therefore BEFORE the loop body — so a try/catch around {@code reg.run()} never sees the
-     *  resulting NoClassDefFoundError. Loading {@code TestRunVerb} alone is already fatal: its
-     *  {@code SCHEMA} initializer calls into worlddriver's {@code Schemas}. */
-    private static void installVerbHooks() {
-        if (verbHooksInstalled) return;
-        verbHooksInstalled = true;
-        if (!driverPresent()) {
-            LOG.info("[{}] no worlddriver on this classpath — skipping the mc.test.* verbs. Scenes still "
-                    + "run; what is absent is the on-demand trigger and the bot input verbs, so this "
-                    + "runtime is autorun-only.", MOD_ID);
-            return;
-        }
+    /** Called on the server thread while the world is still available for cleanup. */
+    public static synchronized void onServerStopping(MinecraftServer server) {
+        if (server != armedServer) return;
         try {
-            for (Runnable reg : List.<Runnable>of(
-                    TestRunVerb::register, TestResetVerb::register, TestInputVerbs::register)) {
-                try {
-                    reg.run();
-                } catch (Throwable t) {
-                    LOG.error("[{}] stagewright verb registration failed", MOD_ID, t);
-                }
-            }
-        } catch (Throwable t) {
-            // A driver that is PRESENT but incompatible (ToolCatalog moved, Schemas signature changed)
-            // fails while the list is being built, outside the inner catch. Land it here rather than
-            // aborting the arm: the verbs are a convenience, the suite is the product.
-            LOG.error("[{}] verb wiring failed against the driver on this classpath — continuing "
-                    + "without the mc.test.* verbs", MOD_ID, t);
-        }
-    }
-
-    private static boolean driverPresent() {
-        try {
-            Class.forName(DRIVER_PROBE, false, StageWrightCommon.class.getClassLoader());
-            return true;
-        } catch (Throwable t) {
-            return false;
+            if (harness != null) harness.stop();
+        } finally {
+            harness = null;
+            armedServer = null;
+            armedLoader = null;
+            resolvedScenes = null;
+            registryError = null;
+            registryFailureRecorded = false;
+            armed = false;
+            onDemandRequested = false;
+            settled = false;
+            settleTickCount = 0;
+            consecutiveCadenceTicks = 0;
+            lastTickNanos = 0;
+            EndpointDescriptor.reset();
         }
     }
 
@@ -281,7 +246,7 @@ public final class StageWrightCommon {
         // sets `harness` on the server thread) cannot double-build.
         server.execute(() -> {
             synchronized (StageWrightCommon.class) {
-                if (harness != null || registryFailureRecorded) return;
+                if (armedServer != server || harness != null || registryFailureRecorded) return;
                 try {
                     startSuite(server, loader);
                 } catch (Throwable t) {

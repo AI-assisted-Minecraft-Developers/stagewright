@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.verbs;
+package net.magicterra.stagewright.driver.verbs;
 
 import java.util.Map;
 
@@ -19,14 +19,10 @@ import static net.magicterra.worlddriver.mcp.schema.Schemas.tool;
  * atomic schema/route contract end to end.
  *
  * <h2>Boot placement</h2>
- * {@link #register()} is invoked from {@code WorldDriverCommon.ensureRpcUp}, once, immediately after
- * {@code ToolCatalog.wireRouteSink(api::addRoute)} wires the route sink — the pattern of
- * {@code PathDebugBootstrap.init} (a one-time subsystem bootstrap that runs only after the
- * {@code DriverApi} exists), but deliberately on the COMMON boot path rather than the client-only
- * {@code ClientHooks.register}: the verb must exist on a dedicated server too (the dogfood harness is
- * a headless server, and {@code wd.settingRegistryClosed} asserts the route + schema are present
- * there). Registering pre-boot would throw ({@code registerVerb} refuses a sink-less call), which is
- * exactly why this hook sits after the sink is wired.
+ * StageWright's DriverRuntime invokes {@link #register()} once per API instance from
+ * SERVER_STARTED, after WorldDriver has wired its route sink. This common lifecycle path
+ * installs the verb on dedicated servers too. A pre-boot call throws because
+ * {@code registerVerb} refuses a sink-less call.
  *
  * <h2>Client-only, without loading client classes on a server</h2>
  * The handler delegates through {@link BotHooks#impl()} — a common broker whose impl is null on a
@@ -51,16 +47,13 @@ public final class TestResetVerb {
             + "Client-only — a dedicated server rejects it loudly.",
             object().additionalProperties(false)).asHidden();
 
-    private static volatile boolean registered;
 
     /**
-     * Register {@code mc.test.reset} through the paired SPI. Idempotent (guarded) so a duplicate
-     * boot call cannot append the schema supplier twice. Must run after the route sink is wired
+     * Register {@code mc.test.reset} through the paired SPI. DriverRuntime guards each API instance.
+     * Must run after the route sink is wired
      * (see class javadoc) — a pre-boot call throws from {@code registerVerb}.
      */
     public static synchronized void register() {
-        if (registered) return;
-        registered = true;
         ToolCatalog.registerVerb(SCHEMA, TestResetVerb::handle);
     }
 
