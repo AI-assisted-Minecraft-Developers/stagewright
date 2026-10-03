@@ -84,13 +84,64 @@ class BuildIdTest {
         assertTrue(edited.startsWith(clean + "+"), edited);
     }
 
-    private static Path committedRepo(Path repo) throws Exception {
-        Files.createDirectories(repo);
-        assumeTrue(git(repo, "init", "-q") == 0, "git is not available");
-        Files.writeString(repo.resolve("Scene.java"), "class Scene {}");
+    @Test
+    void diffSettingsDoNotChangeTheIdOfOneChange(@TempDir Path root) throws Exception {
+        // Each file below prints differently under one of the settings configured afterwards.
+        Path repo = committedRepo(root.resolve("app"));
+        Files.writeString(repo.resolve("Scene.java"), "a\n\nb\nc\nd\ne\nf\ng\nh\ni\nj\n");
+        Files.writeString(repo.resolve("Old.java"), "class Old { int x; int y; int z; }\n");
+        Files.writeString(repo.resolve("Szene-ü.txt"), "eins\n");
+        Files.writeString(repo.resolve("histogram.txt"), "a\nb\nc\na\nb\nc\n");
+        Files.writeString(repo.resolve("indent.txt"), "int b() {\n{\nint b() {\n  y();\n");
+        Files.writeString(repo.resolve("big.txt"), "line\n".repeat(600));
         assertEquals(0, git(repo, "add", "."));
-        assertEquals(0, git(repo, "commit", "-qm", "c"));
-        return repo;
+        assertEquals(0, git(repo, "commit", "-qm", "files"));
+
+        Files.writeString(repo.resolve("Scene.java"), "A\n\nb\nc\nd\ne\nf\ng\nh\ni\nJ\n");
+        assertEquals(0, git(repo, "mv", "Old.java", "New.java"));
+        Files.writeString(repo.resolve("Szene-ü.txt"), "zwei\n");
+        Files.writeString(repo.resolve("histogram.txt"), "c\nb\na\nb\nc\n");
+        Files.writeString(repo.resolve("indent.txt"), "int b() {\n{\nint b() {\nint b() {\n  y();\n");
+        Files.writeString(repo.resolve("big.txt"), "line\n".repeat(300) + "changed\n" + "line\n".repeat(299));
+        String plain = BuildId.ofGitWorkTree(repo);
+        assertTrue(plain.contains("+"), plain);
+
+        Path order = root.resolve("order");
+        Files.writeString(order, "indent.txt\n");
+        // A machine's own attributes binding a diff driver with an algorithm of its own.
+        Path attributes = root.resolve("attributes");
+        Files.writeString(attributes, "*.txt diff=local\n");
+        for (String[] setting : new String[][] {
+                {"diff.noprefix", "true"}, {"diff.mnemonicPrefix", "true"},
+                {"diff.srcPrefix", "x/"}, {"diff.dstPrefix", "y/"},
+                {"diff.context", "10"}, {"diff.interHunkContext", "5"},
+                {"diff.algorithm", "histogram"}, {"diff.indentHeuristic", "false"},
+                {"diff.renames", "false"}, {"diff.orderFile", order.toString()},
+                {"diff.suppressBlankEmpty", "true"}, {"core.quotePath", "false"},
+                {"core.abbrev", "12"}, {"core.attributesFile", attributes.toString()},
+                {"diff.local.algorithm", "histogram"}, {"core.bigFileThreshold", "1k"}}) {
+            assertEquals(0, git(repo, "config", setting[0], setting[1]));
+        }
+        assertEquals(plain, BuildId.ofGitWorkTree(repo));
+    }
+
+    @Test
+    void aBinaryChangeGetsOneIdWhateverGitCompressesWith(@TempDir Path root) throws Exception {
+        Path repo = committedRepo(root);
+        byte[] bytes = new byte[4096];
+        new java.util.Random(1).nextBytes(bytes);
+        Files.write(repo.resolve("texture.bin"), bytes);
+        assertEquals(0, git(repo, "add", "texture.bin"));
+        assertEquals(0, git(repo, "commit", "-qm", "binary"));
+        new java.util.Random(2).nextBytes(bytes);
+        Files.write(repo.resolve("texture.bin"), bytes);
+        assertEquals(0, git(repo, "config", "core.compression", "0"));
+        String stored = BuildId.ofGitWorkTree(repo);
+        assertEquals(0, git(repo, "config", "core.compression", "9"));
+        assertEquals(stored, BuildId.ofGitWorkTree(repo));
+        new java.util.Random(3).nextBytes(bytes);
+        Files.write(repo.resolve("texture.bin"), bytes);
+        assertNotEquals(stored, BuildId.ofGitWorkTree(repo));
     }
 
     @Test
@@ -103,6 +154,15 @@ class BuildIdTest {
                 BuildId.hashingInto(streamed).read(new java.io.ByteArrayInputStream(output)));
         assertEquals(java.util.HexFormat.of().formatHex(BuildId.digest().digest(output)),
                 java.util.HexFormat.of().formatHex(streamed.digest()));
+    }
+
+    private static Path committedRepo(Path repo) throws Exception {
+        Files.createDirectories(repo);
+        assumeTrue(git(repo, "init", "-q") == 0, "git is not available");
+        Files.writeString(repo.resolve("Scene.java"), "class Scene {}");
+        assertEquals(0, git(repo, "add", "."));
+        assertEquals(0, git(repo, "commit", "-qm", "c"));
+        return repo;
     }
 
     @Test

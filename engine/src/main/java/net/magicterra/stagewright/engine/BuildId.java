@@ -22,6 +22,13 @@ public final class BuildId {
 
     private static final Duration GIT_TIMEOUT = Duration.ofSeconds(30);
 
+    /** Pins what config would otherwise change in the bytes a diff prints for one change, so one tree
+     *  would get another id on another machine. Flags where git has them, since only a flag also
+     *  overrides a diff driver's own {@code algorithm}; the order file is added per call. */
+    private static final List<String> SAME_BYTES_FOR_THE_SAME_CHANGE = List.of(
+            "--src-prefix=a/", "--dst-prefix=b/", "-U3", "--inter-hunk-context=0",
+            "--diff-algorithm=myers", "--indent-heuristic", "--no-renames", "--full-index");
+
     private BuildId() {}
 
     /** {@code git:<HEAD>}, plus {@code +<digest>} when tracked files differ from HEAD; null when git
@@ -33,17 +40,30 @@ public final class BuildId {
         // A project inside some other repository that ignores it would otherwise take that
         // repository's HEAD, which never changes as the project does.
         if (git(dir, "ls-files", "--error-unmatch", "--", ".") == null) return null;
-        // Every flag pins something user config or a submodule could otherwise hide, making a real
-        // change read as clean: a diff driver, a relative diff, a submodule collapsed to "-dirty".
-        List<String> diff = List.of("git", "-c", "diff.relative=false", "diff", "HEAD", "--binary",
-                "--no-ext-diff", "--no-textconv", "--no-color", "--submodule=diff", "--ignore-submodules=untracked");
-        MessageDigest digest = digest();
-        // Not held in memory, since a diff can be larger than the heap: git writes it to a temporary
-        // file, which is hashed a chunk at a time.
-        Long length = run(dir, GIT_TIMEOUT, diff, hashingInto(digest));
-        if (length == null) return null;
-        String id = "git:" + new String(head, StandardCharsets.UTF_8).trim().substring(0, 12);
-        return length == 0 ? id : id + "+" + hex(digest.digest());
+        Path noOrder = null;
+        try {
+            // An empty file rather than /dev/null, which is not a path on every platform.
+            noOrder = Files.createTempFile("stagewright-build-id", ".order");
+            // Every flag pins something user config or a submodule could otherwise hide, making a real
+            // change read as clean: a diff driver, a relative diff, a submodule collapsed to "-dirty".
+            // No --binary: its patch is as zlib compresses it; --full-index names a binary's content.
+            List<String> diff = new ArrayList<>(List.of("git", "-c", "diff.relative=false",
+                    "-c", "diff.suppressBlankEmpty=false", "-c", "core.quotePath=true",
+                    "-c", "core.bigFileThreshold=512m", "diff", "HEAD",
+                    "--no-ext-diff", "--no-textconv", "--no-color", "--submodule=diff",
+                    "--ignore-submodules=untracked", "-O" + noOrder));
+            diff.addAll(SAME_BYTES_FOR_THE_SAME_CHANGE);
+            MessageDigest digest = digest();
+            // Hashed as it is read: a diff can be larger than the heap.
+            Long length = run(dir, GIT_TIMEOUT, diff, hashingInto(digest));
+            if (length == null) return null;
+            String id = "git:" + new String(head, StandardCharsets.UTF_8).trim().substring(0, 12);
+            return length == 0 ? id : id + "+" + hex(digest.digest());
+        } catch (IOException e) {
+            return null;
+        } finally {
+            deleteQuietly(noOrder);
+        }
     }
 
     /** Stdout of a git command that exited 0, or null for any failure, including git being absent. */
