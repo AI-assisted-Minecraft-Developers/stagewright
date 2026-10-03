@@ -268,7 +268,7 @@ public final class ClientDirector {
         if (mc.level == null || mc.player == null || connection == null
                 || !connection.getConnection().isConnected()) return;
         StageWrightCommon.onClientWorldReady();
-        if (System.getProperty(EndpointDescriptor.PROPERTY, "").isBlank()) return;
+        if (!EndpointDescriptor.pending()) return;
         var server = mc.getSingleplayerServer();
         ServerData remote = mc.getCurrentServer();
         String world = server != null ? server.getWorldData().getLevelName()

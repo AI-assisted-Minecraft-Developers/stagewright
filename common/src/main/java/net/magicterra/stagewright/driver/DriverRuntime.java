@@ -8,7 +8,7 @@ import net.magicterra.worlddriver.api.DriverApi;
 
 /** Required driver connection. Installation and readiness are distinct states. */
 public final class DriverRuntime {
-    private static DriverApi registeredApi;
+    private static volatile DriverApi registeredApi;
 
     private DriverRuntime() {}
 
@@ -18,13 +18,19 @@ public final class DriverRuntime {
         return api;
     }
 
-    /** Register once per API instance; publish the marker only after all registrations succeed. */
-    public static synchronized void registerVerbs() {
+    /**
+     * Register once per API instance; publish the marker only after all registrations succeed.
+     * A client asks every tick, so an API already registered is answered without the lock.
+     */
+    public static void registerVerbs() {
         DriverApi api = requireApi();
         if (api == registeredApi) return;
-        TestRunVerb.register();
-        TestResetVerb.register();
-        TestInputVerbs.register();
-        registeredApi = api;
+        synchronized (DriverRuntime.class) {
+            if (api == registeredApi) return;
+            TestRunVerb.register();
+            TestResetVerb.register();
+            TestInputVerbs.register();
+            registeredApi = api;
+        }
     }
 }
