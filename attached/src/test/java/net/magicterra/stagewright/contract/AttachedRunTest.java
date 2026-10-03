@@ -311,6 +311,28 @@ class AttachedRunTest {
     }
 
     @Test
+    void aScriptErrorInACleanupReadsAsTheSameErrorInABody(@TempDir Path dir) throws IOException {
+        // Rhino's own exceptions carry no cause, so following causes alone left their class names in.
+        List<Map<String, Object>> records = run(dir, """
+                scene('pack.bodyThrows', 20, function (s) { throw new Error('boom'); });
+                scene('pack.cleanupThrows', 20, function (s) {
+                    s.cleanup(function () { throw new Error('boom'); });
+                });
+                scene('pack.cleanupTypeError', 20, function (s) {
+                    s.cleanup(function () { s.noSuchMethod(); });
+                });
+                """, new ArrayList<>(), new boolean[1]);
+
+        String body = (String) records.get(0).get("reason");
+        String cleanup = (String) records.get(1).get("reason");
+        assertTrue(body.startsWith("boom ("), body);
+        assertTrue(cleanup.startsWith("cleanup failed: boom ("), cleanup);
+        String typeError = (String) records.get(2).get("reason");
+        assertFalse(typeError.contains("EcmaError") || typeError.contains("unexpected"), typeError);
+        assertTrue(typeError.contains("noSuchMethod"), typeError);
+    }
+
+    @Test
     void anErrorFromABodyOrACleanupIsAFailedScene(@TempDir Path dir) throws IOException {
         // Escaping, it would end the run with no results file, and the CLI would report a crash.
         DriverBinding broken = (method, params) -> {

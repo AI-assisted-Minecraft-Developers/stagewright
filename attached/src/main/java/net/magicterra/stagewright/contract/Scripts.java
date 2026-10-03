@@ -137,7 +137,7 @@ public final class Scripts {
             // scene file has a syntax error must not get a green run over the scenes that happened to
             // parse — that is the same silent-composition hole the expected-scenes manifest exists to
             // close, arriving by a different door.
-            throw new IllegalStateException("scene file " + name + " failed to load: " + message(e), e);
+            throw new IllegalStateException("scene file " + name + " failed to load: " + Reasons.message(e), e);
         }
     }
 
@@ -238,7 +238,7 @@ public final class Scripts {
             // wrote, not a wrapper around it.
             RuntimeException own = unwrapOurs(e);
             if (own != null) throw own;
-            ctx.fail(explainIntermediary(message(e)));
+            ctx.fail(Reasons.explainIntermediary(Reasons.message(e)));
         }
     }
 
@@ -279,42 +279,6 @@ public final class Scripts {
             spent += OBSERVER_THRESHOLD;
             if (spent > BODY_INSTRUCTION_BUDGET) throw new BodyTooLong();
         }
-    }
-
-    /** Intermediary names ({@code class_2338}, {@code method_10263}) leaking into an error message. */
-    private static final java.util.regex.Pattern INTERMEDIARY =
-            java.util.regex.Pattern.compile("\\b(class|method|field)_\\d+\\b");
-
-    /**
-     * Explain the one failure that only happens in production, and only on one loader.
-     *
-     * <p>A scene file that calls a method on a Minecraft object works in a dev run and on a production
-     * NeoForge server (both mojmap) and fails on a production Fabric server, where the jar is remapped
-     * to intermediary and the method is named {@code method_10263}. Rhino's own message — {@code Cannot
-     * find function getX in object class_2338} — is accurate and useless: it names neither the cause
-     * nor the fix, and the obvious reading (a StageWright bug) is wrong.
-     *
-     * <p>Detected by the intermediary naming scheme rather than by a list of types, because the point
-     * is not which class it was. If a {@code class_1234} reached a scene author's error message at all,
-     * they crossed the boundary this explains.
-     */
-    public static String explainIntermediary(String message) {
-        if (message == null || !INTERMEDIARY.matcher(message).find()) return message;
-        return message + " — this is a remapped Minecraft name: the scene called a method ON a"
-                + " Minecraft object, which only works where the jar is mojmap (a dev run, or a"
-                + " NeoForge server). Scene files may hold and pass Minecraft objects but must call"
-                + " only StageWright's own methods on them — for a position, use ctx.originX() and"
-                + " friends rather than ctx.origin().getX().";
-    }
-
-    /** Strip the Java exception class name Rhino prefixes onto wrapped errors. */
-    public static String message(Throwable t) {
-        String raw = t.getMessage() != null ? t.getMessage() : t.getClass().getSimpleName();
-        int colon = raw.indexOf(": ");
-        if (colon > 0 && raw.substring(0, colon).matches("[\\w.$]*(Exception|Error)")) {
-            return raw.substring(colon + 2);
-        }
-        return raw;
     }
 
     private static String prelude() {

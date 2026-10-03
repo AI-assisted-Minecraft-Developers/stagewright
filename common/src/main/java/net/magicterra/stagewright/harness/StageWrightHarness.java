@@ -413,7 +413,7 @@ public final class StageWrightHarness {
                     teardown(scene, level, origin, radius);
                 } catch (Throwable t) {
                     record(scene, SceneOutcome.FAIL, ctx.ticks(),
-                            "unexpected " + t.getClass().getSimpleName() + ": " + t.getMessage());
+                            net.magicterra.stagewright.contract.Reasons.unexpected(t));
                     teardown(scene, level, origin, radius);
                 }
             }

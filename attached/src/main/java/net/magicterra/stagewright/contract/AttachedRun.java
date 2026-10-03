@@ -138,7 +138,7 @@ public final class AttachedRun {
                 // Throwable, as in-process: an Error escaping here would end the run before the
                 // results file is written, and the CLI would report a crash instead of RED.
                 outcome = "FAIL";
-                reason = "unexpected " + e.getClass().getSimpleName() + ": " + Scripts.message(e);
+                reason = Reasons.unexpected(e);
             }
 
             List<String> teardown = ctx.runCleanups(line -> log.accept("'" + spec.name() + "': " + line));

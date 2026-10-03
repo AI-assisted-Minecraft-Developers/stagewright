@@ -134,9 +134,12 @@ In-process it was the exception's `toString()`, so a `.js` cleanup's `fail` read
 dev.latvian.mods.rhino.WrappedException: Wrapped net.magicterra.stagewright.contract.SceneFailure:
 <reason> (<file>#<line>)`; out of process it was the same without the first class name, and a skip
 read like any other failure. Both homes now give the cleanup's own message for `fail` or `expect`,
-`skipped mid-teardown: <reason>` for a `skip`, and `unexpected <exception>: <message>` for anything
-else. Out of process each failure is also logged, as it is in-process, so one behind a scene that
-had already failed is not lost.
+`skipped mid-teardown: <reason>` for a `skip`, a script's own error in the words a body's would
+read in, and `unexpected <exception>: <message>` for anything else, from the exception thrown
+rather than its innermost cause. A body's unexpected exception reads by the same rule in both
+homes, where in-process it had printed `: null` for an exception with no message. Out of process
+each failure is also logged, as it is in-process, so one behind a scene that had already failed is
+not lost.
 
 ### A plain block set over a block entity is no longer reverted to air · green in unit tests
 
