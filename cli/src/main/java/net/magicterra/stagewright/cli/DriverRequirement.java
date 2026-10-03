@@ -13,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -89,8 +91,23 @@ final class DriverRequirement {
     /**
      * By entry name through the central directory: a pack's jars need not be stream-readable. A
      * file that is no zip at all is not one of our two mods, so the loader judges it, not this.
+     *
+     * <p>A run asks about the same jars several times (preflight, staging, which jars are
+     * StageWright), so each answer is kept for as long as the file's size and mtime are unchanged.
      */
     private static List<Mod> read(Path jar, String loader) {
+        Read key;
+        try {
+            key = new Read(jar.toAbsolutePath().normalize(), Files.size(jar),
+                    Files.getLastModifiedTime(jar).toMillis(), loader);
+        } catch (IOException e) { throw new UncheckedIOException("cannot open " + jar, e); }
+        return READS.computeIfAbsent(key, k -> open(jar, loader));
+    }
+
+    private record Read(Path jar, long size, long modified, String loader) {}
+    private static final Map<Read, List<Mod>> READS = new ConcurrentHashMap<>();
+
+    private static List<Mod> open(Path jar, String loader) {
         ZipFile opened;
         try { opened = new ZipFile(jar.toFile()); }
         catch (ZipException notAZip) { return List.of(); }
