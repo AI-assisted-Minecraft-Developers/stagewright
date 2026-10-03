@@ -5,6 +5,7 @@ import java.util.Map;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.scene.Mods;
 import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -42,7 +43,8 @@ public final class StageWrightNeoForge {
         StageWrightCommon.onServerStarted(event.getServer(), "neoforge");
     }
 
-    @SubscribeEvent
+    /** Ahead of Architectury's HIGH listener, which detaches WorldDriver: cleanups still drive it. */
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onServerStopping(ServerStoppingEvent event) {
         StageWrightCommon.onServerStopping(event.getServer());
     }
