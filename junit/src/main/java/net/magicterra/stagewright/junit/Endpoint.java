@@ -35,9 +35,10 @@ import java.util.regex.Pattern;
  *       schemas are advertised through MCP's {@code tools/list}, so anything asserting about a
  *       tool's declared shape needs this instead of {@code rpcPort}. {@link #mcpUri()} builds the
  *       endpoint; {@link #mcpPort()} is {@code null} when the MCP server did not come up.</li>
- *   <li>{@code mcpHost} — where the MCP server bound, written only when the driver was told to bind
- *       it somewhere of its own. {@link #mcpHost()} is {@code null} otherwise, and {@link #mcpUri()}
- *       then uses {@code rpcHost}, which is what both bind to by default.</li>
+ *   <li>{@code mcpHost} — where the MCP server bound, written alongside {@code mcpPort}. Older
+ *       holds wrote it only when the driver was told to bind it somewhere of its own, so
+ *       {@link #mcpHost()} may be {@code null}; {@link #mcpUri()} then uses {@code rpcHost}, which
+ *       is what both bind to by default.</li>
  *   <li>{@code serverRpcPort} — a client-face descriptor's pointer at the dedicated server it is
  *       joined to. {@link #serverRpcPort()} is {@code null} when the key is absent, which it is for
  *       every descriptor the current holds write; it survives because removing a tolerated optional
