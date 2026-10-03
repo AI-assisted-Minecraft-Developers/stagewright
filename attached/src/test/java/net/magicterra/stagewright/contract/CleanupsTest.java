@@ -39,4 +39,26 @@ class CleanupsTest {
         assertEquals("skipped mid-teardown: no curios",
                 Cleanups.reasonOf(new RuntimeException("Wrapped", new SceneSkipped("no curios"))));
     }
+
+    @Test
+    void aCleanupThatDrainsAgainDoesNotReopenRegistration() {
+        // The inner drain returning must not let the rest of the outer one take registrations, or a
+        // helper that registers on every call loops again.
+        AttachedContext owner = ctx();
+        Cleanups cleanups = new Cleanups(owner);
+        List<String> ran = new ArrayList<>();
+        cleanups.add(() -> ran.add("second"));
+        cleanups.add(() -> {
+            ran.add("first");
+            cleanups.run(msg -> { });
+            cleanups.add(() -> ran.add("registered after the inner drain"));
+        });
+
+        List<String> warned = new ArrayList<>();
+        assertEquals(List.of(), cleanups.run(warned::add));
+        assertEquals(List.of("first", "second"), ran);
+        assertEquals(List.of("1 cleanup(s) registered by a cleanup did not run"), warned,
+                "counted once, by the outermost drain");
+        assertEquals(1, owner.records().get("cleanupsNotRun"));
+    }
 }

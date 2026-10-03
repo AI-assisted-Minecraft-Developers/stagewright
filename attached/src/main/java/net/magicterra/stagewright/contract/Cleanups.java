@@ -11,7 +11,9 @@ public final class Cleanups {
 
     private final SceneReport owner;
     private final Deque<Runnable> queue = new ArrayDeque<>();
-    private boolean draining;
+    /** How many {@link #run} calls are draining: a count, so a cleanup that drains again cannot reopen
+     *  registration for the cleanups after it when its inner drain returns. */
+    private int draining;
     private int unrun;
 
     /** @param owner the scene whose record carries how many cleanups did not run */
@@ -26,7 +28,7 @@ public final class Cleanups {
      * restoring helper called from a cleanup would otherwise undo that cleanup, or loop forever.
      */
     public void add(Runnable action) {
-        if (draining) {
+        if (draining > 0) {
             unrun++;
             return;
         }
@@ -35,14 +37,14 @@ public final class Cleanups {
 
     /** True while {@link #run} is draining, so a caller can tell a cleanup's work from the body's. */
     public boolean draining() {
-        return draining;
+        return draining > 0;
     }
 
     /** Run everything queued; each failure is warned about and returned, never thrown, so one failing
      *  cleanup cannot stop the rest. How many a cleanup registered is recorded on the owner. */
     public List<String> run(Consumer<String> warn) {
         List<String> failed = new ArrayList<>();
-        draining = true;
+        draining++;
         try {
             for (Runnable r; (r = queue.pollFirst()) != null; ) {
                 try {
@@ -54,9 +56,9 @@ public final class Cleanups {
                 }
             }
         } finally {
-            draining = false;
+            draining--;
         }
-        if (unrun > 0) {
+        if (draining == 0 && unrun > 0) {
             warn.accept(unrun + " cleanup(s) registered by a cleanup did not run");
             // In the results too: a dropped cleanup may have been undoing something, and the log
             // is not what a reader of a green run looks at.
