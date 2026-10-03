@@ -91,16 +91,17 @@ attached half keeps its own verdict.
 reading never finished. The CLI closes its client before it stops the game, so it hung there for
 good. `close()` now gives the close handshake two seconds and then shuts the client down.
 
-### A send still in progress no longer reads as a lost connection · green in unit tests
+### A send still in progress no longer reads as a lost connection at once · green in unit tests
 
 The socket refuses a send while the one before it is unfinished. `StageWrightRpc` reported that
 refusal as a `StageWrightTransportException`, which reads as a lost connection, and the attached
-runner stops at one of those. It happened when a server that stopped reading left a timed-out call's
-request unsent, and could happen when a reply arrived before its own request's send had finished.
-Each send now waits for the one before it. Behind a request the server never read, the call waits
-out its time limit and throws `StageWrightTimeoutException`, the same as any call the server does
-not answer. A request whose call has given up by the time its turn comes is not sent, so it cannot
-act on a later scene; one already on its way when its call gave up can still arrive late.
+runner stops at one of those. It could happen when a reply arrived before its own request's send had
+finished. Each send now waits for the one before it. A call whose request is still unsent when its
+time limit runs out, its own or one queued behind it, throws `StageWrightTransportException`: the
+server has stopped reading the socket, no later call would reach it either, and waiting out each
+one's time limit as a timeout would let the attached runner go on through every scene left. A
+request whose call has given up by the time its turn comes is not sent, so it cannot act on a later
+scene; one already on its way when its call gave up can still arrive late.
 
 ### A call on a closed `StageWrightRpc` fails at once · green in unit tests
 

@@ -93,18 +93,21 @@ public final class StageWrightRpc implements AutoCloseable {
 
     /**
      * Issue one request and block at most {@code timeoutMs} for its reply. Throws the refusal as
-     * {@link StageWrightRpcException}, a broken socket or an interrupt as
-     * {@link StageWrightTransportException}, a timeout as {@link StageWrightTimeoutException}.
+     * {@link StageWrightRpcException}, a broken socket, an interrupt or a request that could not be
+     * sent within {@code timeoutMs} as {@link StageWrightTransportException}, and a request sent but
+     * unanswered as {@link StageWrightTimeoutException}.
      */
     public JsonObject call(String method, JsonObject params, long timeoutMs) {
         long id = ids.incrementAndGet();
         CompletableFuture<JsonObject> fut = new CompletableFuture<>();
         pending.put(id, fut);
+        CompletableFuture<WebSocket> send = null;
         try {
             String payload = escapeSurrogates(GSON.toJson(encodeRequest(id, method, params)));
             // A send on a socket whose output already closed fails here even before the reader sees
             // the close; ignored, the call would wait out its timeout and read as a wedged server.
-            sendAfterTheLast(payload, () -> pending.containsKey(id)).whenComplete((ws, failed) -> {
+            send = sendAfterTheLast(payload, () -> pending.containsKey(id));
+            send.whenComplete((ws, failed) -> {
                 if (failed != null) fut.completeExceptionally(failed);
             });
             // Read after the put: a close that failAll drained before this call registered would
@@ -114,6 +117,12 @@ public final class StageWrightRpc implements AutoCloseable {
             JsonObject envelope = fut.get(timeoutMs, TimeUnit.MILLISECONDS);
             return resultOf(method, envelope);
         } catch (TimeoutException e) {
+            // Not sent in all that time: the server has stopped reading the socket, and every call after
+            // this one would queue behind it and wait out its own timeout without reaching the server.
+            if (send != null && !send.isDone()) {
+                throw new StageWrightTransportException(method, "the request could not be sent within "
+                        + timeoutMs + "ms: the server has stopped reading the socket");
+            }
             throw new StageWrightTimeoutException("RPC call " + method + " timed out after " + timeoutMs + "ms");
         } catch (ExecutionException e) {
             throw new StageWrightTransportException(method, "transport error: " + e.getCause());

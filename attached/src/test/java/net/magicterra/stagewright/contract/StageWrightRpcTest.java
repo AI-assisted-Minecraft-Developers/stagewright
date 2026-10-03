@@ -93,8 +93,8 @@ class StageWrightRpcTest {
                 });
         try (StageWrightRpc rpc = new StageWrightRpc(HttpClient.newHttpClient(), stalled,
                 new StageWrightRpc.Reader())) {
-            assertThrows(StageWrightTimeoutException.class, () -> rpc.call("mc.first", new JsonObject(), 200));
-            assertThrows(StageWrightTimeoutException.class, () -> rpc.call("mc.second", new JsonObject(), 200));
+            assertThrows(StageWrightTransportException.class, () -> rpc.call("mc.first", new JsonObject(), 200));
+            assertThrows(StageWrightTransportException.class, () -> rpc.call("mc.second", new JsonObject(), 200));
             serverReadsAgain.complete(stalled);
             assertEquals(1, sends.get(), "a request sent now would act on whatever scene runs next");
         }
@@ -198,14 +198,16 @@ class StageWrightRpcTest {
     }
 
     @Test
-    void aCallQueuedBehindAnUnsentRequestTimesOutRatherThanReadingAsALostConnection() throws Exception {
+    void aCallQueuedBehindAnUnsentRequestIsATransportFailureRatherThanAWedgedServer() throws Exception {
         try (ServerSocket server = new ServerSocket(0)) {
             CompletableFuture<Socket> stopped = stopsReading(server);
             StageWrightRpc rpc = StageWrightRpc.connect("ws://127.0.0.1:" + server.getLocalPort() + "/rpc", 5_000);
             try {
                 fillTheSocket(rpc);
-                assertThrows(StageWrightTimeoutException.class,
+                // It never reached the server, as no call after it would: the runner stops here.
+                StageWrightTransportException e = assertThrows(StageWrightTransportException.class,
                         () -> rpc.call("mc.system.version", new JsonObject(), 1_000));
+                assertTrue(e.error().contains("stopped reading the socket"), e.error());
             } finally {
                 stopped.get(5, TimeUnit.SECONDS).close();
                 rpc.close();
@@ -276,7 +278,7 @@ class StageWrightRpcTest {
     private static void fillTheSocket(StageWrightRpc rpc) {
         JsonObject fill = new JsonObject();
         fill.addProperty("fill", "x".repeat(32 << 20));
-        assertThrows(StageWrightTimeoutException.class, () -> rpc.call("mc.fill", fill, 1_000));
+        assertThrows(StageWrightTransportException.class, () -> rpc.call("mc.fill", fill, 1_000));
     }
 
     /** Complete one websocket handshake, then drop the connection without a close frame. */

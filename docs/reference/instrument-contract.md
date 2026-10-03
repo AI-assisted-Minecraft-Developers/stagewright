@@ -129,9 +129,11 @@ Four behaviours of that facade are contractual:
   so a test can assert on the refusal rather than on the absence of a result.
 - **A broken connection is not a refusal.** A call on a socket the client has seen close, even one
   that closed before the call was made, on a client already closed, or whose wait for a reply was
-  interrupted, throws `StageWrightTransportException` at once. A connection that died without the
-  peer closing it (no FIN or RST) still looks open, so the call waits out its time limit and throws
-  `StageWrightTimeoutException`, as does a call queued behind a request the server never read.
+  interrupted, throws `StageWrightTransportException` at once. So does a call whose request could
+  not be sent within its time limit, because the server stopped reading the socket, once that limit
+  is out. A connection that died without the peer closing it (no FIN or RST) still looks open and
+  still takes a small request, so the call waits out its time limit and throws
+  `StageWrightTimeoutException`.
   `StageWrightTransportException` is a `RuntimeException` beside the refusal exception, not a kind
   of it, so `errorOf` lets it through rather than returning its text as though the driver had said
   it, and a `catch` or `assertThrows` for a refusal does not take it for one.
