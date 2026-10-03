@@ -60,6 +60,24 @@ class EndpointDescriptorTest {
         assertEquals(42345, read(target).get("rpcPort").getAsInt());
     }
 
+    @Test void pendingUntilThisWorldPublishes() throws IOException {
+        System.clearProperty(EndpointDescriptor.PROPERTY);
+        assertFalse(EndpointDescriptor.pending(), "nothing asked for a descriptor");
+
+        Path target = directory.resolve("endpoint.json");
+        System.setProperty(EndpointDescriptor.PROPERTY, target.toString());
+        assertTrue(EndpointDescriptor.pending());
+        // A refusal leaves the next tick free to retry.
+        EndpointDescriptor.cannotPublish("WorldDriver RPC is not listening");
+        EndpointDescriptor.cannotPublish("WorldDriver RPC is not listening");
+        assertTrue(EndpointDescriptor.pending());
+
+        EndpointDescriptor.writeIfRequested("fabric", "first", "localhost", 41234, null, null);
+        assertFalse(EndpointDescriptor.pending());
+        EndpointDescriptor.reset();
+        assertTrue(EndpointDescriptor.pending(), "a new world publishes again");
+    }
+
     private static JsonObject read(Path target) throws IOException {
         return JsonParser.parseString(Files.readString(target)).getAsJsonObject();
     }
