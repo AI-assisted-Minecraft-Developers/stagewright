@@ -12,6 +12,20 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-09-29
 
+### One change gets one build id whatever the machine's diff settings, and is hashed as it is read · green in unit tests
+
+The build id's digest is taken over the bytes `git diff` prints, and a machine's diff settings
+change those bytes for the same change: `diff.noprefix`, `diff.mnemonicPrefix`, `diff.srcPrefix` and
+`diff.dstPrefix`, `diff.context`, `diff.interHunkContext`, `diff.algorithm`, `diff.indentHeuristic`,
+`diff.renames`, `diff.orderFile`, `diff.suppressBlankEmpty`, `core.quotePath` and `core.abbrev`. Two
+machines with the same uncommitted change then recorded different builds, and coverage across their
+runs was ENV under `MIXED BUILDS`. All of them are now pinned for the project's own files, and so is
+the algorithm a diff driver bound by attributes sets for itself. A binary change is named by the
+hash of its new content rather than by its patch, which `core.compression` and the zlib git was
+built with each made different. The diff was also read into memory whole before it was hashed, so a
+work tree with large changed binaries could run the Gradle daemon out of heap; it is now hashed a
+chunk at a time.
+
 ### A companion whose loader left a JVM argument unset says so · green in unit tests
 
 A `null` among a companion's JVM arguments stopped the gate with a bare `NullPointerException`,
