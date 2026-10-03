@@ -20,6 +20,18 @@ Two of the root build's modules are scoped out of the loom pipeline by name —
 putting a Minecraft classpath under a module whose whole contract is not having one would make
 it unconsumable by the CLI.
 
+### The Architectury transforms run one at a time
+
+The root build runs its projects in parallel, but its `transformProduction*` tasks share one build
+service that admits a single task at a time. The Architectury plugin hands each transform its
+configuration, the classpath among it, through JVM system properties, and the Gradle daemon has
+one set of those for every task it runs. Two transforms that overlap can each read the other's: on
+CI, `:stagewright-common:transformProductionFabric` read the classpath of
+`:stagewright-api:transformProductionNeoForge`, which lists what api depends on but not api
+itself, and failed with `Type net/magicterra/stagewright/scene/SceneContext$Progress not present`.
+Whether two transforms overlap depends on how long the tasks before them take, so the failure
+comes and goes with unrelated changes.
+
 ## Where builds are published
 
 CI (`.github/workflows/ci.yml`) builds and tests every pull request and every push to `master`, and
