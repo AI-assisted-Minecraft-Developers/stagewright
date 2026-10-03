@@ -1,7 +1,10 @@
 package net.magicterra.stagewright.cli;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -13,11 +16,15 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipException;
+import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
 /** Checks the required driver in the effective mod set before changing a world or downloading. */
 final class DriverRequirement {
     private record Mod(String id, String version, String driverRange, String source) {}
+    private static final String FABRIC_METADATA = "fabric.mod.json";
+    private static final String NEOFORGE_METADATA = "META-INF/neoforge.mods.toml";
     private DriverRequirement() {}
 
     static void check(Path gameDir, String loader, List<Path> extras, boolean bundledFramework) {
@@ -73,44 +80,79 @@ final class DriverRequirement {
         return Files.isRegularFile(path) && path.getFileName().toString().endsWith(".jar");
     }
 
+    /**
+     * By entry name through the central directory: a pack's jars need not be stream-readable. A
+     * file that is no zip at all is not one of our two mods, so the loader judges it, not this.
+     */
     private static List<Mod> read(Path jar, String loader) {
-        try (InputStream in = Files.newInputStream(jar)) { return metadata(in, loader, jar.toString()); }
-        catch (IOException | RuntimeException e) {
+        ZipFile opened;
+        try { opened = new ZipFile(jar.toFile()); }
+        catch (ZipException notAZip) { return List.of(); }
+        catch (IOException e) { throw new UncheckedIOException("cannot open " + jar, e); }
+        try (ZipFile zip = opened) {
+            for (String path : metadataPaths(loader)) {
+                ZipEntry entry = zip.getEntry(path);
+                if (entry == null) continue;
+                try (InputStream in = zip.getInputStream(entry)) {
+                    return parse(path, new String(in.readAllBytes(), StandardCharsets.UTF_8), jar.toString());
+                }
+            }
+            return List.of();
+        } catch (IOException | RuntimeException e) {
             throw new IllegalArgumentException("cannot read mod metadata from " + jar + ": " + e.getMessage(), e);
         }
     }
 
+    /** The CLI's own bundled jar, which is only reachable as a stream. */
     private static List<Mod> metadata(InputStream input, String loader, String source) throws IOException {
-        String path = loader.equals("fabric") ? "fabric.mod.json" : "META-INF/neoforge.mods.toml";
+        List<String> paths = metadataPaths(loader);
         try (ZipInputStream zip = new ZipInputStream(input)) {
             for (ZipEntry entry; (entry = zip.getNextEntry()) != null;) {
-                if (!entry.getName().equals(path)) continue;
-                String text = new String(zip.readAllBytes(), StandardCharsets.UTF_8);
-                if (loader.equals("fabric")) {
-                    JsonObject json = JsonParser.parseString(text).getAsJsonObject();
-                    String id = json.get("id").getAsString();
-                    if (!id.equals("worlddriver") && !id.equals("mc_testkit")) return List.of();
-                    JsonObject deps = json.getAsJsonObject("depends");
-                    String range = deps != null && deps.has("worlddriver") ? deps.get("worlddriver").getAsString() : null;
-                    return List.of(new Mod(id, json.get("version").getAsString(), range, source));
-                }
-                List<Mod> result = new ArrayList<>();
-                for (String block : text.split("(?m)^\\s*\\[\\[")) {
-                    if (!block.startsWith("mods]]")) continue;
-                    String id = value(block, "modId");
-                    if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) continue;
-                    String range = null;
-                    for (String dep : text.split("(?m)^\\s*\\[\\[")) {
-                        if (dep.startsWith("dependencies." + id + "]]" )
-                                && "worlddriver".equals(value(dep, "modId"))
-                                && "required".equals(value(dep, "type"))) range = value(dep, "versionRange");
-                    }
-                    result.add(new Mod(id, value(block, "version"), range, source));
-                }
-                return result;
+                if (!paths.contains(entry.getName())) continue;
+                return parse(entry.getName(), new String(zip.readAllBytes(), StandardCharsets.UTF_8), source);
             }
         }
         return List.of();
+    }
+
+    private static List<String> metadataPaths(String loader) {
+        return List.of(loader.equals("fabric") ? FABRIC_METADATA : NEOFORGE_METADATA);
+    }
+
+    /**
+     * Only our two mods are read; metadata this cannot read as one of them, in whatever shape, is
+     * that mod's loader's business. A missing field of ours reads as null and is refused by name.
+     */
+    private static List<Mod> parse(String path, String text, String source) {
+        if (path.equals(FABRIC_METADATA)) {
+            JsonElement root;
+            try { root = JsonParser.parseString(text.startsWith("﻿") ? text.substring(1) : text); }
+            catch (JsonParseException unreadable) { return List.of(); }
+            if (!root.isJsonObject()) return List.of();
+            JsonObject json = root.getAsJsonObject();
+            String id = string(json, "id");
+            if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) return List.of();
+            String range = json.get("depends") instanceof JsonObject deps ? string(deps, "worlddriver") : null;
+            return List.of(new Mod(id, string(json, "version"), range, source));
+        }
+        List<Mod> result = new ArrayList<>();
+        for (String block : text.split("(?m)^\\s*\\[\\[")) {
+            if (!block.startsWith("mods]]")) continue;
+            String id = value(block, "modId");
+            if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) continue;
+            String range = null;
+            for (String dep : text.split("(?m)^\\s*\\[\\[")) {
+                if (dep.startsWith("dependencies." + id + "]]" )
+                        && "worlddriver".equals(value(dep, "modId"))
+                        && "required".equals(value(dep, "type"))) range = value(dep, "versionRange");
+            }
+            result.add(new Mod(id, value(block, "version"), range, source));
+        }
+        return result;
+    }
+
+    private static String string(JsonObject json, String key) {
+        return json.get(key) instanceof JsonPrimitive p && p.isString() ? p.getAsString() : null;
     }
 
     private static String value(String block, String key) {

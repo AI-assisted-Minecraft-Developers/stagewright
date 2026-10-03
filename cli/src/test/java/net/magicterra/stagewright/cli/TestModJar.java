@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -24,6 +25,32 @@ final class TestModJar {
                     + "\"\nversion=\"" + version + "\"\n[[dependencies." + id
                     + "]]\nmodId=\"worlddriver\"\ntype=\"required\"\nversionRange=\"[0.1.0-0,0.2.0-0)\"\n");
             entry(out, "marker.txt", marker);
+        }
+        return jar;
+    }
+
+    /** A jar holding only {@code fabric.mod.json}, optionally as a stored entry whose local header
+     *  claims a data descriptor — readable through the central directory only. */
+    static Path withMetadata(Path jar, String fabricModJson, boolean storedWithDescriptor) throws IOException {
+        Files.createDirectories(jar.getParent());
+        byte[] text = fabricModJson.getBytes(StandardCharsets.UTF_8);
+        try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jar))) {
+            ZipEntry entry = new ZipEntry("fabric.mod.json");
+            if (storedWithDescriptor) {
+                CRC32 crc = new CRC32();
+                crc.update(text);
+                entry.setMethod(ZipEntry.STORED);
+                entry.setSize(text.length);
+                entry.setCrc(crc.getValue());
+            }
+            out.putNextEntry(entry);
+            out.write(text);
+            out.closeEntry();
+        }
+        if (storedWithDescriptor) {
+            byte[] bytes = Files.readAllBytes(jar);
+            bytes[6] |= 0x08; // the first local header's general-purpose flag, bit 3
+            Files.write(jar, bytes);
         }
         return jar;
     }
