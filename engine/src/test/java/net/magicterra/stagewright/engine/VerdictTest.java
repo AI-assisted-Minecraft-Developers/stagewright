@@ -311,6 +311,16 @@ class VerdictTest {
         assertTrue(reports(result, "TRUNCATED"));
     }
 
+    @Test
+    void aFooterThatSaysTheRunWasCutShortIsRedThoughEverySceneWasOptional() {
+        Map<String, Object> done = done(1);
+        done.put("cutShort", "the connection to the driver was lost during 'flaky'");
+        Verdict.Result result = Verdict.judge(
+                records(suite(optional("flaky")), scene("flaky", "FAIL"), done), null);
+        assertEquals(1, result.code());
+        assertTrue(reports(result, "CUT SHORT: the connection to the driver was lost during 'flaky'"));
+    }
+
     // ---- optional scenes -----------------------------------------------------------------------
 
     @Test

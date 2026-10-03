@@ -99,6 +99,29 @@ class AttachedRunTest {
     }
 
     @Test
+    void aLostConnectionIsInTheFileNotOnlyInTheReturnValue(@TempDir Path dir) throws IOException {
+        // All optional, so the records alone would judge GREEN.
+        run(dir, """
+                scene.optional('pack.first', 20, function (s) { s.driver('mc.first'); });
+                scene.optional('pack.second', 20, function (s) { s.driver('mc.second'); });
+                """, gone(new ArrayList<>()), new ArrayList<>(), new boolean[1]);
+
+        List<String> lines = Files.readAllLines(dir.resolve("attached-results.jsonl"), StandardCharsets.UTF_8);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> done = GSON.fromJson(lines.get(lines.size() - 1), Map.class);
+        assertEquals("the connection to the driver was lost during 'pack.first' (transport error: closed)",
+                done.get("cutShort"));
+    }
+
+    @Test
+    void aRunThatHeldItsConnectionWritesNoCutShort(@TempDir Path dir) throws IOException {
+        run(dir, "scene('pack.first', 20, function (s) { });", (method, params) -> null,
+                new ArrayList<>(), new boolean[1]);
+        List<String> lines = Files.readAllLines(dir.resolve("attached-results.jsonl"), StandardCharsets.UTF_8);
+        assertFalse(lines.get(lines.size() - 1).contains("cutShort"), lines.get(lines.size() - 1));
+    }
+
+    @Test
     void aLostConnectionABodyCaughtStillEndsTheRun(@TempDir Path dir) throws IOException {
         List<String> calls = new ArrayList<>();
         boolean[] allGood = new boolean[1];
