@@ -37,10 +37,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       # A same-named branch in the companion repository identifies a candidate pair.
-      # Pin its commit before checkout; other PRs keep using their published dependency.
+      # Pin its commit before checkout; other PRs keep using their published dependency. A fork's
+      # branch names are its own, so only a branch of this repository can name a pair.
       - name: Find companion candidate
         id: companion
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         env:
           COMPANION_BRANCH: ${{ github.head_ref }}
           COMPANION_REPOSITORY: ${{ github.repository_owner }}/worlddriver
