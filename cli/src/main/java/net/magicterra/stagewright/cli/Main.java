@@ -175,6 +175,7 @@ public final class Main {
         List<String> launch = serverLaunch(run);
         String loader = GameLaunch.loader(run.gameDir());
         if (!run.opts().containsKey("no-install")) ModInjection.requireLoader(loader);
+        preflightDriver(run, run.gameDir(), loader);
         Worlds.prepareServer(run.gameDir(), serverWorld, run.log());
         RunDirectory.provision(run.gameDir(), List.of(run.results()), false, true, run.log());
         ModInjection.Arguments mods = inject(run, run.gameDir(), loader);
@@ -220,6 +221,7 @@ public final class Main {
         // Before the install: a vanilla client is refused without a download.
         String loader = requireModLoader(run, client);
         ClientPreflight.check(run.gameDir(), run.log());
+        preflightDriver(run, run.gameDir(), loader);
         Path installDir = installDir(run.opts());
         String javaBinary = javaBinary(run.opts());
         String versionId = install(client, installDir, run, javaBinary);
@@ -296,6 +298,8 @@ public final class Main {
         }
         if (loader == null) loader = clientLoader;
         ClientPreflight.check(clientDir, run.log());
+        preflightDriver(run, run.gameDir(), loader);
+        preflightDriver(run, clientDir, loader);
         Worlds.prepareServer(run.gameDir(), serverWorld, run.log());
         Files.createDirectories(clientDir);
 
@@ -413,6 +417,11 @@ public final class Main {
                     + " client cannot run scenes — name a loader in --client");
         }
         return client.modLoader();
+    }
+
+    private static void preflightDriver(Run run, Path dir, String loader) {
+        boolean installMods = !run.opts().containsKey("no-install");
+        DriverRequirement.check(dir, loader, installMods ? run.extraMods() : List.of(), installMods);
     }
 
     private static ModInjection.Arguments inject(Run run, Path dir, String loader) {

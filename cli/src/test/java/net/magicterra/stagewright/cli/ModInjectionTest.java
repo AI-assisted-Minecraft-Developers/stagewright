@@ -25,7 +25,7 @@ class ModInjectionTest {
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));
         Files.writeString(mods.resolve("jei.jar"), "the pack's", StandardCharsets.UTF_8);
-        Path driver = Files.writeString(tmp.resolve("WorldDriver 0.1+1.21.1.jar"), "driver");
+        Path driver = TestModJar.driver(tmp.resolve("WorldDriver 0.1+1.21.1.jar"), "driver");
 
         ModInjection.Arguments args = ModInjection.prepare(gameDir, "neoforge", List.of(driver), l -> {});
 
@@ -46,7 +46,7 @@ class ModInjectionTest {
     @Test
     void fabricGetsAddMods(@TempDir Path tmp) throws IOException {
         Path gameDir = Files.createDirectories(tmp.resolve("pack"));
-        Path driver = Files.writeString(tmp.resolve("worlddriver.jar"), "driver");
+        Path driver = TestModJar.driver(tmp.resolve("worlddriver.jar"), "driver");
 
         ModInjection.Arguments args = ModInjection.prepare(gameDir, "fabric", List.of(driver), l -> {});
 
@@ -63,13 +63,13 @@ class ModInjectionTest {
         // The ledger kept only a name, and the pack has since put its own jar under it.
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));
-        Files.writeString(mods.resolve("worlddriver-neoforge.jar"), "the pack's, same name");
+        TestModJar.driver(mods.resolve("worlddriver-neoforge.jar"), "the pack's, same name");
         Files.writeString(mods.resolve(".stagewright-installed"), "worlddriver-neoforge.jar\n");
 
         List<String> log = new java.util.ArrayList<>();
         ModInjection.prepare(gameDir, "neoforge", List.of(), log::add);
 
-        assertEquals("the pack's, same name", Files.readString(mods.resolve("worlddriver-neoforge.jar")));
+        assertEquals("the pack's, same name", TestModJar.marker(mods.resolve("worlddriver-neoforge.jar")));
         assertTrue(Files.exists(mods.resolve(".stagewright-installed")));
         assertTrue(log.stream().anyMatch(l -> l.startsWith("NOTE:") && l.contains("worlddriver-neoforge.jar")),
                 log.toString());
@@ -79,8 +79,8 @@ class ModInjectionTest {
     void aPackCopyWithOtherBytesIsUsedAndWarnedAbout(@TempDir Path tmp) throws IOException {
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));
-        Files.writeString(mods.resolve("worlddriver.jar"), "last week's build");
-        Path mine = Files.writeString(Files.createDirectories(tmp.resolve("build")).resolve("worlddriver.jar"),
+        TestModJar.driver(mods.resolve("worlddriver.jar"), "last week's build");
+        Path mine = TestModJar.driver(Files.createDirectories(tmp.resolve("build")).resolve("worlddriver.jar"),
                 "today's build");
 
         List<String> log = new java.util.ArrayList<>();
@@ -94,25 +94,26 @@ class ModInjectionTest {
     void aStageWrightThePackShipsIsKeptAndNotLoadedTwice(@TempDir Path tmp) throws IOException {
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));
-        Files.writeString(mods.resolve("mc_stagewright-neoforge-0.1.0+1.21.1.jar"), "shipped");
+        TestModJar.create(mods.resolve("mc_stagewright-neoforge-0.1.0+1.21.1.jar"), "mc_testkit", "0.1.0", "shipped");
+        TestModJar.driver(mods.resolve("driver.jar"), "driver");
 
         ModInjection.Arguments args = ModInjection.prepare(gameDir, "neoforge", List.of(), l -> {});
 
         assertEquals(ModInjection.Arguments.NONE, args);
-        assertEquals("shipped", Files.readString(mods.resolve("mc_stagewright-neoforge-0.1.0+1.21.1.jar")));
+        assertEquals("shipped", TestModJar.marker(mods.resolve("mc_stagewright-neoforge-0.1.0+1.21.1.jar")));
     }
 
     @Test
     void aModThePackAlreadyShipsIsNotLoadedTwice(@TempDir Path tmp) throws IOException {
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));
-        Files.writeString(mods.resolve("worlddriver.jar"), "shipped");
-        Path mine = Files.writeString(Files.createDirectories(tmp.resolve("build")).resolve("worlddriver.jar"),
+        TestModJar.driver(mods.resolve("worlddriver.jar"), "shipped");
+        Path mine = TestModJar.driver(Files.createDirectories(tmp.resolve("build")).resolve("worlddriver.jar"),
                 "mine");
 
         ModInjection.Arguments args = ModInjection.prepare(gameDir, "fabric", List.of(mine), l -> {});
 
         assertFalse(args.jvm().get(0).contains(mine.toString()), args.jvm().toString());
-        assertEquals("shipped", Files.readString(mods.resolve("worlddriver.jar")));
+        assertEquals("shipped", TestModJar.marker(mods.resolve("worlddriver.jar")));
     }
 }

@@ -163,10 +163,12 @@ def check_latvian_fence(problems):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--build', action='store_true', help='run the jar and POM tasks first')
+    parser.add_argument('--gradle-arg', action='append', default=[],
+                        help='extra Gradle argument for every build, e.g. -Pworlddriver_version=...')
     args = parser.parse_args()
     if args.build:
         for cmd in BUILD_COMMANDS:
-            subprocess.run(cmd, cwd=ROOT, check=True)
+            subprocess.run(cmd + args.gradle_arg, cwd=ROOT, check=True)
 
     problems = []
     check_jars(problems)

@@ -1,13 +1,8 @@
 package net.magicterra.stagewright.contract;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
 
 /**
  * {@link DriverBinding} over the RPC websocket — the out-of-process half of {@code driver(...)}.
@@ -36,10 +31,9 @@ public final class RpcDriverBinding implements DriverBinding {
 
     @Override
     public Object route(String method, Map<String, Object> params) {
-        JsonObject json = new JsonObject();
-        params.forEach((k, v) -> json.add(k, toJson(v)));
+        JsonObject json = DriverJson.params(params);
         try {
-            return fromJson(rpc.call(method, json, timeoutMs));
+            return DriverJson.fromJson(rpc.call(method, json, timeoutMs));
         } catch (StageWrightTransportException e) {
             // Kept as the cause so the runner can stop at a lost connection, not just this scene.
             throw new SceneFailure("driver('" + method + "') " + e.error(), e);
@@ -55,47 +49,4 @@ public final class RpcDriverBinding implements DriverBinding {
         }
     }
 
-    private static JsonElement toJson(Object v) {
-        if (v == null) return com.google.gson.JsonNull.INSTANCE;
-        if (v instanceof JsonElement e) return e;
-        if (v instanceof Number n) return new JsonPrimitive(n);
-        if (v instanceof Boolean b) return new JsonPrimitive(b);
-        if (v instanceof Map<?, ?> m) {
-            JsonObject o = new JsonObject();
-            m.forEach((k, val) -> o.add(String.valueOf(k), toJson(val)));
-            return o;
-        }
-        if (v instanceof Iterable<?> it) {
-            JsonArray a = new JsonArray();
-            for (Object o : it) a.add(toJson(o));
-            return a;
-        }
-        return new JsonPrimitive(String.valueOf(v));
-    }
-
-    private static Object fromJson(JsonElement e) {
-        if (e == null || e.isJsonNull()) return null;
-        if (e.isJsonObject()) {
-            Map<String, Object> out = new java.util.LinkedHashMap<>();
-            for (Map.Entry<String, JsonElement> entry : e.getAsJsonObject().entrySet()) {
-                out.put(entry.getKey(), fromJson(entry.getValue()));
-            }
-            return out;
-        }
-        if (e.isJsonArray()) {
-            List<Object> out = new ArrayList<>();
-            for (JsonElement child : e.getAsJsonArray()) out.add(fromJson(child));
-            return out;
-        }
-        JsonPrimitive p = e.getAsJsonPrimitive();
-        if (p.isBoolean()) return p.getAsBoolean();
-        if (p.isNumber()) {
-            double d = p.getAsDouble();
-            // Integral values come back as Long so a script comparing against 3 does not have to
-            // reason about 3.0 — Rhino's == would cope, but a record written to the results file
-            // would read "3.0" and a reader would wonder what the fraction meant.
-            return d == Math.rint(d) && !Double.isInfinite(d) ? (Object) (long) d : (Object) d;
-        }
-        return p.getAsString();
-    }
 }

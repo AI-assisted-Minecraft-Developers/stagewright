@@ -28,7 +28,7 @@ description='''${mod_description}'''
 
 [[dependencies.${mod_id}]]
     modId="worlddriver"
-    type="optional"
+    type="required"
     versionRange="${worlddriver_version_range}"
     ordering="NONE"
     side="BOTH"

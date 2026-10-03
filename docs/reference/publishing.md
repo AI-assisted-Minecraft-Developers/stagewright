@@ -233,7 +233,7 @@ the framework.
 | Fabric Loader | the version pinned in `gradle.properties`, range `[0.16,)` |
 | NeoForge | the version pinned in `gradle.properties`, range `[21,)` |
 | Java | 21 |
-| WorldDriver | optional; when present, `[0.1.0-0,0.2.0-0)` — every `0.1.0` build |
+| WorldDriver | required; `[0.1.0-0,0.2.0-0)` — every `0.1.0` build |
 
 Both loaders' jar metadata takes the mod id, name, authors, licence, description and every range
 above from `gradle.properties` when the jar is built; `fabric.mod.json` gets the Maven ranges
@@ -241,10 +241,13 @@ rewritten into Fabric's predicate form (`[1.21.1,1.22)` becomes `>=1.21.1 <1.22`
 
 WorldDriver's range is derived from `worlddriver_version`, the build StageWright compiles
 against: that release up to its next breaking one, which is the next minor while it is `0.x`.
-Without WorldDriver StageWright still loads and runs its scenes, with no `mc.test.*` verbs.
-With a WorldDriver outside the range the loader refuses to start: NeoForge through an
-`optional` dependency, Fabric through `breaks` (Fabric Loader does not check a `suggests`
-version, so that entry only documents the relationship).
+Both loaders refuse to start without WorldDriver or with a version outside the range:
+Fabric declares it in `depends`, NeoForge declares a `required` dependency. The runtime
+uses direct `DriverBinding` calls through `common/driver`; there is no driver-free mode.
+The CLI checks the effective jar metadata before resetting a world or downloading a client.
+Its preflight accepts the generated release-line ranges and published `build.*` candidates;
+other prerelease formats are refused explicitly. The loader performs its own dependency check.
+
 
 The Minecraft platform versions must stay in lockstep with WorldDriver's `gradle.properties`.
 StageWright compiles against WorldDriver's common module built against those exact versions, and
@@ -265,3 +268,25 @@ internal classes, and the `StageWrightRpc` wire details.
 
 Every artifact of all four builds carries the one version described under [Versions](#versions);
 there is no independent scheme for any of them.
+
+## Local candidate pair
+
+Run `./scripts/build_driver_pair.sh /path/to/worlddriver` from this checkout to reproduce the
+bootstrap order, compile and test both candidates, build the CLI, and check architecture and
+packaging. The script publishes only to `mavenLocal`. Logs go under `build/driver-pair-logs`.
+Both repositories use the same `BUILD_NUMBER` environment value, or `local` when unset.
+
+This build check does not replace joint runtime acceptance. In the WorldDriver checkout run all
+six `stagewright<Topology><Loader>` tasks with `-Pstagewright_version=<candidate>` and then
+`stagewrightCoverage`. Redirect each complete log to a separate local file. Supply a desktop
+`DISPLAY` or Xvfb for client topologies. Never compile into a worktree whose gate is running.
+
+
+### Paired pull requests
+
+Give related changes in both repositories the same branch name. On a pull request, CI checks
+whether the companion repository has that branch and pins its current commit before checkout.
+When it exists, CI runs `build_driver_pair.sh` against both candidate sources, including their JVM,
+CLI, architecture and packaging checks; WorldDriver's NeoForge gate also uses the candidate
+StageWright version. When no companion branch exists, CI uses the configured published dependency.
+These PR builds publish only to the runner's local Maven repository.

@@ -20,13 +20,10 @@ dependencies {
     // is remapped to intermediary and will not link against a dev-mapped compile classpath.
     implementation "net.magicterra:worlddriver-common:${rootProject.worlddriver_version}:dev"
 
-    // JavaScript scene files. compileOnly, and that is the whole point: the runtime copy is the one
-    // worlddriver nests, so this jar neither embeds Rhino nor declares a runtime dependency on it,
-    // and a mod that loads StageWright without worlddriver still boots. `JsScenes` is the only class
-    // that touches it and is reached solely through a name probe, so its absence is a missing
-    // feature, not a NoClassDefFoundError at arm time.
+    // WorldDriver provides the required runtime copy; do not embed Rhino a second time.
     compileOnly "dev.latvian.mods:rhino:${rootProject.rhino_version}"
 
+    testImplementation "dev.latvian.mods:rhino:${rootProject.rhino_version}"
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

@@ -1,6 +1,9 @@
 package net.magicterra.stagewright.neoforge;
 
 import net.magicterra.stagewright.client.ClientDirector;
+import net.magicterra.stagewright.driver.client.ClientProbes;
+import net.magicterra.stagewright.harness.EndpointDescriptor;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -16,13 +19,18 @@ public final class StageWrightClientDirector {
 
     /** Install the director if a directive was given. Called from the mod entry on the client only. */
     public static void install() {
-        if (!ClientDirector.arm("neoforge")) {
-            return;
-        }
+        NeoForge.EVENT_BUS.addListener(ClientPlayerNetworkEvent.LoggingOut.class, event -> {
+            ClientProbes.reset();
+            EndpointDescriptor.reset();
+        });
+        boolean directed = ClientDirector.arm("neoforge");
         // Explicit event class. The single-argument overload infers the event type from the lambda,
         // and a METHOD REFERENCE carries no generic signature for it to read — registration then
         // fails to bind and the listener silently never fires, which is exactly what happened: the
         // client sat at the title screen, ticking normally, while nothing drove it.
-        NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> ClientDirector.tick());
+        NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> {
+            ClientDirector.onWorldReady("neoforge");
+            if (directed) ClientDirector.tick();
+        });
     }
 }

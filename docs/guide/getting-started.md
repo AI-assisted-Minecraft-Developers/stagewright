@@ -8,7 +8,9 @@ StageWright has two audiences and two entry points. Pick the one that describes 
   [the Gradle plugin](#adding-stagewright-to-a-gradle-project).
 
 Either way, you need Minecraft 1.21.1, Java 21, and either Fabric Loader 0.16 or newer with Fabric
-API, or NeoForge 21.
+API, or NeoForge 21, with a compatible WorldDriver mod and its Architectury dependency.
+StageWright requires WorldDriver in every game process, including a joining client.
+The CLI supplies StageWright; install WorldDriver in `mods/` or pass `--mod <worlddriver.jar>`.
 
 ## Testing a modpack, with no build tool
 

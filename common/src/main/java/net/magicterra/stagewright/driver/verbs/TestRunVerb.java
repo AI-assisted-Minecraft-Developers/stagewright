@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.verbs;
+package net.magicterra.stagewright.driver.verbs;
 
 import java.util.Map;
 
@@ -21,10 +21,11 @@ import static net.magicterra.worlddriver.mcp.schema.Schemas.tool;
  *
  * <h2>Boot ordering</h2>
  * {@code registerVerb} refuses a pre-boot (sink-less) call. Registration runs from
- * {@link StageWrightCommon#onServerStarted} (SERVER_STARTED), strictly after worlddriver wired its
- * route sink at SERVER_STARTING ({@code WorldDriverCommon.ensureRpcUp}) — so the sink is always
- * present by the time this fires. {@link #register()} is idempotent-guarded so a duplicate
- * server-started cannot append the schema supplier twice.
+ * {@link StageWrightCommon#onServerStarted} or
+ * {@link StageWrightCommon#onClientWorldReady}, after the driver has wired its route sink.
+ * A joining client has no local SERVER_STARTED notification; it registers when its world,
+ * player and connection are ready. DriverRuntime guards registration per API instance;
+ * paired schemas are keyed by name rather than appended on each registration.
  */
 public final class TestRunVerb {
 
@@ -43,16 +44,14 @@ public final class TestRunVerb {
             + "loudly rather than re-running. No params.",
             object().additionalProperties(false)).asHidden();
 
-    private static volatile boolean registered;
 
     /**
-     * Register {@code mc.test.run} through the paired SPI. Idempotent (guarded) so a duplicate
-     * discovery/boot call cannot append the schema supplier twice. Must run after the route sink is
+     * Register {@code mc.test.run} through the paired schema-and-route entry point.
+     * DriverRuntime guards each API instance.
+     * Must run after the route sink is
      * wired (see class javadoc) — a pre-boot call throws from {@code registerVerb}.
      */
     public static synchronized void register() {
-        if (registered) return;
-        registered = true;
         ToolCatalog.registerVerb(SCHEMA, TestRunVerb::handle);
     }
 

@@ -175,12 +175,13 @@ reasoning behind the larger decisions under [`docs/design/`](docs/design/), and
 
 [WorldDriver](https://github.com/AI-assisted-Minecraft-Developers/worlddriver) is a Minecraft mod
 that exposes the running game as one programmable API surface. StageWright began inside it and became
-its own repository.
+its own repository. StageWright requires WorldDriver on both Fabric and NeoForge.
+Install both loader mods, or pass the matching WorldDriver jar with the CLI's `--mod`.
 
 The two depend on each other, in opposite directions and at different points: StageWright's runtime
 modules compile against WorldDriver's common module, while WorldDriver consumes StageWright as
 published Maven artifacts and applies its Gradle plugin. That is not a cycle — it is broken by module
-and by source set, since StageWright's scene API depends on nothing at all and WorldDriver's
+and by source set, since StageWright's scene API depends only on Minecraft and its shared attached vocabulary and WorldDriver's
 production code never depends on StageWright. Each side depends on one exact published version of
 the other, set in `gradle.properties` — `worlddriver_version` here, `stagewright_version` there — so
 neither needs the other's source to build. [Publishing](docs/reference/publishing.md) explains how to

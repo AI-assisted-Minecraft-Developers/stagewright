@@ -83,12 +83,10 @@ class NeoForgeModMetadataTest {
     }
 
     @Test
-    void worlddriverIsOptionalButRefusedOutsideTheLineStageWrightLinksAgainst() throws Exception {
+    void worlddriverIsRequiredWithinTheLineStageWrightLinksAgainst() throws Exception {
         Config wd = dependency("worlddriver");
         assertNotNull(wd, "no dependency entry for worlddriver");
-        // FML refuses an OPTIONAL dependency that is present with a version outside its range, and
-        // ignores it when absent — exactly the relationship StageWright has with its driver.
-        assertEquals("optional", wd.get("type"));
+        assertEquals("required", wd.get("type"));
         assertEquals("BOTH", wd.get("side"));
 
         VersionRange range = VersionRange.createFromVersionSpec(wd.get("versionRange"));
