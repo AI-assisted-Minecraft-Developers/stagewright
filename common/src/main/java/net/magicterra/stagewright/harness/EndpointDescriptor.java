@@ -42,7 +42,23 @@ public final class EndpointDescriptor {
     /** First writer wins, so a JVM that reaches both call sites publishes one descriptor. */
     private static volatile boolean written;
 
+    /** Why the last attempt failed. A client retries every tick, so each reason is logged once. */
+    private static String lastFailure;
+
     private EndpointDescriptor() {}
+
+    /** True while this run asked for a descriptor and this world has not published one yet. */
+    public static boolean pending() {
+        String target = System.getProperty(PROPERTY);
+        return target != null && !target.isBlank() && !written;
+    }
+
+    /** Record that this attempt cannot publish; the next one retries, quietly unless the reason changes. */
+    public static synchronized void cannotPublish(String why) {
+        if (why.equals(lastFailure)) return;
+        lastFailure = why;
+        StageWrightCommon.LOG.error("[{}] {}", StageWrightCommon.MOD_ID, why);
+    }
 
     /**
      * Write the descriptor if this run asked for one. Idempotent; never throws — a hold whose
@@ -74,15 +90,18 @@ public final class EndpointDescriptor {
             if (parent != null) Files.createDirectories(parent);
             Files.writeString(out, json, StandardCharsets.UTF_8);
             written = true;
+            lastFailure = null;
             StageWrightCommon.LOG.info("[{}] endpoint descriptor written to {} — attach with"
                     + " TESTKIT_ENDPOINT={}", StageWrightCommon.MOD_ID, out.toAbsolutePath(),
                     out.toAbsolutePath());
         } catch (IOException e) {
-            StageWrightCommon.LOG.error("[{}] could not write the endpoint descriptor to {}: {}",
-                    StageWrightCommon.MOD_ID, out.toAbsolutePath(), e.toString());
+            cannotPublish("could not write the endpoint descriptor to " + out.toAbsolutePath() + ": " + e);
         }
     }
 
     /** A new world owns a new descriptor publication. */
-    public static synchronized void reset() { written = false; }
+    public static synchronized void reset() {
+        written = false;
+        lastFailure = null;
+    }
 }

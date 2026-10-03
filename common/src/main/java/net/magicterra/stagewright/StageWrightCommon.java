@@ -174,9 +174,12 @@ public final class StageWrightCommon {
         }
 
         // Only where no client shares this JVM. An integrated server has one, and its ClientDirector
-        // publishes the same port later, once there is a world to attach to.
-        if (server.isDedicatedServer()) {
-            DriverEndpoint.publish(loader, server.getWorldData().getLevelName());
+        // publishes the same port later, once there is a world to attach to. This is a dedicated
+        // server's only attempt, so a hold whose endpoint nobody can read stops here rather than
+        // leaving whatever attaches to wait out its timeout.
+        if (server.isDedicatedServer() && !DriverEndpoint.publish(loader, server.getWorldData().getLevelName())) {
+            throw new IllegalStateException("StageWright: the endpoint descriptor -D"
+                    + EndpointDescriptor.PROPERTY + " asked for could not be published; the reason is logged above");
         }
     }
 
