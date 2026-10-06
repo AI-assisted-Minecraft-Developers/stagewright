@@ -310,6 +310,27 @@ class StageWrightRpcTest {
         s.getOutputStream().flush();
     }
 
+    @Test
+    void anErrorObjectReadsAsOneLineWithItsCodeAndIssues() {
+        JsonObject env = StageWrightRpc.decodeEnvelope("{\"jsonrpc\":\"2.0\",\"id\":3,\"error\":{\"code\":-32602,"
+                + "\"message\":\"invalid params\",\"data\":{\"code\":\"invalid_params\",\"message\":\"invalid params\","
+                + "\"issues\":[{\"path\":\"/bogus\",\"code\":\"unknown_field\",\"message\":\"not a parameter\"}],"
+                + "\"execution\":\"not_started\"}}}");
+        StageWrightRpcException e = assertThrows(StageWrightRpcException.class,
+                () -> StageWrightRpc.resultOf("mc.observe.player", env));
+        assertEquals("invalid params [invalid_params]: /bogus unknown_field (not a parameter)", e.error());
+        assertEquals("mc.observe.player", e.method());
+    }
+
+    @Test
+    void anErrorWithNoDataStillNamesItsJsonRpcCode() {
+        JsonObject env = StageWrightRpc.decodeEnvelope(
+                "{\"id\":4,\"error\":{\"code\":-32601,\"message\":\"unknown method: mc.no.such\"}}");
+        StageWrightRpcException e = assertThrows(StageWrightRpcException.class,
+                () -> StageWrightRpc.resultOf("mc.no.such", env));
+        assertEquals("unknown method: mc.no.such [-32601]", e.error());
+    }
+
     /** A socket whose every send succeeds and which never answers. */
     private static WebSocket sendsIntoTheVoid() {
         return (WebSocket) Proxy.newProxyInstance(

@@ -177,17 +177,23 @@ class SelfTest {
         JsonObject result = StageWrightRpc.resultOf("mc.action.runCommand", okEnv);
         assertTrue(result.get("ok").getAsBoolean());
 
+        // object result -> the object itself
+        JsonObject cursorEnv = StageWrightRpc.decodeEnvelope("{\"id\":8,\"result\":{\"cursor\":\"42\"}}");
+        assertEquals("42", StageWrightRpc.resultOf("mc.observe.cursor", cursorEnv).get("cursor").getAsString());
+
         // bare-primitive result -> wrapped under "result"
-        JsonObject cursorEnv = StageWrightRpc.decodeEnvelope("{\"id\":8,\"result\":42}");
-        JsonObject wrapped = StageWrightRpc.resultOf("mc.observe.cursor", cursorEnv);
+        JsonObject bareEnv = StageWrightRpc.decodeEnvelope("{\"id\":8,\"result\":42}");
+        JsonObject wrapped = StageWrightRpc.resultOf("worlddriver.bare", bareEnv);
         assertEquals(42, wrapped.get("result").getAsInt());
 
-        // error envelope -> StageWrightRpcException carrying method + raw error
-        JsonObject errEnv = StageWrightRpc.decodeEnvelope("{\"id\":9,\"error\":\"unknown method: mc.no.such\"}");
+        // error object -> StageWrightRpcException carrying method + a readable error line
+        JsonObject errEnv = StageWrightRpc.decodeEnvelope("{\"jsonrpc\":\"2.0\",\"id\":9,\"error\":{\"code\":-32601,"
+                + "\"message\":\"unknown method: mc.no.such\",\"data\":{\"code\":\"method_not_found\","
+                + "\"message\":\"unknown method: mc.no.such\",\"issues\":[],\"execution\":\"not_started\"}}}");
         StageWrightRpcException ex = assertThrows(StageWrightRpcException.class,
                 () -> StageWrightRpc.resultOf("mc.no.such", errEnv));
         assertEquals("mc.no.such", ex.method());
-        assertEquals("unknown method: mc.no.such", ex.error());
+        assertEquals("unknown method: mc.no.such [method_not_found]", ex.error());
     }
 
     @Test

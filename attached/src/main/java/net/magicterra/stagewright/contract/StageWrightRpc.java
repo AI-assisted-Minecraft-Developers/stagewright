@@ -21,12 +21,12 @@ import java.util.function.BooleanSupplier;
 /**
  * Synchronous bare-RPC client over a plain {@link WebSocket} (path {@code /rpc}).
  *
- * <p>Wire format matches the driver's hand-rolled envelope (NOT JSON-RPC 2.0), the
- * same one {@code scripts/stagewright/instrument.py} and {@code rpc.py} speak:
+ * <p>Wire format is the driver's JSON-RPC 2.0 envelope (the request's {@code jsonrpc} member is
+ * optional to the driver, so it is not sent):
  * <pre>
  *   request:  {"id":N,"method":"mc.x.y","params":{…}}
  *   success:  {"id":N,"result":…}
- *   error:    {"id":N,"error":"&lt;string&gt;"}
+ *   error:    {"id":N,"error":{"code":int,"message":"…","data":{code,message,issues,execution}}}
  * </pre>
  *
  * <p><b>Concurrency contract:</b> this client is designed for a <i>serial lease</i>
@@ -213,15 +213,15 @@ public final class StageWrightRpc implements AutoCloseable {
 
     /**
      * Interpret a reply envelope: an {@code error} member (non-null) throws
-     * {@link StageWrightRpcException}; otherwise the {@code result} is returned as a
-     * {@link JsonObject}. A non-object / absent result is wrapped as
+     * {@link StageWrightRpcException} carrying {@link #describeError} of it; otherwise the
+     * {@code result} is returned as a {@link JsonObject}. A non-object / absent result is wrapped as
      * {@code {"result": <value>}} so the frozen {@code JsonObject} return type holds
      * for methods that reply with a bare primitive or array.
      */
     public static JsonObject resultOf(String method, JsonObject envelope) {
         JsonElement err = envelope.get("error");
         if (err != null && !err.isJsonNull()) {
-            throw new StageWrightRpcException(method, err.isJsonPrimitive() ? err.getAsString() : err.toString());
+            throw new StageWrightRpcException(method, describeError(err));
         }
         JsonElement result = envelope.get("result");
         if (result != null && result.isJsonObject()) {
@@ -230,6 +230,49 @@ public final class StageWrightRpc implements AutoCloseable {
         JsonObject wrapped = new JsonObject();
         wrapped.add("result", result != null ? result : com.google.gson.JsonNull.INSTANCE);
         return wrapped;
+    }
+
+    /**
+     * One readable line for an envelope's {@code error}: {@code message [api code] at /path: issue; …}
+     * from a {@code {code, message, data:{code, issues}}} object, the string itself from a bare string
+     * (an older driver), and the raw JSON from anything else. A test reads this line, never a parse of it.
+     */
+    public static String describeError(JsonElement err) {
+        if (err.isJsonPrimitive()) return err.getAsString();
+        if (!err.isJsonObject()) return err.toString();
+        JsonObject e = err.getAsJsonObject();
+        StringBuilder out = new StringBuilder(stringOr(e.get("message"), e.toString()));
+        JsonElement dataEl = e.get("data");
+        JsonObject data = dataEl != null && dataEl.isJsonObject() ? dataEl.getAsJsonObject() : null;
+        String apiCode = data == null ? null : stringOr(data.get("code"), null);
+        if (apiCode != null) {
+            out.append(" [").append(apiCode).append(']');
+        } else if (e.get("code") != null && e.get("code").isJsonPrimitive()) {
+            out.append(" [").append(e.get("code").getAsString()).append(']');
+        }
+        JsonElement issues = data == null ? null : data.get("issues");
+        if (issues != null && issues.isJsonArray() && !issues.getAsJsonArray().isEmpty()) {
+            out.append(':');
+            String sep = " ";
+            for (JsonElement i : issues.getAsJsonArray()) {
+                out.append(sep);
+                sep = "; ";
+                if (!i.isJsonObject()) {
+                    out.append(i);
+                    continue;
+                }
+                JsonObject issue = i.getAsJsonObject();
+                String path = stringOr(issue.get("path"), "");
+                out.append(path.isEmpty() ? "/" : path).append(' ').append(stringOr(issue.get("code"), "?"));
+                String msg = stringOr(issue.get("message"), "");
+                if (!msg.isEmpty()) out.append(" (").append(msg).append(')');
+            }
+        }
+        return out.toString();
+    }
+
+    private static String stringOr(JsonElement el, String fallback) {
+        return el != null && el.isJsonPrimitive() ? el.getAsString() : fallback;
     }
 
     // -------------------------------------------------------------- reader -----

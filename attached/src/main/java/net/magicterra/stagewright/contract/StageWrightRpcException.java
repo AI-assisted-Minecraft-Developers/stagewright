@@ -20,7 +20,8 @@ public class StageWrightRpcException extends RuntimeException {
         return method;
     }
 
-    /** The envelope's raw error string, or what {@code StageWright.exec} found wrong. */
+    /** The envelope's error as one readable line ({@link StageWrightRpc#describeError}), or what
+     *  {@code StageWright.exec} found wrong. */
     public String error() {
         return error;
     }
