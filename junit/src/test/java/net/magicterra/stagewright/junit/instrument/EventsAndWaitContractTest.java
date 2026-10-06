@@ -105,6 +105,8 @@ class EventsAndWaitContractTest {
         params.addProperty("pollMs", 200);
 
         JsonObject r = tk.call("mc.wait.condition", params);
+        assertEquals("done", r.has("outcome") ? r.get("outcome").getAsString() : "",
+                "a foreground wait must answer outcome:done: " + r);
         assertTrue(flag(r, "satisfied"), "wait.condition did not resolve: " + r);
         assertEquals(7L, num(r, "value"), "wait.condition reported the wrong value: " + r);
     }

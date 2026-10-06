@@ -41,14 +41,13 @@ class CatalogContractTest {
     /**
      * {@code mc.bot.setting}'s advertised schema is CLOSED and carries the whole registry.
      *
-     * <p><b>Closed renders as an ABSENT key, never a literal false.</b> {@code additionalProperties}
-     * is stored as null when disallowed and emitted through an optional field, so a closed object
-     * simply omits it — matching the validator's own reading, where only an explicit {@code true}
-     * means open. So the assertion is "not true", not "equals false"; asserting the latter would
-     * fail against a correctly closed schema.
+     * <p>The params are tagged on {@code op} ({@code read|patch|apply}), so the schema is a
+     * {@code oneOf} of three closed variants; the registry lives in {@code patch}'s
+     * {@code updates.items}, itself a {@code oneOf} with one {@code {key, value}} variant per key.
+     * Only an explicit {@code additionalProperties:true} means open, so the assertion is "not true".
      *
      * <p>The key-count floor catches the other half: a registry that silently lost its reflective
-     * completion pass still renders as a valid closed object, just a much smaller one.
+     * completion pass still renders as a valid closed schema, just a much smaller one.
      */
     @Test
     void settingSchemaIsClosedAndComplete(StageWright tk) {
@@ -56,32 +55,41 @@ class CatalogContractTest {
         JsonObject schema = tool.getAsJsonObject("inputSchema");
         assertNotNull(schema, "mc.bot.setting advertises no inputSchema: " + tool);
         assertEquals("object", str(schema, "type"), "inputSchema is not an object: " + schema);
+        assertFalse(isOpen(schema), "mc.bot.setting schema is OPEN (additionalProperties:true) — it must be closed");
 
-        JsonElement open = schema.get("additionalProperties");
-        assertFalse(open != null && open.isJsonPrimitive() && open.getAsJsonPrimitive().isBoolean()
-                        && open.getAsBoolean(),
-                "mc.bot.setting schema is OPEN (additionalProperties:true) — it must be closed");
+        JsonObject patch = null;
+        for (String op : new String[] {"read", "patch", "apply"}) {
+            JsonObject variant = variantTagged(schema, "op", op);
+            assertNotNull(variant, "mc.bot.setting schema has no op:'" + op + "' variant: " + schema);
+            assertFalse(isOpen(variant), "mc.bot.setting op:'" + op + "' variant is OPEN: " + variant);
+            if (op.equals("patch")) patch = variant;
+        }
 
-        JsonObject props = schema.getAsJsonObject("properties");
-        assertNotNull(props, "mc.bot.setting advertises no properties: " + schema);
-        assertTrue(props.size() >= 200,
-                "mc.bot.setting advertises " + props.size() + " keys (< 200) — the single-source"
-                        + " settings registry is undersized");
+        JsonObject items = patch.getAsJsonObject("properties").getAsJsonObject("updates").getAsJsonObject("items");
+        assertNotNull(items, "op:'patch' advertises no updates.items: " + patch);
+        JsonElement perKey = items.get("oneOf");
+        assertTrue(perKey != null && perKey.isJsonArray(), "updates.items is not a oneOf of keys: " + items);
+        int keys = perKey.getAsJsonArray().size();
+        assertTrue(keys >= 200, "mc.bot.setting advertises " + keys + " keys (< 200) — the single-source"
+                + " settings registry is undersized");
     }
 
     /**
      * The validator runs before the handler, and that ordering is side-uniform.
      *
-     * <p>{@code mc.bot.setting} is client-only, so on a dedicated server it has two ways to fail.
-     * Which one it picks is the assertion: a bogus key must produce the VALIDATOR's unexpected-key
-     * error, not the handler's client-only error. If it produced client-only, validation would be
-     * happening after the side gate — meaning params reaching a client are validated and the same
-     * params reaching a server are not.
+     * <p>{@code op:"apply"} acts on this client's player, so on a dedicated server it has two ways
+     * to fail. Which one it picks is the assertion: a bogus key must produce the VALIDATOR's
+     * {@code invalid_params} at {@code /update/key}, not the handler's {@code capability_unavailable}.
+     * If it produced the latter, validation would be happening after the side gate — meaning params
+     * reaching a client are validated and the same params reaching a server are not.
      */
     @Test
     void unknownSettingKeyHitsTheValidatorNotTheSideGate(StageWright tk) {
-        refuses(tk, "mc.bot.setting", p("definitelyNotAKnob", true),
-                "definitelyNotAKnob", "unexpected key");
+        JsonObject update = p("key", "definitelyNotAKnob");
+        update.addProperty("value", true);
+        JsonObject params = p("op", "apply");
+        params.add("update", update);
+        refuses(tk, "mc.bot.setting", params, "[invalid_params]", "/update/key invalid_value", "definitelyNotAKnob");
     }
 
     /** A hidden verb with valid params still fails loudly on the wrong side — never a silent no-op. */
@@ -116,6 +124,24 @@ class CatalogContractTest {
     }
 
     // ------------------------------------------------------------- helpers -----
+
+    private static boolean isOpen(JsonObject schema) {
+        JsonElement open = schema.get("additionalProperties");
+        return open != null && open.isJsonPrimitive() && open.getAsJsonPrimitive().isBoolean() && open.getAsBoolean();
+    }
+
+    /** The {@code oneOf} variant whose {@code tag} property is {@code const: value}, or null. */
+    private static JsonObject variantTagged(JsonObject schema, String tag, String value) {
+        JsonElement oneOf = schema.get("oneOf");
+        if (oneOf == null || !oneOf.isJsonArray()) return null;
+        for (JsonElement e : oneOf.getAsJsonArray()) {
+            if (!e.isJsonObject()) continue;
+            JsonObject props = e.getAsJsonObject().getAsJsonObject("properties");
+            JsonObject t = props == null ? null : props.getAsJsonObject(tag);
+            if (t != null && value.equals(str(t, "const"))) return e.getAsJsonObject();
+        }
+        return null;
+    }
 
     private static JsonObject requireTool(StageWright tk, String name) {
         Map<String, JsonObject> tools = McpCatalog.tools(endpoint(tk));

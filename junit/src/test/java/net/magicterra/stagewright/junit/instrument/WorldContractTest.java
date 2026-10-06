@@ -12,14 +12,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import static net.magicterra.stagewright.junit.instrument.Contract.at;
 import static net.magicterra.stagewright.junit.instrument.Contract.cmd;
-import static net.magicterra.stagewright.junit.instrument.Contract.flag;
 import static net.magicterra.stagewright.junit.instrument.Contract.num;
 import static net.magicterra.stagewright.junit.instrument.Contract.pos;
 import static net.magicterra.stagewright.junit.instrument.Contract.query;
-import static net.magicterra.stagewright.junit.instrument.Contract.rows;
+import static net.magicterra.stagewright.junit.instrument.Contract.queryRows;
 import static net.magicterra.stagewright.junit.instrument.Contract.str;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * World writes and the reads that must agree with them.
@@ -40,8 +39,7 @@ class WorldContractTest {
     @Test
     void vanillaSetblockIsVisibleToTheDriverRead(StageWright tk) {
         cmd(tk, "setblock 0 200 0 minecraft:gold_block");
-        JsonArray found = rows(tk, "mc.query",
-                query("blocks", pos(0, 200, 0), 1, "minecraft:gold_block"));
+        JsonArray found = queryRows(tk, query("blocks", pos(0, 200, 0), 1, "minecraft:gold_block"));
         assertEquals(1, found.size(), "driver read disagrees with the vanilla write: " + found);
         assertEquals(pos(0, 200, 0), at(found, 0).getAsJsonObject("pos"),
                 "readback landed at the wrong position: " + found);
@@ -53,12 +51,11 @@ class WorldContractTest {
         params.add("from", pos(4, 200, 4));
         params.add("to", pos(6, 202, 6));
         params.addProperty("type", "minecraft:polished_andesite");
+        // A refused fill is an error envelope and throws from call(); a reply is a fill that ran.
         JsonObject r = tk.call("mc.action.fill", params);
-        assertTrue(flag(r, "ok"), "fill failed: " + r);
         assertEquals(27L, num(r, "placed"), "3x3x3 fill reported the wrong count: " + r);
 
-        JsonArray found = rows(tk, "mc.query",
-                query("blocks", pos(5, 201, 5), 2, "minecraft:polished_andesite"));
+        JsonArray found = queryRows(tk, query("blocks", pos(5, 201, 5), 2, "minecraft:polished_andesite"));
         assertEquals(27, found.size(), "query readback disagrees with the reported count");
     }
 
@@ -68,7 +65,8 @@ class WorldContractTest {
         snapParams.add("from", pos(10, 200, 10));
         snapParams.add("to", pos(12, 202, 12));
         JsonObject snap = tk.call("mc.world.snapshot", snapParams);
-        assertTrue(flag(snap, "ok"), "snapshot failed: " + snap);
+        assertFalse(str(snap, "id").isEmpty(), "snapshot answered no id: " + snap);
+        assertEquals(27L, num(snap, "blocks"), "a 3x3x3 snapshot must hold 27 cells: " + snap);
 
         cmd(tk, "setblock 11 201 11 minecraft:emerald_block");
 
@@ -76,10 +74,9 @@ class WorldContractTest {
         restoreParams.addProperty("id", str(snap, "id"));
         restoreParams.addProperty("discard", true);
         JsonObject restored = tk.call("mc.world.restore", restoreParams);
-        assertTrue(flag(restored, "ok"), "restore failed: " + restored);
+        assertEquals(str(snap, "id"), str(restored, "id"), "restore answered for another snapshot: " + restored);
 
-        JsonArray left = rows(tk, "mc.query",
-                query("blocks", pos(11, 201, 11), 2, "minecraft:emerald_block"));
+        JsonArray left = queryRows(tk, query("blocks", pos(11, 201, 11), 2, "minecraft:emerald_block"));
         assertEquals(0, left.size(), "restore left the marker block behind: " + left);
     }
 }

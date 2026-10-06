@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.magicterra.stagewright.junit.StageWright;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -93,11 +94,17 @@ final class Contract {
                 && e.getAsBoolean();
     }
 
-    /** A bare-array result (mc.query rows, mc.observe.eventsSince events). */
-    static JsonArray rows(StageWright tk, String method, JsonObject params) {
-        JsonElement bare = tk.callBare(method, params);
-        assertTrue(bare.isJsonArray(), method + " must answer a bare array, got: " + bare);
-        return bare.getAsJsonArray();
+    /**
+     * {@code mc.query}'s rows: the reply is tagged on {@code q} and carries them under the key the
+     * tag names — {@code {q:"blocks", blocks:[…]}} or {@code {q:"entities", entities:[…]}}.
+     */
+    static JsonArray queryRows(StageWright tk, JsonObject params) {
+        String q = str(params, "q");
+        JsonObject r = tk.call("mc.query", params);
+        assertEquals(q, str(r, "q"), "mc.query must answer tagged with the q it was asked: " + r);
+        JsonElement rows = r.get(q);
+        assertTrue(rows != null && rows.isJsonArray(), "mc.query must carry its rows under '" + q + "': " + r);
+        return rows.getAsJsonArray();
     }
 
     /** The i-th element of an array, as an object. */

@@ -14,6 +14,7 @@ import static net.magicterra.stagewright.junit.instrument.Contract.p;
 import static net.magicterra.stagewright.junit.instrument.Contract.refuses;
 import static net.magicterra.stagewright.junit.instrument.Contract.str;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -41,7 +42,7 @@ class RouteContractTest {
 
     @Test
     void unknownMethodIsRefused(StageWright tk) {
-        refuses(tk, "mc.no.suchMethod", "unknown method");
+        refuses(tk, "mc.no.suchMethod", "unknown method", "[method_not_found]");
     }
 
     /**
@@ -52,35 +53,38 @@ class RouteContractTest {
      * key is optional — {@code mc.observe.eventsSince}'s {@code cursor} defaults to {@code "0"} — round-trip
      * clean on empty params and prove nothing about required-key handling.
      */
+    // The refusals below assert the issue's path and code ("/ticks required"), which the error line
+    // carries as "<message> [invalid_params]: <path> <code> (<sentence>)". The path and the code are
+    // the contract; the sentence is for a person and may be reworded.
+
     @Test
     void missingRequiredKeyIsRefused(StageWright tk) {
-        refuses(tk, "mc.system.waitTicks", "ticks");
+        refuses(tk, "mc.system.waitTicks", "[invalid_params]", "/ticks required");
     }
 
     @Test
     void wrongTypedKeyIsRefused(StageWright tk) {
-        // The validator renders type violations as "'ticks' must be integer, got string (...)".
-        // Asserting the rendering, not merely that something failed, is what makes this a contract.
-        refuses(tk, "mc.system.waitTicks", p("ticks", "not-a-number"), "must be integer");
+        refuses(tk, "mc.system.waitTicks", p("ticks", "not-a-number"), "[invalid_params]", "/ticks type_mismatch");
     }
 
     @Test
     void unexpectedKeyIsRefused(StageWright tk) {
         JsonObject params = p("ticks", 1);
         params.addProperty("bogusKey", 1);
-        refuses(tk, "mc.system.waitTicks", params, "unexpected key");
+        refuses(tk, "mc.system.waitTicks", params, "[invalid_params]", "/bogusKey unknown_field");
     }
 
     /**
      * A client-only verb on a dedicated server must fail LOUDLY, never silently no-op.
      *
-     * <p>{@code mc.bot.setting} with empty params, a plain read: every key in its schema is optional,
-     * so the call passes validation and reaches the missing client bot. Not {@code mc.bot.status},
-     * which a dedicated server answers with its registered {@code bodies}.
+     * <p>{@code mc.client.player}, which takes no params, so the call passes validation and reaches
+     * the missing client. Not {@code mc.bot.setting}, whose read a dedicated server now answers from
+     * its own copy of the settings, nor {@code mc.bot.status}, which it answers with its registered
+     * {@code bodies}.
      */
     @Test
     void clientOnlyVerbIsRefused(StageWright tk) {
-        refuses(tk, "mc.bot.setting", "client only");
+        refuses(tk, "mc.client.player", "[capability_unavailable]");
     }
 
     /** The in-JVM script route must agree with the transport it is being called over. */
@@ -89,7 +93,7 @@ class RouteContractTest {
         JsonObject params = p("source", "Driver.invoke('mc.system.version').modid");
         params.addProperty("timeoutMs", 5000);
         JsonObject r = tk.call("mc.script.eval", params);
-        assertEquals("", str(r, "error"), "script threw: " + r);
+        assertFalse(r.has("error"), "script threw: " + r);
         assertEquals("worlddriver", str(r, "result"), "in-JVM route parity broken: " + r);
     }
 }
