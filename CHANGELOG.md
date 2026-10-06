@@ -32,6 +32,11 @@ pin keeps the floor at `<base>-0`. The CLI's preflight orders numbered builds th
 do. Six Fabric/NeoForge runtime topologies and cross-topology coverage passed against paired build
 901, with only the two standing optional failures.
 
+`:stagewright-junit` tells a client-less endpoint by the `capability_unavailable` code its
+`mc.client.*` probe is refused with, not by the refusal's wording, which the typed API changed: every
+face-sensitive test class had errored at its condition instead of running or skipping. The attached
+contract tests pass against a dedicated-server hold and an integrated-server hold.
+
 ## 2026-10-03
 
 ### WorldDriver is required and integration belongs to `common/driver` · compiled and green in the paired self-test suite

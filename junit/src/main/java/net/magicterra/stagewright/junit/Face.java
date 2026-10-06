@@ -29,10 +29,11 @@ public enum Face {
     /** This JVM is a dedicated server: {@code mc.client.*} is refused as client-only. */
     SERVER;
 
-    /** What {@code mc.client.*} says in a JVM with no client. Not the {@code mc.bot.*} wording
-     *  ("client only; bot impl not registered"): matching that one rethrows every SERVER endpoint's
-     *  refusal at the condition stage, erroring the whole container instead of skipping a class. */
-    private static final String NO_CLIENT = "no client registered";
+    /** The code {@code mc.client.*} is refused with in a JVM with no client, as
+     *  {@link net.magicterra.stagewright.contract.StageWrightRpc#describeError} renders it. The code,
+     *  not the message: the message is prose the driver may reword, and a reworded one errored every
+     *  face-sensitive class at the condition stage instead of skipping it. */
+    private static final String NO_CLIENT = "[capability_unavailable]";
 
     private static volatile Face detected;
 
