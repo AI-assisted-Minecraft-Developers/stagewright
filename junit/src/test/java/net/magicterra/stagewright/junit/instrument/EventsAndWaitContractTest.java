@@ -28,10 +28,9 @@ class EventsAndWaitContractTest {
     /**
      * A dispatched command lands in the observe ring with its success flag.
      *
-     * <p>Two shapes are load-bearing and both have drifted before. {@code mc.observe.cursor} answers
-     * a bare number, not {@code {cursor:N}}; {@code mc.observe.eventsSince} answers a bare array,
-     * not the {@code {events,timedOut,cursor,ms}} envelope its {@code mc.wait.*} cousins use. The
-     * asserts below are written so a future re-wrap fails loudly instead of being reinterpreted.
+     * <p>The cursor is a decimal string, never a JSON number: a seq is 64-bit, and a JavaScript
+     * reader would round it. {@code mc.observe.eventsSince} answers {@code {events, cursor}}, the
+     * cursor being the one to pass back.
      *
      * <p>The staged command is a {@code fill}, not a {@code setblock}: a plain setblock takes the
      * driver's fast path, which returns before the {@code command.result} emit. Only the Brigadier
@@ -42,23 +41,25 @@ class EventsAndWaitContractTest {
         long cursor = cursor(tk);
         cmd(tk, "fill 40 200 40 40 200 40 minecraft:iron_block");
 
-        JsonObject params = p("cursor", cursor);
+        JsonObject params = p("cursor", Long.toString(cursor));
         JsonArray types = new JsonArray();
         types.add("command.result");
         params.add("types", types);
 
-        JsonElement bare = tk.callBare("mc.observe.eventsSince", params);
-        assertTrue(bare.isJsonArray(),
-                "eventsSince must answer a bare array, not an envelope: " + bare);
+        JsonObject r = tk.call("mc.observe.eventsSince", params);
+        assertTrue(r.has("events") && r.get("events").isJsonArray(), "eventsSince carries no events array: " + r);
+        assertTrue(Long.parseLong(r.get("cursor").getAsString()) > cursor,
+                "eventsSince did not advance the cursor past the event it returned: " + r);
 
         JsonObject hit = null;
-        for (JsonElement e : bare.getAsJsonArray()) {
+        for (JsonElement e : r.getAsJsonArray("events")) {
             if (e.isJsonObject() && e.toString().contains("iron_block")) {
                 hit = e.getAsJsonObject();
                 break;
             }
         }
-        assertTrue(hit != null, "no command.result event for a dispatched command: " + bare);
+        assertTrue(hit != null, "no command.result event for a dispatched command: " + r);
+        assertTrue(hit.get("seq").getAsJsonPrimitive().isString(), "an event's seq must be a string: " + hit);
         assertTrue(flag(payloadOf(hit), "success"),
                 "success flag wrong on a succeeding command: " + hit);
     }
@@ -110,19 +111,18 @@ class EventsAndWaitContractTest {
 
     // ------------------------------------------------------------- helpers -----
 
-    /** {@code mc.observe.cursor} answers a bare long, so it needs unwrapping. */
+    /** {@code mc.observe.cursor}'s {@code {cursor:"N"}}, read as the number the string spells. */
     private static long cursor(StageWright tk) {
-        JsonElement bare = tk.callBare("mc.observe.cursor", new JsonObject());
-        assertTrue(bare.isJsonPrimitive() && bare.getAsJsonPrimitive().isNumber(),
-                "mc.observe.cursor must answer a bare number, got: " + bare);
-        return bare.getAsLong();
+        JsonObject r = tk.call("mc.observe.cursor", new JsonObject());
+        JsonElement c = r.get("cursor");
+        assertTrue(c != null && c.isJsonPrimitive() && c.getAsJsonPrimitive().isString(),
+                "mc.observe.cursor must answer {cursor:\"<decimal>\"}, got: " + r);
+        return Long.parseLong(c.getAsString());
     }
 
-    /** An event's {@code data}, which the transport may deliver as an object or as a JSON string. */
+    /** An event's {@code data} object, empty when the event carries none. */
     private static JsonObject payloadOf(JsonObject event) {
         JsonElement data = event.get("data");
-        if (data == null) return new JsonObject();
-        if (data.isJsonObject()) return data.getAsJsonObject();
-        return com.google.gson.JsonParser.parseString(data.getAsString()).getAsJsonObject();
+        return data != null && data.isJsonObject() ? data.getAsJsonObject() : new JsonObject();
     }
 }

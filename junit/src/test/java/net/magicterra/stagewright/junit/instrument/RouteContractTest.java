@@ -49,7 +49,7 @@ class RouteContractTest {
      *
      * <p>{@code mc.system.waitTicks} rather than an observe verb on purpose: its schema is
      * {@code req("ticks", integer(0, 200))}, a genuinely required int. Verbs whose only interesting
-     * key is optional — {@code mc.observe.eventsSince}'s {@code cursor} defaults to 0 — round-trip
+     * key is optional — {@code mc.observe.eventsSince}'s {@code cursor} defaults to {@code "0"} — round-trip
      * clean on empty params and prove nothing about required-key handling.
      */
     @Test
