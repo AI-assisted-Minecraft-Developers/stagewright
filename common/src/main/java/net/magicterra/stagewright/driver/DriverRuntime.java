@@ -1,8 +1,6 @@
 package net.magicterra.stagewright.driver;
 
-import net.magicterra.stagewright.driver.verbs.TestInputVerbs;
-import net.magicterra.stagewright.driver.verbs.TestResetVerb;
-import net.magicterra.stagewright.driver.verbs.TestRunVerb;
+import net.magicterra.stagewright.driver.verbs.TestMethods;
 import net.magicterra.worlddriver.WorldDriverCommon;
 import net.magicterra.worlddriver.api.DriverApi;
 
@@ -27,9 +25,7 @@ public final class DriverRuntime {
         if (api == registeredApi) return;
         synchronized (DriverRuntime.class) {
             if (api == registeredApi) return;
-            TestRunVerb.register();
-            TestResetVerb.register();
-            TestInputVerbs.register();
+            TestMethods.register(api);
             registeredApi = api;
         }
     }

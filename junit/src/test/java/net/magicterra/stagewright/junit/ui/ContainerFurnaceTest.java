@@ -89,10 +89,12 @@ class ContainerFurnaceTest {
 
     /** {@code mc.test.input.useOnBlock} — instrument-grade right-click on a world block. */
     private static void useOnBlock(StageWright tk, int x, int y, int z) {
+        JsonObject pos = new JsonObject();
+        pos.addProperty("x", x);
+        pos.addProperty("y", y);
+        pos.addProperty("z", z);
         JsonObject params = new JsonObject();
-        params.addProperty("x", x);
-        params.addProperty("y", y);
-        params.addProperty("z", z);
+        params.add("pos", pos);
         tk.call("mc.test.input.useOnBlock", params);
     }
 }

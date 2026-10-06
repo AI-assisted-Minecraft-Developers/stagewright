@@ -95,17 +95,17 @@ class CatalogContractTest {
     /** A hidden verb with valid params still fails loudly on the wrong side — never a silent no-op. */
     @Test
     void testResetIsClientOnly(StageWright tk) {
-        refuses(tk, "mc.test.reset", "client only", "mc.test.reset");
+        refuses(tk, "mc.test.reset", "[capability_unavailable]", "client only", "mc.test.reset");
     }
 
     /**
-     * {@code mc.test.reset} was registered through the paired schema+route entry point, so its
-     * schema exists, is closed, and is enforced ahead of the client-only gate. A regression to
-     * schema-less dispatch would show up here as the client-only error instead.
+     * {@code mc.test.reset} is a typed method, so its params are decoded, strictly, before the
+     * client-only gate runs. A handler reached with unchecked params would answer the client-only
+     * error here instead.
      */
     @Test
-    void testResetSchemaIsPairedAndEnforcedFirst(StageWright tk) {
-        refuses(tk, "mc.test.reset", p("nope", true), "nope", "unexpected key");
+    void testResetParamsAreDecodedFirst(StageWright tk) {
+        refuses(tk, "mc.test.reset", p("nope", true), "[invalid_params]", "/nope unknown_field");
     }
 
     /**
@@ -120,7 +120,7 @@ class CatalogContractTest {
         Map<String, JsonObject> tools = McpCatalog.tools(endpoint(tk));
         assertFalse(tools.containsKey("mc.test.run"),
                 "mc.test.run leaked into tools/list — the on-demand trigger must stay hidden");
-        refuses(tk, "mc.test.run", p("nope", true), "nope", "unexpected key");
+        refuses(tk, "mc.test.run", p("nope", true), "[invalid_params]", "/nope unknown_field");
     }
 
     // ------------------------------------------------------------- helpers -----
