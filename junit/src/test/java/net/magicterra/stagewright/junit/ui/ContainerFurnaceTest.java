@@ -52,7 +52,9 @@ class ContainerFurnaceTest {
 
         // Furnace at a player-relative block: two blocks along +X at feet Y (in reach,
         // clear of the player's own body). observePlayer is server-authoritative.
-        JsonObject pos = tk.observePlayer().getAsJsonObject("pos");
+        JsonObject observed = tk.observePlayer();
+        assertTrue(observed.has("player"), "observe.player must carry a player on a client endpoint: " + observed);
+        JsonObject pos = observed.getAsJsonObject("player").getAsJsonObject("pos");
         int fx = (int) Math.floor(pos.get("x").getAsDouble()) + 2;
         int fy = (int) Math.floor(pos.get("y").getAsDouble());
         int fz = (int) Math.floor(pos.get("z").getAsDouble());

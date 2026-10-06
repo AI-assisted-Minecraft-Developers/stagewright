@@ -158,9 +158,9 @@ public final class StageWright implements AutoCloseable {
     }
 
     /**
-     * Unwrap a call whose result is not a JSON object. The transport wraps a bare result — a
-     * {@code long} cursor, an array of events — as {@code {"result": <value>}}; this hands back
-     * the value itself.
+     * Unwrap a call whose result is not a JSON object. The transport wraps a bare result (a
+     * primitive or an array; every typed {@code mc.*} method answers an object, so this is for the
+     * rest) as {@code {"result": <value>}}; this hands back the value itself.
      */
     public JsonElement callBare(String method, JsonObject params) {
         JsonObject o = call(method, params);
@@ -190,7 +190,8 @@ public final class StageWright implements AutoCloseable {
         }
     }
 
-    /** {@code mc.observe.player} — server-authoritative player snapshot. */
+    /** {@code mc.observe.player} — {@code {player?}}: the server-authoritative snapshot, absent when
+     *  nobody is on. */
     public JsonObject observePlayer() {
         return call("mc.observe.player", new JsonObject());
     }
@@ -200,40 +201,63 @@ public final class StageWright implements AutoCloseable {
         return call("mc.client.screen.info", new JsonObject());
     }
 
-    /** {@code mc.client.screen.tree} — full widget tree of the current screen. */
+    /** {@code mc.client.screen.tree} — the current screen's widgets as a flat, depth-first
+     *  {@code nodes} list ({@code parent} names a node's holder). */
     public JsonObject screenTree() {
         return call("mc.client.screen.tree", new JsonObject());
     }
 
     /**
      * {@code mc.client.input.key} — synth a key (ENTER/ESCAPE/TAB/arrows/F1..F25/
-     * A..Z/0..9). Default action is {@code click} (press+release).
+     * A..Z/0..9). Default action is {@code click} (press+release). Returns the
+     * {@code outcome:"done"} reply; a refusal throws (see {@link #write}).
      */
-    public void key(String key) {
+    public JsonObject key(String key) {
         JsonObject params = new JsonObject();
         params.addProperty("key", key);
-        call("mc.client.input.key", params);
+        return write("mc.client.input.key", params);
     }
 
     /** {@code mc.client.input.typeText} — type each codepoint into the focused widget. */
-    public void typeText(String text) {
+    public JsonObject typeText(String text) {
         JsonObject params = new JsonObject();
         params.addProperty("text", text);
-        call("mc.client.input.typeText", params);
+        return write("mc.client.input.typeText", params);
     }
 
     /** {@code mc.client.input.click} — left-click at logical screen coords {@code (x,y)}. */
-    public void click(int x, int y) {
-        click(x, y, 0);
+    public JsonObject click(int x, int y) {
+        return click(x, y, 0);
     }
 
     /** {@code mc.client.input.click} — click at {@code (x,y)} with button 0=L,1=R,2=M. */
-    public void click(int x, int y, int button) {
+    public JsonObject click(int x, int y, int button) {
         JsonObject params = new JsonObject();
         params.addProperty("x", x);
         params.addProperty("y", y);
         params.addProperty("button", button);
-        call("mc.client.input.click", params);
+        return write("mc.client.input.click", params);
+    }
+
+    /**
+     * Call a client write ({@code mc.client.input.*}, {@code mc.client.chat.send}, …) and hand back
+     * its reply unless it is a refusal. These verbs answer a refusal
+     * ({@code outcome:"refused", reason, message}) as a reply, not an error, so a caller that only
+     * looked for a thrown error would read "no screen to type into" as success; this throws it as
+     * {@link StageWrightRpcException} instead. A stale {@code contextId} is an error envelope
+     * ({@code context_changed}) and throws from {@link #call} as before.
+     */
+    public JsonObject write(String method, JsonObject params) {
+        JsonObject r = call(method, params);
+        JsonElement outcome = r.get("outcome");
+        if (outcome != null && outcome.isJsonPrimitive() && "refused".equals(outcome.getAsString())) {
+            JsonElement reason = r.get("reason");
+            JsonElement message = r.get("message");
+            throw new StageWrightRpcException(method, "refused ("
+                    + (reason != null && reason.isJsonPrimitive() ? reason.getAsString() : "?") + ")"
+                    + (message != null && message.isJsonPrimitive() ? ": " + message.getAsString() : ""));
+        }
+        return r;
     }
 
     /** {@code mc.test.reset} — reset transient client instrumentation (screen/keys/chat). */

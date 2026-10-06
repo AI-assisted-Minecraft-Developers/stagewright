@@ -30,49 +30,47 @@ final class UiSupport {
     }
 
     /**
-     * Count the slot nodes under the synthetic {@code ContainerSlots} child of a
-     * {@code mc.client.screen.tree} snapshot. Returns 0 when the tree has no such node
-     * (no screen, or a non-container screen). See {@code ScreenIntrospection.containerSlotsNode}.
+     * Count the nodes held by the synthetic {@code ContainerSlots} node of a
+     * {@code mc.client.screen.tree} snapshot — the flat {@code nodes} list names a node's holder
+     * in {@code parent}. Returns 0 when the tree has no such node (no screen, or a non-container
+     * screen). See {@code ScreenIntrospection.containerSlotsNode}.
      */
     static int slotCount(JsonObject tree) {
-        if (tree == null || !tree.has("children") || !tree.get("children").isJsonArray()) {
-            return 0;
-        }
-        for (JsonElement e : tree.getAsJsonArray("children")) {
-            if (!e.isJsonObject()) continue;
-            JsonObject node = e.getAsJsonObject();
-            if (node.has("type") && "ContainerSlots".equals(strOf(node, "type"))) {
-                JsonElement kids = node.get("children");
-                return kids != null && kids.isJsonArray() ? kids.getAsJsonArray().size() : 0;
+        JsonArray nodes = nodesOf(tree);
+        String holder = null;
+        for (JsonElement e : nodes) {
+            if (e.isJsonObject() && "ContainerSlots".equals(strOf(e.getAsJsonObject(), "type"))) {
+                holder = strOf(e.getAsJsonObject(), "id");
+                break;
             }
         }
-        return 0;
+        if (holder == null) return 0;
+        int count = 0;
+        for (JsonElement e : nodes) {
+            if (e.isJsonObject() && holder.equals(strOf(e.getAsJsonObject(), "parent"))) count++;
+        }
+        return count;
     }
 
     /**
-     * True if any EditBox node anywhere in the tree carries a {@code value} containing
-     * {@code needle}. Used to prove {@code typeText} landed in the focused chat box.
+     * True if any node in the tree carries a {@code value} containing {@code needle}. Used to
+     * prove {@code typeText} landed in the focused chat box.
      */
     static boolean anyEditBoxValueContains(JsonObject tree, String needle) {
-        if (tree == null) return false;
-        return walkForValue(tree, needle);
-    }
-
-    private static boolean walkForValue(JsonObject node, String needle) {
-        JsonElement value = node.get("value");
-        if (value != null && value.isJsonPrimitive() && value.getAsString().contains(needle)) {
-            return true;
-        }
-        JsonElement kids = node.get("children");
-        if (kids != null && kids.isJsonArray()) {
-            JsonArray arr = kids.getAsJsonArray();
-            for (JsonElement e : arr) {
-                if (e.isJsonObject() && walkForValue(e.getAsJsonObject(), needle)) {
-                    return true;
-                }
+        for (JsonElement e : nodesOf(tree)) {
+            if (!e.isJsonObject()) continue;
+            JsonElement value = e.getAsJsonObject().get("value");
+            if (value != null && value.isJsonPrimitive() && value.getAsString().contains(needle)) {
+                return true;
             }
         }
         return false;
+    }
+
+    /** The tree's flat, depth-first {@code nodes}; empty when there are none. */
+    static JsonArray nodesOf(JsonObject tree) {
+        JsonElement nodes = tree == null ? null : tree.get("nodes");
+        return nodes != null && nodes.isJsonArray() ? nodes.getAsJsonArray() : new JsonArray();
     }
 
     private static String strOf(JsonObject o, String key) {

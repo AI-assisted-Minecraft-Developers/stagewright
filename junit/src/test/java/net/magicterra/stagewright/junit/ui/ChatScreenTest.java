@@ -46,7 +46,7 @@ class ChatScreenTest {
         String probe = "testkit-chat-" + (System.currentTimeMillis() % 100000);
         JsonObject sendParams = new JsonObject();
         sendParams.addProperty("text", probe);
-        tk.call("mc.client.chat.send", sendParams);
+        tk.write("mc.client.chat.send", sendParams);
         tk.awaitCondition(() -> chatCount(tk) > 0, UI);
         assertTrue(chatCount(tk) > 0, "chat readback should be non-empty after chat.send");
 
@@ -74,11 +74,11 @@ class ChatScreenTest {
         assertEquals(0, chatCount(tk), "reset must clear the chat readback");
     }
 
-    /** {@code mc.client.chat.history} → captured line count. */
+    /** {@code mc.client.chat.history} → captured line count (the size of {@code messages}). */
     private static int chatCount(StageWright tk) {
         JsonObject params = new JsonObject();
         params.addProperty("limit", 50);
         JsonObject r = tk.call("mc.client.chat.history", params);
-        return r.has("count") && r.get("count").isJsonPrimitive() ? r.get("count").getAsInt() : -1;
+        return r.has("messages") && r.get("messages").isJsonArray() ? r.getAsJsonArray("messages").size() : -1;
     }
 }
