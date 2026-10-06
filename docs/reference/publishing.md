@@ -70,6 +70,12 @@ Every build is a pre-release of `<base>`, so SemVer, and with it Fabric Loader, 
 below `0.1.0` itself. That is why a version range over StageWright or WorldDriver builds ends its
 bounds in `-0`; the Minecraft and loader ranges, over releases, do not.
 
+The WorldDriver range both loaders declare starts at the build `worlddriver_version` names, not at
+`<base>-0`: StageWright is compiled against what that build added (the typed method registry its
+`mc.test.*` methods publish into, for one), so an older WorldDriver of the same line is refused by
+the loader rather than failing to link at server start. Pinning a newer build raises the floor with
+it. Only a `build.local` pin keeps the `<base>-0` floor, since `local` is not a build number.
+
 ## The artifacts
 
 Group is `net.magicterra` throughout.
