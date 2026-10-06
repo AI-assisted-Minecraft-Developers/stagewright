@@ -38,11 +38,18 @@ class WorldContractTest {
 
     @Test
     void vanillaSetblockIsVisibleToTheDriverRead(StageWright tk) {
-        cmd(tk, "setblock 0 200 0 minecraft:gold_block");
-        JsonArray found = queryRows(tk, query("blocks", pos(0, 200, 0), 1, "minecraft:gold_block"));
-        assertEquals(1, found.size(), "driver read disagrees with the vanilla write: " + found);
-        assertEquals(pos(0, 200, 0), at(found, 0).getAsJsonObject("pos"),
-                "readback landed at the wrong position: " + found);
+        // A query refuses unloaded chunks, and with no player on a dedicated server the chunk a
+        // setblock loads can unload again before the read; pin it for the test, read only its cell.
+        cmd(tk, "forceload add 0 0");
+        try {
+            cmd(tk, "setblock 0 200 0 minecraft:gold_block");
+            JsonArray found = queryRows(tk, query("blocks", pos(0, 200, 0), 0, "minecraft:gold_block"));
+            assertEquals(1, found.size(), "driver read disagrees with the vanilla write: " + found);
+            assertEquals(pos(0, 200, 0), at(found, 0).getAsJsonObject("pos"),
+                    "readback landed at the wrong position: " + found);
+        } finally {
+            cmd(tk, "forceload remove 0 0");
+        }
     }
 
     @Test
