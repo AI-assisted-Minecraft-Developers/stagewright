@@ -38,8 +38,14 @@ final class DriverFeed {
         subscribedApi = null;
     }
 
-    static void damageSelf() {
-        DriverRuntime.requireApi().route("mc.client.chat.send",
+    /** Send the /damage; null once it went out, else why the verb refused ({@code outcome:"refused"}). */
+    static String damageSelf() {
+        Object reply = DriverRuntime.requireApi().route("mc.client.chat.send",
                 Map.of("text", "/damage @s 2 minecraft:out_of_world"));
+        if (reply instanceof Map<?, ?> m && "refused".equals(m.get("outcome"))) {
+            Object message = m.get("message");
+            return "mc.client.chat.send refused (" + m.get("reason") + ")" + (message == null ? "" : ": " + message);
+        }
+        return null;
     }
 }

@@ -114,7 +114,11 @@ public final class ClientProbes {
                 }
                 // Through the driver's own client verb rather than the connection directly: it is
                 // the surface a pack author has, and it is what the retired python check drove.
-                DriverFeed.damageSelf();
+                String refused = DriverFeed.damageSelf();
+                if (refused != null) {
+                    report(SceneOutcome.FAIL, refused, Map.of(), false, bodyEntered(phase));
+                    return;
+                }
                 phase = Phase.WAITING;
             }
             case WAITING -> {
