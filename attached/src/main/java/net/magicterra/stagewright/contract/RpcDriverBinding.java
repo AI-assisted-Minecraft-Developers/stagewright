@@ -17,7 +17,7 @@ import com.google.gson.JsonObject;
  * <p><b>Results come back as plain maps and lists, not as gson nodes.</b> A scene that received a
  * {@code JsonObject} would have to call gson methods on it, and the in-process home hands back a
  * {@code Map} — so the same line of script would need two spellings. Converting here is what makes
- * {@code driver('mc.observe.player').pos.y} mean the same thing in both homes.
+ * {@code driver('mc.observe.player').player.pos.y} mean the same thing in both homes.
  */
 public final class RpcDriverBinding implements DriverBinding {
 

@@ -125,8 +125,14 @@ Four behaviours of that facade are contractual:
 - **A command that Brigadier rejects throws.** Vanilla's own dispatcher reports errors to the
   command source and returns normally, so without this a typo in a test is a line that does
   nothing and passes.
-- **A refused call surfaces as an exception carrying the method and the driver's error string**,
-  so a test can assert on the refusal rather than on the absence of a result.
+- **A refused call surfaces as an exception carrying the method and the driver's error as one
+  line**, so a test can assert on the refusal rather than on the absence of a result. The driver
+  answers an error as `{code, message, data:{code, issues}}`; the line reads
+  `<message> [<data.code>]: <path> <issue code> (<sentence>); …`, so a test asserts on the API code
+  and on each issue's path and code (`[invalid_params]`, `/ticks required`) rather than on wording.
+  The client writes (`key`, `typeText`, `click`, and `write(method, params)` for the rest) answer a
+  refusal as a reply, `{outcome:"refused", reason, message}`; the facade throws that as the same
+  exception, so "no screen to type into" cannot pass as success.
 - **A broken connection is not a refusal.** A call on a socket the client has seen close, even one
   that closed before the call was made, on a client already closed, or whose wait for a reply was
   interrupted, throws `StageWrightTransportException` at once. So does a call whose request could
@@ -232,7 +238,7 @@ server face is the instrument face.
 | A call missing a required key is refused, naming the key | Closed-schema required-key validation cannot be bypassed. |
 | A call with a wrongly typed key is refused | Type validation exists. |
 | A call with an unexpected key is refused, naming the key | The closed-schema rule: an unrecognised key is rejected rather than quietly discarded. |
-| A client-only verb on a dedicated server is refused, naming the restriction | A verb that cannot work here must say so rather than doing nothing. |
+| A client-only verb on a dedicated server is refused as `capability_unavailable` | A verb that cannot work here must say so rather than doing nothing. |
 | The in-process script engine and the external socket return the same answer for the same call | Schema and routing are single-sourced. Two call paths into one router must not diverge. |
 
 The last three are one family: each is a way for a call to be accepted and then to have no
@@ -247,16 +253,15 @@ renders from the same typed schema the router validates against.
 
 | Assertion | What it establishes |
 |---|---|
-| The settings verb's input schema is an object, is closed, and declares at least a floor number of properties | The settings registry is single-sourced from the configuration fields rather than hand-listed. The floor catches the reflective completion silently dropping out, which would leave a schema that is closed and nearly empty. |
-| An unknown settings key is refused by the *validator*, not by the side gate | Validation runs ahead of the client-only check, uniformly, for every transport. On a dedicated server an unknown key must produce an unexpected-key error, not a client-only one. |
+| The settings verb's input schema is a closed `oneOf` over `op` (`read`, `patch`, `apply`), and `patch`'s update items declare at least a floor number of keys | The settings registry is single-sourced from the configuration fields rather than hand-listed. The floor catches the reflective completion silently dropping out, which would leave a schema that is closed and nearly empty. |
+| An unknown settings key in an `apply` is refused by the *validator*, not by the side gate | Validation runs ahead of the client-only check, uniformly, for every transport. On a dedicated server an unknown key must produce `invalid_params` at `/update/key`, not `capability_unavailable`. |
 | The reset verb is refused on a server as client-only, naming itself | Client-only verbs fail loudly server-side. |
 | The reset verb with an unexpected key is refused by the validator first | Paired registration worked: the hidden verb has a schema, the schema is closed, and validation ordering is uniform. |
 | The run verb is absent from `tools/list` yet still rejects an unexpected key | Hidden means hidden from the catalog, not exempt from validation. |
 
-Closed objects are worth one note, because the assertion looks lax and is not. Rendering a closed
-object omits the `additionalProperties` key entirely rather than writing `false`. The convention
-the validator implements is therefore that *only* an explicit `true` means open, and absent or
-`false` both mean closed — so the assertion is "not `true`" rather than "equals `false`".
+Closed objects are worth one note, because the assertion looks lax and is not. Only an explicit
+`additionalProperties: true` means open; absent or `false` both mean closed, and a renderer has
+written either over time — so the assertion is "not `true`" rather than "equals `false`".
 
 ### The world
 
@@ -272,7 +277,7 @@ the validator implements is therefore that *only* an explicit `true` means open,
 |---|---|
 | A damaged tool in a container reads back its damage, maximum damage and remaining durability | Tool wear is observable as a triple rather than living only as internal state. |
 | Observing the player on a playerless server answers "absent" and does not throw | The documented semantics for the case the instrument face is in. |
-| A summoned entity is returned by an entity query with a positive health value | Entity observation works at all, which everything asserting about creatures depends on. |
+| A summoned entity is returned by an entity query with a positive health value, its exact position and its cell | Entity observation works at all, which everything asserting about creatures depends on. |
 
 ### Events and waiting
 
