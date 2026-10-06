@@ -15,8 +15,8 @@ dependencies {
     // the full reasoning.
     implementation project(path: ':stagewright-api', configuration: 'namedElements')
 
-    // StageWright depends on the driver it drives, so the mc.test.* verbs call
-    // ToolCatalog.registerVerb directly. The `dev` classifier, not the plain jar: the published jar
+    // StageWright depends on the driver it drives, so the mc.test.* methods register into its
+    // API registry directly. The `dev` classifier, not the plain jar: the published jar
     // is remapped to intermediary and will not link against a dev-mapped compile classpath.
     implementation "net.magicterra:worlddriver-common:${rootProject.worlddriver_version}:dev"
 

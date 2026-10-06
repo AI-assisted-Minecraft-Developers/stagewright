@@ -130,9 +130,9 @@ public final class StageWright implements AutoCloseable {
      *
      * <p>Half the instrument contract is negative — unknown method, missing key, wrong type,
      * unexpected key, client-only verb — and every one of those assertions is about the error's
-     * <i>text</i>, because that text is the contract: "must be integer", "unexpected key",
-     * "client only". Returning it instead of throwing lets a test say what it means
-     * ({@code assertContains(err, "unexpected key")}) and lets the "it did not fail at all" case be
+     * one-line rendering, because its code and issue paths are the contract: "[invalid_params]",
+     * "/bogus unknown_field", "client only". Returning it instead of throwing lets a test say what it
+     * means ({@code assertContains(err, "/bogus unknown_field")}) and lets the "it did not fail at all" case be
      * a null check rather than a missing exception.
      *
      * @throws StageWrightTransportException when the socket could not carry the call, and

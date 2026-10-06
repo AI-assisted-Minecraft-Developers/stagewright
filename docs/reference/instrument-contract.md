@@ -255,9 +255,9 @@ renders from the same typed schema the router validates against.
 |---|---|
 | The settings verb's input schema is a closed `oneOf` over `op` (`read`, `patch`, `apply`), and `patch`'s update items declare at least a floor number of keys | The settings registry is single-sourced from the configuration fields rather than hand-listed. The floor catches the reflective completion silently dropping out, which would leave a schema that is closed and nearly empty. |
 | An unknown settings key in an `apply` is refused by the *validator*, not by the side gate | Validation runs ahead of the client-only check, uniformly, for every transport. On a dedicated server an unknown key must produce `invalid_params` at `/update/key`, not `capability_unavailable`. |
-| The reset verb is refused on a server as client-only, naming itself | Client-only verbs fail loudly server-side. |
-| The reset verb with an unexpected key is refused by the validator first | Paired registration worked: the hidden verb has a schema, the schema is closed, and validation ordering is uniform. |
-| The run verb is absent from `tools/list` yet still rejects an unexpected key | Hidden means hidden from the catalog, not exempt from validation. |
+| The reset verb is refused on a server with `capability_unavailable`, naming itself as client only | Client-only verbs fail loudly server-side. |
+| The reset verb with an unexpected key is refused with `invalid_params` at that key's path, `unknown_field` | The hidden method is typed: its params are decoded strictly before its handler's client-only check runs. |
+| The run verb is absent from `tools/list` yet still rejects an unexpected key | Hidden means left out of the tool list, not exempt from decoding. |
 
 Closed objects are worth one note, because the assertion looks lax and is not. Only an explicit
 `additionalProperties: true` means open; absent or `false` both mean closed, and a renderer has
