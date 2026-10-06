@@ -10,6 +10,28 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-06
+
+### StageWright speaks WorldDriver's typed API · green in the paired self-test suite
+
+WorldDriver's methods are now typed contracts with strict decoding, and StageWright follows them.
+`mc.test.run`, `mc.test.reset`, `mc.test.input.heldKeys` and `mc.test.input.useOnBlock` are one
+hidden batch registered under the `stagewright` owner, so their parameters are decoded like every
+other method's: an unknown field is refused as `invalid_params` with the field's path, and a
+client-only method asked on a dedicated server answers `capability_unavailable` instead of an
+error string. `mc.test.input.useOnBlock` takes `{pos:{x,y,z}}`.
+
+A driver error reaches a scene as one readable line built from its code, message and per-field
+issues, both over RPC and in-process. Scene files run in-process now get the call's result rather
+than the `{"result":…}` envelope around it, and a refused call fails the scene with its code.
+Client writes that answer `outcome: refused` throw, and screen trees are read as flat nodes.
+
+The WorldDriver range's floor is the numbered build StageWright was compiled against, so a jar
+older than its own API is refused by the loader instead of failing a scene later; an unnumbered
+pin keeps the floor at `<base>-0`. The CLI's preflight orders numbered builds the way the loaders
+do. Six Fabric/NeoForge runtime topologies and cross-topology coverage passed against paired build
+901, with only the two standing optional failures.
+
 ## 2026-10-03
 
 ### WorldDriver is required and integration belongs to `common/driver` · compiled and green in the paired self-test suite
