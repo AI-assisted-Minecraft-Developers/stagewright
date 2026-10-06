@@ -11,12 +11,22 @@ class InProcessDriverBindingTest {
         InProcessDriverBinding binding = new InProcessDriverBinding((method, params) -> {
             assertEquals("sample.read", method);
             assertEquals("{\"seed\":9007199254740993}", params);
-            return "{\"seed\":9007199254740993,\"pos\":{\"x\":1},\"fraction\":0.25}";
+            return "{\"result\":{\"seed\":9007199254740993,\"pos\":{\"x\":1},\"fraction\":0.25}}";
         });
         Map<?, ?> result = (Map<?, ?>) binding.route("sample.read", Map.of("seed", 9007199254740993L));
         assertEquals(9007199254740993L, result.get("seed"));
         assertEquals(Map.of("x", 1L), result.get("pos"));
         assertEquals(0.25, result.get("fraction"));
+    }
+
+    @Test
+    void aRefusedCallFailsTheSceneWithItsCodeAndIssues() {
+        InProcessDriverBinding binding = new InProcessDriverBinding((method, params) ->
+                "{\"error\":{\"code\":\"invalid_params\",\"message\":\"invalid params\",\"issues\":"
+                        + "[{\"path\":\"/pos\",\"code\":\"required\",\"message\":\"missing\"}],\"execution\":\"not_started\"}}");
+        SceneFailure failure = assertThrows(SceneFailure.class, () -> binding.route("sample.read", Map.of()));
+        assertTrue(failure.getMessage().contains("invalid_params"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("/pos"), failure.getMessage());
     }
 
     @Test
