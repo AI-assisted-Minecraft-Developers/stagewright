@@ -5,6 +5,11 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
+## An attached scene's `mods()` always fails
+
+`AttachedContext.mods()` reads a `mods` list from `mc.system.version`, which has never carried one, so
+it throws for every attached scene. WorldDriver's version reply needs the loaded mod ids.
+
 ## A gate task still waits for a game process that cannot exit
 
 The command-line runner stops at the done footer and destroys what it launched. The Gradle plugin's
