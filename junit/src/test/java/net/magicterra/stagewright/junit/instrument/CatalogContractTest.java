@@ -42,8 +42,8 @@ class CatalogContractTest {
      * {@code mc.bot.setting}'s advertised schema is CLOSED and carries the whole registry.
      *
      * <p>The params are tagged on {@code op} ({@code read|patch|apply}), so the schema is a
-     * {@code oneOf} of three closed variants; the registry lives in {@code patch}'s
-     * {@code updates.items}, itself a {@code oneOf} with one {@code {key, value}} variant per key.
+     * {@code oneOf} of three closed variants; the registry lives in {@code patch}'s {@code values},
+     * a closed object with one typed property per key.
      * Only an explicit {@code additionalProperties:true} means open, so the assertion is "not true".
      *
      * <p>The key-count floor catches the other half: a registry that silently lost its reflective
@@ -65,11 +65,12 @@ class CatalogContractTest {
             if (op.equals("patch")) patch = variant;
         }
 
-        JsonObject items = patch.getAsJsonObject("properties").getAsJsonObject("updates").getAsJsonObject("items");
-        assertNotNull(items, "op:'patch' advertises no updates.items: " + patch);
-        JsonElement perKey = items.get("oneOf");
-        assertTrue(perKey != null && perKey.isJsonArray(), "updates.items is not a oneOf of keys: " + items);
-        int keys = perKey.getAsJsonArray().size();
+        JsonObject values = patch.getAsJsonObject("properties").getAsJsonObject("values");
+        assertNotNull(values, "op:'patch' advertises no values: " + patch);
+        assertFalse(isOpen(values), "op:'patch' values is OPEN: " + values);
+        JsonObject perKey = values.getAsJsonObject("properties");
+        assertNotNull(perKey, "values has no per-key properties: " + values);
+        int keys = perKey.size();
         assertTrue(keys >= 200, "mc.bot.setting advertises " + keys + " keys (< 200) — the single-source"
                 + " settings registry is undersized");
     }
@@ -78,18 +79,17 @@ class CatalogContractTest {
      * The validator runs before the handler, and that ordering is side-uniform.
      *
      * <p>{@code op:"apply"} acts on this client's player, so on a dedicated server it has two ways
-     * to fail. Which one it picks is the assertion: a bogus key must produce the VALIDATOR's
-     * {@code invalid_params} at {@code /update/key}, not the handler's {@code capability_unavailable}.
+     * to fail. Which one it picks is the assertion: a bogus control must produce the VALIDATOR's
+     * {@code invalid_params} at {@code /control}, not the handler's {@code capability_unavailable}.
      * If it produced the latter, validation would be happening after the side gate — meaning params
      * reaching a client are validated and the same params reaching a server are not.
      */
     @Test
     void unknownSettingKeyHitsTheValidatorNotTheSideGate(StageWright tk) {
-        JsonObject update = p("key", "definitelyNotAKnob");
-        update.addProperty("value", true);
         JsonObject params = p("op", "apply");
-        params.add("update", update);
-        refuses(tk, "mc.bot.setting", params, "[invalid_params]", "/update/key invalid_value", "definitelyNotAKnob");
+        params.addProperty("control", "definitelyNotAKnob");
+        params.addProperty("value", true);
+        refuses(tk, "mc.bot.setting", params, "[invalid_params]", "/control invalid_value", "definitelyNotAKnob");
     }
 
     /** A hidden verb with valid params still fails loudly on the wrong side — never a silent no-op. */
