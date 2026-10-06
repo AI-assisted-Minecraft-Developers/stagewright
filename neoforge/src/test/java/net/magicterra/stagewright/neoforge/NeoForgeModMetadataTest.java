@@ -90,7 +90,7 @@ class NeoForgeModMetadataTest {
         assertEquals("BOTH", wd.get("side"));
 
         VersionRange range = VersionRange.createFromVersionSpec(wd.get("versionRange"));
-        String built = prop("worlddriver_version");
+        String built = System.getProperty("stagewright.worlddriverVersion", prop("worlddriver_version"));
         Matcher v = Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)").matcher(built);
         assertTrue(v.find(), built);
         int major = Integer.parseInt(v.group(1));
@@ -98,10 +98,22 @@ class NeoForgeModMetadataTest {
         String base = v.group();
         String nextBreaking = major == 0 ? "0." + (minor + 1) + ".0" : (major + 1) + ".0.0";
         String laterCompatible = major + "." + minor + "." + (Integer.parseInt(v.group(3)) + 1);
-        for (String version : List.of(built, base, laterCompatible + "+1.21.1")) {
+        List<String> accepted = new java.util.ArrayList<>(List.of(built, laterCompatible + "+1.21.1"));
+        List<String> refused = new java.util.ArrayList<>(List.of(base + "-alpha", nextBreaking, nextBreaking + "+1.21.1"));
+        // A numbered pin is the floor: the next build is in, the one before it is out. Maven orders a
+        // release below its -build.N versions, so the bare release is in only when the pin is not a build.
+        Matcher n = Pattern.compile("-build\\.(\\d+)(?:\\+|$)").matcher(built);
+        if (n.find()) {
+            int pinned = Integer.parseInt(n.group(1));
+            accepted.add(base + "-build." + (pinned + 1) + "+1.21.1");
+            if (pinned > 0) refused.add(base + "-build." + (pinned - 1) + "+1.21.1");
+        } else {
+            accepted.add(base);
+        }
+        for (String version : accepted) {
             assertTrue(range.containsVersion(new DefaultArtifactVersion(version)), "range should accept " + version);
         }
-        for (String version : List.of(base + "-alpha", nextBreaking, nextBreaking + "+1.21.1")) {
+        for (String version : refused) {
             assertFalse(range.containsVersion(new DefaultArtifactVersion(version)), "range should refuse " + version);
         }
     }

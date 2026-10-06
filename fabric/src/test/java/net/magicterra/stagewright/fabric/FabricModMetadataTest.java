@@ -110,7 +110,7 @@ class FabricModMetadataTest {
         assertFalse(META.has("suggests"));
         assertFalse(META.has("breaks"));
 
-        String built = prop("worlddriver_version");
+        String built = System.getProperty("stagewright.worlddriverVersion", prop("worlddriver_version"));
         Matcher v = Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)").matcher(built);
         assertTrue(v.find(), built);
         int major = Integer.parseInt(v.group(1));
@@ -120,12 +120,20 @@ class FabricModMetadataTest {
         String laterCompatible = major + "." + minor + "." + (Integer.parseInt(v.group(3)) + 1);
         // Every build is published as a pre-release of its line, which SemVer orders below the line.
         String earlierLine = major == 0 ? "0." + (minor - 1) + ".9" : (major - 1) + ".9.9";
-        for (String version : List.of(built, base, laterCompatible, base + "-build.1+1.21.1",
-                base + "-build.local+1.21.1")) {
+        List<String> covered = new java.util.ArrayList<>(List.of(built, base, laterCompatible, base + "-build.local+1.21.1"));
+        List<String> refused = new java.util.ArrayList<>(List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1",
+                nextBreaking + "-build.1+1.21.1"));
+        // A numbered pin is the floor: the next build is in, the one before it is out.
+        Matcher n = Pattern.compile("-build\\.(\\d+)(?:\\+|$)").matcher(built);
+        if (n.find()) {
+            int pinned = Integer.parseInt(n.group(1));
+            covered.add(base + "-build." + (pinned + 1) + "+1.21.1");
+            if (pinned > 0) refused.add(base + "-build." + (pinned - 1) + "+1.21.1");
+        }
+        for (String version : covered) {
             assertTrue(matches(required, version), "required range should cover " + version);
         }
-        for (String version : List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1",
-                nextBreaking + "-build.1+1.21.1")) {
+        for (String version : refused) {
             assertFalse(matches(required, version), "required range should not cover " + version);
         }
     }

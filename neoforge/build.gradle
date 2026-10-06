@@ -55,6 +55,8 @@ dependencies {
 
 tasks.named('test', Test) {
     useJUnitPlatform()
+    // The pin the metadata was rendered from, which -Pworlddriver_version may override.
+    systemProperty 'stagewright.worlddriverVersion', rootProject.worlddriver_version
 }
 
 processResources {

@@ -53,6 +53,8 @@ dependencies {
 
 tasks.named('test', Test) {
     useJUnitPlatform()
+    // The pin the metadata was rendered from, which -Pworlddriver_version may override.
+    systemProperty 'stagewright.worlddriverVersion', rootProject.worlddriver_version
 }
 
 // fabric.mod.json cannot read Maven ranges, and gradle.properties states each range once, in the
