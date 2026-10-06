@@ -12,8 +12,9 @@ import java.util.zip.ZipOutputStream;
 final class TestModJar {
     private TestModJar() {}
 
+    /** A WorldDriver every floor the framework under test may carry admits: local outranks every numbered build. */
     static Path driver(Path jar, String marker) throws IOException {
-        return create(jar, "worlddriver", "0.1.0-build.1+1.21.1", marker);
+        return create(jar, "worlddriver", "0.1.0-build.local+1.21.1", marker);
     }
 
     static Path create(Path jar, String id, String version, String marker) throws IOException {

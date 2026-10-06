@@ -70,7 +70,7 @@ class DriverRequirementTest {
     @Test
     void ourOwnMetadataIsReadPastAByteOrderMark(@TempDir Path tmp) throws IOException {
         TestModJar.withMetadata(tmp.resolve("mods/driver.jar"), "﻿{\"schemaVersion\":1,\"id\":\"worlddriver\","
-                + "\"version\":\"0.1.0-build.1+1.21.1\"}", false);
+                + "\"version\":\"0.1.0-build.local+1.21.1\"}", false);
         assertDoesNotThrow(() -> DriverRequirement.check(tmp, "fabric", List.of(), true));
     }
 
@@ -78,7 +78,7 @@ class DriverRequirementTest {
     void aJarThatOnlyReadsThroughItsDirectoryIsStillRead(@TempDir Path tmp) throws IOException {
         // A stored entry flagged with a data descriptor: ZipInputStream refuses it, ZipFile does not.
         TestModJar.withMetadata(tmp.resolve("mods/driver.jar"), "{\"schemaVersion\":1,\"id\":\"worlddriver\","
-                + "\"version\":\"0.1.0-build.1+1.21.1\"}", true);
+                + "\"version\":\"0.1.0-build.local+1.21.1\"}", true);
         assertDoesNotThrow(() -> DriverRequirement.check(tmp, "fabric", List.of(), true));
     }
 
@@ -107,6 +107,20 @@ class DriverRequirementTest {
                 assertTrue(DriverRequirement.accepts(range, version), version);
             }
             for (String version : List.of("0.0.9", "0.2.0-build.1+1.21.1", "bad", "0.1.0-alpha")) {
+                assertFalse(DriverRequirement.accepts(range, version), version);
+            }
+        }
+    }
+
+    @Test
+    void aNumberedFloorRefusesTheBuildsBeforeIt() {
+        for (String range : List.of(">=0.1.0-build.900 <0.2.0-0", "[0.1.0-build.900,0.2.0-0)")) {
+            for (String version : List.of("0.1.0-build.900+1.21.1", "0.1.0-build.1000+1.21.1",
+                    "0.1.0-build.local+1.21.1", "0.1.0", "0.1.1-build.1+1.21.1")) {
+                assertTrue(DriverRequirement.accepts(range, version), version);
+            }
+            for (String version : List.of("0.1.0-build.899+1.21.1", "0.1.0-build.1+1.21.1", "0.1.0-0",
+                    "0.2.0-build.1+1.21.1")) {
                 assertFalse(DriverRequirement.accepts(range, version), version);
             }
         }
