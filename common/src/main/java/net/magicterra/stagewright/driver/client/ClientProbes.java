@@ -36,7 +36,7 @@ import net.minecraft.client.Minecraft;
  * between "works in singleplayer" and "works on a server", the most expensive bug class a modpack
  * has.
  *
- * <p>It listens through {@link net.magicterra.worlddriver.api.DriverApi#addEventListener}, the same
+ * <p>It listens through {@link net.magicterra.worlddriver.api.registry.EventFeed#addEventListener}, the same
  * fan-out that feeds live push subscribers, so what is asserted is what an agent attached to this
  * client would actually have received — not a re-read of the client state the event was derived
  * from, which would pass even if the event were never emitted.

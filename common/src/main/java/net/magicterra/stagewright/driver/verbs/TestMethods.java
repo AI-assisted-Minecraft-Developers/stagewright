@@ -8,22 +8,21 @@ import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
 
 import net.magicterra.stagewright.StageWrightCommon;
-import net.magicterra.worlddriver.api.ApiBatch;
-import net.magicterra.worlddriver.api.ApiHandler;
-import net.magicterra.worlddriver.api.ApiHandlers;
-import net.magicterra.worlddriver.api.ApiMethod;
-import net.magicterra.worlddriver.api.ApiRegistry;
-import net.magicterra.worlddriver.api.DriverApi;
-import net.magicterra.worlddriver.api.contract.ApiError;
-import net.magicterra.worlddriver.api.contract.ApiException;
-import net.magicterra.worlddriver.api.contract.ApiField;
-import net.magicterra.worlddriver.api.contract.ApiTypes;
-import net.magicterra.worlddriver.api.contract.MethodSpec;
-import net.magicterra.worlddriver.api.contract.MethodSpec.Effect;
-import net.magicterra.worlddriver.api.contract.RecordType;
-import net.magicterra.worlddriver.api.methods.CommonTypes;
-import net.magicterra.worlddriver.api.methods.CommonTypes.NoParams;
-import net.magicterra.worlddriver.api.methods.TestInputContracts;
+import net.magicterra.worlddriver.api.schema.ApiError;
+import net.magicterra.worlddriver.api.schema.ApiException;
+import net.magicterra.worlddriver.api.schema.ApiField;
+import net.magicterra.worlddriver.api.schema.ApiTypes;
+import net.magicterra.worlddriver.api.schema.MethodSpec;
+import net.magicterra.worlddriver.api.schema.MethodSpec.Effect;
+import net.magicterra.worlddriver.api.schema.RecordType;
+import net.magicterra.worlddriver.api.methods.shared.CommonTypes;
+import net.magicterra.worlddriver.api.methods.shared.CommonTypes.NoParams;
+import net.magicterra.worlddriver.api.methods.test.TestInputContracts;
+import net.magicterra.worlddriver.api.registry.ApiBatch;
+import net.magicterra.worlddriver.api.registry.ApiHandler;
+import net.magicterra.worlddriver.api.registry.ApiHandlers;
+import net.magicterra.worlddriver.api.registry.ApiMethod;
+import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.bot.BotApi;
 import net.magicterra.worlddriver.bot.BotHooks;
 
@@ -113,8 +112,8 @@ public final class TestMethods {
     /** One batch object, so publishing it again on the same API is the no-op the registry makes of a retry. */
     private static final ApiBatch BATCH = new ApiBatch(ApiRegistry.TEST_OWNER, "test", METHODS);
 
-    public static void register(DriverApi api) {
-        api.registry().registerBatch(BATCH);
+    public static void register(ApiRegistry api) {
+        api.registerBatch(BATCH);
     }
 
     private static Accepted run() {

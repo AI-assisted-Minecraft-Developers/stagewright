@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The route layer's own contract: what {@code DriverApi.route} answers, and — mostly — what it
+ * The route layer's own contract: what {@code ApiRegistry.route} answers, and — mostly — what it
  * refuses.
  *
  * <p><b>Why these live out here and not in a scene.</b> This is the instrument face: green here is

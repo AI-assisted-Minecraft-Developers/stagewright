@@ -2,16 +2,16 @@ package net.magicterra.stagewright.driver;
 
 import net.magicterra.stagewright.driver.verbs.TestMethods;
 import net.magicterra.worlddriver.WorldDriverCommon;
-import net.magicterra.worlddriver.api.DriverApi;
+import net.magicterra.worlddriver.api.registry.ApiRegistry;
 
 /** Required driver connection. Installation and readiness are distinct states. */
 public final class DriverRuntime {
-    private static volatile DriverApi registeredApi;
+    private static volatile ApiRegistry registeredApi;
 
     private DriverRuntime() {}
 
-    public static DriverApi requireApi() {
-        DriverApi api = WorldDriverCommon.api();
+    public static ApiRegistry requireApi() {
+        ApiRegistry api = WorldDriverCommon.registry();
         if (api == null) throw new IllegalStateException("StageWright: WorldDriver API is not ready");
         return api;
     }
@@ -21,7 +21,7 @@ public final class DriverRuntime {
      * A client asks every tick, so an API already registered is answered without the lock.
      */
     public static void registerVerbs() {
-        DriverApi api = requireApi();
+        ApiRegistry api = requireApi();
         if (api == registeredApi) return;
         synchronized (DriverRuntime.class) {
             if (api == registeredApi) return;

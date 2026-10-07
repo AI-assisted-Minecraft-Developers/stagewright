@@ -5,37 +5,40 @@ import java.util.Queue;
 import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.magicterra.stagewright.driver.DriverRuntime;
-import net.magicterra.worlddriver.api.DriverApi;
-import net.magicterra.worlddriver.model.DriverEvent;
+import net.magicterra.worlddriver.WorldDriverCommon;
+import net.magicterra.worlddriver.api.methods.event.EventContracts;
+import net.magicterra.worlddriver.api.registry.EventFeed;
 
-/** Event subscription owns the API instance it registered with. */
+/** Event subscription owns the feed it registered with. */
 final class DriverFeed {
-    private static DriverApi subscribedApi;
-    private static Consumer<DriverEvent> listener;
+    private static EventFeed subscribedFeed;
+    private static Consumer<EventContracts.Event> listener;
     private static AtomicBoolean listening;
 
     private DriverFeed() {}
 
     static synchronized void listenForHurts(Queue<Map<?, ?>> sink) {
         stopListening();
-        DriverApi api = DriverRuntime.requireApi();
+        DriverRuntime.requireApi();
+        EventFeed feed = WorldDriverCommon.host();
         AtomicBoolean active = new AtomicBoolean(true);
         listening = active;
         listener = e -> {
             synchronized (DriverFeed.class) {
-                if (active.get() && "player.hurt".equals(e.type) && e.data.tree() instanceof Map<?, ?> m) sink.add(m);
+                if (active.get() && "player.hurt".equals(e.type())
+                        && e.data().isPresent() && e.data().get().tree() instanceof Map<?, ?> m) sink.add(m);
             }
         };
-        subscribedApi = api;
-        api.addEventListener(listener);
+        subscribedFeed = feed;
+        feed.addEventListener(listener);
     }
 
     static synchronized void stopListening() {
         if (listener == null) return;
         listening.set(false);
-        subscribedApi.removeEventListener(listener);
+        subscribedFeed.removeEventListener(listener);
         listener = null;
-        subscribedApi = null;
+        subscribedFeed = null;
     }
 
     /** Send the /damage; null once it went out, else why the verb refused ({@code outcome:"refused"}). */
