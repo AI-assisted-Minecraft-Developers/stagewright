@@ -21,8 +21,8 @@ import net.magicterra.worlddriver.api.contract.ApiTypes;
 import net.magicterra.worlddriver.api.contract.MethodSpec;
 import net.magicterra.worlddriver.api.contract.MethodSpec.Effect;
 import net.magicterra.worlddriver.api.contract.RecordType;
-import net.magicterra.worlddriver.api.methods.EventStreamContract;
-import net.magicterra.worlddriver.api.methods.EventStreamContract.NoParams;
+import net.magicterra.worlddriver.api.methods.CommonTypes;
+import net.magicterra.worlddriver.api.methods.CommonTypes.NoParams;
 import net.magicterra.worlddriver.api.methods.TestInputContracts;
 import net.magicterra.worlddriver.bot.BotApi;
 import net.magicterra.worlddriver.bot.BotHooks;
@@ -60,19 +60,19 @@ public final class TestMethods {
             ApiField.field("keys", TestInputContracts.HELD_KEYS).required().forGetter(Keys::keys),
             Keys::new);
 
-    public static final MethodSpec<NoParams, Accepted> RUN = MethodSpec.of("mc.test.run", EventStreamContract.NO_PARAMS,
+    public static final MethodSpec<NoParams, Accepted> RUN = MethodSpec.of("mc.test.run", CommonTypes.NO_PARAMS,
             ACCEPTED, "Start the StageWright scene suite on this server, once. Answers when the run is accepted; the "
                     + "results file's done footer is the only completion signal. Refused when the suite already ran "
                     + "or is running, and where no StageWright runtime is armed.")
             .hidden().effects(Effect.WORLD_WRITE);
 
-    public static final MethodSpec<NoParams, Reset> RESET_ENTRY = MethodSpec.of("mc.test.reset", EventStreamContract.NO_PARAMS,
+    public static final MethodSpec<NoParams, Reset> RESET_ENTRY = MethodSpec.of("mc.test.reset", CommonTypes.NO_PARAMS,
             RESET, "Reset this client between reused test runs: end the bot's task and fight, release held keys, close "
                     + "the screen, clear the chat readback. Client only.")
             .hidden().effects(Effect.BODY_TASK, Effect.CLIENT_INPUT).mayWait();
 
     public static final MethodSpec<NoParams, Keys> HELD_KEYS = MethodSpec.of("mc.test.input.heldKeys",
-            EventStreamContract.NO_PARAMS, KEYS, "Read on the client thread whether each of the eight inputs a key "
+            CommonTypes.NO_PARAMS, KEYS, "Read on the client thread whether each of the eight inputs a key "
                     + "release clears is down, from outside the release itself. Client only.")
             .hidden().effects(Effect.SNAPSHOT_READ).mayWait();
 

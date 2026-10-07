@@ -23,7 +23,7 @@ final class DriverFeed {
         listening = active;
         listener = e -> {
             synchronized (DriverFeed.class) {
-                if (active.get() && "player.hurt".equals(e.type) && e.data instanceof Map<?, ?> m) sink.add(m);
+                if (active.get() && "player.hurt".equals(e.type) && e.data.tree() instanceof Map<?, ?> m) sink.add(m);
             }
         };
         subscribedApi = api;
