@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.magicterra.stagewright.driver.DriverRuntime;
 import net.magicterra.worlddriver.api.game.WorldDriver;
+import net.magicterra.worlddriver.api.methods.event.EventCatalog;
 import net.magicterra.worlddriver.api.methods.event.EventContracts;
 import net.magicterra.worlddriver.api.registry.EventFeed;
 
@@ -25,7 +26,7 @@ final class DriverFeed {
         listening = active;
         listener = e -> {
             synchronized (DriverFeed.class) {
-                if (active.get() && "player.hurt".equals(e.type())
+                if (active.get() && EventCatalog.PLAYER_HURT.type().equals(e.type())
                         && e.data().isPresent() && e.data().get().tree() instanceof Map<?, ?> m) sink.add(m);
             }
         };
