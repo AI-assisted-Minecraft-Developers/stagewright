@@ -40,7 +40,7 @@ final class UiSupport {
         String holder = null;
         for (JsonElement e : nodes) {
             if (e.isJsonObject() && "ContainerSlots".equals(strOf(e.getAsJsonObject(), "type"))) {
-                holder = strOf(e.getAsJsonObject(), "id");
+                holder = strOf(e.getAsJsonObject(), "ref");
                 break;
             }
         }
