@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.driver.verbs;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -17,6 +18,7 @@ import net.magicterra.worlddriver.api.schema.MethodSpec.Effect;
 import net.magicterra.worlddriver.api.schema.RecordType;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.NoParams;
+import net.magicterra.worlddriver.api.methods.test.TestHarnessApiBinding;
 import net.magicterra.worlddriver.api.methods.test.TestInputContracts;
 import net.magicterra.worlddriver.api.registry.ApiBatch;
 import net.magicterra.worlddriver.api.registry.ApiHandler;
@@ -103,11 +105,17 @@ public final class TestMethods {
         };
     }
 
-    private static final List<ApiMethod<?, ?>> METHODS = List.of(
-            new ApiMethod<>(RUN, ApiHandlers.immediate(p -> run())),
-            new ApiMethod<>(RESET_ENTRY, onClient(RESET_ENTRY, (bot, p) -> new Reset(bot.resetClientEntry()))),
-            new ApiMethod<>(HELD_KEYS, onClient(HELD_KEYS, (bot, p) -> new Keys(bot.heldKeys()))),
-            new ApiMethod<>(USE_ON_BLOCK, onClient(USE_ON_BLOCK, BotApi::useOnBlock)));
+    private static final List<ApiMethod<?, ?>> METHODS = methods();
+
+    private static List<ApiMethod<?, ?>> methods() {
+        List<ApiMethod<?, ?>> all = new ArrayList<>(List.of(
+                new ApiMethod<>(RUN, ApiHandlers.immediate(p -> run())),
+                new ApiMethod<>(RESET_ENTRY, onClient(RESET_ENTRY, (bot, p) -> new Reset(bot.resetClientEntry()))),
+                new ApiMethod<>(HELD_KEYS, onClient(HELD_KEYS, (bot, p) -> new Keys(bot.heldKeys()))),
+                new ApiMethod<>(USE_ON_BLOCK, onClient(USE_ON_BLOCK, BotApi::useOnBlock))));
+        all.addAll(TestHarnessApiBinding.methods(new HarnessService()));
+        return all;
+    }
 
     /** One batch object, so publishing it again on the same API is the no-op the registry makes of a retry. */
     private static final ApiBatch BATCH = new ApiBatch(ApiRegistry.TEST_OWNER, "test", METHODS);

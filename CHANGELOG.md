@@ -10,6 +10,21 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-19
+
+### Scenes hold the settings and the bot ticks through `mc.test.*` · compiled
+
+A scene no longer reaches into WorldDriver's settings classes or its tick list. `mc.test.settings`
+pins every setting under a baseline (`test`, `compiled` or `current`) and restores them on `unpin`,
+writes and reads keys on the calling thread without saving them, and checks each value as
+`mc.bot.setting` does. `mc.test.bots` advances every server-side bot a number of ticks within the
+call (optionally until none is busy), counts them, or clears the tick list; it answers
+`capability_unavailable` off the server thread. Both answer within the call, so a scene keeps going
+in the same tick. Their contracts are WorldDriver's `TestHarnessContracts`; StageWright serves them.
+
+StageWright finds the driver through WorldDriver's `api/game/WorldDriver` now, and matches hurt
+events by their catalogue entry.
+
 ## 2026-10-06
 
 ### StageWright speaks WorldDriver's typed API · green in the paired self-test suite
