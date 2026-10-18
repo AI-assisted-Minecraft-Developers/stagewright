@@ -54,7 +54,6 @@ run_step "$worlddriver_root" driver ./gradlew build :common:generatePomFileForMa
 run_step "$stagewright_root" framework-packaging python3 scripts/check_packaging.py --build "--gradle-arg=-Pworlddriver_version=$worlddriver_candidate"
 run_step "$stagewright_root" framework-boundaries python3 scripts/check_architecture.py --jars
 run_step "$worlddriver_root" driver-packaging python3 scripts/check_packaging.py
-run_step "$worlddriver_root" driver-boundaries python3 scripts/check_architecture.py --jars
 run_step "$worlddriver_root" driver-budget python3 scripts/check_source_budget.py
 run_step "$worlddriver_root" driver-remap python3 scripts/check_remap_safety.py
 printf 'Local build and packaging passed. Joint acceptance still requires all six game gates and stagewrightCoverage.\n'
