@@ -22,6 +22,12 @@ call (optionally until none is busy), counts them, or clears the tick list; it a
 `capability_unavailable` off the server thread. Both answer within the call, so a scene keeps going
 in the same tick. Their contracts are WorldDriver's `TestHarnessContracts`; StageWright serves them.
 
+`mc.test.bots` also parks a bot (off the tick list, still addressable) and unparks it, ticks one
+named bot alone or only its body's physics, and its `clear` now removes every bot but `self` from
+the roster instead of only stopping their ticks. `mc.test.input.press` holds or lets go of a
+server-side bot's movement, jump, sneak, sprint, dig and use keys, aims it at a block and puts the
+right tool in hand, so a scene that poses a body and steps it no longer calls the body's methods.
+
 StageWright finds the driver through WorldDriver's `api/game/WorldDriver` now, and matches hurt
 events by their catalogue entry.
 
