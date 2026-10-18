@@ -1,7 +1,7 @@
 package net.magicterra.stagewright.driver.endpoint;
 
 import net.magicterra.stagewright.harness.EndpointDescriptor;
-import net.magicterra.worlddriver.WorldDriverCommon;
+import net.magicterra.worlddriver.api.game.WorldDriver;
 
 /**
  * Publishes live ports, never the requested port or a stale port file from a prior run.
@@ -15,13 +15,13 @@ public final class DriverEndpoint {
     /** @return false while a requested descriptor is still unpublished */
     public static boolean publish(String loader, String worldName) {
         if (!EndpointDescriptor.pending()) return true;
-        int rpcPort = WorldDriverCommon.rpcPort();
+        int rpcPort = WorldDriver.rpcPort();
         if (rpcPort < 1) {
             EndpointDescriptor.cannotPublish("-D" + EndpointDescriptor.PROPERTY
                     + " asked for an endpoint descriptor, but WorldDriver RPC is not listening");
             return false;
         }
-        int mcpPort = WorldDriverCommon.mcpPort();
+        int mcpPort = WorldDriver.mcpPort();
         EndpointDescriptor.writeIfRequested(loader, worldName,
                 System.getProperty("worlddriver.rpcHost", "127.0.0.1"), rpcPort,
                 System.getProperty("worlddriver.mcpHost", "127.0.0.1"),

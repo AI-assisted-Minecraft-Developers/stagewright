@@ -3,7 +3,7 @@ package net.magicterra.stagewright.driver.endpoint;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import net.magicterra.stagewright.harness.EndpointDescriptor;
-import net.magicterra.worlddriver.WorldDriverCommon;
+import net.magicterra.worlddriver.api.game.WorldDriver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +32,7 @@ class DriverEndpointTest {
     }
 
     @Test void aDriverThatIsNotListeningLeavesTheDescriptorOwed() {
-        assertTrue(WorldDriverCommon.rpcPort() < 1, "no RPC server is bound in a unit test");
+        assertTrue(WorldDriver.rpcPort() < 1, "no RPC server is bound in a unit test");
         Path target = directory.resolve("endpoint.json");
         System.setProperty(EndpointDescriptor.PROPERTY, target.toString());
         assertFalse(DriverEndpoint.publish("neoforge", "world"));

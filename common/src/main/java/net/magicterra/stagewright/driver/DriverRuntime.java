@@ -1,7 +1,7 @@
 package net.magicterra.stagewright.driver;
 
 import net.magicterra.stagewright.driver.verbs.TestMethods;
-import net.magicterra.worlddriver.WorldDriverCommon;
+import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 
 /** Required driver connection. Installation and readiness are distinct states. */
@@ -11,7 +11,7 @@ public final class DriverRuntime {
     private DriverRuntime() {}
 
     public static ApiRegistry requireApi() {
-        ApiRegistry api = WorldDriverCommon.registry();
+        ApiRegistry api = WorldDriver.registry();
         if (api == null) throw new IllegalStateException("StageWright: WorldDriver API is not ready");
         return api;
     }

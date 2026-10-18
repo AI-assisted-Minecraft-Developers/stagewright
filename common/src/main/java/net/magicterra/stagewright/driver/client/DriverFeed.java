@@ -5,7 +5,7 @@ import java.util.Queue;
 import java.util.function.Consumer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.magicterra.stagewright.driver.DriverRuntime;
-import net.magicterra.worlddriver.WorldDriverCommon;
+import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.methods.event.EventContracts;
 import net.magicterra.worlddriver.api.registry.EventFeed;
 
@@ -20,7 +20,7 @@ final class DriverFeed {
     static synchronized void listenForHurts(Queue<Map<?, ?>> sink) {
         stopListening();
         DriverRuntime.requireApi();
-        EventFeed feed = WorldDriverCommon.host();
+        EventFeed feed = WorldDriver.host();
         AtomicBoolean active = new AtomicBoolean(true);
         listening = active;
         listener = e -> {
