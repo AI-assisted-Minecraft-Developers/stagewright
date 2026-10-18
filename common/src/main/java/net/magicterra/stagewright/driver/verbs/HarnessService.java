@@ -39,6 +39,8 @@ import net.magicterra.worlddriver.bot.BotHooks;
 import net.magicterra.worlddriver.bot.BotTicker;
 import net.magicterra.worlddriver.bot.SettingsCommand;
 import net.magicterra.worlddriver.config.BotConfig;
+import net.magicterra.worlddriver.config.ControlConfig;
+import net.magicterra.worlddriver.config.PlanningConfig;
 
 /**
  * {@code mc.test.settings} and {@code mc.test.bots}, over the driver's own settings and tick list. Each runs on
@@ -58,6 +60,10 @@ final class HarnessService implements TestHarnessApi {
                     case TEST -> BotConfig.applyGameTestBaseline();
                     case COMPILED -> BotConfig.applyCompiledDefaults();
                     case CURRENT -> { }
+                }
+                if (p.untimed()) {
+                    PlanningConfig.pathfinderMaxMs = Long.MAX_VALUE / 2;
+                    ControlConfig.pathfinderSliceMs = Long.MAX_VALUE / 2;
                 }
                 int id = nextPin.incrementAndGet();
                 pins.put(id, saved);
