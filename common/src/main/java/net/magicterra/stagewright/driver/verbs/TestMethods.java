@@ -44,18 +44,18 @@ public final class TestMethods {
 
     public record Keys(TestInputContracts.HeldKeys keys) {}
 
-    private static final RecordType<Accepted> ACCEPTED = ApiTypes.record("TestRunAccepted",
+    private static final RecordType<Accepted> ACCEPTED = ApiTypes.record(Accepted.class, "TestRunAccepted",
             ApiField.field("accepted", ApiTypes.trueOnly()).required().forGetter(Accepted::accepted),
             ApiField.field("scenes", ApiTypes.integer(0, Integer.MAX_VALUE)).describe("Registered scenes the run will execute.")
                     .required().forGetter(Accepted::scenes),
             Accepted::new);
 
-    private static final RecordType<Reset> RESET = ApiTypes.record("TestReset",
+    private static final RecordType<Reset> RESET = ApiTypes.record(Reset.class, "TestReset",
             ApiField.field("reset", TestInputContracts.RESET).describe("One token per effect the reset undid.")
                     .required().forGetter(Reset::reset),
             Reset::new);
 
-    private static final RecordType<Keys> KEYS = ApiTypes.record("TestHeldKeys",
+    private static final RecordType<Keys> KEYS = ApiTypes.record(Keys.class, "TestHeldKeys",
             ApiField.field("keys", TestInputContracts.HELD_KEYS).required().forGetter(Keys::keys),
             Keys::new);
 
