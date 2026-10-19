@@ -19,6 +19,8 @@ dependencies {
     // API registry directly. The `dev` classifier, not the plain jar: the published jar
     // is remapped to intermediary and will not link against a dev-mapped compile classpath.
     implementation "net.magicterra:worlddriver-common:${rootProject.worlddriver_version}:dev"
+    // Its api is a module of its own; the `dev` jars declare no dependencies, so name it too.
+    implementation "net.magicterra:worlddriver-api:${rootProject.worlddriver_version}:dev"
 
     // WorldDriver provides the required runtime copy; do not embed Rhino a second time.
     compileOnly "dev.latvian.mods:rhino:${rootProject.rhino_version}"
