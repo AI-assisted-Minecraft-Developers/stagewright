@@ -9,13 +9,14 @@ import net.magicterra.stagewright.contract.DriverJson;
 import net.magicterra.stagewright.contract.SceneFailure;
 import net.magicterra.stagewright.contract.StageWrightRpc;
 import net.magicterra.stagewright.driver.DriverRuntime;
+import net.magicterra.worlddriver.script.ScriptCalls;
 
 /** Uses the current validated router and its wire encoding, with the same value shapes as RPC. */
 public final class InProcessDriverBinding implements DriverBinding {
     private final BiFunction<String, String, String> invokeJson;
 
     public InProcessDriverBinding() {
-        this((method, params) -> DriverRuntime.requireApi().invokeJson(method, params));
+        this((method, params) -> ScriptCalls.standalone(DriverRuntime.requireApi()).invokeJson(method, params));
     }
 
     InProcessDriverBinding(BiFunction<String, String, String> invokeJson) {

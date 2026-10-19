@@ -6,7 +6,7 @@ import java.util.Map;
  * How a scene reaches the driver's verb surface — {@code driver('mc.observe.player')} in a script.
  *
  * <p>One method, because the driver already collapsed to one method. WorldDriver's whole design
- * rests on {@code ApiRegistry.route(method, params)} being the single source of truth that MCP, the
+ * rests on {@code ApiRegistry.dispatch(method, params, context)} being the single source of truth that MCP, the
  * RPC websocket and the in-JVM Rhino sandbox all funnel into, with a validation suite asserting all
  * three return byte-identical results. The out-of-process home is a FOURTH caller of that same
  * route, so it inherits the discipline rather than re-deriving a verb surface: in-process the
