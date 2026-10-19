@@ -14,6 +14,7 @@ import java.util.function.Supplier;
 import net.magicterra.worlddriver.api.call.CallContext;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.BlockPosition;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Park;
+import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Part;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Parked;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Pressed;
@@ -142,7 +143,7 @@ final class HarnessService implements TestHarnessApi {
 
     private static int tick(Tick t) {
         if (t.bot().isEmpty()) {
-            if (t.bodyOnly()) throw ApiException.invalidParam("/bodyOnly", ApiIssue.Code.INVALID_VALUE, "bodyOnly needs a bot");
+            if (t.part() != Part.ALL) throw ApiException.invalidParam("/part", ApiIssue.Code.INVALID_VALUE, "part " + t.part().wireName() + " needs a bot");
             int n = 0;
             for (; n < t.ticks(); n++) {
                 if (t.untilIdle() && BotTicker.activeCount() == 0) break;
@@ -157,8 +158,11 @@ final class HarnessService implements TestHarnessApi {
         int n = 0;
         for (; n < t.ticks(); n++) {
             if (t.untilIdle() && !bot.busy()) break;
-            if (t.bodyOnly()) server.stepBody();
-            else server.tick();
+            switch (t.part()) {
+                case ALL -> server.tick();
+                case BODY -> server.stepBody();
+                case BRAIN -> server.think();
+            }
         }
         return n;
     }
