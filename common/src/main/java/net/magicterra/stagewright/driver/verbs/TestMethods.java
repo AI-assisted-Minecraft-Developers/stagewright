@@ -11,11 +11,15 @@ import java.util.function.BiFunction;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.worlddriver.api.schema.ApiError;
 import net.magicterra.worlddriver.api.schema.ApiException;
-import net.magicterra.worlddriver.api.schema.ApiField;
 import net.magicterra.worlddriver.api.schema.ApiTypes;
 import net.magicterra.worlddriver.api.schema.MethodSpec;
 import net.magicterra.worlddriver.api.schema.MethodSpec.Effect;
 import net.magicterra.worlddriver.api.schema.RecordType;
+import net.magicterra.worlddriver.api.schema.annotation.Doc;
+import net.magicterra.worlddriver.api.schema.annotation.Length;
+import net.magicterra.worlddriver.api.schema.annotation.Named;
+import net.magicterra.worlddriver.api.schema.annotation.OnlyTrue;
+import net.magicterra.worlddriver.api.schema.annotation.Range;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.NoParams;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessApiBinding;
@@ -40,26 +44,22 @@ import net.magicterra.worlddriver.bot.BotHooks;
 public final class TestMethods {
     private TestMethods() {}
 
-    public record Accepted(boolean accepted, int scenes) {}
+    @Named("TestRunAccepted")
+    public record Accepted(
+            @OnlyTrue boolean accepted,
+            @Doc("Registered scenes the run will execute.") @Range(min = 0) int scenes) {}
 
-    public record Reset(List<String> reset) {}
+    @Named("TestReset")
+    public record Reset(@Doc("One token per effect the reset undid.") @Length(max = 64) List<String> reset) {}
 
+    @Named("TestHeldKeys")
     public record Keys(TestInputContracts.HeldKeys keys) {}
 
-    private static final RecordType<Accepted> ACCEPTED = ApiTypes.record(Accepted.class, "TestRunAccepted",
-            ApiField.field("accepted", ApiTypes.trueOnly()).required().forGetter(Accepted::accepted),
-            ApiField.field("scenes", ApiTypes.integer(0, Integer.MAX_VALUE)).describe("Registered scenes the run will execute.")
-                    .required().forGetter(Accepted::scenes),
-            Accepted::new);
+    private static final RecordType<Accepted> ACCEPTED = ApiTypes.record(Accepted.class);
 
-    private static final RecordType<Reset> RESET = ApiTypes.record(Reset.class, "TestReset",
-            ApiField.field("reset", TestInputContracts.RESET).describe("One token per effect the reset undid.")
-                    .required().forGetter(Reset::reset),
-            Reset::new);
+    private static final RecordType<Reset> RESET = ApiTypes.record(Reset.class);
 
-    private static final RecordType<Keys> KEYS = ApiTypes.record(Keys.class, "TestHeldKeys",
-            ApiField.field("keys", TestInputContracts.HELD_KEYS).required().forGetter(Keys::keys),
-            Keys::new);
+    private static final RecordType<Keys> KEYS = ApiTypes.record(Keys.class);
 
     public static final MethodSpec<NoParams, Accepted> RUN = MethodSpec.of("mc.test.run", CommonTypes.NO_PARAMS,
             ACCEPTED, "Start the StageWright scene suite on this server, once. Answers when the run is accepted; the "
