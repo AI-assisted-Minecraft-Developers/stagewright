@@ -27,6 +27,7 @@ import net.magicterra.worlddriver.bot.ServerBot;
 import net.magicterra.worlddriver.game.body.Body;
 import net.magicterra.worlddriver.game.body.ServerPlayerBody;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Entity;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessApi;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.BotsOp;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.BotsReply;
@@ -62,7 +63,8 @@ import net.magicterra.worlddriver.config.PlanningConfig;
 /**
  * {@code mc.test.settings}, {@code mc.test.bots} and {@code mc.test.input.press}, over the driver's own settings and tick list. Each runs on
  * the calling thread and answers within the call: a scene on the server thread goes on in the same tick with
- * the answer, which {@code mc.bot.setting} cannot give it when a client holds the settings.
+ * the answer, which {@code mc.bot.setting} cannot give it when a client holds the settings. The one exception is a
+ * press on self, which runs on the client thread and answers once it has.
  */
 final class HarnessService implements TestHarnessApi {
     private final Map<Integer, Map<String, Object>> pins = new ConcurrentHashMap<>();
@@ -169,27 +171,53 @@ final class HarnessService implements TestHarnessApi {
 
     @Override
     public CompletionStage<Pressed> press(Press press, CallContext ctx) {
+        if (BotRegistry.isSelf(press.bot())) {
+            BotApi self = BotHooks.impl();
+            if (self == null) {
+                return CompletableFuture.failedFuture(ApiException.of(ApiError.Code.CAPABILITY_UNAVAILABLE,
+                        "self is this client's own player, and there is no client here; name a server bot"));
+            }
+            return self.clientHop().submit(() -> {
+                Body body = self.clientAvatar();
+                if (body == null) {
+                    throw ApiException.of(ApiError.Code.CAPABILITY_UNAVAILABLE,
+                            "the client has no player now: it is loading, dead or changing dimension");
+                }
+                return press(press, body);
+            }, ctx);
+        }
         return now(() -> {
             onServerThread("mc.test.input.press");
-            Body body = named(press.bot(), "/bot").body();
-            if (press.forward().isPresent() || press.left().isPresent()) {
-                float forward = press.forward().map(Double::floatValue).orElse(forward(body));
-                float left = press.left().map(Double::floatValue).orElse(left(body));
-                body.commandMove(left, forward);
-            }
-            press.jump().ifPresent(body::commandJump);
-            press.sneak().ifPresent(body::commandSneak);
-            press.sprint().ifPresent(body::commandSprint);
-            press.toolFor().ifPresent(c -> body.equipment().ifPresent(e -> e.selectTool(cell(c))));
-            press.aimAt().ifPresent(c -> body.aimAtBlock(cell(c)));
-            press.attack().ifPresent(v -> body.blockInteraction()
-                    .orElseThrow(() -> ApiException.invalidParam("/attack", ApiIssue.Code.INVALID_VALUE, press.bot() + " cannot dig"))
-                    .breakHold(v));
-            press.use().ifPresent(v -> body.equipment()
-                    .orElseThrow(() -> ApiException.invalidParam("/use", ApiIssue.Code.INVALID_VALUE, press.bot() + " has no hands"))
-                    .commandUseItem(v));
-            return new Pressed(press.bot(), held(body));
+            return press(press, named(press.bot(), "/bot").body());
         });
+    }
+
+    /** {@code press} on {@code body}, on the thread that owns it. */
+    private static Pressed press(Press press, Body body) {
+        if (press.forward().isPresent() || press.left().isPresent()) {
+            float forward = press.forward().map(Double::floatValue).orElse(forward(body));
+            float left = press.left().map(Double::floatValue).orElse(left(body));
+            body.commandMove(left, forward);
+        }
+        press.jump().ifPresent(body::commandJump);
+        press.sneak().ifPresent(body::commandSneak);
+        press.sprint().ifPresent(body::commandSprint);
+        press.toolFor().ifPresent(c -> body.equipment().ifPresent(e -> e.selectTool(cell(c))));
+        press.aimAt().ifPresent(c -> body.aimAtBlock(cell(c)));
+        press.attack().ifPresent(v -> body.blockInteraction()
+                .orElseThrow(() -> ApiException.invalidParam("/attack", ApiIssue.Code.INVALID_VALUE, press.bot() + " cannot dig"))
+                .breakHold(v));
+        press.use().ifPresent(v -> body.equipment()
+                .orElseThrow(() -> ApiException.invalidParam("/use", ApiIssue.Code.INVALID_VALUE, press.bot() + " has no hands"))
+                .commandUseItem(v));
+        press.hit().ifPresent(id -> {
+            Entity target = body.entity().level().getEntity(id);
+            if (target == null) throw ApiException.invalidParam("/hit", ApiIssue.Code.INVALID_VALUE, "no entity " + id + " in the bot's level");
+            body.attack()
+                    .orElseThrow(() -> ApiException.invalidParam("/hit", ApiIssue.Code.INVALID_VALUE, press.bot() + " cannot attack"))
+                    .attackEntityUnchecked(target);
+        });
+        return new Pressed(press.bot(), held(body));
     }
 
     private static HeldKeys held(Body body) {

@@ -26,8 +26,10 @@ in the same tick. Their contracts are WorldDriver's `TestHarnessContracts`; Stag
 named bot alone, or only one half of its tick (`part: body`, the physics; `part: brain`, perceiving,
 reflexes and task with no step, so a press can change the input before the body moves), and its `clear` now removes every bot but `self` from
 the roster instead of only stopping their ticks. `mc.test.input.press` holds or lets go of a
-server-side bot's movement, jump, sneak, sprint, dig and use keys, aims it at a block and puts the
-right tool in hand, so a scene that poses a body and steps it no longer calls the body's methods.
+bot's movement, jump, sneak, sprint, dig and use keys, aims it at a block, puts the right tool in
+hand and strikes an entity once through the body's own unchecked attack (`hit`), so a scene that
+poses a body and steps it no longer calls the body's methods. It takes self too: that press runs on
+the client thread and answers once it has.
 
 StageWright finds the driver through WorldDriver's `api/game/WorldDriver` now, and matches hurt
 events by their catalogue entry.
