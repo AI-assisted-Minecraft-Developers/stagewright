@@ -26,6 +26,11 @@ repositories {
     // declare mavenCentral ourselves (the root subprojects{} block returns before its
     // repositories for this module, and settings.gradle has no dependencyResolutionManagement).
     mavenCentral()
+    maven {
+        // Rhino, for the attached-scene tests only; fenced to its own group as in :stagewright-attached.
+        url "https://maven.latvian.dev/releases"
+        content { includeGroup 'dev.latvian.mods' }
+    }
 }
 
 dependencies {
@@ -47,6 +52,8 @@ dependencies {
     api platform('org.junit:junit-bom:5.11.3')
     api 'org.junit.jupiter:junit-jupiter-api'
 
+    // Scene files run from a test (AttachedArenaContractTest); the attached module keeps Rhino compileOnly.
+    testImplementation "dev.latvian.mods:rhino:${rootProject.rhino_version}"
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.junit.platform:junit-platform-testkit'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
