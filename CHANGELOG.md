@@ -36,6 +36,17 @@ different StageWright versions refuse each other at `begin` rather than disagree
 not pass, and is RED on a difference. `expect(...).isEqualTo(...)` now compares numbers as numbers,
 so `Long` 5 and `Integer` 5 are equal wherever a script meets one.
 
+The global `driver(method, params)` that scene files call now exists out of process too, with the
+same parameter and result conversions (one copy of the code now serves both homes), and sends a
+`mc.test.*` method through the game's server thread. The `stagewright:superflat` dimension no
+longer generates structures: a village in the arena's path made `oak_stairs` the block under a
+scene that asked for flat grass, and which scene it hit depended on where its slot fell in the
+world.
+
+Run against the same ground, a scene file that ran in both homes ended the same way in 11 of 13
+scenes of the self-test server's `pack.js`. The two that did not are the two boundaries below: a
+tick-denominated `await`, and a function passed to `s.perf().measure`.
+
 Still refused out of process: `await`, `advance`, `runBody` and `ticks`, and a script function
 passed to the game. Reading a field off a held object (`pos.x`) is not supported; call the method.
 `flow.js` in the All the Mods 10 attached scenes asserts that `mods()` is refused, which is no
