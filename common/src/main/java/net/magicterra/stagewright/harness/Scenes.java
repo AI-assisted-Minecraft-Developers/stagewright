@@ -130,7 +130,7 @@ public final class Scenes {
                     ctx.record("surfaceY", ctx.originY());
                 }).withTerrain(Terrain.SUPERFLAT).withOriginSlot(SWEEP_PROBE_SLOT),
                 Scene.of("arenaLeftoversStayGone", 200, ctx -> {
-                    BlockPos previous = StageWrightHarness.originFor(SWEEP_PROBE_SLOT);
+                    BlockPos previous = Arenas.originFor(SWEEP_PROBE_SLOT);
                     String at = previous.getX() + " " + previous.getZ();
                     ctx.cleanup(() -> ctx.command("forceload remove " + at));
                     ctx.command("forceload add " + at);
