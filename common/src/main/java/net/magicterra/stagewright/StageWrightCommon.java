@@ -8,6 +8,7 @@ import java.util.Map;
 import net.magicterra.stagewright.driver.DriverRuntime;
 import net.magicterra.stagewright.driver.script.InProcessDriverBinding;
 import net.magicterra.stagewright.driver.endpoint.DriverEndpoint;
+import net.magicterra.stagewright.harness.AttachedSessions;
 import net.magicterra.stagewright.harness.EndpointDescriptor;
 import net.magicterra.stagewright.harness.ResultsJsonl;
 import net.magicterra.stagewright.harness.StageWrightHarness;
@@ -201,6 +202,7 @@ public final class StageWrightCommon {
     public static synchronized void onServerStopping(MinecraftServer server) {
         if (server != armedServer) return;
         try {
+            AttachedSessions.stop(server);
             if (harness != null) harness.stop();
         } finally {
             harness = null;
@@ -236,6 +238,11 @@ public final class StageWrightCommon {
                     "mc.test.run: the testkit runtime is not armed on this server — the scene harness "
                     + "only exists where StageWrightCommon.onServerStarted fired (a testkit runtime). "
                     + "Nothing to trigger here.");
+        }
+        if (AttachedSessions.active()) {
+            throw new IllegalStateException(
+                    "mc.test.run: an out-of-process run holds this world pinned — end it before starting the"
+                    + " in-game suite, which pins the world itself.");
         }
         if (harness != null || onDemandRequested) {
             boolean done = suiteFinished();
@@ -295,6 +302,16 @@ public final class StageWrightCommon {
         if (registryFailureRecorded) return true;
         StageWrightHarness h = harness;
         return h != null && h.isFinished();
+    }
+
+    /** The server this runtime is armed on, or null where it is not. */
+    public static synchronized MinecraftServer armedServer() {
+        return armedServer;
+    }
+
+    /** True once a suite has been built or asked for: the world is, or is about to be, the suite's. */
+    public static synchronized boolean suiteStarted() {
+        return harness != null || onDemandRequested || registryFailureRecorded;
     }
 
     /**
@@ -372,6 +389,7 @@ public final class StageWrightCommon {
             }
             if (!settled) return;
         }
+        AttachedSessions.tick(server);
         if (harness == null && !registryFailureRecorded && armed && !holding()
                 && Boolean.getBoolean("stagewright.autorun")
                 && Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() > 0) {

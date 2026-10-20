@@ -34,6 +34,18 @@ final class Arenas {
         return new BlockPos(GRID_X0 + slot * GRID_STEP, GRID_Y, GRID_Z0);
     }
 
+    /** Rows between the suite's grid and the out-of-process scenes', far enough that the two never touch. */
+    private static final int ATTACHED_ROW_OFFSET = 8;
+
+    /**
+     * The grid position for the {@code slot}th scene an out-of-process run opens: the suite's row of
+     * slots, moved {@value #ATTACHED_ROW_OFFSET} steps along z. Slots are not reused within a server's
+     * life, so a scene never inherits the blocks the one before it left.
+     */
+    static BlockPos attachedOriginFor(int slot) {
+        return new BlockPos(GRID_X0 + slot * GRID_STEP, GRID_Y, GRID_Z0 - ATTACHED_ROW_OFFSET * GRID_STEP);
+    }
+
     /**
      * The level an arena is built in, or {@code null} if the terrain asked for names a dimension this
      * server does not have.

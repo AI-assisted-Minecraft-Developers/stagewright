@@ -720,5 +720,8 @@ public final class SceneContext implements net.magicterra.stagewright.contract.S
 
     public int ticks() { return ticks; }
 
+    /** Harness-internal: how many {@link #await} steps are waiting to run. */
+    public int pendingSteps() { return steps.size(); }
+
     public String failureReason() { return failureReason; }
 }

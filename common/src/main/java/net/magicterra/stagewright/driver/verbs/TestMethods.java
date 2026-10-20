@@ -114,6 +114,7 @@ public final class TestMethods {
                 new ApiMethod<>(HELD_KEYS, onClient(HELD_KEYS, (bot, p) -> new Keys(bot.heldKeys()))),
                 new ApiMethod<>(USE_ON_BLOCK, onClient(USE_ON_BLOCK, BotApi::useOnBlock))));
         all.addAll(TestHarnessApiBinding.methods(new HarnessService()));
+        all.addAll(AttachedMethods.methods());
         return all;
     }
 
