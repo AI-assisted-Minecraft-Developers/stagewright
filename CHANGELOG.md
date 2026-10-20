@@ -10,6 +10,39 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-20
+
+### Attached scenes get a real arena and the whole scene context · green against the self-test server
+
+A scene file run with `--attached` used to be able to read the world and nothing else: `setBlock`,
+`origin` and the other verbs that shape a world were refused, because out of process nothing gave
+the scene a plot of its own, swept it or checked it for leftovers. They work now, and mean what
+they mean in process. The game allocates an arena for each attached scene with the same code the
+in-game scheduler uses, holds the scene's real `SceneContext` in it, and the runner calls into
+that context by name, so a method added to `SceneContext` exists out of process the same day. When
+a scene ends the game runs its cleanups, sweeps the arena, releases the chunks and audits the
+world, and the leaks come back in the scene's record.
+
+Scene options are honoured: terrain, dimension and clock are passed to the game, where they were
+refused as a failure before. A dimension the runtime lacks is a recorded skip; an arena that never
+arrives is a failure whose record says the body never ran.
+
+`mc.test.attached.*` is a new set of seven hidden methods (format in
+[the protocol reference](docs/reference/attached-protocol.md)), so a runner and a game built from
+different StageWright versions refuse each other at `begin` rather than disagreeing later. An
+`--attached` run needs a game with the same StageWright build as the runner.
+
+`--parity` compares, for the scenes that ran in both homes, whether each passed, was skipped or did
+not pass, and is RED on a difference. `expect(...).isEqualTo(...)` now compares numbers as numbers,
+so `Long` 5 and `Integer` 5 are equal wherever a script meets one.
+
+Still refused out of process: `await`, `advance`, `runBody` and `ticks`, and a script function
+passed to the game. Reading a field off a held object (`pos.x`) is not supported; call the method.
+`flow.js` in the All the Mods 10 attached scenes asserts that `mods()` is refused, which is no
+longer true: assert `s.mods().loaded('worlddriver')`.
+
+---
+
 ## 2026-10-19
 
 ### Scenes hold the settings and the bot ticks through `mc.test.*` · compiled

@@ -5,10 +5,11 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
-## An attached scene's `mods()` always fails
+## An attached scene cannot read a field of a held object
 
-`AttachedContext.mods()` reads a `mods` list from `mc.system.version`, which has never carried one, so
-it throws for every attached scene. WorldDriver's version reply needs the loaded mod ids.
+A script that writes `pos.x` on an object the game handed back gets a function, because the runner
+cannot tell a field from a method name. Methods work. Reading public fields and bean properties would
+mean asking the game what the name is before answering.
 
 ## A gate task still waits for a game process that cannot exit
 

@@ -20,7 +20,7 @@ Capability follows the process, not the language.
 |---|---|---|---|---|
 | **In-process scene** | Java (`@SceneDef`) or JavaScript under `config/stagewright/scenes` | the server thread, inline on the tick | arena allocation, forced chunks, the world pin, leak auditing, tick budgets, byte determinism | block, cross a process boundary, touch a client on a dedicated topology |
 | **Client probe** | Java only | the client JVM's client thread | see what crosses the network boundary — what a payload decodes to | server-side state |
-| **Attached script** | JavaScript, run by the command-line runner; or Java, through the JUnit attach module | its own JVM, everything over RPC | wait on wall clock, cross process boundaries, restart the game, drive menus, run under a debugger | arena allocation, the world pin, leak auditing, byte determinism, a per-scene origin |
+| **Attached script** | JavaScript, run by the command-line runner; or Java, through the JUnit attach module | its own JVM, everything over RPC | wait on wall clock, cross process boundaries, restart the game, drive menus, run under a debugger; and, through the game, everything the in-process context does with a world: an arena of its own, the frozen world, the sweep and the leak audit | tick-exact timing and byte determinism (a call and the next tick are not one atomic step), anything that needs a Java closure to run in the game |
 
 The two entries in the third row are two front ends over one runtime, which is the answer to
 "should the test mod have a part that is not on the server thread". It should not. The test mod
@@ -41,6 +41,12 @@ It has no Minecraft, no loader and no loom, and it is scoped out of the root bui
 pipeline by name — putting a Minecraft classpath under a module whose entire contract is not
 having one would make it unconsumable by the command-line runner, which is a separate Gradle
 build with no Minecraft anywhere.
+
+The game's half of an attached run is in `:stagewright-common`: `AttachedSessions` holds the
+arenas and contexts, `harness/remote` turns JSON into Java arguments and back and finds the method a
+call names, and `AttachedMethods` publishes the seven hidden `mc.test.attached.*` methods that
+carry it. The runner's half is `contract/remote` in the attached module. Neither half lists the
+context's verbs.
 
 **The command-line runner** (`cli/`) drives it. The out-of-process home needs a JavaScript
 interpreter, and that dependency could not go in the engine. `stagewright-engine` lands on a
@@ -90,53 +96,74 @@ every absent mod, dimension and player in every pack. A second, hand-copied runn
 reintroduce it verbatim and it would hide for just as long. Sharing the code is what makes that
 impossible rather than merely unlikely.
 
-## What can be offered honestly, and what must refuse
+## One context, held by the game and called from here
 
-`AttachedContext` keeps the same names and the same spellings as `SceneContext` for everything
-it supports — that is the entire promise of a shared scene file, and it is why the class is not
-called something like "remote context". What it does not support, it **refuses by name, listing
-what is available**, following the rule the option parsers already obey: never degrade silently.
+An earlier version of this design gave the attached home its own context class, copied the names
+it could honour and refused the rest by name. That was honest, and it left a scene file unable to
+build anything: `setBlock` was refused, because an origin out here had no plot, no sweep and no
+audit behind it. The fix was not a longer list of verbs. It was to stop having a second context.
 
-Supported:
+**The game holds the scene's real `SceneContext`, and this side calls into it.** When the runner
+opens a scene it asks the game for an arena (`mc.test.attached.open`). The game allocates a grid
+slot, forces the chunks, waits for them to arrive, and builds a `SceneContext` there — through the
+same `Arenas`, `ArenaLease` and `ArenaPrep` classes the scheduler uses, so the two homes cannot
+disagree about where an arena is, how long it is given, or what counts as stuck. When the scene
+ends the game runs the cleanups it holds, sweeps, releases the chunks and audits the world against
+the baseline taken when the arena arrived, and the answer comes back with the scene's result.
 
-| Verb | How |
-|---|---|
-| `command(...)` | The driver's run-command verb. |
-| `mods()` | The driver's version verb, which carries the mod list. |
-| `driver(method, params)` | The RPC call itself — the one door to the game out here. |
-| `expect` / `check` / `record` / `fail` / `skip` / `cleanup` | The shared vocabulary, through `SceneReport`. |
-| `waitUntil(condition, timeoutMs, pollMs)` | Attached-only; see below. |
+A name the scene uses that the runner does not define is sent to the game as a call
+(`mc.test.attached.call`), looked up by reflection on the object it is called on, and run on the
+server thread between ticks. There is no list of what an attached scene may do: it may do what the
+in-process scene may do, by the same names, because both end in the same class. A method added to
+`SceneContext` exists out here the same day. A name it lacks fails with the game's own answer,
+naming the class and what it does have.
 
-Refused, in three groups with three different messages, because they have three different fixes.
+What crosses is deliberately small. Plain data (numbers, strings, booleans, lists, maps) goes as
+itself. A thing a registry names, such as a block, goes as `{"$id":…}` and is looked up again in
+the game, so `block('minecraft:stone')` means the same block on both sides. Everything else stays
+in the game, and the scene holds a number for it (`{"$handle":…}`): a call on the result of a call
+is a call on that number. Objects are never copied by value, even a record that would fit, because
+a record has methods that are not its components and a scene that calls one expects the object's
+answer. The exact format is in [the protocol reference](../reference/attached-protocol.md).
 
-**The world-shaping verbs** — `arena`, `origin`, `rel`, `setBlock`, `floor`, `level`, `server`,
-`perf`. The tempting design lets `setBlock` through, since it really could be a command round
-trip. It must not be. In process, an origin is a *grid-allocated* point: the harness gives each
-scene its own plot, force-loads it, sweeps it afterwards and audits it for leaks. Out of process
-there is no allocator, no force-load, no teardown and no audit, so every attached scene would
-build on top of the previous one's rubble — which is precisely the failure that deleting the
-world before every run exists to prevent, and which makes scenes fail in ways indistinguishable
-from product bugs.
+An exception keeps its kind across the socket. A skip stays a skip, a scene failure a scene
+failure, a rejected argument an illegal-argument exception, so a scene that catches a rejection as
+an answer (see below) means the same thing in both homes.
 
-Note the asymmetry that decides this. `arena()` throwing is *safe*: it fails immediately, at the
-line that asked. `setBlock` quietly succeeding is not: it poisons the next scene, which then
-fails somewhere unrelated to the cause. So the read-only subset is not a first-version shortcut.
-It is the only version that can report honestly until origin allocation has an answer out here —
-either the harness learns to hand out origins to outside callers, or the attached home computes
-them from the same grid constants and force-loads and sweeps for itself. The second needs no
-change to the driver but does require the grid constants to move somewhere both homes can see
-them, or they become one more hand-copied pair that drifts.
+The runner defines only what must run on its side: the assertion vocabulary, `record`, `fail`,
+`skip`, `cleanup`, `waitUntil` and `driver`. Of these only `driver` reaches the game, and it
+routes any `mc.test.*` method through the game's server thread, because several of them answer
+only there.
 
-**The discovery verbs** — `capability`, `capabilities`, `probe`. These must refuse with a message
-that says plainly that this is *not* the same as the mod being absent. Capability providers are
-found by `ServiceLoader` on the **game's** classpath; the attached JVM does not have it, so the
-scan out here would report an empty set for a pack that has every one of them — which is exactly
-what an uninstalled mod also looks like. Reporting the framework's own structural limit as "this
-pack does not have Mekanism" is a recurring species of bug in this project, and the whole reason
-`Mods` raises rather than returning an empty list.
+### What is still refused, and why
 
-**The player facets** — `equip`, `items`, `menu`. These need the `ServerPlayer` instance itself,
-which does not cross a socket. The player observation verb carries a snapshot, not the entity.
+**Tick-denominated waiting**: `await`, `advance`, `runBody` and `ticks`. In process the body, the
+tick and the assertion are one atomic step on one thread; out here a call is a round trip and the
+game ticks between any two of them. Waiting is spelled `waitUntil`, below.
+
+**Functions**: a script's function cannot be sent to the game, because it would have to run there
+and a script's functions run in this process. This refuses at the call, naming the argument,
+rather than sending a string that happens to look like one.
+
+**Anything that queues a step for later ticks**: the game checks, after every call, that the
+call did not leave a pending `await` on the context, and fails the call if it did. Nothing out
+here would drive the ticks the step waits on.
+
+**Running the in-game suite from a scene**: `mc.test.run` and the `mc.test.attached.*` methods
+manage the run the scene is in, and are refused.
+
+### What a scene can rely on, and what is different
+
+The arena, the frozen world and the audit are the game's, so a scene that builds in its plot, reads
+it back and cleans up behaves as it does in process. Three differences remain, and none of them
+is hidden:
+
+- **Time.** There is no tick budget. `waitUntil` waits on the wall clock.
+- **Cleanup order.** The runner's own cleanups run first, then the game's, then the sweep. In
+  process the two interleave in the order they were registered.
+- **Properties are not read.** A scene calls methods. Reading a field or a bean property off a
+  held object (`pos.x`, rather than `pos.getX()`) is a name the runner cannot tell from a method,
+  and gets a function back. Use the method.
 
 ### Waiting is a different verb, deliberately
 
@@ -206,8 +233,10 @@ in-process suite and the companion client, so that the existing worst-of-several
 it without learning anything new. Four details of that format are not obvious for a home with no
 game, and each is a way to be silently wrong:
 
-- **No world-pin key.** Attached pins nothing. The key's "present only when it has a value"
-  rule is what lets that be stated by omission rather than by writing something untrue.
+- **The frozen-world key states what the game froze.** The game freezes the world when the run
+  begins, as the in-game suite does, and says in what way; the header carries that sentence. A
+  game that did not answer one leaves the key out, which is how "nothing was frozen" is stated
+  without writing something untrue.
 - **The loader field is mandatory** and this JVM has no loader. It is copied from the endpoint
   descriptor, which carries it.
 - **The tick count is a frozen field** and there are no ticks out here. It is written as zero,
@@ -220,12 +249,11 @@ game, and each is a way to be silently wrong:
   the gate congratulates them. The file is written first and the failure reported after, so the
   diagnosis is "it found no scenes" rather than "it produced nothing".
 
-A scene declaring an option this home cannot honour — a terrain, a dimension, a clock other than
-the default — is **refused as a failure rather than skipped**. A skip would be right if the option
-were about something *absent from this runtime*; it is not. It is about this home being the wrong
-place for this scene, which is an authoring mistake that should be fixed rather than tolerated on
-every future run. The message names the directory where the harness would give the scene the
-world it asked for.
+A scene's options (terrain, dimension, clock) are honoured: they are passed to the game when the
+arena is opened, and the game answers as the scheduler does. A dimension the runtime lacks is a
+recorded skip carrying the reason, because an absent mod is nobody's defect; a terrain dimension
+StageWright itself should have provided is a failure; an arena that never arrives is a failure
+whose record says the body never ran, so the run cannot count it as coverage.
 
 One correctness fix had to land before a third results file could exist at all, and it applied
 to the second one too: provisioning must clear **every** results file a run will be judged on,
@@ -318,9 +346,8 @@ So the load-bearing parts of this design are the three that a machine maintains:
 The rule that follows, for anyone extending this: before writing a constraint into a table, ask
 whether a machine could hold it instead. If it could, it should.
 
-A fourth machine-maintained check is designed and not built: run the same file in both homes and
-assert the two results records agree on outcome and reason. It is worth more than any hand-written
-table of portable verbs, and it has a known boundary — it can only judge files that touch no
-unportable verb, and "touches one" must be decided by the refusal the attached home throws, not
-by a list. Until it exists, the tables in this document carry a risk this design otherwise
-avoids.
+A fourth machine-maintained check is `--parity`: run the same file in both homes and compare, scene
+by scene, whether it passed, was skipped or did not pass. It is worth more than any hand-written
+table of portable verbs. Outcome only, not the reason: a message about ticks and a message about
+seconds are the same answer worded for two clocks. A scene that ran in only one home is counted and
+not judged.

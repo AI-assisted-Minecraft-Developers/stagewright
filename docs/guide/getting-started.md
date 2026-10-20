@@ -201,6 +201,15 @@ are judged and the worse wins. If the socket closes partway, the scene it closed
 scenes after it are recorded as not run, and the attached half is RED, even when the scenes involved
 are optional; the in-process suite then cannot be started, so that half is ENV, and with it the run.
 
+Each attached scene gets an arena of its own in the game, built, swept and checked for leftovers
+the way an in-process scene's is, and calls the same context methods by the same names:
+`s.setBlock(0, 0, 0, block('minecraft:stone'))` means the same thing in both places. What differs is
+time. There is no tick budget out here, so a scene waits with `waitUntil` on the wall clock, and
+`await`, `advance` and `ticks` are refused by name. The scene file you give `--attached` can be
+the one in `--scenes`; add `--parity` and the runner also compares, scene by scene, whether each one
+passed, was skipped or did not pass in both places, and a difference is RED. The wire format is in
+the [attached protocol](../reference/attached-protocol.md).
+
 ## Adding StageWright to a Gradle project
 
 ### 1. Resolve the plugin
