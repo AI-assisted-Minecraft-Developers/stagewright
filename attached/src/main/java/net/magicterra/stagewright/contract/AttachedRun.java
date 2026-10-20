@@ -14,6 +14,7 @@ import java.util.function.Consumer;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import net.magicterra.stagewright.contract.remote.AttachedBridge;
 import net.magicterra.stagewright.contract.remote.RemoteSession;
 import net.magicterra.stagewright.contract.remote.Wire;
 
@@ -155,6 +156,7 @@ public final class AttachedRun {
                         clockMs, OPEN_TIMEOUT_MS);
                 ctx.attach(remote);
                 bodyRan = true;
+                AttachedBridge.enter(ctx);
                 Scripts.run(spec, ctx);
             } catch (SceneSkipped e) {
                 // An absent thing is a recorded PASS carrying the reason — the framework's central
@@ -177,6 +179,7 @@ public final class AttachedRun {
             List<String> teardown = new ArrayList<>(
                     ctx.runCleanups(line -> log.accept("'" + spec.name() + "': " + line)));
             RemoteSession.Closed closed = closeSession(remote, spec, log);
+            AttachedBridge.leave();
             teardown.addAll(closed.cleanupFailures());
             Map<String, Object> recorded = new LinkedHashMap<>(closed.records());
             recorded.putAll(ctx.records());

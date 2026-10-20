@@ -38,6 +38,8 @@ final class FakeGame implements DriverBinding {
     /** What {@link Wire#BEGIN} answers when it does not throw. */
     String pin = "world pinned";
     RuntimeException beginRefusal;
+    /** What {@link Wire#ROUTE} answers. */
+    Object routed = Map.of("op", "count");
     Calls calls = (target, method, args) -> {
         throw new IllegalStateException("this test supplied no answer for " + method);
     };
@@ -75,6 +77,13 @@ final class FakeGame implements DriverBinding {
             case Wire.CLOSE -> {
                 wire.add("close");
                 return closed;
+            }
+            case Wire.ROUTE -> {
+                wire.add("route:" + params.get("method"));
+                Map<String, Object> ok = new LinkedHashMap<>();
+                ok.put("ok", true);
+                ok.put("value", routed);
+                return ok;
             }
             case Wire.CALL -> {
                 Object args = params.get("args");

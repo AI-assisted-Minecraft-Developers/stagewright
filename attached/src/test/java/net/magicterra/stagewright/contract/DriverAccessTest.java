@@ -1,4 +1,4 @@
-package net.magicterra.stagewright.script;
+package net.magicterra.stagewright.contract;
 
 import dev.latvian.mods.rhino.Context;
 import dev.latvian.mods.rhino.ContextFactory;

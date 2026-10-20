@@ -2,6 +2,7 @@ package net.magicterra.stagewright.script;
 
 import java.util.ArrayList;
 import java.util.List;
+import net.magicterra.stagewright.contract.DriverAccess;
 import net.magicterra.stagewright.contract.DriverBinding;
 
 import net.magicterra.stagewright.StageWrightCommon;

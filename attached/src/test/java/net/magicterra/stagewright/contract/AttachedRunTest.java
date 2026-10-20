@@ -460,6 +460,30 @@ class AttachedRunTest {
     }
 
     @Test
+    void theGlobalDriverGoesWhereSDriverGoes(@TempDir Path dir) throws IOException {
+        // pack.js-style files write driver(...), not s.driver(...); a harness verb has to reach the
+        // game's server thread by either spelling, and anything else the driver directly.
+        List<String> direct = new ArrayList<>();
+        FakeGame game = new FakeGame((method, params) -> {
+            direct.add(method + " " + params);
+            return Map.of("modid", "worlddriver");
+        });
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.globalDriver', 20, function (s) {
+                    var v = driver('mc.system.version', { verbose: true });
+                    s.expect(v.modid).isEqualTo('worlddriver');
+                    var counted = driver('mc.test.bots', { op: 'count' });
+                    s.expect(counted.op).isEqualTo('count');
+                });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals("PASS", records.get(0).get("outcome"), String.valueOf(records.get(0)));
+        assertEquals(List.of("mc.system.version {verbose=true}"), direct);
+        assertEquals(List.of("begin", "open:pack.globalDriver", "route:mc.test.bots", "close", "end"), game.wire);
+    }
+
+    @Test
     void aFunctionIsRefusedBeforeItLeavesAndSaysWhy(@TempDir Path dir) throws IOException {
         FakeGame game = new FakeGame((method, params) -> null);
         boolean[] allGood = new boolean[1];

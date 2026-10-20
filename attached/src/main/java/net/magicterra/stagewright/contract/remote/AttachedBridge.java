@@ -4,6 +4,9 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 import dev.latvian.mods.rhino.ScriptableObject;
+import net.magicterra.stagewright.contract.AttachedContext;
+import net.magicterra.stagewright.contract.DriverAccess;
+import net.magicterra.stagewright.contract.DriverBinding;
 import net.magicterra.stagewright.contract.Scripts;
 
 /**
@@ -27,10 +30,41 @@ public final class AttachedBridge {
         this.log = log;
     }
 
-    /** What to hand {@link Scripts#load}: installs this bridge in each file's scope. */
+    /**
+     * The scene whose body is running, for the global {@code driver(...)}. A run is one scene at a time
+     * on one thread, so a single reference is the whole of it; null outside a body.
+     */
+    private static volatile AttachedContext current;
+
+    /** Called by the runner around each scene body. */
+    public static void enter(AttachedContext scene) {
+        current = scene;
+    }
+
+    public static void leave() {
+        current = null;
+    }
+
+    /**
+     * What to hand {@link Scripts#load}: installs this bridge and the global {@code driver} in each
+     * file's scope. {@code driver} is the one in-process scenes have, with the same conversions
+     * ({@link DriverAccess}); here it goes by way of the running scene, so a {@code mc.test.*} verb
+     * reaches the game's server thread as it does through {@code s.driver}.
+     */
     public static Scripts.ScopeSetup setup(Consumer<String> log) {
-        return (cx, scope, fileName) -> ScriptableObject.putProperty(scope, "__bridge",
-                cx.javaToJS(new AttachedBridge(fileName, log), scope), cx);
+        DriverBinding viaTheScene = (method, params) -> {
+            AttachedContext scene = current;
+            if (scene == null) {
+                throw new IllegalStateException("driver('" + method + "') was called outside a scene body, where"
+                        + " there is no arena to go through");
+            }
+            return scene.driver(method, params);
+        };
+        return (cx, scope, fileName) -> {
+            ScriptableObject.putProperty(scope, "__bridge",
+                    cx.javaToJS(new AttachedBridge(fileName, log), scope), cx);
+            DriverAccess.install(cx, scope, viaTheScene);
+        };
     }
 
     /** A block by registry id. A bare path is a vanilla block, as everywhere else a resource location is parsed. */

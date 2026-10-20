@@ -1,10 +1,9 @@
-package net.magicterra.stagewright.script;
+package net.magicterra.stagewright.contract;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import net.magicterra.stagewright.contract.DriverBinding;
 
 import dev.latvian.mods.rhino.BaseFunction;
 import dev.latvian.mods.rhino.Context;
@@ -13,12 +12,16 @@ import dev.latvian.mods.rhino.Scriptable;
 import dev.latvian.mods.rhino.ScriptableObject;
 import dev.latvian.mods.rhino.Undefined;
 
-/** Installs the common JavaScript surface over an injected driver binding. */
-final class DriverAccess {
+/**
+ * Installs the global {@code driver(method, params)} over an injected driver binding, in either home.
+ * One copy, so a scene file that calls {@code driver(...)} converts its parameters and reads its
+ * answer the same way wherever it runs.
+ */
+public final class DriverAccess {
 
     private DriverAccess() {}
 
-    static void install(Context cx, ScriptableObject scope, DriverBinding binding) {
+    public static void install(Context cx, ScriptableObject scope, DriverBinding binding) {
         ScriptableObject.putProperty(scope, "driver", new DriverFunction(binding), cx);
     }
 
