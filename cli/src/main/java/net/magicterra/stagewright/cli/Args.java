@@ -38,6 +38,8 @@ final class Args {
                 systemProps.add(a);
             } else if ("--no-install".equals(a)) {
                 opts.put("no-install", "true");
+            } else if ("--parity".equals(a)) {
+                opts.put("parity", "true");
             } else if ("--mod".equals(a)) {
                 if (i + 1 >= args.length) throw new IllegalArgumentException(a + " needs a value");
                 extraMods.add(Path.of(args[++i]).toAbsolutePath().normalize());

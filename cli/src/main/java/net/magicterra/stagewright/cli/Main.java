@@ -127,6 +127,10 @@ public final class Main {
         requireScenesDir(opts);
         int timeoutMinutes = minutes(opts, "timeout", DEFAULT_TIMEOUT_MINUTES);
         int stallMinutes = minutes(opts, "stall-timeout", Stall.DEFAULT_MINUTES);
+        if (opts.containsKey("parity") && !opts.containsKey("attached")) {
+            throw new IllegalArgumentException("--parity compares the out-of-process run with the in-process one,"
+                    + " so it needs --attached");
+        }
         if (opts.containsKey("no-install") && !parsed.extraMods().isEmpty()) {
             throw new IllegalArgumentException("--mod and --no-install together: --no-install loads"
                     + " nothing, so " + parsed.extraMods().get(0).getFileName() + " would not load either");
@@ -826,9 +830,15 @@ public final class Main {
         // Worst-wins across the two files, the same rule the companion client already gets:
         // GREEN 0 < RED 1 < DEAD 2 < ENV 3. Reporting only the in-process verdict would let a red
         // attached half ride home on a green suite.
-        int worst = Math.max(inProcess, attachedCode);
-        attachedSummary(inProcess, attachedCode, attachedResults).forEach(System.out::println);
-        return worst;
+        int parityCode = 0;
+        if (run.opts().containsKey("parity")) {
+            // A half that did not run has nothing to compare, and its own verdict already says so.
+            Parity.Report parity = Parity.compare(Parity.read(run.results()), Parity.read(attachedResults));
+            Parity.lines(parity).forEach(System.out::println);
+            if (!parity.agrees()) parityCode = 1;
+        }
+        attachedSummary(inProcess, attachedCode, parityCode, attachedResults).forEach(System.out::println);
+        return Math.max(Math.max(inProcess, attachedCode), parityCode);
     }
 
     /**
@@ -895,7 +905,12 @@ public final class Main {
      * reading as a code defect.
      */
     static List<String> attachedSummary(int inProcess, int attachedCode, Path attachedResults) {
-        int worst = Math.max(inProcess, attachedCode);
+        return attachedSummary(inProcess, attachedCode, 0, attachedResults);
+    }
+
+    /** As above, with the parity comparison's code (0 agrees, 1 differs) counted into the run's. */
+    static List<String> attachedSummary(int inProcess, int attachedCode, int parityCode, Path attachedResults) {
+        int worst = Math.max(Math.max(inProcess, attachedCode), parityCode);
         return List.of(
                 "[stagewright] ATTACHED VERDICT: " + Verdict.LABELS[attachedCode]
                         + "  (" + attachedResults + ")",
@@ -1180,6 +1195,13 @@ public final class Main {
                                       Attached scenes run first, then the in-process suite; both
                                       results are judged, worst wins. If mc.test.run does not go
                                       through, the in-process half is ENV, unjudged.
+                                      Each attached scene gets an arena of its own in the game,
+                                      allocated, swept and audited as an in-process scene's is, and
+                                      calls the same SceneContext methods by the same names.
+                  --parity            with --attached: also compare, scene by scene, how the scenes
+                                      that ran in both homes ended (passed, skipped, did not pass).
+                                      A difference is RED. Give --attached and --scenes the same
+                                      files for this to mean anything.
                   --coverage <files>  judge nothing but coverage: comma-separated results files from
                                       runs that have already finished, RED if any scene they register
                                       executed in none of them, ENV if any of them was a filtered
