@@ -96,12 +96,18 @@ public final class AttachedContext implements SceneReport, CustomJavaToJsWrapper
      */
     public Object driver(String method, Map<String, Object> params) {
         Map<String, Object> p = params == null ? Map.of() : params;
-        if (remote != null && routedThroughTheGame(method)) return remote.route(method, p);
+        if (managesTheRun(method)) {
+            // Refused here, not sent: these end or restart the run this scene is a part of, and a scene
+            // that did so by accident would take the arena it is standing in with it.
+            throw new IllegalArgumentException(method + " is not for a scene to call: it manages the run the scene"
+                    + " is in");
+        }
+        if (remote != null && method.startsWith("mc.test.")) return remote.route(method, p);
         return driver.route(method, p);
     }
 
-    private static boolean routedThroughTheGame(String method) {
-        return method.startsWith("mc.test.") && !method.startsWith("mc.test.attached.") && !method.equals("mc.test.run");
+    private static boolean managesTheRun(String method) {
+        return method.startsWith("mc.test.attached.") || method.equals("mc.test.run");
     }
 
     // ---- assertions ------------------------------------------------------------
