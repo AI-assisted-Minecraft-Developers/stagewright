@@ -14,9 +14,16 @@ import java.util.function.Consumer;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import net.magicterra.stagewright.contract.remote.RemoteSession;
+import net.magicterra.stagewright.contract.remote.Wire;
 
 /**
  * Runs a directory of {@code .js} scenes out of process and writes the results file the verdict reads.
+ *
+ * <p>Each scene gets an arena of the game's own (see {@link AttachedContext}): opened before its body,
+ * closed after its cleanups, so the world it stands in is allocated, swept and audited by the same
+ * code that does it for a scene run in process. The whole phase runs under the world pin the suite
+ * itself takes, handed back before the suite starts.
  *
  * <p>The results format is the orchestration contract, unchanged — the same header / scene / done
  * shape the in-process suite and the companion client write, so the existing worst-wins verdict
@@ -24,8 +31,9 @@ import com.google.gson.GsonBuilder;
  * for a home with no game, and each is a way to be silently wrong:
  *
  * <ul>
- *   <li><b>No {@code worldPin} key.</b> Attached does not pin the world. The key's "present only
- *       when it has a value" semantics exist for exactly this.</li>
+ *   <li><b>{@code worldPin} states what the game pinned</b>, as the in-process header does, and is
+ *       absent only when the game never accepted the phase — the key's "present only when it has a
+ *       value" semantics.</li>
  *   <li><b>{@code loader} is mandatory</b> and this JVM has no loader — it is copied from the
  *       endpoint descriptor, which carries it.</li>
  *   <li><b>{@code ticks} is a frozen field</b> and there are no ticks here. It is written as
@@ -42,6 +50,13 @@ import com.google.gson.GsonBuilder;
 public final class AttachedRun {
 
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
+
+    /** The window around an arena a scene may build in, in chunks; a script cannot ask for another, as in process. */
+    private static final int CHUNK_RADIUS = 1;
+
+    /** How long to wait for an arena before giving up on the game giving up. The game ends a stalled
+     *  arena itself, by its own progress test; this only keeps a wedged game from holding the runner. */
+    private static final long OPEN_TIMEOUT_MS = 15 * 60_000L;
 
     private final List<SceneSpec> scenes;
     private final DriverBinding driver;
@@ -77,7 +92,7 @@ public final class AttachedRun {
         // them. Writing the file first and failing after keeps the evidence: the empty file is on
         // disk, so the diagnosis is "it found no scenes" rather than "it produced nothing".
         if (scenes.isEmpty()) {
-            write(resultsFile, records, startedAt, null);
+            write(resultsFile, records, startedAt, null, null);
             log.accept("RED: no attached scenes were registered — a run that tested nothing is not a"
                     + " pass. Check that --attached points at a directory containing .js files.");
             return false;
@@ -96,7 +111,27 @@ public final class AttachedRun {
         };
         String lostDuring = null;
 
+        // The world is pinned for the whole out-of-process phase, once: the arenas below are the game's
+        // own and each scene's clock is applied to its arena, but the gamerules that freeze the sky
+        // and the weather are the suite's and are taken and handed back around all of it.
+        String worldPin = null;
+        String beginFailure = null;
+        try {
+            Map<?, ?> begun = (Map<?, ?>) watched.route(Wire.BEGIN, Map.of("protocol", Wire.PROTOCOL));
+            if (begun.get("description") != null) worldPin = String.valueOf(begun.get("description"));
+        } catch (RuntimeException e) {
+            beginFailure = Reasons.message(e);
+            log.accept("RED: the game did not accept the out-of-process phase (" + beginFailure + "). It needs a"
+                    + " StageWright that speaks protocol " + Wire.PROTOCOL + " — the one this runner embeds does.");
+        }
+
         for (SceneSpec spec : scenes) {
+            if (beginFailure != null) {
+                records.add(record(spec, "FAIL", 0, "not run: the game did not accept the out-of-process phase ("
+                        + beginFailure + ")", false, false, Map.of()));
+                allGood = false;
+                continue;
+            }
             if (lostDuring != null) {
                 // Each would fail on its first call without testing anything; recorded as not run,
                 // so coverage counts it as a hole instead of as executed.
@@ -106,31 +141,26 @@ public final class AttachedRun {
             }
             long started = clockMs.getAsLong();
             AttachedContext ctx = new AttachedContext(spec.name(), watched, spec.wallMsHint(), clockMs);
+            RemoteSession remote = null;
             String outcome = "PASS";
             String reason = "";
+            String skipReason = null;
             boolean skipped = false;
             boolean bodyRan = false;
             try {
-                refuseUnhonourableOptions(spec);
+                // The arena first: a scene that names a dimension this runtime lacks is skipped here, as
+                // in process, and one whose arena never arrives fails here without its body having run.
+                remote = RemoteSession.open(watched, spec.name(),
+                        new RemoteSession.Options(spec.terrain(), spec.clock(), spec.dimension(), CHUNK_RADIUS),
+                        clockMs, OPEN_TIMEOUT_MS);
+                ctx.attach(remote);
                 bodyRan = true;
                 Scripts.run(spec, ctx);
-                List<String> soft = ctx.softViolations();
-                if (!soft.isEmpty()) {
-                    outcome = "FAIL";
-                    reason = String.join("; ", soft);
-                }
             } catch (SceneSkipped e) {
                 // An absent thing is a recorded PASS carrying the reason — the framework's central
                 // rule, and the one Rhino's WrappedException hid for so long. Scripts.unwrapOurs is
                 // shared precisely so this branch cannot be reached in one home and missed in the other.
-                String failed = SceneSkipped.failureAfterChecks(ctx.softViolations(), e.getMessage());
-                if (failed != null) {
-                    outcome = "FAIL";
-                    reason = failed;
-                } else {
-                    reason = "skipped: " + e.getMessage();
-                    skipped = true;
-                }
+                skipReason = e.getMessage();
             } catch (SceneFailure e) {
                 outcome = "FAIL";
                 reason = e.getMessage();
@@ -141,7 +171,34 @@ public final class AttachedRun {
                 reason = Reasons.unexpected(e);
             }
 
-            List<String> teardown = ctx.runCleanups(line -> log.accept("'" + spec.name() + "': " + line));
+            // This side's cleanups first, then the game's: a script's cleanup may still want the arena
+            // it built, and the game's own (a restored inventory, a block entity taken down) run when
+            // the arena is let go.
+            List<String> teardown = new ArrayList<>(
+                    ctx.runCleanups(line -> log.accept("'" + spec.name() + "': " + line)));
+            RemoteSession.Closed closed = closeSession(remote, spec, log);
+            teardown.addAll(closed.cleanupFailures());
+            Map<String, Object> recorded = new LinkedHashMap<>(closed.records());
+            recorded.putAll(ctx.records());
+            if (!closed.leaks().isEmpty()) recorded.put("leaks", closed.leaks());
+
+            // Checks failed on either side count, wherever they were made: a check on a game-side
+            // object (checkBlock) records its violation there.
+            List<String> soft = new ArrayList<>(ctx.softViolations());
+            soft.addAll(closed.softViolations());
+            if (skipReason != null) {
+                String failed = SceneSkipped.failureAfterChecks(soft, skipReason);
+                if (failed != null) {
+                    outcome = "FAIL";
+                    reason = failed;
+                } else {
+                    reason = "skipped: " + skipReason;
+                    skipped = true;
+                }
+            } else if ("PASS".equals(outcome) && !soft.isEmpty()) {
+                outcome = "FAIL";
+                reason = String.join("; ", soft);
+            }
             if (!teardown.isEmpty() && "PASS".equals(outcome)) {
                 outcome = "FAIL";
                 reason = "cleanup failed: " + String.join("; ", teardown);
@@ -157,7 +214,7 @@ public final class AttachedRun {
             }
 
             long wallMs = clockMs.getAsLong() - started;
-            records.add(record(spec, outcome, wallMs, reason, skipped, bodyRan, ctx.records()));
+            records.add(record(spec, outcome, wallMs, reason, skipped, bodyRan, recorded));
 
             if ("FAIL".equals(outcome) && !spec.optional()) allGood = false;
             log.accept(outcome.toLowerCase(java.util.Locale.ROOT) + ": '" + spec.name() + "' ("
@@ -175,11 +232,41 @@ public final class AttachedRun {
             }
         }
 
+        // Handed back before mc.test.run, which pins the world itself and would restore this phase's
+        // frozen values as the world's own. Not when there is no connection left to hand it back over.
+        if (beginFailure == null && lostDuring == null) {
+            try {
+                watched.route(Wire.END, Map.of());
+            } catch (RuntimeException e) {
+                log.accept("the game did not take the out-of-process phase back (" + Reasons.message(e) + ")");
+                allGood = false;
+            }
+        }
+
         // In the file as well as in the return value: judged from its records alone, a run whose scenes
         // are all optional would otherwise read GREEN however early the connection went.
         write(resultsFile, records, startedAt, lostDuring == null ? null
-                : "the connection to the driver was lost during '" + lostDuring + "' (" + lost[0].error() + ")");
+                : "the connection to the driver was lost during '" + lostDuring + "' (" + lost[0].error() + ")",
+                worldPin);
         return allGood;
+    }
+
+    /**
+     * Let a scene's arena go, whatever state the scene ended in.
+     *
+     * <p>A failure to close is logged and answered with nothing left behind: the scene's own outcome
+     * is already decided, and a dead connection fails here the same way it failed there, where the
+     * run already knows about it.
+     */
+    private static RemoteSession.Closed closeSession(RemoteSession remote, SceneSpec spec, Consumer<String> log) {
+        if (remote == null) return RemoteSession.Closed.none();
+        try {
+            return remote.close();
+        } catch (RuntimeException e) {
+            log.accept("'" + spec.name() + "': the game did not close the scene's arena ("
+                    + Reasons.message(e) + ")");
+            return RemoteSession.Closed.none();
+        }
     }
 
     private static Map<String, Object> record(SceneSpec spec, String outcome, long wallMs, String reason,
@@ -204,34 +291,8 @@ public final class AttachedRun {
         return record;
     }
 
-    /**
-     * Refuse, before running it, a scene whose options this home cannot honour.
-     *
-     * <p>{@code terrain} and {@code dimension} shape the world a scene stands in. Out here nothing
-     * builds an arena, so honouring them is impossible — and running the body anyway would assert
-     * against whatever world happens to be loaded while the file plainly said otherwise. That is a
-     * pass or a failure with no relationship to what the author wrote. {@code clock} is the same
-     * argument: a scene that pinned noon and ran at whatever time it is has not been tested.
-     *
-     * <p>Refused as a FAILURE rather than a skip, deliberately. A skip would be the right answer if
-     * the option were about something ABSENT from this runtime; it is not. It is about this home
-     * being the wrong place to run this scene, which is an authoring mistake and should be fixed
-     * rather than tolerated on every future run.
-     */
-    private static void refuseUnhonourableOptions(SceneSpec spec) {
-        List<String> unhonourable = new ArrayList<>();
-        if (spec.terrain() != Terrain.RUN_WORLD) unhonourable.add("terrain=" + spec.terrain());
-        if (spec.clock() != Clock.MIDNIGHT) unhonourable.add("clock=" + spec.clock());
-        if (spec.dimension() != null) unhonourable.add("dimension=" + spec.dimension());
-        if (unhonourable.isEmpty()) return;
-        throw new SceneFailure("scene '" + spec.name() + "' declares " + String.join(", ", unhonourable)
-                + ", and out of process there is no arena to build and no world to pin, so those"
-                + " cannot be honoured. Running it anyway would assert against whatever world happens"
-                + " to be loaded. Move this scene to config/stagewright/scenes, where the harness"
-                + " gives it the world it asked for.");
-    }
-
-    private void write(Path resultsFile, List<Map<String, Object>> records, long startedAt, String cutShort) {
+    private void write(Path resultsFile, List<Map<String, Object>> records, long startedAt, String cutShort,
+                       String worldPin) {
         try {
             Path parent = resultsFile.toAbsolutePath().getParent();
             if (parent != null) Files.createDirectories(parent);
@@ -249,8 +310,9 @@ public final class AttachedRun {
                 }
                 header.put("registered", registered);
                 header.put("startedAt", startedAt);
-                // No worldPin key. Attached pins nothing, and the contract's "present only when it
-                // has a value" rule is what lets that be stated by omission rather than by a lie.
+                // Present only when the game pinned something, which is the contract's rule for the key:
+                // a run the game never accepted has nothing to state.
+                if (worldPin != null && !worldPin.isBlank()) header.put("worldPin", worldPin);
                 w.write(GSON.toJson(header));
                 w.write('\n');
                 for (Map<String, Object> record : records) {

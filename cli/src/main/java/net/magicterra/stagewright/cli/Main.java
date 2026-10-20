@@ -22,6 +22,7 @@ import net.magicterra.stagewright.contract.SceneFailure;
 import net.magicterra.stagewright.contract.SceneSpec;
 import net.magicterra.stagewright.contract.Scripts;
 import net.magicterra.stagewright.contract.StageWrightRpc;
+import net.magicterra.stagewright.contract.remote.AttachedBridge;
 import net.magicterra.stagewright.engine.Manifest;
 import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.Verdict;
@@ -841,10 +842,10 @@ public final class Main {
         List<SceneSpec> specs;
         try {
             specs = Scripts.load(attachedDir,
-                    // No extra globals: out here `driver` is the ONLY door to the game, and it is
-                    // installed as a plain Java object below rather than as a script-visible
-                    // reflection surface. A second door would be a verb one home has.
-                    (cx, scope, fileName) -> { },
+                    // The bridge and nothing else: the game is reached through the scene's context,
+                    // which sends every name it does not answer to the real SceneContext. A second
+                    // door would be a verb one home has.
+                    AttachedBridge.setup(log),
                     log);
         } catch (RuntimeException e) {
             log.accept("RED: the attached scenes could not be loaded, so none of them ran — "

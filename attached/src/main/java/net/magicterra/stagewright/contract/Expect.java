@@ -47,11 +47,25 @@ public final class Expect {
     // ---- equality / identity ----
 
     public Expect isEqualTo(Object expected) {
-        return verify(java.util.Objects.equals(actual, expected), "to equal " + show(expected));
+        return verify(same(actual, expected), "to equal " + show(expected));
     }
 
     public Expect isNotEqualTo(Object unexpected) {
-        return verify(!java.util.Objects.equals(actual, unexpected), "not to equal " + show(unexpected));
+        return verify(!same(actual, unexpected), "not to equal " + show(unexpected));
+    }
+
+    /**
+     * Equal, with numbers compared as numbers: a script's literal is a double, a game method may say
+     * int or long, and the wire turns every whole number into a long, so {@code Long.equals(Integer)}
+     * would answer differently in the two homes for the same line.
+     */
+    private static boolean same(Object a, Object b) {
+        if (a instanceof Number x && b instanceof Number y && !(x instanceof Float || x instanceof Double)
+                && !(y instanceof Float || y instanceof Double)) {
+            return x.longValue() == y.longValue();
+        }
+        if (a instanceof Number x && b instanceof Number y) return x.doubleValue() == y.doubleValue();
+        return java.util.Objects.equals(a, b);
     }
 
     public Expect isSameAs(Object expected) {
@@ -121,7 +135,7 @@ public final class Expect {
 
     public Expect isIn(Object... options) {
         for (Object o : options) {
-            if (java.util.Objects.equals(actual, o)) return this;
+            if (same(actual, o)) return this;
         }
         return verify(false, "to be one of " + show(java.util.Arrays.asList(options)));
     }

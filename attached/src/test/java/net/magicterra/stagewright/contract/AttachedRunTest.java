@@ -20,6 +20,8 @@ import java.util.concurrent.CompletableFuture;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import net.magicterra.stagewright.contract.remote.AttachedBridge;
+import net.magicterra.stagewright.contract.remote.Wire;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -41,11 +43,17 @@ class AttachedRunTest {
 
     private static List<Map<String, Object>> run(Path dir, String js, DriverBinding driver, List<String> log,
                                                  boolean[] allGood) throws IOException {
+        return runAgainst(dir, js, new FakeGame(driver), log, allGood);
+    }
+
+    /** {@code js} run against a game the test has set up. */
+    private static List<Map<String, Object>> runAgainst(Path dir, String js, FakeGame game, List<String> log,
+                                                        boolean[] allGood) throws IOException {
         Path scenes = Files.createDirectories(dir.resolve("scenes"));
         Files.writeString(scenes.resolve("scenes.js"), js, StandardCharsets.UTF_8);
-        List<SceneSpec> specs = Scripts.load(scenes, (cx, scope, file) -> { }, log::add);
+        List<SceneSpec> specs = Scripts.load(scenes, AttachedBridge.setup(log::add), log::add);
         Path results = dir.resolve("attached-results.jsonl");
-        allGood[0] = new AttachedRun(specs, driver, "fabric", log::add, System::currentTimeMillis)
+        allGood[0] = new AttachedRun(specs, game, "fabric", log::add, System::currentTimeMillis)
                 .run(results);
 
         List<Map<String, Object>> records = new ArrayList<>();
@@ -245,18 +253,223 @@ class AttachedRunTest {
     }
 
     @Test
-    void aSceneRefusedBeforeItsBodySaysTheBodyNeverRan(@TempDir Path dir) throws IOException {
+    void aSceneWhoseArenaNeverArrivedSaysItsBodyNeverRan(@TempDir Path dir) throws IOException {
         // A FAIL counts as coverage unless the record says otherwise, and this one tested nothing.
+        FakeGame game = new FakeGame((method, params) -> null);
+        game.state = Wire.FAILED;
+        game.message = "the arena never became usable: only 0 of 9 arena chunks ever loaded";
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.noArena', 20, function (s) { });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals("FAIL", records.get(0).get("outcome"));
+        assertEquals("the arena never became usable: only 0 of 9 arena chunks ever loaded",
+                records.get(0).get("reason"));
+        assertEquals(Boolean.FALSE, records.get(0).get("bodyRan"));
+        assertFalse(allGood[0]);
+    }
+
+    @Test
+    void aBodyThatRanLeavesNoMarkThatItDidNot(@TempDir Path dir) throws IOException {
         boolean[] allGood = new boolean[1];
         List<Map<String, Object>> records = run(dir, """
-                scene('pack.refused', 20, function (s) { }, { dimension: 'pack:elsewhere' });
                 scene('pack.failed', 20, function (s) { throw new Error('measured wrong'); });
                 """, new ArrayList<>(), allGood);
 
         assertEquals("FAIL", records.get(0).get("outcome"));
+        assertFalse(records.get(0).containsKey("bodyRan"), "a body that ran is the default");
+    }
+
+    @Test
+    void aDimensionTheRuntimeLacksIsASkipNotAFailure(@TempDir Path dir) throws IOException {
+        // As in process: the mod that registers it is not here, which is nobody's defect.
+        FakeGame game = new FakeGame((method, params) -> null);
+        game.state = Wire.SKIPPED;
+        game.message = "dimension 'pack:elsewhere' is not loaded in this runtime";
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.elsewhere', 20, function (s) { s.fail('the body must not run'); },
+                      { dimension: 'pack:elsewhere' });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals("PASS", records.get(0).get("outcome"));
+        assertEquals(Boolean.TRUE, records.get(0).get("skipped"));
+        assertEquals("skipped: dimension 'pack:elsewhere' is not loaded in this runtime", records.get(0).get("reason"));
+        assertEquals("pack:elsewhere", game.opened.get("dimension"));
+        assertTrue(allGood[0]);
+    }
+
+    @Test
+    void whatASceneAskedForIsWhatTheGameIsAskedFor(@TempDir Path dir) throws IOException {
+        FakeGame game = new FakeGame((method, params) -> null);
+        boolean[] allGood = new boolean[1];
+        runAgainst(dir, """
+                scene('pack.ground', 20, function (s) { }, { terrain: 'superflat', clock: 'noon' });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals("superflat", game.opened.get("terrain"));
+        assertEquals("noon", game.opened.get("clock"));
+        assertEquals(1, game.opened.get("chunkRadius"));
+        assertTrue(allGood[0]);
+    }
+
+    @Test
+    void thePhaseIsOpenedOnceAndEveryArenaIsClosedBeforeItIsHandedBack(@TempDir Path dir) throws IOException {
+        FakeGame game = new FakeGame((method, params) -> null);
+        boolean[] allGood = new boolean[1];
+        runAgainst(dir, """
+                scene('pack.one', 20, function (s) { });
+                scene('pack.two', 20, function (s) { s.fail('measured wrong'); });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals(List.of("begin", "open:pack.one", "close", "open:pack.two", "close", "end"), game.wire);
+    }
+
+    @Test
+    void aGameThatDoesNotSpeakTheProtocolRunsNothingAndSaysSo(@TempDir Path dir) throws IOException {
+        FakeGame game = new FakeGame((method, params) -> null);
+        game.beginRefusal = new SceneFailure("unknown method: mc.test.attached.begin");
+        List<String> log = new ArrayList<>();
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.one', 20, function (s) { s.fail('the body must not run'); });
+                """, game, log, allGood);
+
+        assertEquals("FAIL", records.get(0).get("outcome"));
         assertEquals(Boolean.FALSE, records.get(0).get("bodyRan"));
+        assertTrue(String.valueOf(records.get(0).get("reason")).startsWith("not run: the game did not accept"));
+        assertEquals(List.of("begin"), game.wire, "nothing was opened in a game that refused the phase");
+        assertFalse(allGood[0]);
+    }
+
+    @Test
+    void whatTheGameRecordedAndLeakedTravelsWithTheScene(@TempDir Path dir) throws IOException {
+        FakeGame game = new FakeGame((method, params) -> null);
+        game.closed = Map.of("leaks", List.of("entities left in the arena: 0 -> 2"),
+                "records", Map.of("prep.ticks", 7), "softViolations", List.of());
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.records', 20, function (s) { s.record('mine', 1); });
+                """, game, new ArrayList<>(), allGood);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) records.get(0).get("data");
+        assertEquals(7.0, data.get("prep.ticks"));
+        assertEquals(1.0, data.get("mine"));
+        assertEquals(List.of("entities left in the arena: 0 -> 2"), data.get("leaks"));
+        assertTrue(allGood[0], "a leak is reported, as in process, and does not fail the scene");
+    }
+
+    @Test
+    void aCheckThatFailedInTheGameFailsTheScene(@TempDir Path dir) throws IOException {
+        // checkBlock and its kind record their violation on the game-side context, where the runner
+        // cannot see it until the arena is closed; without this the scene would pass over it.
+        FakeGame game = new FakeGame((method, params) -> null);
+        game.closed = Map.of("leaks", List.of(), "records", Map.of(),
+                "softViolations", List.of("block at rel(0,0,0) is air, expected stone"));
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.soft', 20, function (s) { });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals("FAIL", records.get(0).get("outcome"));
+        assertEquals("block at rel(0,0,0) is air, expected stone", records.get(0).get("reason"));
+        assertFalse(allGood[0]);
+    }
+
+    @Test
+    void aCheckThatFailedInTheGameBeforeASkipStillFailsTheScene(@TempDir Path dir) throws IOException {
+        FakeGame game = new FakeGame((method, params) -> null);
+        game.closed = Map.of("leaks", List.of(), "records", Map.of(),
+                "softViolations", List.of("measured wrong"));
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.softThenSkip', 20, function (s) { s.skip('no such mod'); });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals("FAIL", records.get(0).get("outcome"));
+        assertEquals("1 check(s) failed: measured wrong — then skipped: no such mod", records.get(0).get("reason"));
+    }
+
+    @Test
+    void aNameTheRunnerDoesNotKnowIsAskedOfTheGameWithItsArguments(@TempDir Path dir) throws IOException {
+        FakeGame game = new FakeGame((method, params) -> null);
+        List<String> seen = new ArrayList<>();
+        game.calls = (target, method, args) -> {
+            seen.add(target + ":" + method + ":" + args);
+            return "setBlock".equals(method) ? null : 42;
+        };
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.verbs', 20, function (s) {
+                    s.setBlock(1, 2.0, -3, block('stone'));
+                    s.expect(s.blockCount()).as('count').isEqualTo(42);
+                });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals("PASS", records.get(0).get("outcome"), String.valueOf(records.get(0)));
+        assertEquals(List.of("0:setBlock:[1, 2, -3, {$id=block, id=minecraft:stone}]", "0:blockCount:[]"), seen);
+    }
+
+    @Test
+    void anObjectTheGameHandsBackCanBeAskedThingsInTurn(@TempDir Path dir) throws IOException {
+        FakeGame game = new FakeGame((method, params) -> null);
+        List<String> seen = new ArrayList<>();
+        game.calls = (target, method, args) -> {
+            seen.add(target + ":" + method);
+            return switch (method) {
+                case "mods" -> Map.of(Wire.HANDLE, 7, "type", "ModsView");
+                case "loaded" -> true;
+                default -> throw new IllegalStateException("unexpected " + method);
+            };
+        };
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.handles', 20, function (s) {
+                    s.expect(s.mods().loaded('worlddriver')).as('loaded').isTrue();
+                });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals("PASS", records.get(0).get("outcome"), String.valueOf(records.get(0)));
+        assertEquals(List.of("0:mods", "7:loaded"), seen);
+    }
+
+    @Test
+    void theGamesRefusalsKeepTheirKindOnTheWayBack(@TempDir Path dir) throws IOException {
+        FakeGame game = new FakeGame((method, params) -> null);
+        game.calls = (target, method, args) -> {
+            throw switch (method) {
+                case "needsMod" -> new SceneSkipped("mod 'x' is not loaded");
+                case "wrong" -> new SceneFailure("the arena is on fire");
+                default -> new IllegalArgumentException("no such block 'pack:nope'");
+            };
+        };
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.a', 20, function (s) { s.needsMod(); });
+                scene('pack.b', 20, function (s) { s.wrong(); });
+                scene('pack.c', 20, function (s) { s.badBlock(); });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals(Boolean.TRUE, records.get(0).get("skipped"));
         assertEquals("FAIL", records.get(1).get("outcome"));
-        assertFalse(records.get(1).containsKey("bodyRan"), "a body that ran is the default");
+        assertEquals("the arena is on fire", records.get(1).get("reason"));
+        assertEquals("FAIL", records.get(2).get("outcome"));
+        assertEquals("no such block 'pack:nope'", records.get(2).get("reason"));
+    }
+
+    @Test
+    void aFunctionIsRefusedBeforeItLeavesAndSaysWhy(@TempDir Path dir) throws IOException {
+        FakeGame game = new FakeGame((method, params) -> null);
+        boolean[] allGood = new boolean[1];
+        List<Map<String, Object>> records = runAgainst(dir, """
+                scene('pack.fn', 20, function (s) { s.each(function () { }); });
+                """, game, new ArrayList<>(), allGood);
+
+        assertEquals("FAIL", records.get(0).get("outcome"));
+        assertTrue(String.valueOf(records.get(0).get("reason")).contains("a function cannot be sent to the game"),
+                String.valueOf(records.get(0)));
     }
 
     @Test

@@ -10,9 +10,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import net.magicterra.stagewright.contract.DriverBinding;
 import net.magicterra.stagewright.contract.SceneFailure;
+import net.magicterra.stagewright.contract.remote.Wire;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -22,6 +24,27 @@ class AttachedScenesTest {
     private static final DriverBinding NO_DRIVER = (method, params) -> {
         throw new SceneFailure("no driver in this test: " + method);
     };
+
+    /** A game that opens every arena at once and has nothing in it: the protocol, and no world. */
+    private static final DriverBinding EMPTY_GAME = (method, params) -> switch (method) {
+        case Wire.BEGIN -> Map.of("pinned", true, "description", "pinned");
+        case Wire.END -> Map.of("released", true);
+        case Wire.OPEN -> Map.of("session", 1);
+        case Wire.STATUS -> Map.of("state", Wire.READY, "message", "");
+        case Wire.CLOSE -> Map.of("leaks", List.of(), "records", Map.of(), "softViolations", List.of());
+        default -> throw new SceneFailure("no driver in this test: " + method);
+    };
+
+    @Test
+    void aGameThatDoesNotSpeakTheProtocolIsRedAndRunsNothing(@TempDir Path dir) throws IOException {
+        Path scenes = Files.createDirectories(dir.resolve("attached"));
+        Files.writeString(scenes.resolve("ok.js"), "scene('pack.a', 20, function (s) { s.fail('must not run'); });",
+                StandardCharsets.UTF_8);
+        List<String> log = new ArrayList<>();
+        int code = Main.runAttachedScenes(scenes, NO_DRIVER, "fabric", dir.resolve("attached-results.jsonl"), log::add);
+        assertEquals(1, code);
+        assertTrue(log.stream().anyMatch(l -> l.contains("did not accept the out-of-process phase")), log.toString());
+    }
 
     @Test
     void aSceneFileThatDoesNotParseIsRedNotEnv(@TempDir Path dir) throws IOException {
@@ -43,7 +66,7 @@ class AttachedScenesTest {
                 "scene('pack.a', 20, function (s) { s.check(1).isEqualTo(1); });",
                 StandardCharsets.UTF_8);
         Path results = dir.resolve("attached-results.jsonl");
-        assertEquals(0, Main.runAttachedScenes(scenes, NO_DRIVER, "fabric", results, l -> { }));
+        assertEquals(0, Main.runAttachedScenes(scenes, EMPTY_GAME, "fabric", results, l -> { }));
         assertTrue(Files.readString(results).contains("\"name\":\"pack.a\""));
     }
 

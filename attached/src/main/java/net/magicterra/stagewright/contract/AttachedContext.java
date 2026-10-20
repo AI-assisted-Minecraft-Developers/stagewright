@@ -5,40 +5,42 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import dev.latvian.mods.rhino.Context;
+import dev.latvian.mods.rhino.Scriptable;
+import dev.latvian.mods.rhino.type.TypeInfo;
+import dev.latvian.mods.rhino.util.CustomJavaToJsWrapper;
+import net.magicterra.stagewright.contract.remote.RemoteFace;
+import net.magicterra.stagewright.contract.remote.RemoteSession;
+import net.magicterra.stagewright.contract.remote.Wire;
+
 /**
  * What a scene body gets as {@code s} when it runs OUT of the game process.
  *
- * <p>Same name, same methods, same spelling as the in-process {@code SceneContext} for everything it
- * supports — that is the whole promise of a shared scene file, and it is why this class exists
- * rather than a differently-named "remote" API. What it does NOT support, it refuses BY NAME with
- * the full list of what is available, following {@code Clock.parse}'s rule: never silently degrade.
+ * <p>Same name, same methods, same spelling as the in-process {@code SceneContext}, and that is
+ * kept true by construction rather than by a list. The assertion vocabulary and the few verbs that
+ * only make sense on this side ({@link #waitUntil}, {@link #cleanup}, {@link #driver}) are methods of
+ * this class. Every other name a script uses is sent to the game, where it is looked up on the real
+ * {@code SceneContext} the scene's arena was built for — so a method added there exists here the
+ * same day, and a method that does not exist there fails here with the game's own answer.
  *
- * <h2>Why refusing is the feature</h2>
+ * <h2>Why the arena is the game's</h2>
  *
- * <p>The tempting design is to let the world-writing verbs through — {@code setBlock} really could
- * be a command round trip. It must not be. In-process, {@code origin()} is a GRID-ALLOCATED point:
- * the harness gives each scene its own slot 512 blocks from the next, force-loads it, sweeps it
- * afterwards and audits it for leaks. Out here there is no slot allocator, no force-load, no
- * teardown and no audit, so every attached scene would build on top of the previous one's rubble.
- * That is the exact failure {@code RunDirectory.provision} deletes the world to prevent, and its
- * comment says why: reusing one "makes scenes fail in ways that look exactly like product bugs".
+ * <p>An origin in process is a GRID-ALLOCATED point: the harness gives each scene its own slot,
+ * force-loads it, sweeps it afterwards and audits it for leaks. Out here none of that can be
+ * reimplemented without drifting from it, so none of it is: the game allocates the arena for this
+ * scene through the same scheduler code and holds the context, and this class holds a
+ * {@link RemoteSession} to it. {@code setBlock} is then exactly {@code SceneContext.setBlock}, on the
+ * server thread, in a plot that gets swept and audited when the scene ends.
  *
- * <p>{@code arena()} throwing is safe — it fails immediately and visibly. {@code setBlock} quietly
- * succeeding is not: it would poison the NEXT scene, which then fails somewhere unrelated to the
- * cause. So the read-only subset is not a first-version shortcut; it is the only version that can
- * report honestly until origin allocation has an answer out here.
+ * <h2>What still cannot cross</h2>
  *
- * <h2>Waiting is a different verb, deliberately</h2>
- *
- * <p>There is no {@code await(...).within(ticks)}. In-process that is exact — the body, the tick and
- * the assertion are one atomic thing on one thread. Out here every call is a round trip and the game
- * ticks between any two of them, so "within 20 ticks" cannot be honoured, only approximated by wall
- * clock. And the approximation is wrong in a way that is not even a constant factor: a server
- * draining startup tick debt runs catch-up ticks in ~3ms rather than 50ms. A method that silently
- * meant something different in each home would be worse than not having it, so the wall-clock wait
- * is named {@link #waitUntil} and says so.
+ * <p>Ticks. In process the body, the tick and the assertion are one atomic thing on one thread; out
+ * here every call is a round trip and the game ticks between any two of them. So there is no
+ * {@code await(...).within(ticks)} — it would have to mean something different here, and a method
+ * that silently meant something different in each home would be worse than not having it. The
+ * wall-clock wait is named {@link #waitUntil} and says what it is.
  */
-public final class AttachedContext implements SceneReport {
+public final class AttachedContext implements SceneReport, CustomJavaToJsWrapper {
 
     private final String sceneName;
     private final DriverBinding driver;
@@ -49,6 +51,7 @@ public final class AttachedContext implements SceneReport {
     private final long startedAtMs;
     private final java.util.function.LongSupplier clockMs;
     private int pollCount;
+    private RemoteSession remote;
 
     public AttachedContext(String sceneName, DriverBinding driver, long budgetMs,
                            java.util.function.LongSupplier clockMs) {
@@ -59,63 +62,46 @@ public final class AttachedContext implements SceneReport {
         this.startedAtMs = clockMs.getAsLong();
     }
 
+    /** Give this context its arena in the game; until then every name that belongs to the game fails by saying so. */
+    public void attach(RemoteSession session) {
+        this.remote = session;
+    }
+
+    /** The scene's hold on the game, or null when it has none. */
+    public RemoteSession session() {
+        return remote;
+    }
+
+    /** What the script receives: this object, with the names it does not answer sent to the game. */
+    @Override
+    public Scriptable convertJavaToJs(Context cx, Scriptable scope, TypeInfo staticType) {
+        return new RemoteFace(scope, this, cx, remote, Wire.CONTEXT);
+    }
+
     // ---- the driver seam -------------------------------------------------------
 
     /** Call one driver verb. The same {@code driver(...)} a script uses in either home. */
     public Object driver(String method) {
-        return driver.route(method, Map.of());
+        return driver(method, Map.of());
     }
-
-    /** Call one driver verb with parameters. */
-    public Object driver(String method, Map<String, Object> params) {
-        return driver.route(method, params == null ? Map.of() : params);
-    }
-
-    // ---- the supported subset --------------------------------------------------
 
     /**
-     * Run a command at the server.
+     * Call one driver verb with parameters.
      *
-     * <p>Returns the same {@code CommandResult}-shaped pair the in-process home returns — the numeric
-     * result and every line of feedback — because a scene that reads the feedback must read it in
-     * both homes. And a REJECTED command raises {@link IllegalArgumentException}, not
-     * {@link SceneFailure}: scenes legitimately use a rejection as an ANSWER ({@code data get} on an
-     * absent path means the slot is empty) and catch it to return false. Normalising every RPC error
-     * to SceneFailure would silently change what those try/catch blocks mean — silently, because both
-     * spellings throw.
+     * <p>A {@code mc.test.*} verb goes by way of the game's server thread, because that is where an
+     * in-process scene calls it from and several of them answer only there ({@code mc.test.bots}
+     * refuses any other thread). Everything else is an ordinary driver call. The split is made on the
+     * name because the registry already guarantees what the name means: only StageWright may register
+     * under {@code mc.test.}, and it registers nothing else.
      */
-    public CommandResult command(String cmd) {
-        Object raw = driver.route("mc.action.runCommand", Map.of("cmd", cmd));
-        if (!(raw instanceof Map<?, ?> m)) {
-            throw new SceneFailure("mc.action.runCommand answered " + raw + ", which is not a result");
-        }
-        boolean success = Boolean.TRUE.equals(m.get("success"));
-        List<String> feedback = new ArrayList<>();
-        if (m.get("feedback") instanceof List<?> lines) {
-            for (Object line : lines) feedback.add(String.valueOf(line));
-        }
-        if (!success) {
-            throw new IllegalArgumentException("command '" + cmd + "' failed"
-                    + (feedback.isEmpty() ? "" : ": " + String.join(" / ", feedback)));
-        }
-        int value = m.get("value") instanceof Number n ? n.intValue() : 0;
-        return new CommandResult(value, List.copyOf(feedback));
+    public Object driver(String method, Map<String, Object> params) {
+        Map<String, Object> p = params == null ? Map.of() : params;
+        if (remote != null && routedThroughTheGame(method)) return remote.route(method, p);
+        return driver.route(method, p);
     }
 
-    /** A command's numeric result and its feedback lines — the same shape both homes return. */
-    public record CommandResult(int result, List<String> output) {}
-
-    /** Every mod id in the runtime, read once over RPC. */
-    @SuppressWarnings("unchecked")
-    public List<String> mods() {
-        Object raw = driver.route("mc.system.version", Map.of());
-        if (raw instanceof Map<?, ?> m && m.get("mods") instanceof List<?> list) {
-            List<String> out = new ArrayList<>();
-            for (Object id : list) out.add(String.valueOf(id));
-            return List.copyOf(out);
-        }
-        throw new SceneFailure("this runtime's driver does not report a mod list — mc.system.version"
-                + " answered " + raw);
+    private static boolean routedThroughTheGame(String method) {
+        return method.startsWith("mc.test.") && !method.startsWith("mc.test.attached.") && !method.equals("mc.test.run");
     }
 
     // ---- assertions ------------------------------------------------------------
@@ -195,73 +181,32 @@ public final class AttachedContext implements SceneReport {
         cleanups.add(action);
     }
 
-    // ---- everything the out-of-process home structurally cannot do --------------
+    // ---- the one thing that cannot cross -----------------------------------------
 
-    public Object arena()     { throw refuse("arena"); }
-    public Object origin()    { throw refuse("origin"); }
-    public int originX()      { throw refuse("originX"); }
-    public int originY()      { throw refuse("originY"); }
-    public int originZ()      { throw refuse("originZ"); }
-    public Object rel(int dx, int dy, int dz) { throw refuse("rel"); }
-    public void setBlock(int dx, int dy, int dz, Object block) { throw refuse("setBlock"); }
-    public void floor(int size, Object block) { throw refuse("floor"); }
-    public Object level()     { throw refuse("level"); }
-    public Object server()    { throw refuse("server"); }
-    public Object perf()      { throw refuse("perf"); }
-    public Object capability(String name) { throw refuseDiscovery("capability"); }
-    public Object capabilities()          { throw refuseDiscovery("capabilities"); }
-    public Object probe(String className) { throw refuseDiscovery("probe"); }
-    public Object equip()     { throw refusePlayerFacet("equip"); }
-    public Object items()     { throw refusePlayerFacet("items"); }
-    public Object menu(int dx, int dy, int dz) { throw refusePlayerFacet("menu"); }
+    public Object await(Object condition) { throw refuseTime("await"); }
+    public Object advance()               { throw refuseTime("advance"); }
+    public Object runBody(Object body)    { throw refuseTime("runBody"); }
+    public int ticks()                    { throw refuseTime("ticks"); }
 
     /**
-     * Refuse a world-shaping verb, naming what IS available.
+     * Refuse a verb that is about ticks, naming what to use instead.
      *
-     * <p>The message says which of the two reasons applies, because they have different fixes: this
-     * one means "rewrite the scene against the supported subset, or run it in-process", and telling
-     * an author only that something is unsupported leaves them guessing which.
+     * <p>Not forwarded, though the game would answer: {@code await} takes a function the game cannot
+     * run, and {@code ticks} would answer the game-side context's tick count, which nothing here ever
+     * advances — a zero that reads like a fact.
      */
-    private static SceneFailure refuse(String verb) {
-        return new SceneFailure("'" + verb + "' does not exist out of process. It is not missing, it"
-                + " is structurally absent: an arena is a grid-allocated origin in force-loaded chunks"
-                + " with a sweep and a leak audit around it, and none of those are verbs — they are"
-                + " the harness. A scene that needs them belongs in config/stagewright/scenes, which"
-                + " runs in the game. Available here: command, mods, driver, expect, check, record,"
-                + " cleanup, skip, fail, waitUntil.");
-    }
-
-    /**
-     * Refuse a discovery verb, and say plainly that this is not the same as the mod being absent.
-     *
-     * <p>The distinction the whole capability surface rests on. {@code CapabilityProvider} is found
-     * by {@code ServiceLoader} on the GAME's classpath; out here that scan finds nothing, and
-     * "nothing" is exactly what an uninstalled mod also looks like. Reporting the framework's own
-     * structural limit as "this pack does not have Mekanism" is the seventh instance of a bug wearing
-     * an absent mod's clothes, and this message exists to make the eighth impossible.
-     */
-    private static SceneFailure refuseDiscovery(String verb) {
-        return new SceneFailure("'" + verb + "' cannot be answered out of process — and this is NOT"
-                + " the same as the mod being absent. Capability providers are discovered by"
-                + " ServiceLoader on the GAME's classpath, and this JVM does not have it, so the scan"
-                + " here would report an empty set for a pack that has every one of them. A scene"
-                + " gated on a capability belongs in config/stagewright/scenes; use mods() out here to"
-                + " branch on what is installed.");
-    }
-
-    private static SceneFailure refusePlayerFacet(String verb) {
-        return new SceneFailure("'" + verb + "' needs the ServerPlayer instance itself, which does not"
-                + " cross a socket — mc.observe.player carries a snapshot, not the entity. A scene"
-                + " asserting on inventories, equipment or menus belongs in"
-                + " config/stagewright/scenes; driver('mc.observe.player') is available here for what"
-                + " the snapshot does carry.");
+    private static SceneFailure refuseTime(String verb) {
+        return new SceneFailure("'" + verb + "' is counted in ticks, and out of process the game ticks between any"
+                + " two calls: a tick count cannot be honoured, only approximated by the wall clock. Use"
+                + " waitUntil(condition, timeoutMs, pollMs) here, or move the scene to config/stagewright/scenes"
+                + " where the harness runs it between two ticks.");
     }
 
     // ---- results ---------------------------------------------------------------
 
     public String sceneName() { return sceneName; }
 
-    public Map<String, Object> records() { return Map.copyOf(records); }
+    public Map<String, Object> records() { return java.util.Collections.unmodifiableMap(new LinkedHashMap<>(records)); }
 
     public List<String> softViolations() { return List.copyOf(softViolations); }
 
