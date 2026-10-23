@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-24
 
+### A start stuck in GLFW's window call is named · green in unit tests on recorded frames only
+
+A stalled game whose `main` or `Render thread` is inside `glfwCreateWindow` or `glfwShowWindow` is now
+reported as that, in the command-line runner and in a Gradle gate, instead of as "spinning at 100%
+of a core". The frames come from two earlier hand recordings; the hang itself did not occur when
+tried, so nothing here has yet met a real one. The AWT failed-window dialog is still found from the
+client's log.
+
 ### A crashed game that stays up is ended by its agent, in a Gradle gate too · green in fake-game end to end, not yet in the self-test suite
 
 A Minecraft that crashes often keeps its JVM alive on a mod's thread pool, and only the

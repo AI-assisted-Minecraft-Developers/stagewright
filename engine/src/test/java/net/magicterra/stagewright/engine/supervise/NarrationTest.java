@@ -58,6 +58,29 @@ class NarrationTest {
     }
 
     @Test
+    void aMainThreadInsideGlfwWindowCreationIsAStuckStartAndNotAMod() {
+        String said = Narration.stuckStart(List.of(
+                new Supervisor.ThreadStack("Server thread", List.of("java.base@21/java.lang.Object.wait(Native Method)")),
+                new Supervisor.ThreadStack("main", List.of(
+                        "org.lwjgl.system.JNI.invokePV(Native Method)",
+                        "org.lwjgl.glfw.GLFW.glfwShowWindow(GLFW.java:4178)",
+                        "net.neoforged.fml.loading.progress.DisplayWindow.initWindow(DisplayWindow.java:80)"))));
+        assertTrue(said.contains("main is inside GLFW's glfwShowWindow"), said);
+        assertTrue(Narration.stuckStart(List.of(new Supervisor.ThreadStack("Render thread", List.of(
+                "app//org.lwjgl.glfw.GLFW.glfwCreateWindow(GLFW.java:1)")))).contains("glfwCreateWindow"));
+    }
+
+    @Test
+    void aStackThatMatchesNothingKnownIsNotClassified() {
+        assertEquals(null, Narration.stuckStart(List.of()));
+        assertEquals(null, Narration.stuckStart(List.of(new Supervisor.ThreadStack("main", List.of(
+                "java.desktop/java.awt.EventQueue.getNextEvent(EventQueue.java:600)")))));
+        // Polling events is what a healthy client does all day; only the window calls count.
+        assertEquals(null, Narration.stuckStart(List.of(new Supervisor.ThreadStack("Render thread", List.of(
+                "org.lwjgl.glfw.GLFW.glfwPollEvents(GLFW.java:1)")))));
+    }
+
+    @Test
     void aStallNamesTheMinutesTheScreenAndWhatTheProcessWasDoing() {
         String said = Narration.noProgress("client", 1, "armed", 0, "the title screen", "it is ASLEEP");
         assertTrue(said.contains("for 1 minute:"), said);

@@ -647,8 +647,12 @@ public final class Main {
                 // screen is sitting on a screen nobody is going to click past.
                 String screen = noWindow.log() == null || half.name().equals("server") ? null
                         : Stall.screen(noWindow.log());
+                // A stack the agent sent that names the stuck place beats a CPU sample, which can only
+                // say busy or asleep; the sample is what is left for a stuck start no signature fits.
+                String stuck = Narration.stuckStart(supervisor.stacks());
                 System.err.println("[stagewright] " + Narration.noProgress(half.name(), run.stallMinutes(),
-                        supervisor.phase(), supervisor.ticks(), screen, Stall.describe(half.process().toHandle())));
+                        supervisor.phase(), supervisor.ticks(), screen,
+                        stuck != null ? stuck : Stall.describe(half.process().toHandle())));
                 Narration.stacks(supervisor.stacks()).forEach(System.err::println);
             }
             default -> {

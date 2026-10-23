@@ -5,12 +5,13 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
-## A stuck start is reported with stacks but not classified
+## The AWT failed-window dialog is not recognised from its stack
 
-`NoWindow` still matches the failed-window lines in the client's log, and a stalled game's CPU state
-still comes from `/proc`. Measure the glfw spin and the AWT dialog on a display, put their stack
-signatures in the agent, and delete both. Neither could be measured on 2026-10-24: the glfw spin did
-not occur on an unpatched GLFW with the screen unlocked, and the AWT dialog needs a failed `glfwInit`.
+`NoWindow` still matches the failed-window lines in the client's log, and `Stall.describe` still
+reads `/proc` for a stuck start no signature fits. Measure the dialog's stack (it needs a failed
+`glfwInit`), add it to `Narration.stuckStart`, and delete both. The glfw hang is recognised from
+frames recorded earlier, and was not reproduced on 2026-10-24: it did not occur on an unpatched GLFW
+with the screen unlocked.
 
 ## `CrashWatch` is still in the runner beside the agent's crash event
 

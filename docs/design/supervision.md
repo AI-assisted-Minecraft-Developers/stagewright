@@ -70,13 +70,16 @@ argument file, where the JVM rather than the launcher reads it.
    agent rather than phrases searched for in a log. An unrecognised stuck start is reported with
    its top frames, which is still more than a silent log says.
 
-   *As built, the first half of that is not yet done.* Once nothing the supervisor can see —
-   phase, ticks, loaded classes — has moved for `idle` seconds (20 by default), the agent attaches
-   the stacks of `main`, `Render thread` and `Server thread` to every heartbeat, and the runner
-   prints them with the verdict on a stall. That is the evidence; it is not a classification,
-   because the two signatures above were reported by hand and have not been measured on this box.
-   The runner still reads the client's log for the failed-window lines (`NoWindow`), and it
-   still reads `/proc` to say whether a stalled process was spinning or asleep.
+   *As built, the classification is half done and lives in `Narration.stuckStart`, not in the
+   agent.* Once nothing the supervisor can see — phase, ticks, loaded classes — has moved for `idle`
+   seconds (20 by default), the agent attaches the stacks of `main`, `Render thread` and
+   `Server thread` to every heartbeat, and both launchers print them with the verdict on a stall.
+   The engine reads those stacks: a `main` or `Render thread` inside `GLFW.glfwCreateWindow` or
+   `glfwShowWindow` is named as the Xwayland window hang, and that replaces the `/proc` CPU sample.
+   Classifying where the stacks arrive keeps the agent a reporter and serves both launchers from
+   one place. The AWT dialog is not classified: its stack has not been measured, so the runner still
+   reads the client's log for the failed-window lines (`NoWindow`), and `/proc` still says spinning
+   or asleep for a stuck start nothing fits.
 4. **Watches the crash-report directory** and reports a new report within a second of it being
    written. (As built it lists the folder on each heartbeat rather than holding a `WatchService`: the
    loop is already there, and the folder holds tens of files.) A crashed game frequently does not exit; this is how the supervisor stops

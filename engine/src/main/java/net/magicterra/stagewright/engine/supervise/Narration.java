@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * What to say about how a supervised run ended, worded once for the command-line runner and the Gradle
@@ -86,6 +88,34 @@ public final class Narration {
                 + (screen == null ? "" : ", and it is sitting on " + screen + ", a screen nobody is going to"
                         + " click past")
                 + "." + (processState == null ? "" : " " + processState + ".") + " Killed.";
+    }
+
+    private static final Pattern WINDOW_CALL = Pattern.compile("org\\.lwjgl\\.glfw\\.GLFW\\.n?glfw(CreateWindow|ShowWindow)\\(");
+
+    /**
+     * What a stuck start is stuck on, from where the game's threads were, or null when no known way
+     * of being stuck fits.
+     *
+     * <p>Known: the game's main or render thread inside GLFW's window creation or showing. A window
+     * takes well under a second to open, and the stacks are only sampled once nothing has moved for
+     * the agent's idle time, so a thread found there is not opening one. It was measured under
+     * Xwayland, where LWJGL's own GLFW waits for a visibility event the compositor never sends — a
+     * locked screen was the usual cause — with the thread running at a full core and the log six lines
+     * long. A failed-window dialog from NeoForge is not here: it has not been measured.
+     */
+    public static String stuckStart(List<Supervisor.ThreadStack> stacks) {
+        for (Supervisor.ThreadStack stack : stacks) {
+            if (!stack.thread().equals("main") && !stack.thread().equals("Render thread")) continue;
+            for (String frame : stack.frames()) {
+                Matcher call = WINDOW_CALL.matcher(frame);
+                if (call.find()) {
+                    return "its " + stack.thread() + " is inside GLFW's glfw" + call.group(1) + ", so the window never"
+                            + " finished opening. That is not a mod: under Xwayland, LWJGL's own GLFW can wait forever"
+                            + " for a visibility event the compositor does not send, usually with the screen locked";
+                }
+            }
+        }
+        return null;
     }
 
     /** Where the game's threads were when it stopped moving, one thread to a block. */

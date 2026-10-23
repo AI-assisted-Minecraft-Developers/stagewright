@@ -113,7 +113,7 @@ public abstract class StageWrightSupervisionService
                 case CRASHED -> kill(supervisor, game, tag, "the " + half + " crashed and its JVM is still up; the"
                         + " report is at " + supervisor.crashReport());
                 case STALLED -> kill(supervisor, game, tag, Narration.noProgress(half, (int) stall.toMinutes(),
-                        supervisor.phase(), supervisor.ticks(), null, null));
+                        supervisor.phase(), supervisor.ticks(), null, Narration.stuckStart(supervisor.stacks())));
                 default -> {
                     // PROCESS_DIED: the task sees it. TIMED_OUT and NEVER_CONNECTED cannot be reached with these limits.
                 }
