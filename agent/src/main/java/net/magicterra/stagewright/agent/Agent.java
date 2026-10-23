@@ -9,6 +9,7 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,6 +50,8 @@ public final class Agent {
     private volatile long ticks;
     private volatile long doneAtNanos;
     private volatile ThreadOrigins origins;
+    /** Listed in premain: what is already there then is a previous run's, and must not read as a crash. */
+    private final CrashReports crashes = CrashReports.beside(Path.of(System.getProperty("user.dir", ".")));
     // Only the agent's own thread touches these.
     private String lastSignature = "";
     private long lastChangeNanos = System.nanoTime();
@@ -122,6 +125,8 @@ public final class Agent {
                 .text("agent", AGENT_VERSION).text("java", System.getProperty("java.version", "")));
         while (true) {
             send(heartbeat());
+            // A crashed game frequently does not exit, so this is how its supervisor stops waiting on it.
+            for (String report : crashes.fresh()) send(Lines.event("crash").text("report", report));
             ThreadOrigins recording = origins;
             if (recording != null && recording.releaseIfAlone()) origins = null;
             long doneAt = doneAtNanos;

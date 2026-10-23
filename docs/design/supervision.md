@@ -77,8 +77,9 @@ argument file, where the JVM rather than the launcher reads it.
    because the two signatures above were reported by hand and have not been measured on this box.
    The runner still reads the client's log for the failed-window lines (`NoWindow`), and it
    still reads `/proc` to say whether a stalled process was spinning or asleep.
-4. **Watches the crash-report directory** with a `WatchService`, and reports a new report the
-   moment it is written. A crashed game frequently does not exit; this is how the supervisor stops
+4. **Watches the crash-report directory** and reports a new report within a second of it being
+   written. (As built it lists the folder on each heartbeat rather than holding a `WatchService`: the
+   loop is already there, and the folder holds tens of files.) A crashed game frequently does not exit; this is how the supervisor stops
    waiting on it without a second polling loop.
 5. **Ends the JVM after the run.** When the bridge reports done, the agent waits a grace period for
    the game to stop on its own. If the JVM is still up at the end of it, the agent lists every

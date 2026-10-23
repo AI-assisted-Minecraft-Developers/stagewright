@@ -110,6 +110,8 @@ public abstract class StageWrightSupervisionService
                 }
                 case HEARTBEAT_LOST -> kill(supervisor, game, tag,
                         Narration.jvmStopped(half, HEARTBEAT_LIMIT, supervisor.phase(), supervisor.ticks()));
+                case CRASHED -> kill(supervisor, game, tag, "the " + half + " crashed and its JVM is still up; the"
+                        + " report is at " + supervisor.crashReport());
                 case STALLED -> kill(supervisor, game, tag, Narration.noProgress(half, (int) stall.toMinutes(),
                         supervisor.phase(), supervisor.ticks(), null, null));
                 default -> {

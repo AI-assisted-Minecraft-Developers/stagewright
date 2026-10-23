@@ -55,7 +55,7 @@ public final class Supervisor implements AutoCloseable {
          * the last, running a suite moves the second, so a game that moves none is stuck.
          */
         STALLED,
-        /** The caller's probe said so: a crash report appeared, for instance. */
+        /** The agent reported a crash report written since it started, or the caller's probe said so. */
         CRASHED,
         /** Alive and talking, and not done within the ceiling. */
         TIMED_OUT
@@ -93,6 +93,7 @@ public final class Supervisor implements AutoCloseable {
     private boolean done;
     private boolean resultsComplete;
     private boolean exiting;
+    private String crashReport;
     private long agentPid = -1;
     private long lastBeatNanos;
     private long ticks;
@@ -190,6 +191,9 @@ public final class Supervisor implements AutoCloseable {
     private Ended evaluate(ProcessHandle game, Limits limits) {
         if (done) return Ended.DONE;
         if (resultsComplete) return Ended.RESULTS;
+        // Before the process is asked about: a crashed game often stays up, and one that has gone since
+        // still crashed rather than merely died.
+        if (crashReport != null) return Ended.CRASHED;
         long now = System.nanoTime();
         if (!game.isAlive()) {
             // Its last lines may still be in flight. Once the connection has closed they have all been
@@ -256,6 +260,13 @@ public final class Supervisor implements AutoCloseable {
     public long ticks() {
         synchronized (lock) {
             return ticks;
+        }
+    }
+
+    /** The first crash report the game wrote after its agent started, or null. */
+    public String crashReport() {
+        synchronized (lock) {
+            return crashReport;
         }
     }
 
@@ -402,6 +413,9 @@ public final class Supervisor implements AutoCloseable {
                         phase = s;
                         lastProgressNanos = now;
                     }
+                }
+                case "crash" -> {
+                    if (crashReport == null) crashReport = String.valueOf(event.get("report"));
                 }
                 case "done" -> done = true;
                 case "results" -> resultsComplete = true;

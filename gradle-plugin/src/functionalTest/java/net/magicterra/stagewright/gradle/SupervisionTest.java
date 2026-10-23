@@ -37,6 +37,14 @@ class SupervisionTest {
                         Thread.sleep(300_000);
                         return;
                     }
+                    if (mode.equals("crash")) {
+                        Thread.sleep(1_500);
+                        Path report = Path.of("crash-reports", "crash-new.txt");
+                        Files.createDirectories(report.getParent());
+                        Files.writeString(report, "---- Minecraft Crash Report ----");
+                        Thread.sleep(300_000);
+                        return;
+                    }
                     Path results = Path.of("stagewright", "stagewright-results.jsonl");
                     Files.createDirectories(results.getParent());
                     Files.writeString(results, \"\"\"
@@ -123,6 +131,19 @@ class SupervisionTest {
         BuildResult result = gate().buildAndFail();
         assertTrue(result.getOutput().contains("failOnLeak"), result.getOutput());
         assertTrue(result.getOutput().contains("RED"), result.getOutput());
+    }
+
+    @Test
+    void aGameThatCrashesButStaysUpIsEndedAndTheReportIsNamed() throws Exception {
+        consumer("crash", "");
+        long started = System.nanoTime();
+        BuildResult result = gate().buildAndFail();
+        long seconds = (System.nanoTime() - started) / 1_000_000_000L;
+        String output = result.getOutput();
+        // It would sleep for five minutes, and the task's own timeout is twenty.
+        assertTrue(seconds < 120, seconds + "s\n" + output);
+        assertTrue(output.contains("crashed and its JVM is still up"), output);
+        assertTrue(output.contains("crash-new.txt"), output);
     }
 
     @Test

@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-24
 
+### A crashed game that stays up is ended by its agent, in a Gradle gate too · green in fake-game end to end, not yet in the self-test suite
+
+A Minecraft that crashes often keeps its JVM alive on a mod's thread pool, and only the
+command-line runner noticed the report. The agent now watches the game's `crash-reports/` folder and
+tells whoever supervises it, so a gate run by Gradle stops waiting on a game that has crashed, ends it,
+and names the report instead of waiting out the task's timeout.
+
 ### The Gradle plugin's companion client has an agent of its own · green in a fake-game end to end, not yet in the self-test suite
 
 A server-with-client gate started its client with no agent, so a client that stopped moving or

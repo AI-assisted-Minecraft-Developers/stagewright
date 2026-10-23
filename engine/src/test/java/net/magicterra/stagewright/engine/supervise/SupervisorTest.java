@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.List;
 import net.magicterra.stagewright.engine.supervise.Supervisor.Ended;
 import net.magicterra.stagewright.engine.supervise.Supervisor.Limits;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The supervisor against a real agent in a real JVM, and against hand-written clients for the cases
@@ -32,6 +34,11 @@ class SupervisorTest {
     }
 
     private static Process start(Supervisor supervisor, int graceSeconds, String mode) throws IOException {
+        return start(supervisor, graceSeconds, mode, null);
+    }
+
+    private static Process start(Supervisor supervisor, int graceSeconds, String mode, Path gameDir)
+            throws IOException {
         List<String> command = new ArrayList<>();
         command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
         command.add(supervisor.agentArgument(Path.of(System.getProperty("stagewright.agentJar")), graceSeconds));
@@ -39,7 +46,9 @@ class SupervisorTest {
         command.add(System.getProperty("stagewright.testClasses"));
         command.add(FakeGame.class.getName());
         command.add(mode);
-        return new ProcessBuilder(command).inheritIO().start();
+        ProcessBuilder builder = new ProcessBuilder(command).inheritIO();
+        if (gameDir != null) builder.directory(gameDir.toFile());
+        return builder.start();
     }
 
     /** A live JVM that never loaded the agent: what a hand-played client needs as the game it is "of". */
@@ -220,6 +229,38 @@ class SupervisorTest {
             assertEquals(Ended.DONE, supervisor.peek(game.toHandle(), FAST));
         } finally {
             Supervisor.kill(game.toHandle());
+        }
+    }
+
+    @Test
+    void aCrashReportWrittenWhileTheJvmStaysUpEndsTheWaitAndIsNamed(@TempDir Path gameDir) throws Exception {
+        // One from a previous run: it was there before the agent started, so it is not this run's.
+        Path old = Files.createDirectories(gameDir.resolve("crash-reports")).resolve("crash-old.txt");
+        Files.writeString(old, "an earlier run");
+        try (Supervisor supervisor = Supervisor.open()) {
+            Process game = start(supervisor, 20, "crash", gameDir);
+            try {
+                assertEquals(Ended.CRASHED, supervisor.await(game.toHandle(), FAST));
+                assertEquals(gameDir.resolve("crash-reports").resolve("crash-new.txt").toString(),
+                        supervisor.crashReport());
+                assertTrue(game.isAlive(), "the JVM was held up, which is what makes the report worth sending");
+            } finally {
+                Supervisor.kill(game.toHandle());
+            }
+        }
+    }
+
+    @Test
+    void aCrashReportFromBeforeTheGameStartedIsNotThisRunsCrash(@TempDir Path gameDir) throws Exception {
+        Files.writeString(Files.createDirectories(gameDir.resolve("crash-reports")).resolve("crash-old.txt"), "x");
+        try (Supervisor supervisor = Supervisor.open()) {
+            Process game = start(supervisor, 20, "clean", gameDir);
+            try {
+                assertEquals(Ended.DONE, supervisor.await(game.toHandle(), FAST));
+                assertEquals(null, supervisor.crashReport());
+            } finally {
+                Supervisor.kill(game.toHandle());
+            }
         }
     }
 

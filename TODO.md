@@ -9,8 +9,14 @@ comment next to it. This file is only for what is *not done*.
 
 `NoWindow` still matches the failed-window lines in the client's log, and a stalled game's CPU state
 still comes from `/proc`. Measure the glfw spin and the AWT dialog on a display, put their stack
-signatures in the agent, and delete both. Crash reports are still found by `CrashWatch` in the runner,
-not by the agent.
+signatures in the agent, and delete both. Neither could be measured on 2026-10-24: the glfw spin did
+not occur on an unpatched GLFW with the screen unlocked, and the AWT dialog needs a failed `glfwInit`.
+
+## `CrashWatch` is still in the runner beside the agent's crash event
+
+The agent reports a new crash report and the runner stops waiting on it, but `CrashWatch` also
+backs the verdict's no-results explanation and the in-process path, and finds a report written by a
+JVM that died before it could say so. Drop it once those read the report from the supervisor instead.
 
 ## The harness still forces a JVM down when no agent is attached
 

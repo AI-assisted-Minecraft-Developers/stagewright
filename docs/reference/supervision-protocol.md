@@ -45,6 +45,7 @@ Every line has `event`. The agent's events:
 | `phase` | `phase` | when the game reports a phase different from the last |
 | `done` | none | when the game reports the run over |
 | `results` | none | when a held game's results are complete; it stays up and the agent ends nothing |
+| `crash` | `report` (the path) | once for each file that appears in `<working directory>/crash-reports` after the agent started; the listing is taken in `premain`, so a previous run's reports are not this run's. Looked for once a second |
 | `leaked` | `graceMs`, `threads` | once, when the JVM is still up `grace` seconds after `done` |
 | `exiting` | none | from a shutdown hook, when the JVM ends in an orderly way |
 
@@ -86,7 +87,7 @@ right after sending it: the results file, not the exit code, carries the verdict
 | `HEARTBEAT_LOST` | connected, and no line for longer than the limit: the whole JVM has stopped |
 | `NEVER_CONNECTED` | alive and silent for longer than the connect limit: it did not reach the agent |
 | `STALLED` | heartbeating, and none of `phase`, `ticks` and `classes` has changed for longer than the stall limit. Loading a pack moves `classes`, running a suite moves `ticks`, so a game that moves neither is stuck |
-| `CRASHED` | the caller's probe said so; the command-line runner asks whether a crash report has appeared |
+| `CRASHED` | the agent sent `crash`, or the caller's probe said so; the command-line runner also asks whether a crash report has appeared, for a game whose JVM died before it could say. Ranks below `DONE` and `RESULTS` and above whether the process is alive |
 | `TIMED_OUT` | alive and talking, and not done within the ceiling |
 
 `DONE` says when to read the results file, and nothing about what is in it.

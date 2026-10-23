@@ -22,6 +22,15 @@ public final class FakeGame {
             Thread.sleep(300_000);
             return;
         }
+        if (mode.equals("crash")) {
+            // A crash report appears and the JVM stays up, as a mod's thread pool lets it.
+            Thread.sleep(1_500);
+            java.nio.file.Path report = java.nio.file.Path.of("crash-reports", "crash-new.txt");
+            java.nio.file.Files.createDirectories(report.getParent());
+            java.nio.file.Files.writeString(report, "---- Minecraft Crash Report ----");
+            Thread.sleep(60_000);
+            return;
+        }
         if (mode.equals("held")) {
             // A hold: the results are complete and the JVM is meant to outlive them.
             Thread.sleep(1_500);
