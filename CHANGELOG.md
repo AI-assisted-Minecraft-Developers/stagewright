@@ -58,6 +58,24 @@ now puts the agent on the run task's JVM and ends the process when the agent say
 
 ---
 
+### A topology with a companion keeps the configuration cache · green in TestKit through a store and a reuse
+
+A topology with `companionRunTask` used to declare its run task incompatible with the configuration
+cache, because the run read the companion's `JavaExec` while it executed and a task cannot be stored.
+The companion's launch is now taken when the task graph is built and held as values: the lazy ones
+(the launcher, main class, the classpath and environment a loader binds in its own action, the game
+directory) as the property objects, read when the game starts, and the rest as plain data. The
+per-loader knowledge of where ModDevGradle and Loom keep those is in one place (`Toolchain`).
+
+- A run task that is neither a plain `JavaExec` nor one of those two loaders' is refused for a
+  companion, naming its class and the properties it adds, instead of launched without them.
+- The JVM argument providers (the build id among them) are kept as providers and asked when the game
+  starts, as before: asked while configuring, they would run git in a phase the cache forbids.
+- Not run against a real ModDevGradle or Loom build; the TestKit consumer uses a run task with the
+  same members. The gates that exercise it were not run.
+
+---
+
 ### The command-line runner is a module of the root build · compiled
 
 `cli/` used to be a Gradle build of its own, so it could not see the loader jars it bundles or the

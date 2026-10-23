@@ -178,12 +178,12 @@ module is a split package, and the loader's module layer rejects it at boot.
 
 ## Known limitations
 
-**A topology with a companion disables the configuration cache for its run task.** The companion is
-built from another task's `JavaExec` specification, read inside the run task's action, and a task
-reference cannot be serialised into the cache. The plugin declares the incompatibility rather than
-failing the build with a stack trace a consumer cannot act on. The cost is one cold configuration per
-run of such a topology.
+**A companion's run task must be a plain `JavaExec`, ModDevGradle's or Loom's.** The companion's launch
+is taken from that task when the graph is built, and the plugin knows where those two loaders keep what
+they bind late: the classpath, the environment and the game directory. A run task of any other kind
+that has properties of its own is refused, with its class and those properties named, instead of being
+launched without whatever they hold.
 
-**A run whose game JVM cannot exit costs that topology its whole timeout.** The check waits for the
-process, so a pack whose mods leave non-daemon threads behind holds the task open after the suite has
-already finished.
+**A hold and the companion client are not watched by the game's agent.** Only a gate's own game is. A
+hold, by design, never says it is finished; a companion client that stops moving is ended when the gate
+ends.

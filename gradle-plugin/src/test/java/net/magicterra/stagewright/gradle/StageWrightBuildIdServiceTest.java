@@ -96,7 +96,7 @@ class StageWrightBuildIdServiceTest {
         var companion = project.getTasks().register("runClient", org.gradle.api.tasks.JavaExec.class).get();
         companion.getJvmArgumentProviders().add(
                 argument(service, companion.getPath(), project.files(written(60_000).toFile())));
-        List<String> ids = SideProcesses.jvmArgs(companion).stream()
+        List<String> ids = CompanionLaunch.of(companion).jvmArgs().stream()
                 .filter(a -> a.startsWith("-Dstagewright.build=")).toList();
         assertEquals(1, ids.size(), ids.toString());
     }
@@ -108,7 +108,7 @@ class StageWrightBuildIdServiceTest {
         var service = registered(project);
         var companion = project.getTasks().register("runClient", LoaderRun.class).get();
         companion.getJvmArgumentProviders().add(argument(service, companion.getPath(), project.files()));
-        assertEquals(1, SideProcesses.jvmArgs(companion).stream()
+        assertEquals(1, CompanionLaunch.of(companion).jvmArgs().stream()
                 .filter(a -> a.startsWith("-Dstagewright.build=git:")).count());
     }
 
@@ -121,7 +121,7 @@ class StageWrightBuildIdServiceTest {
         companion.getMainClass().set("Client");
         companion.getJvmArgumentProviders().add(argument(service, companion.getPath(), project.files()));
         var thrown = org.junit.jupiter.api.Assertions.assertThrows(org.gradle.api.GradleException.class,
-                () -> SideProcesses.startCompanion(companion, dir.resolve("client.log").toFile(), project.getLogger()));
+                () -> CompanionLaunch.of(companion).start(dir.resolve("client.log").toFile(), project.getLogger()));
         assertTrue(thrown.getMessage().contains("null"), thrown.getMessage());
     }
 

@@ -167,14 +167,59 @@ class SideProcessWiringTest {
         for (Class<? extends JavaExec> type : LOADER_RUNS) {
             JavaExec companion = loaderRun(type, Map.of("DISPLAY", "", "XAUTHORITY", "/tasks/own"),
                                            Map.of("DISPLAY", "localhost:10.0", "MOD_CLASSES", "late"));
-            ProcessBuilder builder = new ProcessBuilder("true");
-            builder.environment().put("WAYLAND_DISPLAY", "only-in-this-daemon");
-
-            SideProcesses.useEnvironmentOf(companion, builder);
 
             assertEquals(Map.of("DISPLAY", "localhost:10.0", "XAUTHORITY", "/tasks/own", "MOD_CLASSES", "late"),
-                         builder.environment(), type.getSimpleName());
+                         CompanionLaunch.of(companion).environment(), type.getSimpleName());
         }
+    }
+
+    /** A run task with a property of its own that no adapter reads. */
+    public abstract static class UnknownLoaderRun extends JavaExec {
+        @Internal
+        public abstract MapProperty<String, String> getSomethingBoundLate();
+    }
+
+    @Test
+    void aCompanionWhoseLoaderHasMembersNoAdapterReadsIsRefusedByName() {
+        Project project = ProjectBuilder.builder().withProjectDir(dir.resolve("unknown").toFile()).build();
+        JavaExec run = project.getTasks().register("runClient", UnknownLoaderRun.class).get();
+
+        GradleException refused = assertThrows(GradleException.class, () -> CompanionLaunch.of(run));
+
+        assertTrue(refused.getMessage().contains("UnknownLoaderRun"), refused.getMessage());
+        assertTrue(refused.getMessage().contains("getSomethingBoundLate"), refused.getMessage());
+        assertTrue(refused.getMessage().contains("ModDevGradle") && refused.getMessage().contains("Loom"),
+                refused.getMessage());
+    }
+
+    @Test
+    void thePlainRunsAndTheKnownLoadersAreNotRefused() {
+        Project project = ProjectBuilder.builder().withProjectDir(dir.resolve("plain").toFile()).build();
+        CompanionLaunch.of(project.getTasks().register("runPlain", JavaExec.class).get());
+        for (Class<? extends JavaExec> type : LOADER_RUNS) {
+            CompanionLaunch.of(loaderRun(type, Map.of(), Map.of()));
+        }
+    }
+
+    /** ModDevGradle's other members: a classpath it assembles in its action, and the game directory. */
+    public abstract static class StagedRun extends JavaExec {
+        @Internal
+        public abstract org.gradle.api.file.ConfigurableFileCollection getClasspathProvider();
+
+        @Internal
+        public abstract org.gradle.api.file.DirectoryProperty getGameDirectory();
+    }
+
+    @Test
+    void aClasspathAndAGameDirectoryTheLoaderBindsLateAreReadWhenTheGameStartsNotWhenItIsCaptured() {
+        Project project = ProjectBuilder.builder().withProjectDir(dir.resolve("staged").toFile()).build();
+        StagedRun run = project.getTasks().register("runClient", StagedRun.class).get();
+        CompanionLaunch launch = CompanionLaunch.of(run);
+
+        // Bound after the launch was taken, as a loader does inside its own action.
+        run.getGameDirectory().set(dir.resolve("game").toFile());
+
+        assertEquals(dir.resolve("game").toFile(), launch.workingDirectory());
     }
 
     @Test

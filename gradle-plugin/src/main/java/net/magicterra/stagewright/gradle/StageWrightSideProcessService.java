@@ -8,7 +8,6 @@ import org.gradle.api.logging.Logger;
 import org.gradle.api.provider.Property;
 import org.gradle.api.services.BuildService;
 import org.gradle.api.services.BuildServiceParameters;
-import org.gradle.api.tasks.JavaExec;
 
 /**
  * Owns the processes a topology stands up beside the game under test, and guarantees they come down.
@@ -32,8 +31,8 @@ public abstract class StageWrightSideProcessService
     private final List<Process> companions = new ArrayList<>();
 
     /** Start a companion run and take ownership of it. */
-    public synchronized void startCompanion(JavaExec spec, File logFile, Logger logger) {
-        companions.add(SideProcesses.startCompanion(spec, logFile, logger));
+    synchronized void startCompanion(CompanionLaunch launch, File logFile, Logger logger) {
+        companions.add(launch.start(logFile, logger));
     }
 
     @Override

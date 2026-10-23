@@ -29,20 +29,9 @@ A script that writes `pos.x` on an object the game handed back gets a function, 
 cannot tell a field from a method name. Methods work. Reading public fields and bean properties would
 mean asking the game what the name is before answering.
 
-## The companion mechanism is not compatible with the configuration cache
+## The companion adapters have only met stand-ins for the loaders
 
-`stagewright { topologies { … companionRunTask = 'x' } }` starts a second game process built from
-that task's `JavaExec` spec, read inside the run task's action. A `Task` cannot be serialised into
-the configuration cache, so `StageWrightPlugin` declares the incompatibility rather than failing the
-build with a stack trace a consumer cannot act on. The cost is one cold configuration per run of a
-dedicated-server-with-client topology, against runs measured in tens of minutes — it is on this list
-because a consumer who has tuned their own build for the cache sees StageWright switch it off, and
-that should be their choice.
-
-The fix is to capture what the companion launch needs — executable, JVM arguments, program
-arguments, classpath, environment, working directory — as plain values at configuration time and
-hold no task reference at all. `SideProcesses.lateBoundEnvironment` already does this for the two
-build systems' staged environment maps, so the shape is known. What makes it more than mechanical is
-that both Loom and ModDevGradle finalise parts of a run spec late, and a value read too early
-produces a launch that differs from the one Gradle would have performed — which is the failure this
-mechanism exists to avoid.
+`Toolchain` finds ModDevGradle's and Loom's late-bound members by name, and the TestKit tests use run
+tasks that declare the same members. Run `stagewrightDedicatedServerWithClientFabric` and
+`…Neoforge` with `--configuration-cache` once, store and reuse, and compare the companion's logged
+command with the one before this change.

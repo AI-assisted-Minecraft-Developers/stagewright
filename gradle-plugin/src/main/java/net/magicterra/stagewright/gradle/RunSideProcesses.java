@@ -23,8 +23,24 @@ final class RunSideProcesses implements Action<Task> {
 
     private static final String KEY = "stagewright.sideProcesses";
 
-    /** A companion to start: its spec, where its output goes, and the service that owns it. */
-    record Companion(JavaExec spec, File log, Provider<StageWrightSideProcessService> service) {}
+    /** A companion to start: its launch, where its output goes, and the service that owns it. */
+    static final class Companion {
+        private final CompanionLaunch launch;
+        private final File log;
+        private final Provider<StageWrightSideProcessService> service;
+
+        Companion(CompanionLaunch launch, File log, Provider<StageWrightSideProcessService> service) {
+            this.launch = launch;
+            this.log = log;
+            this.service = service;
+        }
+
+        CompanionLaunch launch() { return launch; }
+
+        File log() { return log; }
+
+        Provider<StageWrightSideProcessService> service() { return service; }
+    }
 
     private final Set<String> clientTopologies = new LinkedHashSet<>();
     private final Map<String, Companion> companions = new LinkedHashMap<>();
@@ -49,7 +65,9 @@ final class RunSideProcesses implements Action<Task> {
 
     /** Start {@code spec} beside the run; false if it was already registered. */
     boolean startCompanion(JavaExec spec, File log, Provider<StageWrightSideProcessService> service) {
-        return companions.putIfAbsent(spec.getPath(), new Companion(spec, log, service)) == null;
+        if (companions.containsKey(spec.getPath())) return false;
+        companions.put(spec.getPath(), new Companion(CompanionLaunch.of(spec), log, service));
+        return true;
     }
 
     /** A line to print once the run is about to start. */
@@ -77,7 +95,7 @@ final class RunSideProcesses implements Action<Task> {
         }
         for (Companion companion : companions.values()) {
             companion.log().getParentFile().mkdirs();
-            companion.service().get().startCompanion(companion.spec(), companion.log(), task.getLogger());
+            companion.service().get().startCompanion(companion.launch(), companion.log(), task.getLogger());
         }
         banners.forEach(task.getLogger()::lifecycle);
     }

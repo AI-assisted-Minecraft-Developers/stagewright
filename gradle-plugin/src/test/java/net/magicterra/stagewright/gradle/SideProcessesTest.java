@@ -25,7 +25,7 @@ class SideProcessesTest {
         var companion = project.getTasks().register("runClient", NullArgumentRun.class).get();
         companion.getMainClass().set("Client");
         var thrown = assertThrows(GradleException.class,
-                () -> SideProcesses.startCompanion(companion, dir.resolve("client.log").toFile(), project.getLogger()));
+                () -> CompanionLaunch.of(companion).start(dir.resolve("client.log").toFile(), project.getLogger()));
         assertTrue(thrown.getMessage().contains("null"), thrown.getMessage());
     }
 

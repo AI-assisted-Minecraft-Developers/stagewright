@@ -1,24 +1,26 @@
 package net.magicterra.stagewright.gradle;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import net.magicterra.stagewright.engine.Display;
 import org.gradle.api.GradleException;
+import org.gradle.api.file.FileCollection;
 import org.gradle.api.logging.Logger;
+import org.gradle.api.provider.MapProperty;
 import org.gradle.api.tasks.JavaExec;
 
 /**
- * The process a scene run sometimes needs beside the game: a second game.
+ * What a scene run sometimes needs beside the game, and the questions a run task is asked about what
+ * its loader has not finished binding.
  *
- * <p>It lives in the plugin because Gradle already knows what starting it takes — the java binary,
- * the classpath, the run directory. A separate program would have to reconstruct all of that from
- * the outside, and then manage the process tree differently on each platform.
+ * <p>The process itself is {@link CompanionLaunch}: a second game, started from values taken from its
+ * run task when the build was configured.
  */
 final class SideProcesses {
 
@@ -26,180 +28,6 @@ final class SideProcesses {
 
     /** How long to give a companion to die politely before killing it. */
     private static final long COMPANION_STOP_SECONDS = 20;
-
-    /**
-     * Start a companion run as a detached process, built from the run task's own resolved
-     * {@link JavaExec} spec.
-     *
-     * <p>Reading the spec rather than rebuilding it is the whole point: the loader plugin — loom,
-     * ModDevGradle, whatever comes next — stays the only thing that knows what a dev run looks like
-     * on its loader. This copies the answer; it does not compute one.
-     *
-     * <p>The caller must already have run the companion's own task dependencies, or the argfiles
-     * those tasks generate will not exist yet. {@code StageWrightPlugin} wires that.
-     */
-    static Process startCompanion(JavaExec spec, File logFile, Logger logger) {
-        List<String> command = new ArrayList<>();
-        command.add(javaBinary(spec));
-        List<String> jvmArgs = new ArrayList<>();
-        jvmArgs(spec).forEach(a -> jvmArgs.add(unescapeArgFileReference(a)));
-        command.addAll(jvmArgs);
-        if (!alreadyHasClasspath(jvmArgs)) {
-            String classpathArgFile = writeClasspathArgFile(resolveClasspath(spec), logFile);
-            if (classpathArgFile != null) {
-                command.add(classpathArgFile);
-            }
-        }
-        command.add(spec.getMainClass().get());
-        spec.getArgs().forEach(a -> command.add(unescapeArgFileReference(a)));
-        // ProcessBuilder answers a null element with a bare NullPointerException carrying no message
-        // and no index — which is a terrible way to learn that a loader plugin left one of these
-        // unset. Name it instead.
-        for (int i = 0; i < command.size(); i++) {
-            if (command.get(i) == null) {
-                throw new GradleException("the companion run '" + spec.getName()
-                        + "' produced a null argument at position " + i
-                        + " — its loader plugin builds the command line differently than expected");
-            }
-        }
-
-        // Created here, because the run task that would normally create it is not going to run. Its
-        // absence surfaces as a bare "cannot start the companion" from ProcessBuilder, which says
-        // nothing about a missing directory.
-        File workingDir = resolveWorkingDir(spec);
-        if (!workingDir.isDirectory() && !workingDir.mkdirs()) {
-            throw new GradleException("cannot create the companion's game directory " + workingDir);
-        }
-        ProcessBuilder builder = new ProcessBuilder(command)
-                .directory(workingDir)
-                // Merged and redirected to a file rather than inherited: the companion is a whole
-                // second game, and interleaving its log with the one being judged makes the run
-                // that matters unreadable at exactly the moment someone is reading it.
-                .redirectErrorStream(true)
-                // Appended, not truncated: writeHeader put the command line in first.
-                .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile));
-        useEnvironmentOf(spec, builder);
-        requireDisplay("companion '" + spec.getName() + "'", builder.environment());
-
-        try {
-            // The command that produced a log is the first thing anyone debugging one wants, and it
-            // is otherwise unrecoverable — the process is detached and Gradle never printed it.
-            writeHeader(logFile, command);
-            Process process = builder.start();
-            logger.lifecycle("[stagewright] companion '{}' started (pid {}), log: {}",
-                    spec.getName(), process.pid(), logFile.getAbsolutePath());
-            return process;
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot start the companion run " + spec.getName(), e);
-        }
-    }
-
-    /** Start the log with the command that produced it, one argument per line. */
-    private static void writeHeader(File logFile, List<String> command) {
-        StringBuilder header = new StringBuilder("# stagewright companion command\n");
-        command.forEach(a -> header.append("#   ").append(a).append('\n'));
-        try {
-            logFile.getParentFile().mkdirs();
-            java.nio.file.Files.writeString(logFile.toPath(), header,
-                    java.nio.charset.StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot write the companion log " + logFile, e);
-        }
-    }
-
-    /**
-     * Undo the backslash escaping a loader plugin applies to an {@code @argfile} reference.
-     *
-     * <p>ModDevGradle hands its run task {@code @C:\\Users\\...\\RunVmArgs.txt} — doubled, because
-     * Gradle writes long command lines into a java argument file of its own and a backslash is an
-     * escape character in there. Handed straight to {@code ProcessBuilder}, which does no such
-     * rewriting, that names a file which does not exist. The JVM then starts with none of the vm
-     * args — no module path, no launch target — and dies on
-     * {@code ClassNotFoundException: net.neoforged.devlaunch.Main}, an error that says nothing
-     * whatsoever about the actual cause.
-     *
-     * <p>Only after the first character, so a UNC reference ({@code @\\server\share\...}) keeps its
-     * leading pair.
-     */
-    private static String unescapeArgFileReference(String arg) {
-        if (arg == null || arg.length() < 2 || arg.charAt(0) != '@') return arg;
-        return "@" + arg.substring(1).replace("\\\\", "\\");
-    }
-
-    /**
-     * Every JVM argument the run would start with, from all three places Gradle keeps them.
-     *
-     * <p>No single source is sufficient, and each loader plugin uses a different one.
-     *
-     * <ul>
-     *   <li>{@code getAllJvmArgs()} — the eager list. ModDevGradle's argfile reference is here.</li>
-     *   <li>{@code getJvmArguments()} — the lazy {@code ListProperty} that superseded it, and NOT
-     *       included in the eager list. architectury-loom puts everything here, so reading only the
-     *       eager list produced a four-argument command line carrying nothing but the default
-     *       encoding and locale — the client died in {@code TransformerRuntime.applyProperties} on a
-     *       null path, which is the transformer asking for settings nobody had given it.</li>
-     *   <li>{@code jvmArgumentProviders} — argument providers, whose output a plugin may or may not
-     *       also place in one of the above. ModDevGradle places its {@code -Dfml.modFolders} in
-     *       both, and expanding it a second time put two copies on the line.</li>
-     * </ul>
-     *
-     * <p>Union, then, de-duplicated a whole source at a time — never token by token. A JVM argument
-     * list is not a set of independent strings: {@code --add-opens} and {@code --add-exports} appear
-     * many times over, each followed by its own value, and dropping the second occurrence of the
-     * flag as a "duplicate" leaves its value stranded on the command line. The JVM then reads that
-     * value as the main class and reports
-     * {@code Could not find or load main class java.base.java.lang.invoke=cpw.mods.securejarhandler},
-     * which names the symptom and hides the cause completely.
-     */
-    static List<String> jvmArgs(JavaExec spec) {
-        List<String> args = new ArrayList<>(spec.getAllJvmArgs());
-        appendUnlessPresent(args, spec.getJvmArguments().getOrElse(List.of()));
-        for (org.gradle.process.CommandLineArgumentProvider provider : spec.getJvmArgumentProviders()) {
-            List<String> provided = new ArrayList<>();
-            provider.asArguments().forEach(provided::add);
-            appendUnlessPresent(args, provided);
-        }
-        return args;
-    }
-
-    /** Append a source's arguments unless the target already carries all of them. */
-    private static void appendUnlessPresent(List<String> target, List<String> extra) {
-        if (extra.isEmpty() || target.containsAll(extra)) return;
-        target.addAll(extra);
-    }
-
-    /**
-     * Whether the JVM arguments already put a classpath on the command line, directly or through an
-     * argument file.
-     *
-     * <p>Asked because appending a second one is not harmless. A later {@code -classpath} wins, so
-     * the run would silently execute against this plugin's idea of the classpath instead of the
-     * loader's — and loom's differs deliberately, having filtered out libraries its run must not
-     * see.
-     */
-    private static boolean alreadyHasClasspath(List<String> args) {
-        for (String arg : args) {
-            // Left for startCompanion to name, which it cannot do after a bare NullPointerException.
-            if (arg == null) continue;
-            if (arg.equals("-cp") || arg.equals("-classpath") || arg.equals("--class-path")) {
-                return true;
-            }
-            if (arg.startsWith("@")) {
-                try {
-                    String body = java.nio.file.Files.readString(
-                            java.nio.file.Path.of(arg.substring(1)));
-                    if (body.startsWith("-classpath") || body.startsWith("-cp")
-                            || body.contains("\n-classpath") || body.contains("\n-cp")) {
-                        return true;
-                    }
-                } catch (IOException | RuntimeException e) {
-                    // Unreadable argfile: not this method's problem. The JVM will report it far more
-                    // precisely than a guess here could.
-                }
-            }
-        }
-        return false;
-    }
 
     /**
      * The classpath the run task would execute with, including the part it only merges in once it is
@@ -212,26 +40,21 @@ final class SideProcesses {
      * Read from the outside without this, the spec is not merely incomplete, it is convincingly
      * wrong: every argument is present, the command starts, and the JVM dies on
      * {@code ClassNotFoundException: net.neoforged.devlaunch.Main} as though the install were broken.
-     *
-     * <p>Reflective and by name, because there is no interface to ask. The name belongs to a loader
-     * plugin, not to Gradle, so this is a list of known stashes rather than a general rule — and an
-     * unknown loader loses nothing, since a plugin that assembles its classpath the ordinary way is
-     * already covered by {@code getClasspath()}.
      */
-    static org.gradle.api.file.FileCollection resolveClasspath(JavaExec spec) {
-        org.gradle.api.file.FileCollection classpath = spec.getClasspath();
-        Object staged = readProperty(spec, "getClasspathProvider");
-        if (staged instanceof org.gradle.api.file.FileCollection extra) {
-            classpath = classpath.plus(extra);
+    static FileCollection resolveClasspath(JavaExec spec) {
+        FileCollection classpath = spec.getClasspath();
+        for (Toolchain toolchain : Toolchain.of(spec)) {
+            FileCollection staged = toolchain.lateClasspath(spec);
+            if (staged != null) classpath = classpath.plus(staged);
         }
         return classpath;
     }
 
     /**
-     * Environment entries staged the same late way as the classpath above, from either build system.
+     * Environment entries staged the same late way as the classpath above, from either build system,
+     * unread so a caller can hold them until the run.
      *
-     * <p>Both stage them and neither exposes them through {@code getEnvironment()}: ModDevGradle in
-     * {@code getEnvironmentProperty()}, loom in {@code getInternalEnvironmentVars()}. Each is merged
+     * <p>Both stage them and neither exposes them through {@code getEnvironment()}; each is merged
      * into the real environment by the first line of that task's own action — which a companion
      * never reaches, because it is launched FROM the spec rather than by running the task.
      *
@@ -246,25 +69,18 @@ final class SideProcesses {
      * The Fabric twin was unaffected throughout: fabric-loom passes the same information as a
      * {@code -D} system property, which is on the command line and survives being copied.
      *
-     * <p>Read both and merge rather than picking one, so a task that somehow has both is not
-     * silently half-configured.
+     * <p>Merged rather than picking one, so a task that somehow has both is not silently
+     * half-configured.
      */
-    private static java.util.Map<String, String> lateBoundEnvironment(JavaExec spec) {
-        return merged(lateBoundEnvironmentProperties(spec));
-    }
-
-    /** Where {@link #lateBoundEnvironment} reads from, unread, so a caller can hold them until the run. */
-    static List<org.gradle.api.provider.MapProperty<?, ?>> lateBoundEnvironmentProperties(JavaExec spec) {
-        List<org.gradle.api.provider.MapProperty<?, ?>> found = new ArrayList<>();
-        for (String getter : new String[] {"getEnvironmentProperty", "getInternalEnvironmentVars"}) {
-            if (readProperty(spec, getter) instanceof org.gradle.api.provider.MapProperty<?, ?> p) found.add(p);
-        }
+    static List<MapProperty<?, ?>> lateBoundEnvironmentProperties(JavaExec spec) {
+        List<MapProperty<?, ?>> found = new ArrayList<>();
+        for (Toolchain toolchain : Toolchain.of(spec)) found.addAll(toolchain.lateEnvironment(spec));
         return found;
     }
 
-    static java.util.Map<String, String> merged(List<org.gradle.api.provider.MapProperty<?, ?>> properties) {
-        java.util.Map<String, String> result = new java.util.LinkedHashMap<>();
-        for (org.gradle.api.provider.MapProperty<?, ?> p : properties) {
+    static Map<String, String> merged(List<MapProperty<?, ?>> properties) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (MapProperty<?, ?> p : properties) {
             p.get().forEach((k, v) -> result.put(String.valueOf(k), String.valueOf(v)));
         }
         return result;
@@ -275,11 +91,11 @@ final class SideProcesses {
      * {@code <mod>%%<path>} entries separated by the path separator. A run loads them without their
      * being on its classpath: worlddriver keeps its scene classes off the classpath this way.
      */
-    static List<File> modClasses(java.util.Map<String, String> environment) {
+    static List<File> modClasses(Map<String, String> environment) {
         String value = environment.get("MOD_CLASSES");
         List<File> dirs = new ArrayList<>();
         if (value == null || value.isBlank()) return dirs;
-        for (String entry : value.split(java.util.regex.Pattern.quote(File.pathSeparator))) {
+        for (String entry : value.split(Pattern.quote(File.pathSeparator))) {
             int mod = entry.indexOf("%%");
             String path = mod < 0 ? entry : entry.substring(mod + 2);
             if (!path.isBlank()) dirs.add(new File(path));
@@ -288,126 +104,11 @@ final class SideProcesses {
     }
 
     /** The environment a run task's game gets: the task's own, plus what its loader binds late. */
-    static java.util.Map<String, String> environmentOf(JavaExec spec) {
-        java.util.Map<String, String> env = new java.util.LinkedHashMap<>();
+    static Map<String, String> environmentOf(JavaExec spec) {
+        Map<String, String> env = new LinkedHashMap<>();
         spec.getEnvironment().forEach((k, v) -> env.put(k, String.valueOf(v)));
-        env.putAll(lateBoundEnvironment(spec));
+        env.putAll(merged(lateBoundEnvironmentProperties(spec)));
         return env;
-    }
-
-    /** Give {@code builder} the run task's environment plus its loader's late-bound entries, and
-     *  nothing else: a variable the task left out stays out, as it would from the task's own launch. */
-    static void useEnvironmentOf(JavaExec spec, ProcessBuilder builder) {
-        builder.environment().clear();
-        builder.environment().putAll(environmentOf(spec));
-    }
-
-    /**
-     * The directory the run would execute in — the game directory, not the project directory.
-     *
-     * <p>Staged late like the classpath, and by both loaders: ModDevGradle and loom each call
-     * {@code setWorkingDir} as a statement inside their own task action. Read from outside without
-     * this, {@code getWorkingDir()} answers the project directory, and a companion started there
-     * does not fail — it runs perfectly well and writes {@code config/}, {@code downloads/},
-     * {@code options.txt} and {@code servers.dat} into the repository. The run is green and the
-     * working tree is dirty, which is the kind of wrong that only shows up in {@code git status}.
-     */
-    /** {@link #resolveWorkingDir} for callers outside the launch path — the provision task needs the
-     *  companion's run directory before anything is started, to install into it. */
-    static File runDirectoryOf(JavaExec spec) {
-        return resolveWorkingDir(spec);
-    }
-
-    private static File resolveWorkingDir(JavaExec spec) {
-        // ModDevGradle: a DirectoryProperty naming the game directory.
-        Object gameDirectory = readProperty(spec, "getGameDirectory");
-        if (gameDirectory instanceof org.gradle.api.file.DirectoryProperty property
-                && property.isPresent()) {
-            return property.get().getAsFile();
-        }
-        // loom: the run directory as a string, relative to a separately-stashed project directory.
-        Object runDir = readProperty(spec, "getInternalRunDir");
-        Object projectDir = readProperty(spec, "getProjectDir");
-        if (runDir instanceof org.gradle.api.provider.Property<?> runProperty
-                && projectDir instanceof org.gradle.api.provider.Property<?> projectProperty
-                && runProperty.isPresent() && projectProperty.isPresent()) {
-            return new File(String.valueOf(projectProperty.get()), String.valueOf(runProperty.get()));
-        }
-        return spec.getWorkingDir();
-    }
-
-    /**
-     * Invoke a zero-argument getter if the task happens to have one, else null.
-     *
-     * <p>Walks the hierarchy rather than asking only for public methods: loom stashes its run
-     * directory behind a {@code protected abstract} getter, which {@code getMethod} cannot see at
-     * all.
-     */
-    private static Object readProperty(JavaExec spec, String getter) {
-        for (Class<?> type = spec.getClass(); type != null; type = type.getSuperclass()) {
-            try {
-                java.lang.reflect.Method method = type.getDeclaredMethod(getter);
-                method.setAccessible(true);
-                return method.invoke(spec);
-            } catch (NoSuchMethodException e) {
-                // Keep walking — the getter may be declared further up.
-            } catch (ReflectiveOperationException | RuntimeException e) {
-                return null;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Put the run's classpath in a java argument file and return the {@code @file} argument, or null
-     * when the run carries no classpath at all.
-     *
-     * <p>A file rather than command-line arguments because a modded dev classpath runs to hundreds of
-     * entries, well past the ~32k Windows allows in a command line.
-     *
-     * <p>Separators are normalised to {@code /}: a java argument file treats backslash as an escape
-     * character, so a Windows path written verbatim silently loses its separators. The JVM accepts
-     * forward slashes in classpath entries on every platform, which makes normalising simpler and
-     * safer than escaping.
-     */
-    private static String writeClasspathArgFile(org.gradle.api.file.FileCollection cp, File logFile) {
-        String classpath = cp.getAsPath();
-        if (classpath == null || classpath.isBlank()) return null;
-
-        File argFile = new File(logFile.getParentFile(), logFile.getName() + ".classpath.args");
-        String body = "-cp \"" + classpath.replace('\\', '/') + "\"\n";
-        try {
-            argFile.getParentFile().mkdirs();
-            java.nio.file.Files.writeString(argFile.toPath(), body,
-                    java.nio.charset.StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot write the companion classpath argfile " + argFile, e);
-        }
-        return "@" + argFile.getAbsolutePath();
-    }
-
-    /**
-     * The java binary a run task would use.
-     *
-     * <p>Three sources, in the order they win. {@code javaLauncher} is what a modern loader plugin
-     * sets — ModDevGradle configures its runs through the toolchain service and leaves
-     * {@code executable} null, which is how the first attempt at this got a
-     * {@code NullPointerException} out of {@code ProcessBuilder} with nothing in it to say why.
-     * {@code executable} covers a build that pinned one by hand. The JVM running Gradle is the last
-     * resort, and it is a real answer rather than a guess: the daemon is already on a JDK this build
-     * chose.
-     */
-    private static String javaBinary(JavaExec spec) {
-        if (spec.getJavaLauncher().isPresent()) {
-            return spec.getJavaLauncher().get().getExecutablePath().getAsFile().getAbsolutePath();
-        }
-        String executable = spec.getExecutable();
-        if (executable != null && !executable.isBlank()) {
-            return executable;
-        }
-        return new File(new File(System.getProperty("java.home"), "bin"),
-                System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows")
-                        ? "java.exe" : "java").getAbsolutePath();
     }
 
     /**
@@ -440,7 +141,7 @@ final class SideProcesses {
      *
      * @param env the environment the client will be started with
      */
-    static void requireDisplay(String what, java.util.Map<String, ?> env) {
+    static void requireDisplay(String what, Map<String, ?> env) {
         String missing = Display.missing(System.getProperty("os.name", ""), env);
         if (missing != null) {
             throw new GradleException("[stagewright] ENV — " + what + ": " + missing);

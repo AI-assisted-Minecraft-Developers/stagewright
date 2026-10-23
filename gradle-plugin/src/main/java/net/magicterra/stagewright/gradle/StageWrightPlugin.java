@@ -283,9 +283,9 @@ public class StageWrightPlugin implements Plugin<Project> {
      * without them — but running the companion TASK would block, since Gradle would wait for the
      * game to exit before starting the one it is supposed to run alongside.
      *
-     * <p>Note for later: reading another task's state from an execution-time action is not
-     * configuration-cache friendly. Only the topologies that declare a companion are affected; the
-     * plain server topology stays cacheable.
+     * <p>What the companion launch needs is taken from its task when the graph is built and held as
+     * values ({@link CompanionLaunch}), so the run task keeps no reference to another task and the
+     * build stays configuration-cacheable.
      */
     /** The property the game reads to narrow a run; see {@code SceneFilter}. */
     static final String SCENE_FILTER_PROPERTY = "stagewright.scenes";
@@ -427,7 +427,7 @@ public class StageWrightPlugin implements Plugin<Project> {
         String companionName = topology.getCompanionRunTask().getOrNull();
         if (companionName == null) return null;
         return resolveRunTask(project, companionName) instanceof JavaExec companion
-                ? SideProcesses.runDirectoryOf(companion)
+                ? CompanionLaunch.runDirectory(companion)
                 : null;
     }
 
@@ -456,7 +456,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                         + (resolved == null ? "not a task in this build"
                                             : "a " + resolved.getClass().getSimpleName()
                                               + " rather than a JavaExec — a companion has to be a"
-                                              + " dev run this plugin can copy a command line from"));
+                                              + " dev run this plugin can take a launch from"));
             }
             File companionLog = new File(topology.getGameDirectory().get().getAsFile(),
                     "companion-" + companionName.replace(':', '-') + ".log");
@@ -475,20 +475,6 @@ public class StageWrightPlugin implements Plugin<Project> {
         // carrying its own build dependencies, which are not in dependsOn — so a companion
         // launched without this can be handed a path to a jar nothing has built yet.
         run.dependsOn(companion.getInputs().getFiles());
-
-        // Declared, not discovered. Starting a companion means reading another run task's command
-        // line at execution time, so this task action holds a Task — which the configuration cache
-        // cannot serialize. Left undeclared, a project that enables the cache fails with Gradle's
-        // own message naming the LOADER's run task class and nothing about companions, on a build
-        // that is otherwise correct and whose verdict already printed GREEN. Saying so here costs
-        // that one task its caching and keeps the failure from being someone else's mystery.
-        //
-        // The alternative is to capture the whole command as values at configuration time and start
-        // the companion from those. That is the right end state and a bigger change than declaring
-        // this, because several of the pieces are staged by the loader plugin and only final once
-        // its own task action has run — which is the same fact that makes MOD_CLASSES late-bound.
-        run.notCompatibleWithConfigurationCache("stagewright starts a companion run from another"
-                + " task's JavaExec spec, which cannot be serialized into the configuration cache");
     }
 
     /**
