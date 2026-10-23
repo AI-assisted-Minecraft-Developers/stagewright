@@ -70,8 +70,10 @@ number are one line with a count. A JVM without `jdk.jfr` reports as before.
 - The stream's reader is not a daemon, which would have kept every game with the agent attached from
   ending by itself. The agent closes it once nothing else is holding the JVM; the unit test for a
   clean game caught this before any pack did.
-- Not yet run against a real pack; the first thing to look at is whether the origin names the mod or
-  stops at a library.
+- Run against the real Fabric pair: `HTTP-Dispatcher` is traced to `McpServer.<init>` in the driver's
+  jar, and a pool of two dozen workers to architectury's tiny-remapper in the dev environment. A
+  second pool had no origin, having started before the recording did, so the recording now opens in
+  `premain` instead of on the agent's thread.
 
 ---
 

@@ -75,6 +75,15 @@ public final class Agent {
             if (running != null) return;
             running = agent;
         }
+        // Here and not on the agent's thread: a pool a launcher starts in the JVM's first second is
+        // exactly the kind that outlives the game, and a recording that begins after it names no one.
+        // The cost is a few hundred milliseconds before main, against a start measured in tens of seconds.
+        try {
+            agent.origins = ThreadOrigins.start();
+        } catch (Throwable unavailable) {
+            // A JVM without jdk.jfr fails to link ThreadOrigins itself, which start() cannot catch.
+            agent.origins = null;
+        }
         Thread thread = new Thread(agent::run, "stagewright-agent");
         // Daemon: the one thread here must never be what keeps a finished JVM alive.
         thread.setDaemon(true);
@@ -111,14 +120,6 @@ public final class Agent {
                 "stagewright-agent-exit"));
         send(Lines.event("hello").text("token", config.token()).number("pid", ProcessHandle.current().pid())
                 .text("agent", AGENT_VERSION).text("java", System.getProperty("java.version", "")));
-        // After hello, so a slow JFR start never delays the supervisor learning the game is alive. The
-        // game's own threads start long after this; the ones before it are the JVM's.
-        try {
-            origins = ThreadOrigins.start();
-        } catch (Throwable unavailable) {
-            // A JVM without jdk.jfr fails to link ThreadOrigins itself, which start() cannot catch.
-            origins = null;
-        }
         while (true) {
             send(heartbeat());
             ThreadOrigins recording = origins;

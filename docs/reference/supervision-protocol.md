@@ -59,8 +59,8 @@ Any event counts as a sign of life. A thread in `leaked.threads` has:
 | `originJars` | where the classes in `origin` were loaded from |
 
 A parked pool worker's own stack is all JDK, so `origin` is what names its owner. It comes from the
-JVM's `jdk.ThreadStart` events, which the agent records through a JFR stream opened right after
-`hello`; threads that started before that are the JVM's own. A JVM without `jdk.jfr` reports `stack`
+JVM's `jdk.ThreadStart` events, which the agent records through a JFR stream opened in `premain`,
+before the game's `main`; only the JVM's own threads start earlier. A JVM without `jdk.jfr` reports `stack`
 and `jars` only. The stream's reader is the one thread of the agent's that is not a daemon, so the
 agent closes the stream as soon as nothing but it and `DestroyJavaVM` is keeping the JVM up, and does
 not list it among the leaks.
