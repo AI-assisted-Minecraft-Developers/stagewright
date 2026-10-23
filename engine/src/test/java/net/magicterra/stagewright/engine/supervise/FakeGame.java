@@ -30,6 +30,9 @@ public final class FakeGame {
             return;
         }
         if (mode.equals("leak")) {
+            // A mod's threads start seconds into a run, long after the agent has begun recording who
+            // starts threads; a thread started in the JVM's first instant would be missed.
+            Thread.sleep(1_500);
             Thread pool = new Thread(new Holder(), "mod-pool-1");
             pool.setDaemon(false);
             pool.start();

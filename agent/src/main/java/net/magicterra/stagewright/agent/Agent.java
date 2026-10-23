@@ -48,6 +48,7 @@ public final class Agent {
     private volatile String phase = "starting";
     private volatile long ticks;
     private volatile long doneAtNanos;
+    private volatile ThreadOrigins origins;
     // Only the agent's own thread touches these.
     private String lastSignature = "";
     private long lastChangeNanos = System.nanoTime();
@@ -110,8 +111,18 @@ public final class Agent {
                 "stagewright-agent-exit"));
         send(Lines.event("hello").text("token", config.token()).number("pid", ProcessHandle.current().pid())
                 .text("agent", AGENT_VERSION).text("java", System.getProperty("java.version", "")));
+        // After hello, so a slow JFR start never delays the supervisor learning the game is alive. The
+        // game's own threads start long after this; the ones before it are the JVM's.
+        try {
+            origins = ThreadOrigins.start();
+        } catch (Throwable unavailable) {
+            // A JVM without jdk.jfr fails to link ThreadOrigins itself, which start() cannot catch.
+            origins = null;
+        }
         while (true) {
             send(heartbeat());
+            ThreadOrigins recording = origins;
+            if (recording != null && recording.releaseIfAlone()) origins = null;
             long doneAt = doneAtNanos;
             if (doneAt != 0 && System.nanoTime() - doneAt >= config.graceMillis() * 1_000_000L) {
                 endJvm();
@@ -221,14 +232,20 @@ public final class Agent {
         Map<Thread, StackTraceElement[]> all = Thread.getAllStackTraces();
         List<Thread> holders = new ArrayList<>();
         Set<String> classNames = new HashSet<>();
+        ThreadOrigins recorded = origins;
         for (Map.Entry<Thread, StackTraceElement[]> entry : all.entrySet()) {
             Thread thread = entry.getKey();
             if (thread.isDaemon() || !thread.isAlive() || thread == Thread.currentThread()) continue;
             // The thread the JVM parks to wait for the others: it is the symptom, not a holder.
             if (thread.getName().equals("DestroyJavaVM")) continue;
+            // The recorder's own reader: it holds nothing the game left behind.
+            if (isRecorderThread(thread.getName())) continue;
             holders.add(thread);
             StackTraceElement[] stack = entry.getValue();
             for (int i = 0; i < Math.min(stack.length, STACK_FRAMES); i++) classNames.add(stack[i].getClassName());
+            if (recorded != null) {
+                for (String frame : recorded.of(thread.threadId())) classNames.add(typeOf(frame));
+            }
         }
         Map<String, String> jars = locate(classNames);
         List<Lines> described = new ArrayList<>();
@@ -241,10 +258,31 @@ public final class Agent {
                 String location = jars.get(stack[i].getClassName());
                 if (location != null) where.add(location);
             }
+            List<String> started = recorded == null ? List.of() : recorded.of(thread.threadId());
+            Set<String> startedIn = new LinkedHashSet<>();
+            for (String frame : started) {
+                String location = jars.get(typeOf(frame));
+                if (location != null) startedIn.add(location);
+            }
             described.add(new Lines().text("name", thread.getName()).texts("stack", frames)
-                    .texts("jars", new ArrayList<>(where)));
+                    .texts("jars", new ArrayList<>(where)).texts("origin", started)
+                    .texts("originJars", new ArrayList<>(startedIn)));
         }
         return described;
+    }
+
+    /**
+     * A thread of the recorder behind {@link ThreadOrigins}; the first is not a daemon. Here and not
+     * there, because asking must not link a class that needs {@code jdk.jfr}.
+     */
+    static boolean isRecorderThread(String name) {
+        return name.startsWith("JFR ");
+    }
+
+    /** The class of a {@code class.method} frame. */
+    private static String typeOf(String frame) {
+        int dot = frame.lastIndexOf('.');
+        return dot < 0 ? frame : frame.substring(0, dot);
     }
 
     /** Where each named class was loaded from. The JDK's own classes have no code source and are left out. */

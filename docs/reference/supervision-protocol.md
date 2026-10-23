@@ -55,6 +55,15 @@ Any event counts as a sign of life. A thread in `leaked.threads` has:
 | `name` | the thread's name |
 | `stack` | its top twelve frames, as `StackTraceElement.toString` gives them |
 | `jars` | where the classes on that stack were loaded from, in stack order, without the JDK's own |
+| `origin` | `class.method` for the frames that started the thread, innermost first, without the JDK's and the agent's own; empty when the JVM did not see it start |
+| `originJars` | where the classes in `origin` were loaded from |
+
+A parked pool worker's own stack is all JDK, so `origin` is what names its owner. It comes from the
+JVM's `jdk.ThreadStart` events, which the agent records through a JFR stream opened right after
+`hello`; threads that started before that are the JVM's own. A JVM without `jdk.jfr` reports `stack`
+and `jars` only. The stream's reader is the one thread of the agent's that is not a daemon, so the
+agent closes the stream as soon as nothing but it and `DestroyJavaVM` is keeping the JVM up, and does
+not list it among the leaks.
 
 An element of `stacks` has `name` and `stack` (the top eight frames), for the threads called `main`,
 `Render thread` and `Server thread`.

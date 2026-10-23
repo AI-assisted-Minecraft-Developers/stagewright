@@ -58,6 +58,23 @@ now puts the agent on the run task's JVM and ends the process when the agent say
 
 ---
 
+### A leaked thread is traced to whoever started it, and a pool is one line · green against a real agent, and the first real run is what showed the need
+
+The first run against a real NeoForge and a real Fabric server named every thread that held the JVM
+up after the suite — and none of them, because a parked worker's stack is all JDK: twenty-four
+`pool-2-thread-N` lines, each ending in `Unsafe.park`, no jar. The agent now records who started each
+thread (JFR's `jdk.ThreadStart`, which carries the starter's stack) and the warning says
+`pool-2-thread-* x24 started at <class.method>  [<jar>]`; threads that differ only in a trailing
+number are one line with a count. A JVM without `jdk.jfr` reports as before.
+
+- The stream's reader is not a daemon, which would have kept every game with the agent attached from
+  ending by itself. The agent closes it once nothing else is holding the JVM; the unit test for a
+  clean game caught this before any pack did.
+- Not yet run against a real pack; the first thing to look at is whether the origin names the mod or
+  stops at a library.
+
+---
+
 ### `--attached` is supervised through the agent, and a held game reports its results · green against a real agent and a fake game
 
 A held game never says the run is over, so `--attached` still read the results file once a second and

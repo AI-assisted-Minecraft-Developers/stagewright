@@ -82,6 +82,9 @@ class SupervisorTest {
                 assertEquals("mod-pool-1", leak.thread());
                 assertTrue(leak.stack().stream().anyMatch(f -> f.contains("FakeGame$Holder")), leak.stack().toString());
                 assertFalse(leak.jars().isEmpty(), "the report should say where the thread's code came from");
+                // Who started it: the JDK's own frames are left out, and the code that did is named.
+                assertTrue(leak.origin().stream().anyMatch(f -> f.contains("FakeGame.main")), leak.origin().toString());
+                assertFalse(leak.originJars().isEmpty(), "the starter's code location should be named");
             } finally {
                 Supervisor.kill(game.toHandle());
             }

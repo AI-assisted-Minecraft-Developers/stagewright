@@ -28,6 +28,31 @@ class NarrationTest {
     }
 
     @Test
+    void workersOfOnePoolAreOneLineWithACountAndNameWhoStartedThem() {
+        List<String> parked = List.of("java.base@21/jdk.internal.misc.Unsafe.park(Native Method)");
+        List<Supervisor.Leak> leaks = new java.util.ArrayList<>();
+        for (int i = 1; i <= 24; i++) {
+            leaks.add(new Supervisor.Leak("pool-2-thread-" + i, parked, List.of(),
+                    List.of("x.Scenes.start", "x.Mod.init"), List.of("file:/mods/x.jar")));
+        }
+        leaks.add(new Supervisor.Leak("pool-1-thread-1", parked, List.of(), List.of("y.Net.open"), List.of()));
+        List<String> lines = Narration.leaks(leaks);
+        assertEquals(3, lines.size(), lines.toString());
+        assertEquals("  pool-2-thread-* x24 started at x.Scenes.start  [file:/mods/x.jar]", lines.get(1));
+        assertEquals("  pool-1-thread-1 started at y.Net.open", lines.get(2));
+    }
+
+    @Test
+    void aThreadWithoutAnOriginKeepsTheOldWordingAmongThoseWithOne() {
+        List<String> lines = Narration.leaks(List.of(
+                new Supervisor.Leak("HTTP-Dispatcher", List.of("sun.nio.ch.EPoll.wait(Native Method)"), List.of()),
+                new Supervisor.Leak("worker-1", List.of("a.B.run(B.java:1)"), List.of("file:/a.jar"),
+                        List.of("a.B.start"), List.of("file:/a.jar"))));
+        assertEquals("  HTTP-Dispatcher at sun.nio.ch.EPoll.wait(Native Method)", lines.get(1));
+        assertEquals("  worker-1 started at a.B.start  [file:/a.jar]", lines.get(2));
+    }
+
+    @Test
     void noLeakSaysNothing() {
         assertEquals(List.of(), Narration.leaks(List.of()));
     }

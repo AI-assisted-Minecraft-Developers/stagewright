@@ -61,8 +61,18 @@ public final class Supervisor implements AutoCloseable {
         TIMED_OUT
     }
 
-    /** A thread that kept the JVM up after the run was over, and the jars its stack runs through. */
-    public record Leak(String thread, List<String> stack, List<String> jars) {}
+    /**
+     * A thread that kept the JVM up after the run was over, the jars its stack runs through, and who
+     * started it. The stack of a parked pool worker is all JDK; {@code origin} is the code that started
+     * the thread (outside the JDK, innermost first) and {@code originJars} where that code came from.
+     * Both are empty when the JVM could not say.
+     */
+    public record Leak(String thread, List<String> stack, List<String> jars, List<String> origin,
+                       List<String> originJars) {
+        public Leak(String thread, List<String> stack, List<String> jars) {
+            this(thread, stack, jars, List.of(), List.of());
+        }
+    }
 
     /** Where a thread was when the game stopped moving. */
     public record ThreadStack(String thread, List<String> frames) {}
@@ -401,7 +411,8 @@ public final class Supervisor implements AutoCloseable {
                         for (Object thread : threads) {
                             if (!(thread instanceof Map<?, ?> t)) continue;
                             leaks.add(new Leak(String.valueOf(t.get("name")), strings(t.get("stack")),
-                                    strings(t.get("jars"))));
+                                    strings(t.get("jars")), strings(t.get("origin")),
+                                    strings(t.get("originJars"))));
                         }
                     }
                 }
