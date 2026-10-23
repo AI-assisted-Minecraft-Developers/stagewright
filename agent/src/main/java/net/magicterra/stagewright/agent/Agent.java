@@ -1,0 +1,264 @@
+package net.magicterra.stagewright.agent;
+
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.lang.instrument.Instrumentation;
+import java.lang.management.ManagementFactory;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.CodeSource;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * Reports on this JVM to the process that started it, from its first instant to its last, and ends
+ * it once the run is over. See {@code docs/design/supervision.md} for why this lives inside the game
+ * instead of watching it from outside, and {@code docs/reference/supervision-protocol.md} for what
+ * it says.
+ *
+ * <p>Loaded with {@code -javaagent:<jar>=<host>:<port>:<token>[,grace=<seconds>]}. Anything wrong
+ * with that argument is reported to standard error and leaves the JVM exactly as it would have been
+ * without the agent: this must never be the reason a game does not start.
+ */
+public final class Agent {
+
+    static final String AGENT_VERSION = "1";
+    private static final long HEARTBEAT_MS = 1_000;
+    private static final int CONNECT_ATTEMPTS = 40;
+    private static final long CONNECT_RETRY_MS = 250;
+    private static final int STACK_FRAMES = 12;
+
+    private static volatile Agent running;
+
+    private final Config config;
+    private final Instrumentation instrumentation;
+    private final Object wake = new Object();
+
+    private volatile Socket socket;
+    private volatile BufferedWriter out;
+    private volatile String phase = "starting";
+    private volatile long ticks;
+    private volatile long doneAtNanos;
+
+    private Agent(Config config, Instrumentation instrumentation) {
+        this.config = config;
+        this.instrumentation = instrumentation;
+    }
+
+    static Agent running() {
+        return running;
+    }
+
+    public static void premain(String args, Instrumentation instrumentation) {
+        Config config;
+        try {
+            config = Config.parse(args);
+        } catch (IllegalArgumentException e) {
+            System.err.println("[stagewright-agent] not started: " + e.getMessage());
+            return;
+        }
+        Agent agent = new Agent(config, instrumentation);
+        synchronized (Agent.class) {
+            if (running != null) return;
+            running = agent;
+        }
+        Thread thread = new Thread(agent::run, "stagewright-agent");
+        // Daemon: the one thread here must never be what keeps a finished JVM alive.
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    void phase(String name) {
+        if (name == null || name.equals(phase)) return;
+        phase = name;
+        send(Lines.event("phase").text("phase", name));
+    }
+
+    void ticks(long value) {
+        ticks = value;
+    }
+
+    void done() {
+        synchronized (wake) {
+            if (doneAtNanos != 0) return;
+            doneAtNanos = System.nanoTime();
+            wake.notifyAll();
+        }
+        send(Lines.event("done"));
+    }
+
+    private void run() {
+        if (!connect()) return;
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> send(Lines.event("exiting")),
+                "stagewright-agent-exit"));
+        send(Lines.event("hello").text("token", config.token()).number("pid", ProcessHandle.current().pid())
+                .text("agent", AGENT_VERSION).text("java", System.getProperty("java.version", "")));
+        while (true) {
+            send(heartbeat());
+            long doneAt = doneAtNanos;
+            if (doneAt != 0 && System.nanoTime() - doneAt >= config.graceMillis() * 1_000_000L) {
+                endJvm();
+                return;
+            }
+            synchronized (wake) {
+                try {
+                    wake.wait(HEARTBEAT_MS);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        }
+    }
+
+    private boolean connect() {
+        for (int attempt = 0; attempt < CONNECT_ATTEMPTS; attempt++) {
+            Socket candidate = new Socket();
+            try {
+                candidate.connect(new InetSocketAddress(config.host(), config.port()), 1_000);
+                candidate.setTcpNoDelay(true);
+                out = new BufferedWriter(new OutputStreamWriter(candidate.getOutputStream(), StandardCharsets.UTF_8));
+                socket = candidate;
+                return true;
+            } catch (IOException e) {
+                try {
+                    candidate.close();
+                } catch (IOException ignored) {
+                    // Nothing was opened.
+                }
+                try {
+                    Thread.sleep(CONNECT_RETRY_MS);
+                } catch (InterruptedException interrupted) {
+                    return false;
+                }
+            }
+        }
+        System.err.println("[stagewright-agent] cannot reach the supervisor at " + config.host() + ":"
+                + config.port() + "; running unsupervised");
+        return false;
+    }
+
+    private Lines heartbeat() {
+        Lines line = Lines.event("heartbeat").number("atMs", System.currentTimeMillis())
+                .text("phase", phase).number("ticks", ticks);
+        try {
+            line.number("classes", ManagementFactory.getClassLoadingMXBean().getLoadedClassCount());
+        } catch (Throwable ignored) {
+            // No java.management in this layer: the heartbeat is still a heartbeat.
+        }
+        return line;
+    }
+
+    /** One line out. A broken connection ends the sending and nothing else: the game carries on. */
+    private synchronized void send(Lines line) {
+        BufferedWriter writer = out;
+        if (writer == null) return;
+        try {
+            writer.write(line.build());
+            writer.write('\n');
+            writer.flush();
+        } catch (IOException e) {
+            out = null;
+        }
+    }
+
+    /**
+     * The grace period is over and the JVM is still here: say what is holding it, then end it. The
+     * results are already complete — that is what {@code done} means — so nothing is lost.
+     */
+    private void endJvm() {
+        send(Lines.event("leaked").number("graceMs", config.graceMillis())
+                .objects("threads", describeLiveThreads()));
+        // halt, not exit: shutdown hooks run on a JVM that did not stop when asked, and a mod's hook
+        // may be the thing that is waiting.
+        Runtime.getRuntime().halt(0);
+    }
+
+    private List<Lines> describeLiveThreads() {
+        Map<Thread, StackTraceElement[]> all = Thread.getAllStackTraces();
+        List<Thread> holders = new ArrayList<>();
+        Set<String> classNames = new HashSet<>();
+        for (Map.Entry<Thread, StackTraceElement[]> entry : all.entrySet()) {
+            Thread thread = entry.getKey();
+            if (thread.isDaemon() || !thread.isAlive() || thread == Thread.currentThread()) continue;
+            // The thread the JVM parks to wait for the others: it is the symptom, not a holder.
+            if (thread.getName().equals("DestroyJavaVM")) continue;
+            holders.add(thread);
+            StackTraceElement[] stack = entry.getValue();
+            for (int i = 0; i < Math.min(stack.length, STACK_FRAMES); i++) classNames.add(stack[i].getClassName());
+        }
+        Map<String, String> jars = locate(classNames);
+        List<Lines> described = new ArrayList<>();
+        for (Thread thread : holders) {
+            StackTraceElement[] stack = all.get(thread);
+            List<String> frames = new ArrayList<>();
+            Set<String> where = new LinkedHashSet<>();
+            for (int i = 0; i < Math.min(stack.length, STACK_FRAMES); i++) {
+                frames.add(stack[i].toString());
+                String location = jars.get(stack[i].getClassName());
+                if (location != null) where.add(location);
+            }
+            described.add(new Lines().text("name", thread.getName()).texts("stack", frames)
+                    .texts("jars", new ArrayList<>(where)));
+        }
+        return described;
+    }
+
+    /** Where each named class was loaded from. The JDK's own classes have no code source and are left out. */
+    private Map<String, String> locate(Set<String> names) {
+        Map<String, String> found = new HashMap<>();
+        if (names.isEmpty()) return found;
+        for (Class<?> type : instrumentation.getAllLoadedClasses()) {
+            if (!names.contains(type.getName())) continue;
+            try {
+                CodeSource source = type.getProtectionDomain().getCodeSource();
+                URL location = source == null ? null : source.getLocation();
+                if (location != null) found.putIfAbsent(type.getName(), location.toString());
+            } catch (SecurityException ignored) {
+                // Leave it unlocated rather than fail the report.
+            }
+        }
+        return found;
+    }
+
+    record Config(String host, int port, String token, long graceMillis) {
+
+        static Config parse(String args) {
+            if (args == null || args.isBlank()) {
+                throw new IllegalArgumentException("expected <host>:<port>:<token>[,grace=<seconds>]");
+            }
+            String[] parts = args.split(",");
+            String[] address = parts[0].split(":", 3);
+            if (address.length != 3 || address[0].isEmpty() || address[2].isEmpty()) {
+                throw new IllegalArgumentException("expected <host>:<port>:<token>, not '" + parts[0] + "'");
+            }
+            int port;
+            try {
+                port = Integer.parseInt(address[1]);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("port is not a number: '" + address[1] + "'");
+            }
+            long grace = 30;
+            for (int i = 1; i < parts.length; i++) {
+                String option = parts[i].trim();
+                if (option.startsWith("grace=")) {
+                    try {
+                        grace = Long.parseLong(option.substring("grace=".length()));
+                    } catch (NumberFormatException e) {
+                        throw new IllegalArgumentException("grace is not a number of seconds: '" + option + "'");
+                    }
+                } else {
+                    throw new IllegalArgumentException("unknown option '" + option + "'");
+                }
+            }
+            return new Config(address[0], port, address[2], grace * 1_000);
+        }
+    }
+}

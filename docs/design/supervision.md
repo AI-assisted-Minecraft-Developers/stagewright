@@ -44,9 +44,9 @@ no footer is still RED; the channel only says when to look.
 
 ## The agent
 
-A separate artifact, `stagewright-agent`, in its own standalone build beside `engine/`, for the
-same reason the engine is standalone: it must never see a Minecraft or a Gradle classpath. It uses
-only the JDK. It does not transform any class, so it cannot conflict with mixins or with another
+A separate artifact, `stagewright-agent` (`agent/`), built by the engine's build so that the engine's
+tests can start a real JVM with it, and for the engine's reason: it must never see a Minecraft or a
+Gradle classpath. It uses only the JDK. It does not transform any class, so it cannot conflict with mixins or with another
 agent.
 
 It is loaded only on the command line (`-javaagent:<jar>`), never by dynamic attach: JDK 21 warns
@@ -85,10 +85,18 @@ policy applies, by system property.
 ## The bridge
 
 The mod and the agent are loaded by different class loaders — the agent by the system loader, the
-mod inside modlauncher's or Knot's — so the mod must not link against an agent class. They meet on
-the platform `MBeanServer`: the agent registers one MBean, and the mod calls it with JDK types
-only. If the MBean is not registered the bridge does nothing, which is the correct behaviour for a
-game started by hand, by `runClient` without the plugin, or for a JUnit attach.
+mod inside modlauncher's or Knot's — so the mod must not link against an agent class. The agent's
+jar is on the system class path, so the mod loads one class from the system loader by name and
+calls its static methods by reflection, with JDK types only (the methods are in
+[the protocol](../reference/supervision-protocol.md)). If that class is not there the bridge does
+nothing, which is the correct behaviour for a game started by hand, by `runClient` without the
+plugin, or for a JUnit attach.
+
+An MBean on the platform `MBeanServer` was the first idea and was dropped: asking for the platform
+server from `premain` initialises `java.util.logging` early, which breaks a pack that sets its own
+`java.util.logging.manager`, and it would make the mod depend on `java.management` being readable
+from its module layer. Reflection on a class the JVM already put on the class path depends on
+neither.
 
 What the bridge sends: harness ready; tick counts from the same counter `StallWatchdog` reads;
 scene started; done. `StallWatchdog` stays where it is and stays the authority on a stall measured
@@ -195,8 +203,8 @@ Reading a file the toolchain generates instead was considered and does not work:
 
 Each of these is believed and not yet measured:
 
-- `java.management` is readable from a mod under NeoForge's module layers and under Fabric's Knot,
-  so the bridge can reach the platform `MBeanServer`.
+- The system class loader can load the agent's `Control` class by name from a mod under NeoForge's
+  module layers and under Fabric's Knot.
 - An agent jar on the system class path is accepted by NeoForge's launcher without being mistaken
   for a mod or tripping its package checks.
 - Attributing a thread to a jar through loaded classes and their `CodeSource` names the mod on the

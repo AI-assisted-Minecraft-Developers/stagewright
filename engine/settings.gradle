@@ -8,3 +8,8 @@
 // Standing alone, it is includeBuild'd by both consumers (the gradle plugin and the root build, whose
 // CLI module uses it) and published to mavenLocal for anyone resolving it as a coordinate.
 rootProject.name = 'stagewright-engine'
+
+// The agent a supervised game is started with. Part of this build so the engine's tests can start a
+// real JVM with it, and so one includeBuild gives every consumer both coordinates.
+include 'stagewright-agent'
+project(':stagewright-agent').projectDir = file('../agent')

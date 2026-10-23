@@ -89,6 +89,7 @@ Group is `net.magicterra` throughout.
 | `mc_stagewright-neoforge` | The same for NeoForge. | plain, `sources`, `dev` | none |
 | `mc_stagewright-junit` | The JUnit 5 attach module, for tests that run outside the game. | plain | gson, the JUnit BOM, `junit-jupiter-api`, `mc_stagewright-attached` |
 | `stagewright-engine` | Verdict, manifest, coverage and run-directory rules, shared by the plugin and the CLI. No Minecraft, no Gradle API, no third-party dependencies. | plain, `sources` | none |
+| `stagewright-agent` | The `-javaagent` a supervised game is started with. JDK only, built by the engine's build. See [the protocol](supervision-protocol.md). | plain, `sources` | none |
 | `stagewright-gradle-plugin` plus its plugin marker | The `net.magicterra.stagewright` plugin. | plain | `stagewright-engine`, declared `api` |
 | `stagewright-cli` | The command-line runner: one executable jar with its dependencies inside it, because its audience downloads one file and runs it. | plain | none |
 

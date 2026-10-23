@@ -34,6 +34,7 @@ built programs rely on, so they are stated as literal names, keys and codes.
 | [Orchestration contract](reference/orchestration-contract.md) | The interface between whatever launches the game and the harness inside it: startup, the results file, exit codes, in-game timing guarantees, scene discovery, manifest reconciliation, coordinate pinning. |
 | [Instrument contract](reference/instrument-contract.md) | The instrumentation surface reachable from outside the game, and the permanent assertions and canaries by which the framework establishes that it is itself sound. |
 | [Attached protocol](reference/attached-protocol.md) | The seven hidden methods by which a scene file running outside the game gets an arena in it and calls into it: the run, the answers, and how values cross. |
+| [Supervision protocol](reference/supervision-protocol.md) | What the agent in a game's JVM sends its supervisor, the conclusions drawn from it, and how the mod talks to the agent. |
 | [Publishing and artifacts](reference/publishing.md) | What is published, which coordinate to depend on for which job, and why the wrong one fails to link rather than failing to resolve. |
 
 ## Design — why it is shaped this way

@@ -1,0 +1,44 @@
+// The agent a supervised game process is started with (-javaagent). See docs/design/supervision.md.
+//
+// JDK ONLY, and no class transformation. It runs in the game's system class loader before any loader
+// has started, so anything it linked against would have to be on the game's class path, and a
+// transformer could collide with mixins or another agent. It speaks to the supervisor in JSON lines
+// written by hand, which is why it carries no JSON library.
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'net.magicterra'
+version = rootProject.stagewrightVersion
+
+apply from: '../gradle/license.gradle'
+apply from: '../gradle/nexus.gradle'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+tasks.named('jar', Jar) {
+    archiveBaseName = 'stagewright-agent'
+    manifest {
+        attributes 'Premain-Class': 'net.magicterra.stagewright.agent.Agent',
+                'Can-Redefine-Classes': 'false',
+                'Can-Retransform-Classes': 'false'
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'stagewright-agent'
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}

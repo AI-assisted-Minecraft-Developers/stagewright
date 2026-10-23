@@ -31,7 +31,7 @@ LICENSE_NAME = 'LGPL-3.0-only'
 LICENSE_URL = 'https://www.gnu.org/licenses/lgpl-3.0.txt'
 
 # Every directory holding a module whose jars are published or handed to a user.
-MODULES = ['api', 'common', 'fabric', 'neoforge', 'attached', 'junit', 'engine', 'cli', 'gradle-plugin']
+MODULES = ['api', 'common', 'fabric', 'neoforge', 'attached', 'junit', 'engine', 'agent', 'cli', 'gradle-plugin']
 
 POMS = [
     'api/build/publications/mavenJava/pom-default.xml',
@@ -41,6 +41,7 @@ POMS = [
     'attached/build/publications/mavenJava/pom-default.xml',
     'junit/build/publications/mavenJava/pom-default.xml',
     'engine/build/publications/mavenJava/pom-default.xml',
+    'agent/build/publications/mavenJava/pom-default.xml',
     'gradle-plugin/build/publications/pluginMaven/pom-default.xml',
     'gradle-plugin/build/publications/mcStageWrightPluginMarkerMaven/pom-default.xml',
 ]

@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--jars', action='store_true')
     args = parser.parse_args()
     errors = []
-    pure_modules = ('attached', 'engine', 'gradle-plugin', 'cli', 'junit')
+    pure_modules = ('attached', 'engine', 'agent', 'gradle-plugin', 'cli', 'junit')
     for module in ('api', *pure_modules, 'common', 'fabric', 'neoforge'):
         source = ROOT / module / 'src/main/java'
         for path in source.rglob('*.java'):

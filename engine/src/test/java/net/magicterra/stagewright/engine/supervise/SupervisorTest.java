@@ -1,0 +1,168 @@
+package net.magicterra.stagewright.engine.supervise;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+
+import net.magicterra.stagewright.engine.supervise.Supervisor.Ended;
+import net.magicterra.stagewright.engine.supervise.Supervisor.Limits;
+import org.junit.jupiter.api.Test;
+
+/**
+ * The supervisor against a real agent in a real JVM, and against hand-written clients for the cases
+ * a real agent will not produce on request: silence, a wrong token, an unknown event.
+ */
+class SupervisorTest {
+
+    private static final Limits FAST = new Limits(Duration.ofSeconds(5), Duration.ofSeconds(5), Duration.ofSeconds(60));
+
+    private static Process start(Supervisor supervisor, int graceSeconds, String mode) throws IOException {
+        List<String> command = new ArrayList<>();
+        command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        command.add(supervisor.agentArgument(Path.of(System.getProperty("stagewright.agentJar")), graceSeconds));
+        command.add("-cp");
+        command.add(System.getProperty("stagewright.testClasses"));
+        command.add(FakeGame.class.getName());
+        command.add(mode);
+        return new ProcessBuilder(command).inheritIO().start();
+    }
+
+    /** A live JVM that never loaded the agent: what a hand-played client needs as the game it is "of". */
+    private static Process bare() throws IOException {
+        return new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                "-cp", System.getProperty("stagewright.testClasses"), FakeGame.class.getName(), "bare")
+                .inheritIO().start();
+    }
+
+    @Test
+    void aGameThatEndsByItselfIsDoneWithNothingLeaked() throws Exception {
+        try (Supervisor supervisor = Supervisor.open()) {
+            Process game = start(supervisor, 20, "clean");
+            try {
+                assertEquals(Ended.DONE, supervisor.await(game.toHandle(), FAST));
+                assertTrue(supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(15)), "the JVM should end itself");
+                assertEquals(0, game.exitValue());
+                assertEquals(List.of(), supervisor.leaks());
+                assertEquals("harness-ready", supervisor.phase());
+                assertEquals(7, supervisor.ticks());
+                assertEquals(game.pid(), supervisor.agentPid());
+            } finally {
+                Supervisor.kill(game.toHandle());
+            }
+        }
+    }
+
+    @Test
+    void aThreadThatHoldsTheJvmUpIsNamedAndTheJvmIsEnded() throws Exception {
+        try (Supervisor supervisor = Supervisor.open()) {
+            Process game = start(supervisor, 1, "leak");
+            try {
+                assertEquals(Ended.DONE, supervisor.await(game.toHandle(), FAST));
+                assertTrue(supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(15)),
+                        "the agent should end a JVM that outlives the grace period");
+                assertEquals(0, game.exitValue());
+                List<Supervisor.Leak> leaks = supervisor.leaks();
+                assertEquals(1, leaks.size(), leaks.toString());
+                Supervisor.Leak leak = leaks.get(0);
+                assertEquals("mod-pool-1", leak.thread());
+                assertTrue(leak.stack().stream().anyMatch(f -> f.contains("FakeGame$Holder")), leak.stack().toString());
+                assertFalse(leak.jars().isEmpty(), "the report should say where the thread's code came from");
+            } finally {
+                Supervisor.kill(game.toHandle());
+            }
+        }
+    }
+
+    @Test
+    void aProcessThatNeverLoadedTheAgentIsNeverConnected() throws Exception {
+        try (Supervisor supervisor = Supervisor.open()) {
+            Process game = bare();
+            try {
+                Limits limits = new Limits(Duration.ofSeconds(1), Duration.ofSeconds(5), Duration.ofSeconds(60));
+                assertEquals(Ended.NEVER_CONNECTED, supervisor.await(game.toHandle(), limits));
+            } finally {
+                Supervisor.kill(game.toHandle());
+            }
+        }
+    }
+
+    @Test
+    void aProcessThatDiesWithoutSayingDoneIsDead() throws Exception {
+        try (Supervisor supervisor = Supervisor.open()) {
+            Process game = start(supervisor, 20, "silent");
+            try {
+                // Wait until it has connected, then take it away.
+                long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+                while (supervisor.agentPid() < 0 && System.nanoTime() < deadline) Thread.sleep(50);
+                assertTrue(supervisor.agentPid() > 0, "the agent should have said hello");
+                game.destroyForcibly();
+                assertEquals(Ended.PROCESS_DIED, supervisor.await(game.toHandle(), FAST));
+            } finally {
+                Supervisor.kill(game.toHandle());
+            }
+        }
+    }
+
+    @Test
+    void aConnectionThatGoesSilentIsAHeartbeatLost() throws Exception {
+        Process game = bare();
+        try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
+            send(client, hello(supervisor.token()));
+            Limits limits = new Limits(Duration.ofSeconds(5), Duration.ofSeconds(1), Duration.ofSeconds(60));
+            assertEquals(Ended.HEARTBEAT_LOST, supervisor.await(game.toHandle(), limits));
+        } finally {
+            Supervisor.kill(game.toHandle());
+        }
+    }
+
+    @Test
+    void aClientWithTheWrongTokenDoesNotCount() throws Exception {
+        Process game = bare();
+        try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
+            send(client, hello("not-the-token"));
+            send(client, "{\"event\":\"done\"}");
+            Limits limits = new Limits(Duration.ofSeconds(1), Duration.ofSeconds(5), Duration.ofSeconds(60));
+            assertEquals(Ended.NEVER_CONNECTED, supervisor.await(game.toHandle(), limits));
+        } finally {
+            Supervisor.kill(game.toHandle());
+        }
+    }
+
+    @Test
+    void anEventThisVersionDoesNotKnowIsIgnored() throws Exception {
+        Process game = bare();
+        try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
+            send(client, hello(supervisor.token()));
+            send(client, "{\"event\":\"from-the-future\",\"x\":1}");
+            send(client, "not json at all");
+            send(client, "{\"event\":\"done\"}");
+            assertEquals(Ended.DONE, supervisor.await(game.toHandle(), FAST));
+        } finally {
+            Supervisor.kill(game.toHandle());
+        }
+    }
+
+    private static Socket connect(Supervisor supervisor) throws IOException {
+        return new Socket(InetAddress.getLoopbackAddress(), supervisor.port());
+    }
+
+    private static String hello(String token) {
+        return "{\"event\":\"hello\",\"token\":\"" + token + "\",\"pid\":1}";
+    }
+
+    private static void send(Socket socket, String line) throws IOException {
+        OutputStream out = socket.getOutputStream();
+        out.write((line + "\n").getBytes(StandardCharsets.UTF_8));
+        out.flush();
+    }
+}
