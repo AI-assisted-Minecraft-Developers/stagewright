@@ -66,6 +66,8 @@ right after sending it: the results file, not the exit code, carries the verdict
 | `PROCESS_DIED` | the process is gone and never said `done`, once its connection has closed so that its last lines are read |
 | `HEARTBEAT_LOST` | connected, and no line for longer than the limit: the whole JVM has stopped |
 | `NEVER_CONNECTED` | alive and silent for longer than the connect limit: it did not reach the agent |
+| `STALLED` | heartbeating, and none of `phase`, `ticks` and `classes` has changed for longer than the stall limit. Loading a pack moves `classes`, running a suite moves `ticks`, so a game that moves neither is stuck |
+| `CRASHED` | the caller's probe said so; the command-line runner asks whether a crash report has appeared |
 | `TIMED_OUT` | alive and talking, and not done within the ceiling |
 
 `DONE` says when to read the results file, and nothing about what is in it.

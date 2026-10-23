@@ -12,6 +12,31 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-23
 
+### A dedicated server is supervised through an agent in its JVM · green in a fake-game end to end, not yet in the self-test suite
+
+The command-line runner used to decide a dedicated server's run was over by reading its results file
+once a second, that it was stuck by whether its log had grown, and that it could not exit by waiting
+out `--timeout`. It now starts the server with a `-javaagent` that talks to it over a local socket,
+and the game tells the agent when it is armed, how many ticks it has delivered, and when its results
+are complete.
+
+What changes for someone running a pack:
+
+- A JVM that outlives a finished suite is ended by its agent after thirty seconds, and the runner
+  prints a warning above the verdict naming each thread that held it and the jars its stack runs
+  through. `--fail-on-leak` makes that RED. The verdict is unchanged without it.
+- "Stalled" no longer means a log that stopped growing: it means a game whose phase, ticks delivered
+  and loaded classes have all stood still for `--stall-timeout`. A quiet but busy game is no longer
+  killed, and a JVM that has stopped altogether is found in a minute, not five.
+- A server that never reaches its agent in two minutes is ENV, and the message says a `--launch`
+  that drops JVM arguments would do it.
+
+A client, a server with a client and an `--attached` run still read files as before, and a game
+started by hand has no agent and behaves as it always did. The protocol is in
+[the supervision protocol](docs/reference/supervision-protocol.md).
+
+---
+
 ### The command-line runner is a module of the root build · compiled
 
 `cli/` used to be a Gradle build of its own, so it could not see the loader jars it bundles or the

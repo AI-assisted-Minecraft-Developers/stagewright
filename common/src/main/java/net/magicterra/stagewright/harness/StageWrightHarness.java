@@ -105,6 +105,7 @@ public final class StageWrightHarness {
                 () -> bodyEntered);
         this.stallWatchdog.start();
         StageWrightCommon.LOG.info("[{}] harness armed: {} scenes", StageWrightCommon.MOD_ID, scenes.size());
+        AgentBridge.system().phase("harness-ready");
     }
 
     /**
@@ -448,6 +449,8 @@ public final class StageWrightHarness {
     /** End the run once its results file is complete: halt the server, and make sure the JVM goes
      *  with it. Shared with the path that records a registry which could not be built. */
     public static void haltAfterResults(MinecraftServer server) {
+        // Before the halt: the agent's grace period for a JVM that will not end starts here.
+        AgentBridge.system().done();
         server.halt(false);
         armExitWatchdog(server);
     }
@@ -481,6 +484,9 @@ public final class StageWrightHarness {
      */
     private static void armExitWatchdog(MinecraftServer server) {
         if (!server.isDedicatedServer()) return;
+        // The agent ends a JVM that outlives its grace period, and says which thread held it, which a
+        // blind halt here would never learn. Only a JVM without one needs this.
+        if (AgentBridge.system().attached()) return;
         Thread watchdog = new Thread(() -> {
             try {
                 Thread.sleep(EXIT_GRACE_MS);

@@ -24,7 +24,12 @@ import org.junit.jupiter.api.Test;
  */
 class SupervisorTest {
 
-    private static final Limits FAST = new Limits(Duration.ofSeconds(5), Duration.ofSeconds(5), Duration.ofSeconds(60));
+    private static final Limits FAST = limits(5, 5, 60, 60);
+
+    private static Limits limits(int connect, int heartbeat, int stall, int total) {
+        return new Limits(Duration.ofSeconds(connect), Duration.ofSeconds(heartbeat), Duration.ofSeconds(stall),
+                Duration.ofSeconds(total));
+    }
 
     private static Process start(Supervisor supervisor, int graceSeconds, String mode) throws IOException {
         List<String> command = new ArrayList<>();
@@ -88,8 +93,7 @@ class SupervisorTest {
         try (Supervisor supervisor = Supervisor.open()) {
             Process game = bare();
             try {
-                Limits limits = new Limits(Duration.ofSeconds(1), Duration.ofSeconds(5), Duration.ofSeconds(60));
-                assertEquals(Ended.NEVER_CONNECTED, supervisor.await(game.toHandle(), limits));
+                assertEquals(Ended.NEVER_CONNECTED, supervisor.await(game.toHandle(), limits(1, 5, 60, 60)));
             } finally {
                 Supervisor.kill(game.toHandle());
             }
@@ -118,8 +122,72 @@ class SupervisorTest {
         Process game = bare();
         try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
             send(client, hello(supervisor.token()));
-            Limits limits = new Limits(Duration.ofSeconds(5), Duration.ofSeconds(1), Duration.ofSeconds(60));
-            assertEquals(Ended.HEARTBEAT_LOST, supervisor.await(game.toHandle(), limits));
+            assertEquals(Ended.HEARTBEAT_LOST, supervisor.await(game.toHandle(), limits(5, 1, 60, 60)));
+        } finally {
+            Supervisor.kill(game.toHandle());
+        }
+    }
+
+    @Test
+    void aGameThatBeatsButMovesNothingIsStalled() throws Exception {
+        Process game = bare();
+        try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
+            send(client, hello(supervisor.token()));
+            Thread beats = new Thread(() -> {
+                try {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        send(client, "{\"event\":\"heartbeat\",\"phase\":\"loading\",\"ticks\":0,\"classes\":9000}");
+                        Thread.sleep(200);
+                    }
+                } catch (IOException | InterruptedException ignored) {
+                    // The test is over.
+                }
+            });
+            beats.setDaemon(true);
+            beats.start();
+            try {
+                assertEquals(Ended.STALLED, supervisor.await(game.toHandle(), limits(5, 5, 1, 60)));
+            } finally {
+                beats.interrupt();
+            }
+        } finally {
+            Supervisor.kill(game.toHandle());
+        }
+    }
+
+    @Test
+    void aGameThatKeepsLoadingClassesIsNotStalled() throws Exception {
+        Process game = bare();
+        try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
+            send(client, hello(supervisor.token()));
+            Thread beats = new Thread(() -> {
+                try {
+                    for (int classes = 9000; !Thread.currentThread().isInterrupted(); classes += 10) {
+                        send(client, "{\"event\":\"heartbeat\",\"phase\":\"loading\",\"ticks\":0,\"classes\":" + classes + "}");
+                        Thread.sleep(200);
+                    }
+                } catch (IOException | InterruptedException ignored) {
+                    // The test is over.
+                }
+            });
+            beats.setDaemon(true);
+            beats.start();
+            try {
+                assertEquals(Ended.TIMED_OUT, supervisor.await(game.toHandle(), limits(5, 5, 1, 3)));
+            } finally {
+                beats.interrupt();
+            }
+        } finally {
+            Supervisor.kill(game.toHandle());
+        }
+    }
+
+    @Test
+    void theCallersProbeEndsTheWait() throws Exception {
+        Process game = bare();
+        try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
+            send(client, hello(supervisor.token()));
+            assertEquals(Ended.CRASHED, supervisor.await(game.toHandle(), FAST, () -> Ended.CRASHED));
         } finally {
             Supervisor.kill(game.toHandle());
         }
@@ -131,8 +199,7 @@ class SupervisorTest {
         try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
             send(client, hello("not-the-token"));
             send(client, "{\"event\":\"done\"}");
-            Limits limits = new Limits(Duration.ofSeconds(1), Duration.ofSeconds(5), Duration.ofSeconds(60));
-            assertEquals(Ended.NEVER_CONNECTED, supervisor.await(game.toHandle(), limits));
+            assertEquals(Ended.NEVER_CONNECTED, supervisor.await(game.toHandle(), limits(1, 5, 60, 60)));
         } finally {
             Supervisor.kill(game.toHandle());
         }

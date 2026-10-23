@@ -93,6 +93,15 @@ is a real completion signal rather than a timeout. Under a hold the harness deli
 not halt: a hold outlives its suite, and halting would take the endpoint down underneath
 whatever attached to it.
 
+When the JVM was started with the supervision agent, the harness tells it three things — that it is
+armed (`harness-ready`), how many ticks have been delivered, and, just before it halts the server
+or the stall watchdog halts the JVM, that the results are complete. The agent then gives the JVM a
+grace period to end by itself and, past it, names the threads that held it up and ends it. A hold
+never says the last, for the reason above. Without an agent the harness behaves as it always did,
+and still forces the JVM down thirty seconds after halting a dedicated server; the agent takes that
+over where it is present, because a blind halt cannot say which mod held the JVM up. See
+[the supervision protocol](supervision-protocol.md).
+
 **The game's exit code is never a verdict.** A dedicated server that halts cleanly exits zero
 whether every scene passed or every scene failed. The results file is the only thing that
 carries an outcome.

@@ -15,6 +15,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import net.magicterra.stagewright.engine.Json;
 
@@ -43,6 +44,14 @@ public final class Supervisor implements AutoCloseable {
         HEARTBEAT_LOST,
         /** The process is alive and never connected: it did not get as far as the agent. */
         NEVER_CONNECTED,
+        /**
+         * Alive and heartbeating, and nothing it reports has changed for longer than the limit: not its
+         * phase, not the server ticks delivered, not the count of classes loaded. Loading a pack moves
+         * the last, running a suite moves the second, so a game that moves none is stuck.
+         */
+        STALLED,
+        /** The caller's probe said so: a crash report appeared, for instance. */
+        CRASHED,
         /** Alive and talking, and not done within the ceiling. */
         TIMED_OUT
     }
@@ -51,7 +60,7 @@ public final class Supervisor implements AutoCloseable {
     public record Leak(String thread, List<String> stack, List<String> jars) {}
 
     /** The waits {@link #await} applies. */
-    public record Limits(Duration connect, Duration heartbeat, Duration total) {}
+    public record Limits(Duration connect, Duration heartbeat, Duration stall, Duration total) {}
 
     private static final long POLL_MS = 250;
     /** After the process is gone, how long to let its last lines be read before concluding it said nothing. */
@@ -68,6 +77,8 @@ public final class Supervisor implements AutoCloseable {
     private long agentPid = -1;
     private long lastBeatNanos;
     private long ticks;
+    private long classes = -1;
+    private long lastProgressNanos;
     private String phase = "";
     private final List<Leak> leaks = new ArrayList<>();
 
@@ -114,12 +125,23 @@ public final class Supervisor implements AutoCloseable {
      * and exits in the same second is done, not dead.
      */
     public Ended await(ProcessHandle game, Limits limits) throws InterruptedException {
+        return await(game, limits, () -> null);
+    }
+
+    /**
+     * As {@link #await(ProcessHandle, Limits)}, asking {@code probe} at every poll for an ending the
+     * supervisor cannot see itself. It is asked after {@code DONE} and before the rest, so a crash
+     * report written while the run was still going outranks a process that has since gone.
+     */
+    public Ended await(ProcessHandle game, Limits limits, Supplier<Ended> probe) throws InterruptedException {
         long start = System.nanoTime();
         game.onExit().thenRun(this::wake);
         long exitSeen = 0;
         synchronized (lock) {
             while (true) {
                 if (done) return Ended.DONE;
+                Ended external = probe.get();
+                if (external != null) return external;
                 long now = System.nanoTime();
                 if (!game.isAlive()) {
                     // Its last lines may still be in flight. Once the connection has closed they have all
@@ -130,6 +152,8 @@ public final class Supervisor implements AutoCloseable {
                     return Ended.NEVER_CONNECTED;
                 } else if (connected && now - lastBeatNanos >= limits.heartbeat().toNanos()) {
                     return Ended.HEARTBEAT_LOST;
+                } else if (connected && now - lastProgressNanos >= limits.stall().toNanos()) {
+                    return Ended.STALLED;
                 }
                 if (now - start >= limits.total().toNanos()) return Ended.TIMED_OUT;
                 lock.wait(POLL_MS);
@@ -280,13 +304,29 @@ public final class Supervisor implements AutoCloseable {
             switch (String.valueOf(event.get("event"))) {
                 case "hello" -> {
                     if (event.get("pid") instanceof Number n) agentPid = n.longValue();
+                    lastProgressNanos = now;
                 }
                 case "heartbeat" -> {
-                    if (event.get("phase") instanceof String s) phase = s;
-                    if (event.get("ticks") instanceof Number n) ticks = n.longValue();
+                    boolean moved = false;
+                    if (event.get("phase") instanceof String s && !s.equals(phase)) {
+                        phase = s;
+                        moved = true;
+                    }
+                    if (event.get("ticks") instanceof Number n && n.longValue() != ticks) {
+                        ticks = n.longValue();
+                        moved = true;
+                    }
+                    if (event.get("classes") instanceof Number n && n.longValue() != classes) {
+                        classes = n.longValue();
+                        moved = true;
+                    }
+                    if (moved) lastProgressNanos = now;
                 }
                 case "phase" -> {
-                    if (event.get("phase") instanceof String s) phase = s;
+                    if (event.get("phase") instanceof String s && !s.equals(phase)) {
+                        phase = s;
+                        lastProgressNanos = now;
+                    }
                 }
                 case "done" -> done = true;
                 case "exiting" -> exiting = true;

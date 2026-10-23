@@ -106,6 +106,7 @@ final class StallWatchdog {
             // Before the verdict, and on every poll including the healthy ones: this is the only
             // record of where the run was that survives a death this thread does not get to observe.
             heartbeat.write(runningScene.get(), ticks, window.delivered(ticks), window.elapsedMs());
+            AgentBridge.system().ticks(ticks);
             String starved = window.starved(ticks);
             if (starved == null) continue;
             if (stopped) return;
@@ -141,6 +142,8 @@ final class StallWatchdog {
             Runtime.getRuntime().halt(2);
         }
 
+        // Before the halt, so a supervisor sees a finished run rather than a process that vanished.
+        AgentBridge.system().done();
         // halt, not exit: shutdown hooks run on a JVM whose main thread is wedged, and a mod hook
         // that waits on the server would hang here too. Zero because the results file carries the
         // verdict — the same contract the exit watchdog follows.

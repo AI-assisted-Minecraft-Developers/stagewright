@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,7 @@ import net.magicterra.stagewright.contract.remote.AttachedBridge;
 import net.magicterra.stagewright.engine.Manifest;
 import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.Verdict;
+import net.magicterra.stagewright.engine.supervise.Supervisor;
 
 /**
  * Run a modpack's scenes and judge them, with no build tool anywhere.
@@ -60,6 +62,12 @@ public final class Main {
      * afterwards, wedged where nothing inside it can act.
      */
     private static final int DRAIN_GRACE_SECONDS = 45;
+    /** How long the agent lets a finished JVM end by itself before it reports what held it up and ends it. */
+    private static final int AGENT_GRACE_SECONDS = 30;
+    /** A launched game that has not reached its agent by now was not started with it. A wrapper script may be slow. */
+    private static final Duration CONNECT_LIMIT = Duration.ofMinutes(2);
+    /** The agent beats every second from a daemon thread; this long without one is a JVM that has stopped. */
+    private static final Duration HEARTBEAT_LIMIT = Duration.ofSeconds(60);
 
     /** The server's console, and a client's, under the run's artifact directory. */
     private static final String RUN_LOG = "stagewright-run.log";
@@ -189,23 +197,31 @@ public final class Main {
         Path runLog = run.artifacts().resolve(RUN_LOG);
         CrashWatch crashes = CrashWatch.on(run.gameDir());
         long started = System.currentTimeMillis();
-        Process game = startServer(run, launch, List.of(), mods, runLog);
-
-        // The results file, not the process, says when the run is over. Those used to be the same
+        Path agent = AgentJar.stage(run.artifacts());
+        // The agent in the game says when the run is over, not the process. Those used to be the same
         // statement — a dedicated server halts itself when the suite drains — and they stop being
         // one on any pack whose mods leave non-daemon threads behind: the suite finishes, the footer
         // lands, the harness halts, and the JVM stays in the process table anyway. Waiting on the
         // process there spends the whole --timeout on a verdict that has been sitting complete on
         // disk since minute three.
-        Waited waited = awaitDoneFooter(run, game, crashes,
-                new Stall(List.of(runLog, run.results(), run.progress()), run.stallMinutes()));
-        if (waited == Waited.DONE) drain(game, runLog);
-        explain(waited, run, "server", game, crashes, runLog, run.gameDir(), started);
-        kill(game);
-        // Deliberately NOT an early return on any of them: a killed or crashed run usually still
-        // wrote records, and the missing done footer is what turns them into a RED that names how
-        // far it got. Judging is strictly more informative than reporting the ending alone.
-        return judge(run, runLog, crashes, waited).code();
+        try (Supervisor supervisor = Supervisor.open()) {
+            Process game = startServer(run, launch,
+                    List.of(supervisor.agentArgument(agent, AGENT_GRACE_SECONDS)), mods, runLog);
+            Waited waited;
+            List<Supervisor.Leak> leaks = List.of();
+            try {
+                waited = awaitEnd(run, supervisor, game, crashes);
+                if (waited == Waited.DONE) leaks = drain(supervisor, game, runLog);
+                explain(waited, run, "server", game, crashes, runLog, run.gameDir(), started);
+                explainSupervision(waited, run, supervisor);
+            } finally {
+                kill(game);
+            }
+            // Deliberately NOT an early return on any of them: a killed or crashed run usually still
+            // wrote records, and the missing done footer is what turns them into a RED that names how
+            // far it got. Judging is strictly more informative than reporting the ending alone.
+            return judge(run, runLog, crashes, waited, leaks).code();
+        }
     }
 
     /**
@@ -503,8 +519,78 @@ public final class Main {
         return start(command, run.gameDir(), runLog);
     }
 
-    /** How a wait for the run's done footer ended. None of them is interchangeable with another. */
-    enum Waited { DONE, CRASHED, NO_WINDOW, PROCESS_DIED, STALLED, TIMED_OUT }
+    /**
+     * How a wait for the end of a run ended. None of them is interchangeable with another.
+     *
+     * <p>The last three are what a supervised run can say that the footer-reading wait could not:
+     * {@code NO_PROGRESS} is a game that heartbeats and moves nothing, {@code JVM_STOPPED} a heartbeat
+     * that went silent (the whole JVM), {@code NO_AGENT} a process that never reached its agent.
+     */
+    enum Waited { DONE, CRASHED, NO_WINDOW, PROCESS_DIED, STALLED, TIMED_OUT, NO_PROGRESS, JVM_STOPPED, NO_AGENT }
+
+    /**
+     * Wait for the agent in the game to say the run is over, or for the game to stop being able to.
+     *
+     * <p>A crash report ends the wait too, asked through the supervisor's probe: a crashed game
+     * frequently does not exit, and a modpack's non-daemon threads (a pool of {@code AwsEventLoop}
+     * threads was enough) keep the JVM that has already written its report in the process table
+     * forever, so a wait on the process spends the whole {@code --timeout} on a game that stopped
+     * being one long before.
+     */
+    private static Waited awaitEnd(Run run, Supervisor supervisor, Process game, CrashWatch crashes)
+            throws InterruptedException {
+        Supervisor.Limits limits = new Supervisor.Limits(CONNECT_LIMIT, HEARTBEAT_LIMIT,
+                Duration.ofMinutes(run.stallMinutes()), Duration.ofMinutes(run.timeoutMinutes()));
+        return switch (supervisor.await(game.toHandle(), limits,
+                () -> crashes.fresh() != null ? Supervisor.Ended.CRASHED : null)) {
+            case DONE -> Waited.DONE;
+            case CRASHED -> Waited.CRASHED;
+            case PROCESS_DIED -> Waited.PROCESS_DIED;
+            case HEARTBEAT_LOST -> Waited.JVM_STOPPED;
+            case NEVER_CONNECTED -> Waited.NO_AGENT;
+            case STALLED -> Waited.NO_PROGRESS;
+            case TIMED_OUT -> Waited.TIMED_OUT;
+        };
+    }
+
+    /**
+     * Give a finished game its chance to end, which its agent will have done by now, then say what held
+     * it up and end it if it is somehow still there.
+     *
+     * <p>Only ever called once the agent has said the results file is complete, which is what makes
+     * killing safe: the verdict is already on disk and the process holds nothing else this run wants.
+     */
+    private static List<Supervisor.Leak> drain(Supervisor supervisor, Process game, Path log)
+            throws InterruptedException {
+        if (!supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(DRAIN_GRACE_SECONDS))) {
+            System.err.println("[stagewright] the suite finished and its results are complete, but the"
+                    + " game JVM was still up " + DRAIN_GRACE_SECONDS + "s later, past its agent's"
+                    + " own " + AGENT_GRACE_SECONDS + "s — the JVM is wedged. Killing it; the verdict below"
+                    + " is read from the finished file. See " + log);
+        }
+        return supervisor.leaks();
+    }
+
+    /** What only a supervised run can tell: why it stopped answering, or never started to. */
+    private static void explainSupervision(Waited waited, Run run, Supervisor supervisor) {
+        switch (waited) {
+            case NO_AGENT -> System.err.println("[stagewright] ENV — the game was running but never reached the"
+                    + " supervision agent in " + CONNECT_LIMIT.toSeconds() + "s. The agent is the first thing a"
+                    + " JVM runs, so this one was not started with -javaagent: a --launch command that drops"
+                    + " JVM arguments would do it.");
+            case JVM_STOPPED -> System.err.println("[stagewright] the whole game JVM stopped: no heartbeat from its"
+                    + " agent for " + HEARTBEAT_LIMIT.toSeconds() + "s, last in phase '" + supervisor.phase()
+                    + "' at " + supervisor.ticks() + " ticks. A JVM that stops its own daemon threads is"
+                    + " wedged in native code or at a safepoint that never ends. Killed.");
+            case NO_PROGRESS -> System.err.println("[stagewright] the game is alive and its agent heartbeats, but"
+                    + " nothing it reports moved for " + run.stallMinutes()
+                    + (run.stallMinutes() == 1 ? " minute" : " minutes") + ": phase '" + supervisor.phase()
+                    + "', " + supervisor.ticks() + " ticks, no new classes loaded. Killed.");
+            default -> {
+                // Said by explain(): these endings need nothing the supervisor knows.
+            }
+        }
+    }
 
     /**
      * Wait for the suite to write its done footer, or for the game to stop being able to.
@@ -1009,12 +1095,25 @@ public final class Main {
 
     private static Verdict.Result judge(Run run, Path log, CrashWatch crashes, Waited waited)
             throws IOException {
+        return judge(run, log, crashes, waited, List.of());
+    }
+
+    /**
+     * @param leaks the threads that held a finished JVM up. Printed above the verdict as a warning, and
+     *              a RED of their own with {@code --fail-on-leak}: a pack author usually cannot change
+     *              the mod that leaked, so by default it must not fail their every run.
+     */
+    private static Verdict.Result judge(Run run, Path log, CrashWatch crashes, Waited waited,
+                                        List<Supervisor.Leak> leaks) throws IOException {
+        // First, with or without results: what held the JVM up is a fact about the game, not the file.
+        leakLines(leaks).forEach(line -> System.out.println("[stagewright] " + line));
         if (!Files.isRegularFile(run.results())) {
             System.err.println("stagewright: ENV — the run wrote no results");
             System.err.println("  expected: " + run.results());
             // A stall has already been explained, with the state the process was in. The guesses
             // below would follow it with "it never loaded" about a game that loaded and then waited.
-            if (waited == Waited.STALLED || waited == Waited.NO_WINDOW) {
+            if (waited == Waited.STALLED || waited == Waited.NO_WINDOW || waited == Waited.NO_PROGRESS
+                    || waited == Waited.JVM_STOPPED) {
                 return new Verdict.Result(3, List.of("the run wrote no results"));
             }
             boolean injected = !run.opts().containsKey("no-install");
@@ -1030,9 +1129,40 @@ public final class Main {
 
         Verdict.Result verdict = verdictOf(records, run.opts());
         verdict.report().forEach(line -> System.out.println("[stagewright] " + line));
+        if (!leaks.isEmpty() && run.opts().containsKey("fail-on-leak") && verdict.code() == 0) {
+            verdict = new Verdict.Result(1, verdict.report(), verdict.filtered());
+            System.out.println("[stagewright] RED: --fail-on-leak, and the game left threads running");
+        }
         System.out.println("[stagewright] VERDICT: " + verdict.label());
         if (verdict.code() != 0) System.out.println("[stagewright] log: " + log);
         return verdict;
+    }
+
+    /**
+     * The first frame that is not the JDK's: a held thread is always parked in {@code Thread.sleep} or
+     * a lock, and that says nothing about whose it is. Falls back to the top frame.
+     */
+    private static String ownFrame(List<String> stack) {
+        for (String frame : stack) {
+            String method = frame.contains("/") ? frame.substring(frame.indexOf('/') + 1) : frame;
+            if (!method.startsWith("java.") && !method.startsWith("jdk.") && !method.startsWith("sun.")) {
+                return frame;
+            }
+        }
+        return stack.isEmpty() ? "no stack" : stack.get(0);
+    }
+
+    /** One line per thread that held the JVM up, naming the jars its stack runs through. */
+    static List<String> leakLines(List<Supervisor.Leak> leaks) {
+        List<String> lines = new ArrayList<>();
+        if (leaks.isEmpty()) return lines;
+        lines.add("WARNING: the suite finished but the game's JVM did not end; its agent ended it."
+                + " Non-daemon threads still running:");
+        for (Supervisor.Leak leak : leaks) {
+            lines.add("  " + leak.thread() + " at " + ownFrame(leak.stack())
+                    + (leak.jars().isEmpty() ? "" : "  [" + String.join(", ", leak.jars()) + "]"));
+        }
+        return lines;
     }
 
     /** The verdict over a run's records, ENV first when they show {@code --scenes} went unread. */
@@ -1225,7 +1355,11 @@ public final class Main {
                                       (default 5, at least 1), and say which screen a client sits on
                                       if it never reached its title screen, or else whether the game
                                       was spinning or asleep. ENV if it wrote no results; else judged
-                                      on them, so RED with no done footer
+                                      on them, so RED with no done footer. A dedicated server is
+                                      watched by its agent instead: stalled when its phase, its ticks
+                                      and its loaded classes all stand still for this long
+                  --fail-on-leak      a dedicated server whose JVM outlives a finished suite is a
+                                      warning naming the threads that held it; with this it is RED
                   --world reset|keep  what to do with a dedicated server's existing world. Required
                                       when one exists: reset deletes it, keep runs in it as it is
                   --mod <jar>         also load this mod (repeatable — e.g. the driver whose verbs your

@@ -5,6 +5,18 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
+## Only a plain dedicated server is supervised through the agent
+
+The client, server-with-client and `--attached` topologies of the command-line runner, and the Gradle
+plugin's run task, still read files from outside. The client ones need the agent's early-start stack
+classification and crash-report watching to replace `Stall` and `NoWindow`; `--attached` runs under a
+hold, which never says the run is over, so it needs a "results complete" event that does not end the
+JVM. Design: `docs/design/supervision.md`.
+
+## The harness still forces a JVM down when no agent is attached
+
+`armExitWatchdog` stays for a game started without the agent, and goes when every launcher attaches one.
+
 ## An attached scene cannot read a field of a held object
 
 A script that writes `pos.x` on an object the game handed back gets a function, because the runner

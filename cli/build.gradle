@@ -28,7 +28,12 @@ repositories {
 // matching Minecraft version is the step that fails, and it fails looking exactly like the mod not
 // working. Publishing the mods and rebuilding this are one release, not two, which
 // gradle/version.gradle holds to one version.
-configurations { bundledMods { transitive = false } }
+configurations {
+    bundledMods { transitive = false }
+    // The supervision agent, carried as a resource and not merged into the classes: a game loads it
+    // from a file, with -javaagent.
+    bundledAgent { transitive = false }
+}
 dependencies {
     // Built from engine/ through the includeBuild in settings.gradle, so this jar always carries
     // the engine in the tree.
@@ -39,6 +44,7 @@ dependencies {
     // exist.
     bundledMods project(path: ':stagewright-neoforge', configuration: 'runtimeElements')
     bundledMods project(path: ':stagewright-fabric', configuration: 'runtimeElements')
+    bundledAgent "net.magicterra:stagewright-agent:${stagewrightVersion}"
 
     // Out-of-process scenes. The SAME module the bundled mod jars shadow — which is the whole
     // guarantee that one `.js` file behaves identically in both homes. A skew between this and the
@@ -75,10 +81,18 @@ def stageBundledMods = tasks.register('stageBundledMods', Copy) {
 }
 tasks.named('processResources') { into('mods') { from stageBundledMods } }
 
+// Staged as /agent/stagewright-agent.jar, version stripped for the reason the mods' is.
+def stageBundledAgent = tasks.register('stageBundledAgent', Copy) {
+    from configurations.bundledAgent
+    into layout.buildDirectory.dir('bundled-agent')
+    rename(/^stagewright-agent-.*\.jar$/, 'stagewright-agent.jar')
+}
+tasks.named('processResources') { into('agent') { from stageBundledAgent } }
+
 // What this jar was built from, printed by `--version` and at the start of every run.
 def buildInfo = tasks.register('buildInfo') {
     def out = layout.buildDirectory.file('generated/build-info/stagewright-cli-build.properties')
-    def parts = configurations.runtimeClasspath.incoming.files + configurations.bundledMods
+    def parts = configurations.runtimeClasspath.incoming.files + configurations.bundledMods + configurations.bundledAgent
     // No build time here: CI publishes the jar it tested because each later Gradle run in the job
     // finds this file up to date. A part's time is its file's, which the job writes only once.
     def version = stagewrightVersion

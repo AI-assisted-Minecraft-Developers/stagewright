@@ -40,6 +40,8 @@ final class Args {
                 opts.put("no-install", "true");
             } else if ("--parity".equals(a)) {
                 opts.put("parity", "true");
+            } else if ("--fail-on-leak".equals(a)) {
+                opts.put("fail-on-leak", "true");
             } else if ("--mod".equals(a)) {
                 if (i + 1 >= args.length) throw new IllegalArgumentException(a + " needs a value");
                 extraMods.add(Path.of(args[++i]).toAbsolutePath().normalize());
