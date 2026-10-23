@@ -1,8 +1,11 @@
 package net.magicterra.stagewright.client;
 
+import java.util.Locale;
+
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.driver.endpoint.DriverEndpoint;
 import net.magicterra.stagewright.driver.client.ClientProbes;
+import net.magicterra.stagewright.harness.AgentBridge;
 import net.magicterra.stagewright.harness.EndpointDescriptor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
@@ -86,6 +89,9 @@ public final class ClientDirector {
     private static String waitingOn;
     private static int driveTicks;
     private static int exitCountdown = -1;
+    /** Client ticks seen, which the supervision agent reads as this JVM's progress. */
+    private static long clientTicks;
+    private static final int AGENT_TICK_INTERVAL = 20;
     /** Set once the loading window has closed, so the log says so exactly once. */
     private static boolean loadReported;
     /** Which loader this client is, for the probe results header. There is no server here to
@@ -122,6 +128,9 @@ public final class ClientDirector {
     /** One client tick. Safe to call before the client has a screen or a level. */
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
+        // Before anything can return: a client that is stuck loading still ticks, and one that has
+        // stopped ticking is what the supervisor needs to see. Once a second is plenty for that.
+        if (joinsServer() && ++clientTicks % AGENT_TICK_INTERVAL == 0) AgentBridge.system().ticks(clientTicks);
         // Nothing before the game has finished loading itself — not driving, not counting, not even
         // reporting. See stillLoading: these ticks arrive from inside the loading window and are
         // about a game that does not exist yet.
@@ -157,7 +166,7 @@ public final class ClientDirector {
                     return;
                 }
                 if (mc.screen instanceof TitleScreen && ++settleTicks >= TITLE_SETTLE_TICKS) {
-                    phase = Phase.DRIVING;
+                    enter(Phase.DRIVING);
                     drive(mc);
                 }
             }
@@ -165,7 +174,7 @@ public final class ClientDirector {
                 if (mc.level != null) {
                     StageWrightCommon.LOG.info("[{}] client is in world after {} ticks",
                             StageWrightCommon.MOD_ID, driveTicks);
-                    phase = Phase.IN_WORLD;
+                    enter(Phase.IN_WORLD);
                     // Only where a scene cannot reach: joined to a dedicated server, the suite runs
                     // in the other JVM. In world mode the equivalent scene runs in THIS one.
                     String connect = System.getProperty(P_CONNECT);
@@ -213,8 +222,28 @@ public final class ClientDirector {
     }
 
     private static void finish() {
-        phase = Phase.FINISHING;
+        enter(Phase.FINISHING);
         exitCountdown = EXIT_DELAY_TICKS;
+        // The client is about to stop itself; if a mod's thread keeps the JVM up after that, the agent
+        // names the thread and ends the JVM instead of leaving the build to wait out its timeout.
+        if (joinsServer() && exitWhenDone()) AgentBridge.system().done();
+    }
+
+    private static void enter(Phase next) {
+        phase = next;
+        if (joinsServer()) AgentBridge.system().phase("client-" + next.name().toLowerCase(Locale.ROOT).replace('_', '-'));
+    }
+
+    /**
+     * Whether this client is only a player on someone else's server.
+     *
+     * <p>Only then does it report to the supervision agent: a client that opens a world runs the suite
+     * in this JVM, where the harness already reports the server's ticks and the end of the run, and a
+     * second voice would overwrite it.
+     */
+    private static boolean joinsServer() {
+        String connect = System.getProperty(P_CONNECT);
+        return connect != null && !connect.isBlank();
     }
 
     /**

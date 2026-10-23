@@ -116,6 +116,15 @@ final class CompanionLaunch {
         return new CompanionLaunch(spec, toolchains);
     }
 
+    /**
+     * Attach the supervision agent to this launch only, not to the run task it was taken from: that
+     * task also serves a developer's own {@code runClient}, which has no supervisor to report to.
+     */
+    CompanionLaunch supervisedBy(SupervisionArgument supervision) {
+        jvmArgumentProviders.add(supervision);
+        return this;
+    }
+
     /** The directory a run executes in: its loader's, else the task's own. */
     static File runDirectory(JavaExec spec) {
         for (Toolchain toolchain : Toolchain.of(spec)) {

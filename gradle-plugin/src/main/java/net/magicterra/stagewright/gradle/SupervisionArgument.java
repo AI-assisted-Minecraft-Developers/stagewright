@@ -19,15 +19,18 @@ final class SupervisionArgument implements CommandLineArgumentProvider {
     private final Provider<StageWrightSupervisionService> service;
     private final String key;
     private final String topology;
+    private final String half;
     private final File artifacts;
     private final int stallMinutes;
     private transient List<String> answer;
 
+    /** @param half what the JVM is called in the lines this prints: {@code game} or {@code client} */
     SupervisionArgument(Provider<StageWrightSupervisionService> service, String key, String topology,
-                        File artifacts, int stallMinutes) {
+                        String half, File artifacts, int stallMinutes) {
         this.service = service;
         this.key = key;
         this.topology = topology;
+        this.half = half;
         this.artifacts = artifacts;
         this.stallMinutes = stallMinutes;
     }
@@ -35,7 +38,7 @@ final class SupervisionArgument implements CommandLineArgumentProvider {
     @Override
     public synchronized Iterable<String> asArguments() {
         if (answer == null) {
-            answer = List.of(service.get().begin(key, topology, artifacts.toPath(),
+            answer = List.of(service.get().begin(key, topology, half, artifacts.toPath(),
                     Duration.ofMinutes(stallMinutes)));
         }
         return answer;

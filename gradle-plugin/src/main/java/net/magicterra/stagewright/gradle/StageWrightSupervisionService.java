@@ -56,10 +56,11 @@ public abstract class StageWrightSupervisionService
      *
      * @param key       the run, as {@link #leaks} will be asked for it
      * @param label     the topology, for the lines this prints
+     * @param half      what the JVM is called in them: {@code game}, or {@code client} for a companion
      * @param artifacts where the agent jar is written
      * @param stall     how long nothing the game reports may move; zero turns the check off
      */
-    synchronized String begin(String key, String label, Path artifacts, Duration stall) {
+    synchronized String begin(String key, String label, String half, Path artifacts, Duration stall) {
         end(key);
         Path agent = AgentJar.stage(StageWrightSupervisionService.class, artifacts);
         Supervisor supervisor;
@@ -68,7 +69,7 @@ public abstract class StageWrightSupervisionService
         } catch (IOException e) {
             throw new UncheckedIOException("cannot listen for the supervision agent", e);
         }
-        Thread monitor = new Thread(() -> watch(supervisor, key, label, stall), "stagewright-watch-" + label);
+        Thread monitor = new Thread(() -> watch(supervisor, key, label, half, stall), "stagewright-watch-" + label);
         monitor.setDaemon(true);
         monitor.start();
         watches.put(key, new Watch(supervisor, monitor));
@@ -82,7 +83,7 @@ public abstract class StageWrightSupervisionService
         return watch == null ? leaks.getOrDefault(key, List.of()) : watch.supervisor().leaks();
     }
 
-    private void watch(Supervisor supervisor, String key, String label, Duration stall) {
+    private void watch(Supervisor supervisor, String key, String label, String half, Duration stall) {
         String tag = "[stagewright:" + label + "] ";
         try {
             ProcessHandle game = awaitGame(supervisor);
@@ -90,8 +91,8 @@ public abstract class StageWrightSupervisionService
                 if (supervisor.agentPid() < 0 && !Thread.currentThread().isInterrupted()) {
                     // Not a kill: the argument passed through a run task this plugin does not own, and
                     // a launcher that drops it leaves the game well, only unsupervised.
-                    LOGGER.warn(tag + "the game never reached its supervision agent in "
-                            + CONNECT_LIMIT.toSeconds() + "s, so this run is not supervised: a launch that"
+                    LOGGER.warn(tag + "the " + half + " never reached its supervision agent in "
+                            + CONNECT_LIMIT.toSeconds() + "s, so it is not supervised: a launch that"
                             + " drops JVM arguments would do it. The task's own timeout still applies.");
                 }
                 return;
@@ -102,14 +103,14 @@ public abstract class StageWrightSupervisionService
             switch (ended) {
                 case DONE -> {
                     if (!supervisor.awaitExit(game, DRAIN)) {
-                        LOGGER.error(tag + "the suite finished and the agent could not end the JVM within "
+                        LOGGER.error(tag + "the " + half + " finished and its agent could not end the JVM within "
                                 + DRAIN.toSeconds() + "s. Killed.");
                         Supervisor.kill(game);
                     }
                 }
                 case HEARTBEAT_LOST -> kill(supervisor, game, tag,
-                        Narration.jvmStopped("game", HEARTBEAT_LIMIT, supervisor.phase(), supervisor.ticks()));
-                case STALLED -> kill(supervisor, game, tag, Narration.noProgress("game", (int) stall.toMinutes(),
+                        Narration.jvmStopped(half, HEARTBEAT_LIMIT, supervisor.phase(), supervisor.ticks()));
+                case STALLED -> kill(supervisor, game, tag, Narration.noProgress(half, (int) stall.toMinutes(),
                         supervisor.phase(), supervisor.ticks(), null, null));
                 default -> {
                     // PROCESS_DIED: the task sees it. TIMED_OUT and NEVER_CONNECTED cannot be reached with these limits.

@@ -5,12 +5,6 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
-## The Gradle plugin's companion client is not supervised through the agent
-
-Only a gate's own game gets the agent. The companion client's JVM is started from values the
-plugin took from its run task, and nothing yet adds the agent argument to them or listens for it.
-The Gradle plugin's `Hold` task is left unsupervised on purpose. Design: `docs/design/supervision.md`.
-
 ## A stuck start is reported with stacks but not classified
 
 `NoWindow` still matches the failed-window lines in the client's log, and a stalled game's CPU state

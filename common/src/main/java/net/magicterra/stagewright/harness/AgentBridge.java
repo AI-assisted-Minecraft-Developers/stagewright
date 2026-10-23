@@ -66,13 +66,13 @@ public final class AgentBridge {
         call(phase, name);
     }
 
-    /** Server ticks delivered so far. */
-    void ticks(long delivered) {
+    /** Ticks delivered so far: the server's, or the client's where the JVM is one. */
+    public void ticks(long delivered) {
         call(ticks, delivered);
     }
 
     /** The results file is complete and this JVM is about to be stopped. */
-    void done() {
+    public void done() {
         call(done);
     }
 

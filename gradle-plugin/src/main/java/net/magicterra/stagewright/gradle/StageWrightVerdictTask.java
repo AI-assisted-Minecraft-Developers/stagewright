@@ -86,11 +86,17 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
         String topology = getTopologyName().getOrElse("stagewright");
 
         // First, with or without results: what held the JVM up is a fact about the game, not the file.
-        List<Supervisor.Leak> leaks = getSupervision().isPresent() && getSupervisedRun().isPresent()
-                ? getSupervision().get().leaks(getSupervisedRun().get())
-                : List.of();
+        boolean supervised = getSupervision().isPresent() && getSupervisedRun().isPresent();
+        List<Supervisor.Leak> leaks = supervised ? getSupervision().get().leaks(getSupervisedRun().get()) : List.of();
         Narration.leaks(leaks)
                 .forEach(line -> getLogger().warn("[stagewright:{}] {}", topology, line));
+        // The companion client is a second JVM with its own agent, and the same fact about it.
+        List<Supervisor.Leak> clientLeaks = supervised
+                ? getSupervision().get().leaks(getSupervisedRun().get() + StageWrightPlugin.COMPANION_KEY_SUFFIX)
+                : List.of();
+        Narration.leaks(clientLeaks)
+                .forEach(line -> getLogger().warn("[stagewright:{}-client] {}", topology, line));
+        leaks = java.util.stream.Stream.concat(leaks.stream(), clientLeaks.stream()).toList();
 
         if (!results.isFile()) {
             throw new GradleException("stagewright " + topology + ": ENV — the run wrote no results"

@@ -10,6 +10,21 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-24
+
+### The Gradle plugin's companion client has an agent of its own · green in a fake-game end to end, not yet in the self-test suite
+
+A server-with-client gate started its client with no agent, so a client that stopped moving or
+outlived its suite cost the build until the task's timeout, and nothing named what held it. The
+companion now gets the same `-javaagent` as the game being judged, from its own supervisor, and a
+client that joins a server tells the agent its tick count, which phase it is in, and when it has
+finished. A client that holds the JVM up after that is ended after thirty seconds, and the verdict
+task prints the threads under `[stagewright:<topology>-client]` beside the game's; `failOnLeak`
+counts both. A hold's companion is still unsupervised, and a client that opens its own world still
+leaves reporting to the harness in that JVM.
+
+---
+
 ## 2026-10-23
 
 ### A game is supervised through an agent in its JVM · green in a fake-game end to end, not yet in the self-test suite

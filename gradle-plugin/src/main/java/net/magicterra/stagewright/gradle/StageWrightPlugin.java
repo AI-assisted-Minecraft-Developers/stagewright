@@ -174,7 +174,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                 applySceneFilter(project, run);
                 applyBuildId(project, topology, run);
                 applySupervision(project, topology, run, supervision);
-                attachSideProcesses(project, topology, run, sideProcesses);
+                attachSideProcesses(project, topology, run, sideProcesses, supervision);
                 return run;
             }));
 
@@ -260,7 +260,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                         RunDirectory.ENDPOINT_FILE);
                 exec.systemProperty(ENDPOINT_PROPERTY, endpoint.getAbsolutePath());
                 holdCompanion(project, topology, run);
-                attachSideProcesses(project, topology, run, sideProcesses);
+                attachSideProcesses(project, topology, run, sideProcesses, null);
                 RunSideProcesses.of(run).banner("[stagewright] holding '" + topology.getName()
                         + "' — attach with TESTKIT_ENDPOINT=" + endpoint.getAbsolutePath() + "\n"
                         + "[stagewright] the descriptor appears once the game is in a world; Ctrl-C ends the hold");
@@ -369,6 +369,9 @@ public class StageWrightPlugin implements Plugin<Project> {
         return project.getPath() + "#" + topology.getName();
     }
 
+    /** Appended to {@link #supervisionKey} for the topology's companion client, which has its own agent. */
+    static final String COMPANION_KEY_SUFFIX = "#companion";
+
     /**
      * Attach the supervision agent to a gate's game, so the run ends when its agent says the suite is
      * over or the game has stopped, instead of when the task's timeout does.
@@ -388,7 +391,7 @@ public class StageWrightPlugin implements Plugin<Project> {
             File artifacts = project.getLayout().getBuildDirectory()
                     .dir("stagewright/" + topology.getName()).get().getAsFile();
             exec.getJvmArgumentProviders().add(new SupervisionArgument(supervision,
-                    supervisionKey(project, topology), topology.getName(), artifacts,
+                    supervisionKey(project, topology), topology.getName(), "game", artifacts,
                     topology.getStallMinutes().getOrElse(DEFAULT_STALL_MINUTES)));
             exec.usesService(supervision);
         }
@@ -445,8 +448,13 @@ public class StageWrightPlugin implements Plugin<Project> {
                 + endpoint.getAbsolutePath());
     }
 
+    /**
+     * @param supervision the service that listens to the companion's agent, or null for a hold, which
+     *                    outlasts the build and is not supervised
+     */
     private void attachSideProcesses(Project project, StageWrightTopology topology, Task run,
-                                     org.gradle.api.provider.Provider<StageWrightSideProcessService> sideProcesses) {
+                                     org.gradle.api.provider.Provider<StageWrightSideProcessService> sideProcesses,
+                                     Provider<StageWrightSupervisionService> supervision) {
         String companionName = topology.getCompanionRunTask().getOrNull();
         if (companionName != null) {
             Task resolved = resolveRunTask(project, companionName);
@@ -460,7 +468,15 @@ public class StageWrightPlugin implements Plugin<Project> {
             }
             File companionLog = new File(topology.getGameDirectory().get().getAsFile(),
                     "companion-" + companionName.replace(':', '-') + ".log");
-            if (RunSideProcesses.of(run).startCompanion(companion, companionLog, sideProcesses)) {
+            // Its own directory: the primary game stages the same jar for itself, and a jar replaced
+            // under a JVM that has it open is a launch that fails on the platforms that lock files.
+            SupervisionArgument companionAgent = supervision == null ? null : new SupervisionArgument(
+                    supervision, supervisionKey(project, topology) + COMPANION_KEY_SUFFIX,
+                    topology.getName() + "-client", "client",
+                    project.getLayout().getBuildDirectory()
+                            .dir("stagewright/" + topology.getName() + "/client").get().getAsFile(),
+                    topology.getStallMinutes().getOrElse(DEFAULT_STALL_MINUTES));
+            if (RunSideProcesses.of(run).startCompanion(companion, companionLog, sideProcesses, companionAgent)) {
                 dependOnCompanion(run, companion);
             }
         }

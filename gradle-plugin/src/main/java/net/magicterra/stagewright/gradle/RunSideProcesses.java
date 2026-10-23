@@ -63,10 +63,17 @@ final class RunSideProcesses implements Action<Task> {
         clientTopologies.add(topology);
     }
 
-    /** Start {@code spec} beside the run; false if it was already registered. */
-    boolean startCompanion(JavaExec spec, File log, Provider<StageWrightSideProcessService> service) {
+    /**
+     * Start {@code spec} beside the run; false if it was already registered.
+     *
+     * @param supervision attaches the agent to the companion, or null for a companion nobody supervises
+     */
+    boolean startCompanion(JavaExec spec, File log, Provider<StageWrightSideProcessService> service,
+                           SupervisionArgument supervision) {
         if (companions.containsKey(spec.getPath())) return false;
-        companions.put(spec.getPath(), new Companion(CompanionLaunch.of(spec), log, service));
+        CompanionLaunch launch = CompanionLaunch.of(spec);
+        if (supervision != null) launch.supervisedBy(supervision);
+        companions.put(spec.getPath(), new Companion(launch, log, service));
         return true;
     }
 
