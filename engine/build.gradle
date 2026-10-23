@@ -57,6 +57,8 @@ tasks.named('test', Test) {
     // The supervision tests start a real JVM with the real agent.
     def agentJar = project(':stagewright-agent').tasks.named('jar', Jar)
     dependsOn agentJar
+    // An input, not only a path in a property: otherwise a changed agent leaves these tests up to date.
+    inputs.file(agentJar.flatMap { it.archiveFile })
     systemProperty 'stagewright.agentJar', agentJar.get().archiveFile.get().asFile.absolutePath
     systemProperty 'stagewright.testClasses', sourceSets.test.output.classesDirs.asPath
 }
