@@ -25,6 +25,7 @@ class WaitTest {
         Path log = Path.of("/c/stagewright/client.log");
         assertNotNull(Main.companionHint(Main.Waited.STALLED, log));
         assertNotNull(Main.companionHint(Main.Waited.TIMED_OUT, log));
+        assertNotNull(Main.companionHint(Main.Waited.NO_PROGRESS, log));
         assertNull(Main.companionHint(Main.Waited.DONE, log));
     }
 }

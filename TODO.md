@@ -5,13 +5,18 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
-## Only a plain dedicated server is supervised through the agent
+## `--attached` and the Gradle plugin are not supervised through the agent
 
-The client, server-with-client and `--attached` topologies of the command-line runner, and the Gradle
-plugin's run task, still read files from outside. The client ones need the agent's early-start stack
-classification and crash-report watching to replace `Stall` and `NoWindow`; `--attached` runs under a
-hold, which never says the run is over, so it needs a "results complete" event that does not end the
-JVM. Design: `docs/design/supervision.md`.
+`--attached` of the command-line runner and the Gradle plugin's run task still read files from
+outside. `--attached` runs under a hold, which never says the run is over, so it needs a "results
+complete" event that does not end the JVM. Design: `docs/design/supervision.md`.
+
+## A stuck start is reported with stacks but not classified
+
+`NoWindow` still matches the failed-window lines in the client's log, and a stalled game's CPU state
+still comes from `/proc`. Measure the glfw spin and the AWT dialog on a display, put their stack
+signatures in the agent, and delete both. Crash reports are still found by `CrashWatch` in the runner,
+not by the agent.
 
 ## The harness still forces a JVM down when no agent is attached
 

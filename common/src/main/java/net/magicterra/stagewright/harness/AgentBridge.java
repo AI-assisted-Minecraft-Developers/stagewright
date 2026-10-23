@@ -12,7 +12,7 @@ import java.lang.reflect.Method;
  * once, every call does nothing, and the harness behaves as it always did. See
  * {@code docs/reference/supervision-protocol.md}.
  */
-final class AgentBridge {
+public final class AgentBridge {
 
     private static final String CONTROL = "net.magicterra.stagewright.agent.Control";
 
@@ -29,7 +29,7 @@ final class AgentBridge {
     }
 
     /** The bridge to this JVM's agent, or an inert one when there is none. */
-    static AgentBridge system() {
+    public static AgentBridge system() {
         return SYSTEM;
     }
 
@@ -50,7 +50,7 @@ final class AgentBridge {
     }
 
     /** Where the game says it is, such as {@code harness-ready}. */
-    void phase(String name) {
+    public void phase(String name) {
         call(phase, name);
     }
 

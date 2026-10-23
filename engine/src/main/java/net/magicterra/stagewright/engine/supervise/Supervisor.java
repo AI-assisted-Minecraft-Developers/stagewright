@@ -59,6 +59,9 @@ public final class Supervisor implements AutoCloseable {
     /** A thread that kept the JVM up after the run was over, and the jars its stack runs through. */
     public record Leak(String thread, List<String> stack, List<String> jars) {}
 
+    /** Where a thread was when the game stopped moving. */
+    public record ThreadStack(String thread, List<String> frames) {}
+
     /** The waits {@link #await} applies. */
     public record Limits(Duration connect, Duration heartbeat, Duration stall, Duration total) {}
 
@@ -79,6 +82,9 @@ public final class Supervisor implements AutoCloseable {
     private long ticks;
     private long classes = -1;
     private long lastProgressNanos;
+    private long exitSeenNanos;
+    private final long openedNanos = System.nanoTime();
+    private List<ThreadStack> stacks = List.of();
     private String phase = "";
     private final List<Leak> leaks = new ArrayList<>();
 
@@ -118,6 +124,11 @@ public final class Supervisor implements AutoCloseable {
                 + ":" + port() + ":" + token + ",grace=" + graceSeconds;
     }
 
+    /** As above, and the agent starts attaching thread stacks to its heartbeats after {@code idleSeconds} without movement. */
+    public String agentArgument(Path agentJar, int graceSeconds, int idleSeconds) {
+        return agentArgument(agentJar, graceSeconds) + ",idle=" + idleSeconds;
+    }
+
     /**
      * Wait until the run is over, or cannot become over.
      *
@@ -134,31 +145,47 @@ public final class Supervisor implements AutoCloseable {
      * report written while the run was still going outranks a process that has since gone.
      */
     public Ended await(ProcessHandle game, Limits limits, Supplier<Ended> probe) throws InterruptedException {
-        long start = System.nanoTime();
         game.onExit().thenRun(this::wake);
-        long exitSeen = 0;
         synchronized (lock) {
             while (true) {
                 if (done) return Ended.DONE;
                 Ended external = probe.get();
                 if (external != null) return external;
-                long now = System.nanoTime();
-                if (!game.isAlive()) {
-                    // Its last lines may still be in flight. Once the connection has closed they have all
-                    // been read; a game that never connected has none to wait for.
-                    if (exitSeen == 0) exitSeen = now;
-                    if (!connected || connectionClosed || now - exitSeen >= DRAIN_NANOS) return Ended.PROCESS_DIED;
-                } else if (!connected && now - start >= limits.connect().toNanos()) {
-                    return Ended.NEVER_CONNECTED;
-                } else if (connected && now - lastBeatNanos >= limits.heartbeat().toNanos()) {
-                    return Ended.HEARTBEAT_LOST;
-                } else if (connected && now - lastProgressNanos >= limits.stall().toNanos()) {
-                    return Ended.STALLED;
-                }
-                if (now - start >= limits.total().toNanos()) return Ended.TIMED_OUT;
+                Ended ended = evaluate(game, limits);
+                if (ended != null) return ended;
                 lock.wait(POLL_MS);
             }
         }
+    }
+
+    /**
+     * What {@link #await} would answer right now, or null when the run is still going. For a caller
+     * watching more than one game from one loop, such as a server and the client joined to it.
+     * Measured from when this supervisor was opened, which is when the game was started.
+     */
+    public Ended peek(ProcessHandle game, Limits limits) {
+        synchronized (lock) {
+            return evaluate(game, limits);
+        }
+    }
+
+    /** The endings the supervisor can see for itself. The lock is held. */
+    private Ended evaluate(ProcessHandle game, Limits limits) {
+        if (done) return Ended.DONE;
+        long now = System.nanoTime();
+        if (!game.isAlive()) {
+            // Its last lines may still be in flight. Once the connection has closed they have all been
+            // read; a game that never connected has none to wait for.
+            if (exitSeenNanos == 0) exitSeenNanos = now;
+            if (!connected || connectionClosed || now - exitSeenNanos >= DRAIN_NANOS) return Ended.PROCESS_DIED;
+        } else if (!connected && now - openedNanos >= limits.connect().toNanos()) {
+            return Ended.NEVER_CONNECTED;
+        } else if (connected && now - lastBeatNanos >= limits.heartbeat().toNanos()) {
+            return Ended.HEARTBEAT_LOST;
+        } else if (connected && now - lastProgressNanos >= limits.stall().toNanos()) {
+            return Ended.STALLED;
+        }
+        return now - openedNanos >= limits.total().toNanos() ? Ended.TIMED_OUT : null;
     }
 
     /**
@@ -180,6 +207,16 @@ public final class Supervisor implements AutoCloseable {
     public List<Leak> leaks() {
         synchronized (lock) {
             return List.copyOf(leaks);
+        }
+    }
+
+    /**
+     * Where the game's own threads were at the latest heartbeat, which the agent only attaches once
+     * nothing has moved for a while. Empty while the game is moving.
+     */
+    public List<ThreadStack> stacks() {
+        synchronized (lock) {
+            return stacks;
         }
     }
 
@@ -321,6 +358,17 @@ public final class Supervisor implements AutoCloseable {
                         moved = true;
                     }
                     if (moved) lastProgressNanos = now;
+                    if (event.get("stacks") instanceof List<?> sampled) {
+                        List<ThreadStack> latest = new ArrayList<>();
+                        for (Object one : sampled) {
+                            if (one instanceof Map<?, ?> t) {
+                                latest.add(new ThreadStack(String.valueOf(t.get("name")), strings(t.get("stack"))));
+                            }
+                        }
+                        stacks = latest;
+                    } else {
+                        stacks = List.of();
+                    }
                 }
                 case "phase" -> {
                     if (event.get("phase") instanceof String s && !s.equals(phase)) {

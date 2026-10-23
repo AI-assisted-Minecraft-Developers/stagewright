@@ -18,6 +18,7 @@ so the JVM reads it rather than the launcher:
 | `host`, `port` | where the supervisor listens: the loopback interface, on a port it chose before starting the game |
 | `token` | a one-time value the supervisor generated; the agent repeats it in its first line |
 | `grace` | seconds the agent lets the JVM end by itself after `done`, default 30 |
+| `idle` | seconds without any change in `phase`, `ticks` or `classes` after which heartbeats carry `stacks`, default 20 |
 
 An argument the agent cannot parse is reported on standard error and leaves the JVM as it would
 have been without the agent. The agent never stops a game from starting.
@@ -40,7 +41,7 @@ Every line has `event`. The agent's events:
 | `event` | Fields | Sent |
 |---|---|---|
 | `hello` | `token`, `pid`, `agent` (the agent's protocol version), `java` | first, once |
-| `heartbeat` | `atMs`, `phase`, `ticks`, `classes` when the JVM can say | every second |
+| `heartbeat` | `atMs`, `phase`, `ticks`, `classes` when the JVM can say, and `stacks` once `idle` seconds have passed with none of the three changing | every second |
 | `phase` | `phase` | when the game reports a phase different from the last |
 | `done` | none | when the game reports the run over |
 | `leaked` | `graceMs`, `threads` | once, when the JVM is still up `grace` seconds after `done` |
@@ -53,6 +54,13 @@ Any event counts as a sign of life. A thread in `leaked.threads` has:
 | `name` | the thread's name |
 | `stack` | its top twelve frames, as `StackTraceElement.toString` gives them |
 | `jars` | where the classes on that stack were loaded from, in stack order, without the JDK's own |
+
+An element of `stacks` has `name` and `stack` (the top eight frames), for the threads called `main`,
+`Render thread` and `Server thread`.
+
+The phases the game reports are `armed` (the mod is loaded and the world is up), `waiting-for-player`
+(a dedicated server holding the suite until a client joins, which is why a client that never arrives
+shows as a server that stopped moving) and `harness-ready` (the suite is armed and running).
 
 `leaked` lists the non-daemon threads still alive, `DestroyJavaVM` excluded, and may be empty when
 the JVM is held up by something that is not a thread. The agent ends the JVM with `Runtime.halt(0)`

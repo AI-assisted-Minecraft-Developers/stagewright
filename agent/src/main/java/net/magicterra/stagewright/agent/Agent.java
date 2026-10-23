@@ -35,6 +35,7 @@ public final class Agent {
     private static final int CONNECT_ATTEMPTS = 40;
     private static final long CONNECT_RETRY_MS = 250;
     private static final int STACK_FRAMES = 12;
+    private static final int IDLE_FRAMES = 8;
 
     private static volatile Agent running;
 
@@ -47,6 +48,9 @@ public final class Agent {
     private volatile String phase = "starting";
     private volatile long ticks;
     private volatile long doneAtNanos;
+    // Only the agent's own thread touches these.
+    private String lastSignature = "";
+    private long lastChangeNanos = System.nanoTime();
 
     private Agent(Config config, Instrumentation instrumentation) {
         this.config = config;
@@ -146,14 +150,41 @@ public final class Agent {
     }
 
     private Lines heartbeat() {
-        Lines line = Lines.event("heartbeat").number("atMs", System.currentTimeMillis())
-                .text("phase", phase).number("ticks", ticks);
+        long classes = -1;
         try {
-            line.number("classes", ManagementFactory.getClassLoadingMXBean().getLoadedClassCount());
+            classes = ManagementFactory.getClassLoadingMXBean().getLoadedClassCount();
         } catch (Throwable ignored) {
             // No java.management in this layer: the heartbeat is still a heartbeat.
         }
+        Lines line = Lines.event("heartbeat").number("atMs", System.currentTimeMillis())
+                .text("phase", phase).number("ticks", ticks);
+        if (classes >= 0) line.number("classes", classes);
+
+        // Where the threads that matter are, once nothing the supervisor can see has moved for a while:
+        // the evidence it needs to say what a stuck game is stuck on, which it cannot read from outside.
+        long now = System.nanoTime();
+        String signature = phase + "|" + ticks + "|" + classes;
+        if (!signature.equals(lastSignature)) {
+            lastSignature = signature;
+            lastChangeNanos = now;
+        } else if (now - lastChangeNanos >= config.idleMillis() * 1_000_000L) {
+            line.objects("stacks", sampleStacks());
+        }
         return line;
+    }
+
+    /** The game's own threads by name; the JDK's and the libraries' helpers would only bury them. */
+    private List<Lines> sampleStacks() {
+        List<Lines> sampled = new ArrayList<>();
+        for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
+            String name = entry.getKey().getName();
+            if (!name.equals("main") && !name.equals("Render thread") && !name.equals("Server thread")) continue;
+            List<String> frames = new ArrayList<>();
+            StackTraceElement[] stack = entry.getValue();
+            for (int i = 0; i < Math.min(stack.length, IDLE_FRAMES); i++) frames.add(stack[i].toString());
+            sampled.add(new Lines().text("name", name).texts("stack", frames));
+        }
+        return sampled;
     }
 
     /** One line out. A broken connection ends the sending and nothing else: the game carries on. */
@@ -228,11 +259,11 @@ public final class Agent {
         return found;
     }
 
-    record Config(String host, int port, String token, long graceMillis) {
+    record Config(String host, int port, String token, long graceMillis, long idleMillis) {
 
         static Config parse(String args) {
             if (args == null || args.isBlank()) {
-                throw new IllegalArgumentException("expected <host>:<port>:<token>[,grace=<seconds>]");
+                throw new IllegalArgumentException("expected <host>:<port>:<token>[,grace=<s>][,idle=<s>]");
             }
             String[] parts = args.split(",");
             String[] address = parts[0].split(":", 3);
@@ -246,19 +277,27 @@ public final class Agent {
                 throw new IllegalArgumentException("port is not a number: '" + address[1] + "'");
             }
             long grace = 30;
+            long idle = 20;
             for (int i = 1; i < parts.length; i++) {
                 String option = parts[i].trim();
                 if (option.startsWith("grace=")) {
-                    try {
-                        grace = Long.parseLong(option.substring("grace=".length()));
-                    } catch (NumberFormatException e) {
-                        throw new IllegalArgumentException("grace is not a number of seconds: '" + option + "'");
-                    }
+                    grace = seconds(option, "grace=");
+                } else if (option.startsWith("idle=")) {
+                    idle = seconds(option, "idle=");
                 } else {
                     throw new IllegalArgumentException("unknown option '" + option + "'");
                 }
             }
-            return new Config(address[0], port, address[2], grace * 1_000);
+            return new Config(address[0], port, address[2], grace * 1_000, idle * 1_000);
+        }
+
+        private static long seconds(String option, String prefix) {
+            try {
+                return Long.parseLong(option.substring(prefix.length()));
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(prefix.substring(0, prefix.length() - 1)
+                        + " is not a number of seconds: '" + option + "'");
+            }
         }
     }
 }

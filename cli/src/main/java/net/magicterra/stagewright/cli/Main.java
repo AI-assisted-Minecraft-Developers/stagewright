@@ -64,6 +64,8 @@ public final class Main {
     private static final int DRAIN_GRACE_SECONDS = 45;
     /** How long the agent lets a finished JVM end by itself before it reports what held it up and ends it. */
     private static final int AGENT_GRACE_SECONDS = 30;
+    /** After this long without movement the agent starts attaching thread stacks to its heartbeats. */
+    private static final int AGENT_IDLE_SECONDS = 20;
     /** A launched game that has not reached its agent by now was not started with it. A wrapper script may be slow. */
     private static final Duration CONNECT_LIMIT = Duration.ofMinutes(2);
     /** The agent beats every second from a daemon thread; this long without one is a JVM that has stopped. */
@@ -206,14 +208,16 @@ public final class Main {
         // disk since minute three.
         try (Supervisor supervisor = Supervisor.open()) {
             Process game = startServer(run, launch,
-                    List.of(supervisor.agentArgument(agent, AGENT_GRACE_SECONDS)), mods, runLog);
+                    List.of(supervisor.agentArgument(agent, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS)), mods, runLog);
             Waited waited;
             List<Supervisor.Leak> leaks = List.of();
             try {
-                waited = awaitEnd(run, supervisor, game, crashes);
+                Watched watched = new Watched("server", supervisor, game, limits(run, run.stallMinutes()));
+                Ending ending = awaitEnding(watched, List.of(), crashes, NoWindow.NEVER);
+                waited = ending.waited();
                 if (waited == Waited.DONE) leaks = drain(supervisor, game, runLog);
                 explain(waited, run, "server", game, crashes, runLog, run.gameDir(), started);
-                explainSupervision(waited, run, supervisor);
+                explainSupervision(waited, run, ending.half(), NoWindow.NEVER);
             } finally {
                 kill(game);
             }
@@ -250,31 +254,39 @@ public final class Main {
         RunDirectory.provision(run.gameDir(), List.of(run.results()), false, false, run.log());
         ModInjection.Arguments mods = inject(run, run.gameDir(), loader);
         String world = Worlds.newClientWorld();
-        List<String> props = new ArrayList<>(run.systemProps());
-        props.add("-Dstagewright.autorun=true");
-        props.add("-Dstagewright.client.world=" + world);
-        props.addAll(runProps(run));
-        props.addAll(mods.jvm());
-        List<String> command = ClientLaunch.command(installDir, run.gameDir(), versionId, javaBinary,
-                props, mods.game(), username(run.opts()));
-
+        Path agent = AgentJar.stage(run.artifacts());
         Path launchLog = run.artifacts().resolve(CLIENT_LOG);
         CrashWatch crashes = CrashWatch.on(run.gameDir());
         long started = System.currentTimeMillis();
-        run.log().accept("launching " + versionId + " from " + installDir + " in " + run.gameDir()
-                + ", world " + world);
-        Process game = start(command, run.gameDir(), launchLog);
-
-        NoWindow noWindow = new NoWindow(launchLog);
-        Waited waited = awaitDoneFooter(run, game, crashes, new Stall(List.of(launchLog,
-                run.gameDir().resolve("logs/latest.log"), run.results(), run.progress()),
-                run.stallMinutes()), noWindow);
-        // Drained like a server: the director closes the client once the suite is over, and the
-        // world has to be saved and closed before it can be removed.
-        if (waited == Waited.DONE) drain(game, launchLog);
-        explain(waited, run, "client", game, crashes, noWindow, launchLog, run.gameDir(), started);
-        kill(game);
-        Verdict.Result verdict = judge(run, launchLog, crashes, waited);
+        Waited waited;
+        List<Supervisor.Leak> leaks = List.of();
+        try (Supervisor supervisor = Supervisor.open()) {
+            List<String> props = new ArrayList<>(run.systemProps());
+            props.add(supervisor.agentArgument(agent, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS));
+            props.add("-Dstagewright.autorun=true");
+            props.add("-Dstagewright.client.world=" + world);
+            props.addAll(runProps(run));
+            props.addAll(mods.jvm());
+            List<String> command = ClientLaunch.command(installDir, run.gameDir(), versionId, javaBinary,
+                    props, mods.game(), username(run.opts()));
+            run.log().accept("launching " + versionId + " from " + installDir + " in " + run.gameDir()
+                    + ", world " + world);
+            Process game = start(command, run.gameDir(), launchLog);
+            try {
+                NoWindow noWindow = new NoWindow(launchLog);
+                Watched watched = new Watched("client", supervisor, game, limits(run, run.stallMinutes()));
+                Ending ending = awaitEnding(watched, List.of(), crashes, noWindow);
+                waited = ending.waited();
+                // Drained like a server: the director closes the client once the suite is over, and the
+                // world has to be saved and closed before it can be removed.
+                if (waited == Waited.DONE) leaks = drain(supervisor, game, launchLog);
+                explain(waited, run, "client", game, crashes, noWindow, launchLog, run.gameDir(), started);
+                explainSupervision(waited, run, ending.half(), noWindow);
+            } finally {
+                kill(game);
+            }
+        }
+        Verdict.Result verdict = judge(run, launchLog, crashes, waited, leaks);
         Worlds.finishClient(run.gameDir(), world, verdict.code() == 0, run.log());
         return verdict.code();
     }
@@ -339,37 +351,49 @@ public final class Main {
         ModInjection.Arguments clientMods = inject(run, clientDir, loader);
 
         String address = "127.0.0.1:" + serverPort(run.gameDir());
-        List<String> clientProps = companionProps(run.systemProps(), address, clientMods.jvm());
-        List<String> clientCommand = ClientLaunch.command(installDir, clientDir, versionId, javaBinary,
-                clientProps, clientMods.game(), username(run.opts()));
-
         Path runLog = run.artifacts().resolve(RUN_LOG);
         Path clientLog = clientDir.resolve(RunDirectory.ARTIFACT_DIR).resolve(CLIENT_LOG);
         CrashWatch crashes = CrashWatch.on(run.gameDir());
         long started = System.currentTimeMillis();
-        Process server = startServer(run, launch, List.of("-Dstagewright.awaitPlayer=true"), serverMods,
-                runLog);
-        Process clientProcess = null;
-        Waited waited = null;
-        try {
-            run.log().accept("client half joining " + address);
-            clientProcess = start(clientCommand, clientDir, clientLog);
-            // The server half is the one that writes the results, so its footer ends the wait here
-            // exactly as it does in the plain topology — and for the same reason: a pack that cannot
-            // close its own JVM must not cost the whole --timeout after it has finished.
-            NoWindow noWindow = new NoWindow(clientLog);
-            waited = awaitDoneFooter(run, server, crashes, new Stall(List.of(runLog,
-                    clientLog, run.results(), run.progress()), run.stallMinutes()), noWindow);
-            if (waited == Waited.DONE) drain(server, runLog);
-            explain(waited, run, "server", server, crashes, noWindow, runLog, run.gameDir(), started);
-            String hint = companionHint(waited, clientLog);
-            if (hint != null) System.err.println(hint);
-        } finally {
-            if (clientProcess != null) kill(clientProcess);
-            kill(server);
+        Path agent = AgentJar.stage(run.artifacts());
+        Waited waited;
+        List<Supervisor.Leak> leaks = List.of();
+        try (Supervisor serverSide = Supervisor.open(); Supervisor clientSide = Supervisor.open()) {
+            List<String> clientProps = companionProps(run.systemProps(), address, clientMods.jvm());
+            clientProps.add(clientSide.agentArgument(agent, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS));
+            List<String> clientCommand = ClientLaunch.command(installDir, clientDir, versionId, javaBinary,
+                    clientProps, clientMods.game(), username(run.opts()));
+            Process server = startServer(run, launch, List.of("-Dstagewright.awaitPlayer=true",
+                    serverSide.agentArgument(agent, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS)), serverMods, runLog);
+            Process clientProcess = null;
+            try {
+                run.log().accept("client half joining " + address);
+                clientProcess = start(clientCommand, clientDir, clientLog);
+                // The server half is the one that writes the results, so its agent ends the wait here
+                // exactly as in the plain topology — and for the same reason: a pack that cannot close
+                // its own JVM must not cost the whole --timeout after it has finished. The client is
+                // watched beside it, but only for being gone or silent: it reports no ticks, so a long
+                // scene looks to it like standing still and the server's own progress is what counts.
+                NoWindow noWindow = new NoWindow(clientLog);
+                Watched serverHalf = new Watched("server", serverSide, server, limits(run, run.stallMinutes()));
+                Watched clientHalf = new Watched("client", clientSide, clientProcess, limits(run, 0));
+                Ending ending = awaitEnding(serverHalf, List.of(clientHalf), crashes, noWindow);
+                waited = ending.waited();
+                if (waited == Waited.DONE) leaks = drain(serverSide, server, runLog);
+                Watched ended = ending.half();
+                Path endedLog = ended == clientHalf ? clientLog : runLog;
+                Path endedDir = ended == clientHalf ? clientDir : run.gameDir();
+                explain(waited, run, ended.name(), ended.process(), crashes, noWindow, endedLog, endedDir, started);
+                explainSupervision(waited, run, ending.half(), noWindow);
+                String hint = companionHint(waited, clientLog);
+                if (hint != null) System.err.println(hint);
+            } finally {
+                if (clientProcess != null) kill(clientProcess);
+                kill(server);
+            }
         }
 
-        return judgeWithClient(judge(run, runLog, crashes, waited), clientDir, System.out::println);
+        return judgeWithClient(judge(run, runLog, crashes, waited, leaks), clientDir, System.out::println);
     }
 
     /**
@@ -377,7 +401,7 @@ public final class Main {
      * its player writes nothing, so a client that never arrives is usually ended by the stall watchdog.
      */
     static String companionHint(Waited waited, Path clientLog) {
-        if (waited != Waited.TIMED_OUT && waited != Waited.STALLED) return null;
+        if (waited != Waited.TIMED_OUT && waited != Waited.STALLED && waited != Waited.NO_PROGRESS) return null;
         return "[stagewright] the client half's log is " + clientLog + ". A server that logged"
                 + " 'deferring the suite until a player joins' and nothing after it never got its player.";
     }
@@ -537,12 +561,37 @@ public final class Main {
      * forever, so a wait on the process spends the whole {@code --timeout} on a game that stopped
      * being one long before.
      */
-    private static Waited awaitEnd(Run run, Supervisor supervisor, Process game, CrashWatch crashes)
-            throws InterruptedException {
-        Supervisor.Limits limits = new Supervisor.Limits(CONNECT_LIMIT, HEARTBEAT_LIMIT,
-                Duration.ofMinutes(run.stallMinutes()), Duration.ofMinutes(run.timeoutMinutes()));
-        return switch (supervisor.await(game.toHandle(), limits,
-                () -> crashes.fresh() != null ? Supervisor.Ended.CRASHED : null)) {
+    private static Ending awaitEnding(Watched main, List<Watched> companions, CrashWatch crashes,
+                                      NoWindow noWindow) throws InterruptedException {
+        // The half a window belongs to: the client, whether it is the whole run or a companion.
+        Watched windowed = companions.isEmpty() ? main : companions.get(0);
+        java.util.concurrent.atomic.AtomicReference<Ending> early = new java.util.concurrent.atomic.AtomicReference<>();
+        Supervisor.Ended ended = main.supervisor().await(main.process().toHandle(), main.limits(), () -> {
+            if (crashes.fresh() != null) {
+                early.set(new Ending(Waited.CRASHED, main));
+                return Supervisor.Ended.CRASHED;
+            }
+            if (noWindow.said() != null) {
+                early.set(new Ending(Waited.NO_WINDOW, windowed));
+                return Supervisor.Ended.CRASHED;
+            }
+            // A companion that is gone or has stopped answering ends the run; one that is merely
+            // finished does not, since only the main half says when the run is over.
+            for (Watched companion : companions) {
+                Supervisor.Ended seen = companion.supervisor().peek(companion.process().toHandle(),
+                        companion.limits());
+                if (seen != null && seen != Supervisor.Ended.DONE) {
+                    early.set(new Ending(waitedOf(seen), companion));
+                    return Supervisor.Ended.CRASHED;
+                }
+            }
+            return null;
+        });
+        return early.get() != null ? early.get() : new Ending(waitedOf(ended), main);
+    }
+
+    private static Waited waitedOf(Supervisor.Ended ended) {
+        return switch (ended) {
             case DONE -> Waited.DONE;
             case CRASHED -> Waited.CRASHED;
             case PROCESS_DIED -> Waited.PROCESS_DIED;
@@ -551,6 +600,22 @@ public final class Main {
             case STALLED -> Waited.NO_PROGRESS;
             case TIMED_OUT -> Waited.TIMED_OUT;
         };
+    }
+
+    /** One half of a run being watched: a game, the supervisor listening to its agent, and its limits. */
+    private record Watched(String name, Supervisor supervisor, Process process, Supervisor.Limits limits) {}
+
+    /** How the wait ended, and which half it ended on. */
+    private record Ending(Waited waited, Watched half) {}
+
+    /**
+     * The limits for one half. A {@code stallMinutes} of 0 turns the stall check off for a half that
+     * reports no progress of its own, such as a client that only joined a server.
+     */
+    private static Supervisor.Limits limits(Run run, int stallMinutes) {
+        Duration total = Duration.ofMinutes(run.timeoutMinutes());
+        return new Supervisor.Limits(CONNECT_LIMIT, HEARTBEAT_LIMIT,
+                stallMinutes == 0 ? total : Duration.ofMinutes(stallMinutes), total);
     }
 
     /**
@@ -572,20 +637,33 @@ public final class Main {
     }
 
     /** What only a supervised run can tell: why it stopped answering, or never started to. */
-    private static void explainSupervision(Waited waited, Run run, Supervisor supervisor) {
+    private static void explainSupervision(Waited waited, Run run, Watched half, NoWindow noWindow) {
+        Supervisor supervisor = half.supervisor();
         switch (waited) {
-            case NO_AGENT -> System.err.println("[stagewright] ENV — the game was running but never reached the"
-                    + " supervision agent in " + CONNECT_LIMIT.toSeconds() + "s. The agent is the first thing a"
-                    + " JVM runs, so this one was not started with -javaagent: a --launch command that drops"
-                    + " JVM arguments would do it.");
-            case JVM_STOPPED -> System.err.println("[stagewright] the whole game JVM stopped: no heartbeat from its"
-                    + " agent for " + HEARTBEAT_LIMIT.toSeconds() + "s, last in phase '" + supervisor.phase()
-                    + "' at " + supervisor.ticks() + " ticks. A JVM that stops its own daemon threads is"
-                    + " wedged in native code or at a safepoint that never ends. Killed.");
-            case NO_PROGRESS -> System.err.println("[stagewright] the game is alive and its agent heartbeats, but"
-                    + " nothing it reports moved for " + run.stallMinutes()
-                    + (run.stallMinutes() == 1 ? " minute" : " minutes") + ": phase '" + supervisor.phase()
-                    + "', " + supervisor.ticks() + " ticks, no new classes loaded. Killed.");
+            case NO_AGENT -> System.err.println("[stagewright] ENV — the " + half.name() + " was running but never"
+                    + " reached the supervision agent in " + CONNECT_LIMIT.toSeconds() + "s. The agent is the"
+                    + " first thing a JVM runs, so this one was not started with -javaagent: a --launch command"
+                    + " that drops JVM arguments would do it.");
+            case JVM_STOPPED -> System.err.println("[stagewright] the whole " + half.name() + " JVM stopped: no"
+                    + " heartbeat from its agent for " + HEARTBEAT_LIMIT.toSeconds() + "s, last in phase '"
+                    + supervisor.phase() + "' at " + supervisor.ticks() + " ticks. A JVM that stops its own"
+                    + " daemon threads is wedged in native code or at a safepoint that never ends. Killed.");
+            case NO_PROGRESS -> {
+                // The client's screen, when its log names one: a client that never got past the title
+                // screen is sitting on a screen nobody is going to click past.
+                String screen = noWindow.log() == null || half.name().equals("server") ? null
+                        : Stall.screen(noWindow.log());
+                System.err.println("[stagewright] the " + half.name() + " is alive and its agent heartbeats, but"
+                        + " nothing it reports moved for " + run.stallMinutes()
+                        + (run.stallMinutes() == 1 ? " minute" : " minutes") + ": phase '" + supervisor.phase()
+                        + "', " + supervisor.ticks() + " ticks, no new classes loaded"
+                        + (screen == null ? "" : ", and it is sitting on " + screen + ", a screen nobody is going"
+                                + " to click past")
+                        + ". " + Stall.describe(half.process().toHandle()) + ". Killed.");
+                for (Supervisor.ThreadStack stack : supervisor.stacks()) {
+                    System.err.println("  " + stack.thread() + ": " + String.join("\n      at ", stack.frames()));
+                }
+            }
             default -> {
                 // Said by explain(): these endings need nothing the supervisor knows.
             }
@@ -593,7 +671,9 @@ public final class Main {
     }
 
     /**
-     * Wait for the suite to write its done footer, or for the game to stop being able to.
+     * Wait for the suite to write its done footer, or for the game to stop being able to. What an
+     * {@code --attached} run still uses: it holds the server, which never says the run is over, so
+     * there is no agent event to wait for (see TODO.md).
      *
      * <p>Polled rather than watched: the file is appended to by another process on another
      * filesystem path, and a second of latency on a run measured in minutes buys nothing worth the
@@ -613,11 +693,6 @@ public final class Main {
      */
     private static Waited awaitDoneFooter(Run run, Process game, CrashWatch crashes, Stall stall)
             throws IOException, InterruptedException {
-        return awaitDoneFooter(run, game, crashes, stall, NoWindow.NEVER);
-    }
-
-    private static Waited awaitDoneFooter(Run run, Process game, CrashWatch crashes, Stall stall,
-                                          NoWindow noWindow) throws IOException, InterruptedException {
         long start = System.nanoTime();
         long limit = TimeUnit.MINUTES.toNanos(run.timeoutMinutes());
         while (!expired(start, limit, System.nanoTime())) {
@@ -629,7 +704,6 @@ public final class Main {
             // All checked AFTER the file, not before: a run that writes its footer and dies in the
             // same second would otherwise be reported as having died with nothing to show.
             if (crashes.fresh() != null) return Waited.CRASHED;
-            if (noWindow.said() != null) return Waited.NO_WINDOW;
             if (!game.isAlive()) return Waited.PROCESS_DIED;
             if (stall.stalled()) return Waited.STALLED;
             Thread.sleep(1000);
@@ -662,39 +736,13 @@ public final class Main {
             case CRASHED, PROCESS_DIED -> System.err.println("[stagewright] the " + half
                     + " stopped before the suite finished. This is not a slow run: " + crashes.describe()
                     + ", then " + log + ".");
-            case STALLED -> {
-                String silence = " made no progress for " + run.stallMinutes()
-                        + (run.stallMinutes() == 1 ? " minute" : " minutes");
-                // The client's output, in both topologies that have one.
-                String screen = noWindow.log() == null ? null : Stall.screen(noWindow.log());
-                System.err.println(screen != null
-                        ? "[stagewright] the client" + silence + " and was killed: it never reached"
-                                + " the title screen and is sitting on " + screen + ", a screen nobody is"
-                                + " going to click past (" + noWindow.log() + ")."
-                        : "[stagewright] the " + half + silence + " (" + log + " stopped growing)"
-                                + " and was killed: " + Stall.describe(game.toHandle()) + ".");
-            }
+            case STALLED -> System.err.println("[stagewright] the " + half + " made no progress for "
+                    + run.stallMinutes() + (run.stallMinutes() == 1 ? " minute" : " minutes") + " (" + log
+                    + " stopped growing) and was killed: " + Stall.describe(game.toHandle()) + ".");
             case TIMED_OUT -> System.err.println("[stagewright] the run exceeded " + run.timeoutMinutes()
                     + " minutes and was killed — see " + log);
         }
         FirstCause.find(gameDir, started).forEach(System.err::println);
-    }
-
-    /**
-     * Give a finished game its chance to close itself, then say why it is being killed.
-     *
-     * <p>Only ever called once the results file carries its done footer, which is what makes killing
-     * safe: the verdict is already complete on disk and the process holds nothing else this run
-     * wants. Without it a suite that has finished still costs the whole {@code --timeout}, because
-     * the JVM the harness could not halt is indistinguishable from a suite still running.
-     */
-    private static void drain(Process game, Path log) throws InterruptedException {
-        if (!game.isAlive()) return;
-        if (game.waitFor(DRAIN_GRACE_SECONDS, TimeUnit.SECONDS)) return;
-        System.err.println("[stagewright] the suite finished and its results are complete, but the"
-                + " game JVM was still up " + DRAIN_GRACE_SECONDS + "s later — a mod is holding"
-                + " non-daemon threads and the harness's own halt could not bring the VM down."
-                + " Killing it; the verdict below is read from the finished file. See " + log);
     }
 
     /**

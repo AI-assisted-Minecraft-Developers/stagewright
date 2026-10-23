@@ -12,13 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-23
 
-### A dedicated server is supervised through an agent in its JVM · green in a fake-game end to end, not yet in the self-test suite
+### A game is supervised through an agent in its JVM · green in a fake-game end to end, not yet in the self-test suite
 
-The command-line runner used to decide a dedicated server's run was over by reading its results file
-once a second, that it was stuck by whether its log had grown, and that it could not exit by waiting
-out `--timeout`. It now starts the server with a `-javaagent` that talks to it over a local socket,
-and the game tells the agent when it is armed, how many ticks it has delivered, and when its results
-are complete.
+The command-line runner used to decide a run was over by reading its results file once a second,
+that the game was stuck by whether its log had grown, and that it could not exit by waiting out
+`--timeout`. It now starts the dedicated server, the client, and both halves of a server with a
+client, with a `-javaagent` that talks to it over a local socket, and the game tells the agent when
+it is armed, how many ticks it has delivered, and when its results are complete.
 
 What changes for someone running a pack:
 
@@ -28,11 +28,14 @@ What changes for someone running a pack:
 - "Stalled" no longer means a log that stopped growing: it means a game whose phase, ticks delivered
   and loaded classes have all stood still for `--stall-timeout`. A quiet but busy game is no longer
   killed, and a JVM that has stopped altogether is found in a minute, not five.
-- A server that never reaches its agent in two minutes is ENV, and the message says a `--launch`
+- A game that never reaches its agent in two minutes is ENV, and the message says a `--launch`
   that drops JVM arguments would do it.
+- A stalled game's verdict says where its `main`, `Render thread` and `Server thread` were, not only
+  that its log went quiet. A client that never joins a server shows as a server that stopped moving,
+  and the client joined to a server is watched for being gone or silent but not for standing still.
 
-A client, a server with a client and an `--attached` run still read files as before, and a game
-started by hand has no agent and behaves as it always did. The protocol is in
+An `--attached` run still reads files as before, and a game started by hand has no agent and
+behaves as it always did. The protocol is in
 [the supervision protocol](docs/reference/supervision-protocol.md).
 
 ---

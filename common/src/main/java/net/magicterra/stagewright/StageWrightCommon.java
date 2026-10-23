@@ -8,6 +8,7 @@ import java.util.Map;
 import net.magicterra.stagewright.driver.DriverRuntime;
 import net.magicterra.stagewright.driver.script.InProcessDriverBinding;
 import net.magicterra.stagewright.driver.endpoint.DriverEndpoint;
+import net.magicterra.stagewright.harness.AgentBridge;
 import net.magicterra.stagewright.harness.AttachedSessions;
 import net.magicterra.stagewright.harness.EndpointDescriptor;
 import net.magicterra.stagewright.harness.ResultsJsonl;
@@ -169,6 +170,8 @@ public final class StageWrightCommon {
         // Register the mc.test.* verbs — BOTH autorun states, so the hidden-verb contract is
         // topology-uniform.
 
+        // Where a supervisor learns the game got this far, whatever happens next.
+        AgentBridge.system().phase("armed");
         if (holding()) {
             LOG.info("[{}] HELD — the suite will not run itself ({} scenes registered, mc.test.run"
                     + " still works). Stop the run to end the hold.", MOD_ID, resolvedScenes.size());
@@ -180,6 +183,9 @@ public final class StageWrightCommon {
                 // observes a player would be racing the login sequence.
                 LOG.info("[{}] armed, deferring the suite until a player joins (-D{}) — {} scenes",
                         MOD_ID, AWAIT_PLAYER, resolvedScenes.size());
+                // Nothing moves from here until a player arrives, which is how a supervisor tells a
+                // client that never joined from a server busy with a long scene.
+                AgentBridge.system().phase("waiting-for-player");
             } else {
                 startSuite(server, loader);
             }

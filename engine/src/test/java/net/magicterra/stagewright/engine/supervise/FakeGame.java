@@ -18,7 +18,8 @@ public final class FakeGame {
         call("phase", String.class, "harness-ready");
         call("ticks", long.class, 7L);
         if (mode.equals("silent")) {
-            Thread.sleep(60_000);
+            // Reports once and then moves nothing: longer than any stall limit a test or a run applies.
+            Thread.sleep(300_000);
             return;
         }
         if (mode.equals("leak")) {

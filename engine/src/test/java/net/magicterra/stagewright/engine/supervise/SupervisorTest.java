@@ -183,6 +183,44 @@ class SupervisorTest {
     }
 
     @Test
+    void aGameThatStopsMovingSaysWhereItsThreadsAre() throws Exception {
+        try (Supervisor supervisor = Supervisor.open()) {
+            List<String> command = new ArrayList<>();
+            command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+            command.add(supervisor.agentArgument(Path.of(System.getProperty("stagewright.agentJar")), 20, 1));
+            command.addAll(List.of("-cp", System.getProperty("stagewright.testClasses"), FakeGame.class.getName(),
+                    "silent"));
+            Process game = new ProcessBuilder(command).inheritIO().start();
+            try {
+                long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+                while (supervisor.stacks().isEmpty() && System.nanoTime() < deadline) Thread.sleep(100);
+                List<Supervisor.ThreadStack> stacks = supervisor.stacks();
+                assertEquals(1, stacks.size(), stacks.toString());
+                assertEquals("main", stacks.get(0).thread());
+                assertTrue(stacks.get(0).frames().stream().anyMatch(f -> f.contains("FakeGame.main")),
+                        stacks.get(0).frames().toString());
+            } finally {
+                Supervisor.kill(game.toHandle());
+            }
+        }
+    }
+
+    @Test
+    void peekAnswersWithoutWaiting() throws Exception {
+        Process game = bare();
+        try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
+            send(client, hello(supervisor.token()));
+            Thread.sleep(300);
+            assertEquals(null, supervisor.peek(game.toHandle(), FAST));
+            send(client, "{\"event\":\"done\"}");
+            Thread.sleep(300);
+            assertEquals(Ended.DONE, supervisor.peek(game.toHandle(), FAST));
+        } finally {
+            Supervisor.kill(game.toHandle());
+        }
+    }
+
+    @Test
     void theCallersProbeEndsTheWait() throws Exception {
         Process game = bare();
         try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {

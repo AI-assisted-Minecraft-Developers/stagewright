@@ -69,6 +69,14 @@ argument file, where the JVM rather than the launcher reads it.
    failed-window dialog waiting in the AWT event queue — and those signatures become data in the
    agent rather than phrases searched for in a log. An unrecognised stuck start is reported with
    its top frames, which is still more than a silent log says.
+
+   *As built, the first half of that is not yet done.* Once nothing the supervisor can see —
+   phase, ticks, loaded classes — has moved for `idle` seconds (20 by default), the agent attaches
+   the stacks of `main`, `Render thread` and `Server thread` to every heartbeat, and the runner
+   prints them with the verdict on a stall. That is the evidence; it is not a classification,
+   because the two signatures above were reported by hand and have not been measured on this box.
+   The runner still reads the client's log for the failed-window lines (`NoWindow`), and it
+   still reads `/proc` to say whether a stalled process was spinning or asleep.
 4. **Watches the crash-report directory** with a `WatchService`, and reports a new report the
    moment it is written. A crashed game frequently does not exit; this is how the supervisor stops
    waiting on it without a second polling loop.
