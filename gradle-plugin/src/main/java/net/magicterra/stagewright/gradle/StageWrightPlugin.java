@@ -41,6 +41,7 @@ public class StageWrightPlugin implements Plugin<Project> {
     static final String TASK_GROUP = "verification";
     static final String DEFAULT_RESULTS = RunDirectory.DEFAULT_RESULTS_FILE;
     static final int DEFAULT_TIMEOUT_MINUTES = 20;
+    static final int DEFAULT_STALL_MINUTES = 5;
 
     @Override
     public void apply(Project project) {
@@ -66,6 +67,8 @@ public class StageWrightPlugin implements Plugin<Project> {
         // is what makes "the companion client is always killed" a guarantee rather than a hope.
         var sideProcesses = project.getGradle().getSharedServices().registerIfAbsent(
                 "stagewrightSideProcesses", StageWrightSideProcessService.class, spec -> {});
+        var supervision = project.getGradle().getSharedServices().registerIfAbsent(
+                "stagewrightSupervision", StageWrightSupervisionService.class, spec -> {});
 
         // Registered once and fed by every topology below. It has to exist before the container is
         // iterated so that a topology added later still lands in it — the alternative, building the
@@ -83,9 +86,11 @@ public class StageWrightPlugin implements Plugin<Project> {
             topology.getCleanWorld().convention(true);
             topology.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
             topology.getClient().convention(false);
+            topology.getStallMinutes().convention(DEFAULT_STALL_MINUTES);
+            topology.getFailOnLeak().convention(false);
             topology.getGameDirectory().convention(project.getLayout().getProjectDirectory()
                     .dir("run-stagewright-" + topology.getName()));
-            registerTopologyTasks(project, topology, sideProcesses);
+            registerTopologyTasks(project, topology, sideProcesses, supervision);
             coverage.configure(task -> {
                 task.getResultsByTopology().put(topology.getName(),
                         topology.getGameDirectory().file(topology.getResultsFile()));
@@ -102,7 +107,8 @@ public class StageWrightPlugin implements Plugin<Project> {
     }
 
     private void registerTopologyTasks(Project project, StageWrightTopology topology,
-                                       org.gradle.api.provider.Provider<StageWrightSideProcessService> sideProcesses) {
+                                       Provider<StageWrightSideProcessService> sideProcesses,
+                                       Provider<StageWrightSupervisionService> supervision) {
         String suffix = capitalize(topology.getName());
 
         TaskProvider<StageWrightProvisionTask> provision = project.getTasks().register(
@@ -136,6 +142,10 @@ public class StageWrightPlugin implements Plugin<Project> {
             task.getResults().set(topology.getGameDirectory().file(topology.getResultsFile()));
             task.getExpectFile().set(topology.getExpectFile());
             task.getCompanionResults().set(topology.getCompanionResultsFile());
+            task.getSupervision().set(supervision);
+            task.getSupervisedRun().set(supervisionKey(project, topology));
+            task.getFailOnLeak().set(topology.getFailOnLeak());
+            task.usesService(supervision);
             task.dependsOn(provision);
 
             // Resolved lazily. The host loader plugin normally registers its run tasks after this
@@ -163,6 +173,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                 applyResultsName(topology, run);
                 applySceneFilter(project, run);
                 applyBuildId(project, topology, run);
+                applySupervision(project, topology, run, supervision);
                 attachSideProcesses(project, topology, run, sideProcesses);
                 return run;
             }));
@@ -350,6 +361,36 @@ public class StageWrightPlugin implements Plugin<Project> {
                     modClasses == null ? Map.of() : Map.of("MOD_CLASSES", String.valueOf(modClasses)),
                     SideProcesses.lateBoundEnvironmentProperties(exec)));
             exec.usesService(service);
+        }
+    }
+
+    /** The run as the supervision service and the verdict task both name it. */
+    static String supervisionKey(Project project, StageWrightTopology topology) {
+        return project.getPath() + "#" + topology.getName();
+    }
+
+    /**
+     * Attach the supervision agent to a gate's game, so the run ends when its agent says the suite is
+     * over or the game has stopped, instead of when the task's timeout does.
+     *
+     * <p>Gates only: a hold is meant to outlast the build, and says nothing that ends it. A run task
+     * that is not a {@code JavaExec} has no JVM to put the argument on and is left as it was.
+     */
+    private void applySupervision(Project project, StageWrightTopology topology, Task run,
+                                  Provider<StageWrightSupervisionService> supervision) {
+        if (!(run instanceof JavaExec exec)) {
+            run.getLogger().warn("[stagewright] run task '{}' is a {}, not a JavaExec, so its game is not"
+                    + " supervised and a game that stops moving costs the whole timeout",
+                    run.getName(), run.getClass().getSimpleName());
+            return;
+        }
+        if (exec.getJvmArgumentProviders().stream().noneMatch(p -> p instanceof SupervisionArgument)) {
+            File artifacts = project.getLayout().getBuildDirectory()
+                    .dir("stagewright/" + topology.getName()).get().getAsFile();
+            exec.getJvmArgumentProviders().add(new SupervisionArgument(supervision,
+                    supervisionKey(project, topology), topology.getName(), artifacts,
+                    topology.getStallMinutes().getOrElse(DEFAULT_STALL_MINUTES)));
+            exec.usesService(supervision);
         }
     }
 

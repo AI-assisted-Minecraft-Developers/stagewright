@@ -12,6 +12,8 @@ import java.util.Map;
 import net.magicterra.stagewright.engine.Manifest;
 import net.magicterra.stagewright.engine.Progress;
 import net.magicterra.stagewright.engine.Verdict;
+import net.magicterra.stagewright.engine.supervise.Narration;
+import net.magicterra.stagewright.engine.supervise.Supervisor;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.GradleException;
 import org.gradle.api.file.RegularFileProperty;
@@ -66,10 +68,29 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
     @org.gradle.api.tasks.Input
     public abstract Property<String> getTopologyName();
 
+    /** What listened to the run's game; a gate that was not supervised has none and reports no leaks. */
+    @org.gradle.api.tasks.Internal
+    public abstract Property<StageWrightSupervisionService> getSupervision();
+
+    /** The run's name in {@link #getSupervision()}. */
+    @org.gradle.api.tasks.Internal
+    public abstract Property<String> getSupervisedRun();
+
+    /** Threads left running after the suite finished fail the topology. */
+    @org.gradle.api.tasks.Input
+    public abstract Property<Boolean> getFailOnLeak();
+
     @TaskAction
     public void judge() {
         File results = getResults().get().getAsFile();
         String topology = getTopologyName().getOrElse("stagewright");
+
+        // First, with or without results: what held the JVM up is a fact about the game, not the file.
+        List<Supervisor.Leak> leaks = getSupervision().isPresent() && getSupervisedRun().isPresent()
+                ? getSupervision().get().leaks(getSupervisedRun().get())
+                : List.of();
+        Narration.leaks(leaks)
+                .forEach(line -> getLogger().warn("[stagewright:{}] {}", topology, line));
 
         if (!results.isFile()) {
             throw new GradleException("stagewright " + topology + ": ENV — the run wrote no results"
@@ -107,6 +128,10 @@ public abstract class StageWrightVerdictTask extends DefaultTask {
 
         Verdict.Result companion = judgeCompanion(topology);
 
+        if (!leaks.isEmpty() && getFailOnLeak().getOrElse(false) && verdict.code() == 0) {
+            verdict = new Verdict.Result(1, verdict.report(), verdict.filtered());
+            getLogger().lifecycle("[stagewright:{}] RED: failOnLeak, and the game left threads running", topology);
+        }
         getLogger().lifecycle("[stagewright:{}] VERDICT: {}", topology, verdict.label());
 
         // The worse of the two wins, and the codes are already ordered by severity: GREEN 0 < RED 1

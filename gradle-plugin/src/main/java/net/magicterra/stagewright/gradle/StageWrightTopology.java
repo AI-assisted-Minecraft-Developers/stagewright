@@ -111,6 +111,27 @@ public abstract class StageWrightTopology implements Named {
     public abstract Property<Integer> getTimeoutMinutes();
 
     /**
+     * How long the game may go without moving before the run is ended, in minutes. Convention: 5;
+     * zero turns the check off.
+     *
+     * <p>The game's supervision agent reports its phase, the server ticks it has delivered and the
+     * classes it has loaded. A game that changes none of them for this long is stuck, and waiting for
+     * {@link #getTimeoutMinutes()} on top of that is the cost this exists to cut. Loading a large pack
+     * moves the class count and running a suite moves the ticks, so only a game that is doing neither
+     * is ended.
+     */
+    public abstract Property<Integer> getStallMinutes();
+
+    /**
+     * A game whose JVM outlives a finished suite fails the topology. Convention: {@code false}.
+     *
+     * <p>The agent ends such a JVM and the run still judges as it would have, with a warning naming
+     * the threads that held it up. A pack author usually cannot change the mod that left them, so
+     * failing every run for it is not the default; a mod author can ask for it here.
+     */
+    public abstract Property<Boolean> getFailOnLeak();
+
+    /**
      * The run task starts a game client. Convention: {@code false}.
      *
      * <p>A client needs a display, and on Linux the run is refused before it starts when neither

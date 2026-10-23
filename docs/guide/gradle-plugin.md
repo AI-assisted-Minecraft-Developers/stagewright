@@ -80,6 +80,8 @@ result and how to read what they report.
 | `sceneScripts` | directory | none | A folder of JavaScript scenes and JSON capability descriptors, installed into the run's `config/stagewright/` before it starts. |
 | `cleanWorld` | `boolean` | `true` | Whether provisioning deletes the previous world. |
 | `timeoutMinutes` | `int` | `20` | Applied to the **run** task, not to the check, and not to a hold. |
+| `stallMinutes` | `int` | `5` | How long the game may go without its phase, ticks delivered or loaded classes changing before the run is ended and the reason printed. `0` turns it off. See [supervision](../reference/supervision-protocol.md). |
+| `failOnLeak` | `boolean` | `false` | A JVM that outlives a finished suite is ended by the game's agent and named in a warning above the verdict; with this it is also RED. |
 | `client` | `boolean` | `false` | The run task is a game client. On Linux it is refused before it starts when neither `DISPLAY` nor `WAYLAND_DISPLAY` is set, or when a local X server is not there or refuses the `XAUTHORITY` cookie; a companion is always checked. The plugin never starts a display. |
 
 ### `companionResultsFile` reads like an option and behaves like a requirement

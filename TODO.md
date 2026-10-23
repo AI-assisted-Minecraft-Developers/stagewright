@@ -5,11 +5,12 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
-## `--attached` and the Gradle plugin are not supervised through the agent
+## `--attached` and holds are not supervised through the agent
 
-`--attached` of the command-line runner and the Gradle plugin's run task still read files from
-outside. `--attached` runs under a hold, which never says the run is over, so it needs a "results
-complete" event that does not end the JVM. Design: `docs/design/supervision.md`.
+`--attached` of the command-line runner and the Gradle plugin's `Hold` task still read files from
+outside. A hold never says the run is over, so it needs a "results complete" event that does not end
+the JVM. The Gradle plugin's companion client is not supervised either. Design:
+`docs/design/supervision.md`.
 
 ## A stuck start is reported with stacks but not classified
 
@@ -27,13 +28,6 @@ not by the agent.
 A script that writes `pos.x` on an object the game handed back gets a function, because the runner
 cannot tell a field from a method name. Methods work. Reading public fields and bean properties would
 mean asking the game what the name is before answering.
-
-## A gate task still waits for a game process that cannot exit
-
-The command-line runner stops at the done footer and destroys what it launched. The Gradle plugin's
-run task is a `JavaExec` and waits for the process instead, so a pack whose mods leave non-daemon
-threads behind costs that topology its whole `timeoutMinutes` after the suite has already finished.
-Same defect as the one the runner already handles, on the other consumer.
 
 ## The companion mechanism is not compatible with the configuration cache
 

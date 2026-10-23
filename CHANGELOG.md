@@ -40,6 +40,24 @@ behaves as it always did. The protocol is in
 
 ---
 
+### The Gradle plugin's gates are supervised the same way · green in TestKit against a fake game
+
+A gate's run task is a `JavaExec` and waited for its process, so a pack whose mods leave non-daemon
+threads behind cost that topology its whole `timeoutMinutes` after the suite had finished. The plugin
+now puts the agent on the run task's JVM and ends the process when the agent says the suite is over
+(after thirty seconds' grace, by the agent itself) or the game has stopped.
+
+- A thread that held the JVM up is named above the verdict as a warning; `failOnLeak = true` on a
+  topology makes it RED. Both the runner and the plugin word it from one place.
+- `stallMinutes` (default 5, `0` for off) ends a game whose phase, ticks and loaded classes have all
+  stood still, and prints where its threads were. A game whose process ends this way fails the run task.
+- A game that never reaches its agent is only warned about, not killed, unlike the runner: the
+  argument passes through a run task the plugin does not own, and a launcher that drops it leaves the
+  game well and unsupervised. The task's own timeout still applies.
+- Holds are not supervised, and neither is the companion client yet.
+
+---
+
 ### The command-line runner is a module of the root build · compiled
 
 `cli/` used to be a Gradle build of its own, so it could not see the loader jars it bundles or the

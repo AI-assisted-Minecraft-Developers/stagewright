@@ -27,6 +27,8 @@ import net.magicterra.stagewright.contract.remote.AttachedBridge;
 import net.magicterra.stagewright.engine.Manifest;
 import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.Verdict;
+import net.magicterra.stagewright.engine.supervise.AgentJar;
+import net.magicterra.stagewright.engine.supervise.Narration;
 import net.magicterra.stagewright.engine.supervise.Supervisor;
 
 /**
@@ -199,7 +201,7 @@ public final class Main {
         Path runLog = run.artifacts().resolve(RUN_LOG);
         CrashWatch crashes = CrashWatch.on(run.gameDir());
         long started = System.currentTimeMillis();
-        Path agent = AgentJar.stage(run.artifacts());
+        Path agent = AgentJar.stage(Main.class, run.artifacts());
         // The agent in the game says when the run is over, not the process. Those used to be the same
         // statement — a dedicated server halts itself when the suite drains — and they stop being
         // one on any pack whose mods leave non-daemon threads behind: the suite finishes, the footer
@@ -254,7 +256,7 @@ public final class Main {
         RunDirectory.provision(run.gameDir(), List.of(run.results()), false, false, run.log());
         ModInjection.Arguments mods = inject(run, run.gameDir(), loader);
         String world = Worlds.newClientWorld();
-        Path agent = AgentJar.stage(run.artifacts());
+        Path agent = AgentJar.stage(Main.class, run.artifacts());
         Path launchLog = run.artifacts().resolve(CLIENT_LOG);
         CrashWatch crashes = CrashWatch.on(run.gameDir());
         long started = System.currentTimeMillis();
@@ -355,7 +357,7 @@ public final class Main {
         Path clientLog = clientDir.resolve(RunDirectory.ARTIFACT_DIR).resolve(CLIENT_LOG);
         CrashWatch crashes = CrashWatch.on(run.gameDir());
         long started = System.currentTimeMillis();
-        Path agent = AgentJar.stage(run.artifacts());
+        Path agent = AgentJar.stage(Main.class, run.artifacts());
         Waited waited;
         List<Supervisor.Leak> leaks = List.of();
         try (Supervisor serverSide = Supervisor.open(); Supervisor clientSide = Supervisor.open()) {
@@ -640,29 +642,17 @@ public final class Main {
     private static void explainSupervision(Waited waited, Run run, Watched half, NoWindow noWindow) {
         Supervisor supervisor = half.supervisor();
         switch (waited) {
-            case NO_AGENT -> System.err.println("[stagewright] ENV — the " + half.name() + " was running but never"
-                    + " reached the supervision agent in " + CONNECT_LIMIT.toSeconds() + "s. The agent is the"
-                    + " first thing a JVM runs, so this one was not started with -javaagent: a --launch command"
-                    + " that drops JVM arguments would do it.");
-            case JVM_STOPPED -> System.err.println("[stagewright] the whole " + half.name() + " JVM stopped: no"
-                    + " heartbeat from its agent for " + HEARTBEAT_LIMIT.toSeconds() + "s, last in phase '"
-                    + supervisor.phase() + "' at " + supervisor.ticks() + " ticks. A JVM that stops its own"
-                    + " daemon threads is wedged in native code or at a safepoint that never ends. Killed.");
+            case NO_AGENT -> System.err.println("[stagewright] " + Narration.neverConnected(half.name(), CONNECT_LIMIT));
+            case JVM_STOPPED -> System.err.println("[stagewright] " + Narration.jvmStopped(half.name(),
+                    HEARTBEAT_LIMIT, supervisor.phase(), supervisor.ticks()));
             case NO_PROGRESS -> {
                 // The client's screen, when its log names one: a client that never got past the title
                 // screen is sitting on a screen nobody is going to click past.
                 String screen = noWindow.log() == null || half.name().equals("server") ? null
                         : Stall.screen(noWindow.log());
-                System.err.println("[stagewright] the " + half.name() + " is alive and its agent heartbeats, but"
-                        + " nothing it reports moved for " + run.stallMinutes()
-                        + (run.stallMinutes() == 1 ? " minute" : " minutes") + ": phase '" + supervisor.phase()
-                        + "', " + supervisor.ticks() + " ticks, no new classes loaded"
-                        + (screen == null ? "" : ", and it is sitting on " + screen + ", a screen nobody is going"
-                                + " to click past")
-                        + ". " + Stall.describe(half.process().toHandle()) + ". Killed.");
-                for (Supervisor.ThreadStack stack : supervisor.stacks()) {
-                    System.err.println("  " + stack.thread() + ": " + String.join("\n      at ", stack.frames()));
-                }
+                System.err.println("[stagewright] " + Narration.noProgress(half.name(), run.stallMinutes(),
+                        supervisor.phase(), supervisor.ticks(), screen, Stall.describe(half.process().toHandle())));
+                Narration.stacks(supervisor.stacks()).forEach(System.err::println);
             }
             default -> {
                 // Said by explain(): these endings need nothing the supervisor knows.
@@ -1154,7 +1144,7 @@ public final class Main {
     private static Verdict.Result judge(Run run, Path log, CrashWatch crashes, Waited waited,
                                         List<Supervisor.Leak> leaks) throws IOException {
         // First, with or without results: what held the JVM up is a fact about the game, not the file.
-        leakLines(leaks).forEach(line -> System.out.println("[stagewright] " + line));
+        Narration.leaks(leaks).forEach(line -> System.out.println("[stagewright] " + line));
         if (!Files.isRegularFile(run.results())) {
             System.err.println("stagewright: ENV — the run wrote no results");
             System.err.println("  expected: " + run.results());
@@ -1184,33 +1174,6 @@ public final class Main {
         System.out.println("[stagewright] VERDICT: " + verdict.label());
         if (verdict.code() != 0) System.out.println("[stagewright] log: " + log);
         return verdict;
-    }
-
-    /**
-     * The first frame that is not the JDK's: a held thread is always parked in {@code Thread.sleep} or
-     * a lock, and that says nothing about whose it is. Falls back to the top frame.
-     */
-    private static String ownFrame(List<String> stack) {
-        for (String frame : stack) {
-            String method = frame.contains("/") ? frame.substring(frame.indexOf('/') + 1) : frame;
-            if (!method.startsWith("java.") && !method.startsWith("jdk.") && !method.startsWith("sun.")) {
-                return frame;
-            }
-        }
-        return stack.isEmpty() ? "no stack" : stack.get(0);
-    }
-
-    /** One line per thread that held the JVM up, naming the jars its stack runs through. */
-    static List<String> leakLines(List<Supervisor.Leak> leaks) {
-        List<String> lines = new ArrayList<>();
-        if (leaks.isEmpty()) return lines;
-        lines.add("WARNING: the suite finished but the game's JVM did not end; its agent ended it."
-                + " Non-daemon threads still running:");
-        for (Supervisor.Leak leak : leaks) {
-            lines.add("  " + leak.thread() + " at " + ownFrame(leak.stack())
-                    + (leak.jars().isEmpty() ? "" : "  [" + String.join(", ", leak.jars()) + "]"));
-        }
-        return lines;
     }
 
     /** The verdict over a run's records, ENV first when they show {@code --scenes} went unread. */

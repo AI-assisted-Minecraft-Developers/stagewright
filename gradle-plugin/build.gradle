@@ -48,7 +48,14 @@ configurations.named('functionalTestRuntimeOnly') {
     extendsFrom(configurations.named('testRuntimeOnly').get())
 }
 
+configurations {
+    // The supervision agent, carried as a resource: a game loads it from a file, with -javaagent.
+    bundledAgent { transitive = false }
+}
+
 dependencies {
+    bundledAgent "net.magicterra:stagewright-agent:${stagewrightVersion}"
+
     // The one dependency, and it is ours. The no-external-dependencies rule above is about
     // third-party libraries colliding on a consumer's buildscript classpath; this artifact exists
     // so the CLI and this plugin judge a results file by the same code, and it pulls in nothing
@@ -64,6 +71,14 @@ dependencies {
     // Gradle TestKit — spins up a synthetic consumer project in-process.
     functionalTestImplementation gradleTestKit()
 }
+
+// Staged as /agent/stagewright-agent.jar, version stripped so the lookup does not depend on it.
+def stageBundledAgent = tasks.register('stageBundledAgent', Copy) {
+    from configurations.bundledAgent
+    into layout.buildDirectory.dir('bundled-agent')
+    rename(/^stagewright-agent-.*\.jar$/, 'stagewright-agent.jar')
+}
+tasks.named('processResources') { into('agent') { from stageBundledAgent } }
 
 def functionalTest = tasks.register('functionalTest', Test) {
     description = 'Runs the Gradle TestKit functional tests.'
