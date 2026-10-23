@@ -58,6 +58,23 @@ now puts the agent on the run task's JVM and ends the process when the agent say
 
 ---
 
+### `--attached` is supervised through the agent, and a held game reports its results · green against a real agent and a fake game
+
+A held game never says the run is over, so `--attached` still read the results file once a second and
+watched the logs to see whether it was stuck. A held game now reports `results` when its footer is
+written: it ends the supervisor's wait, starts no countdown, and leaves the game up for whatever is
+attached to it. `--attached` waits on that, with the same stall, crash and lost-heartbeat verdicts as a
+plain server, and ends the game itself afterwards as it always did. The file-polling wait and the
+log-growth stall check are gone from the runner.
+
+- A `--timeout` too large to count in nanoseconds (`--timeout 999999999`) made a supervised run throw
+  on its first poll; it is now treated as no limit.
+- The agent's `resultsComplete` is optional on the mod's side: an older agent loses this one report.
+- Not run through a real held NeoForge or Fabric server; the runner's wiring is compiled, and the
+  event is tested through a real agent and a fake held game.
+
+---
+
 ### A topology with a companion keeps the configuration cache · green in TestKit through a store and a reuse
 
 A topology with `companionRunTask` used to declare its run task incompatible with the configuration

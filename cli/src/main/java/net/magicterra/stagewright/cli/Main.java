@@ -106,10 +106,6 @@ public final class Main {
         Path artifacts() {
             return gameDir.resolve(RunDirectory.ARTIFACT_DIR);
         }
-
-        Path progress() {
-            return results.resolveSibling(RunDirectory.PROGRESS_FILE);
-        }
     }
 
     static int run(String[] args) throws IOException, InterruptedException {
@@ -403,7 +399,7 @@ public final class Main {
      * its player writes nothing, so a client that never arrives is usually ended by the stall watchdog.
      */
     static String companionHint(Waited waited, Path clientLog) {
-        if (waited != Waited.TIMED_OUT && waited != Waited.STALLED && waited != Waited.NO_PROGRESS) return null;
+        if (waited != Waited.TIMED_OUT && waited != Waited.NO_PROGRESS) return null;
         return "[stagewright] the client half's log is " + clientLog + ". A server that logged"
                 + " 'deferring the suite until a player joins' and nothing after it never got its player.";
     }
@@ -552,7 +548,7 @@ public final class Main {
      * {@code NO_PROGRESS} is a game that heartbeats and moves nothing, {@code JVM_STOPPED} a heartbeat
      * that went silent (the whole JVM), {@code NO_AGENT} a process that never reached its agent.
      */
-    enum Waited { DONE, CRASHED, NO_WINDOW, PROCESS_DIED, STALLED, TIMED_OUT, NO_PROGRESS, JVM_STOPPED, NO_AGENT }
+    enum Waited { DONE, CRASHED, NO_WINDOW, PROCESS_DIED, TIMED_OUT, NO_PROGRESS, JVM_STOPPED, NO_AGENT }
 
     /**
      * Wait for the agent in the game to say the run is over, or for the game to stop being able to.
@@ -582,7 +578,7 @@ public final class Main {
             for (Watched companion : companions) {
                 Supervisor.Ended seen = companion.supervisor().peek(companion.process().toHandle(),
                         companion.limits());
-                if (seen != null && seen != Supervisor.Ended.DONE) {
+                if (seen != null && seen != Supervisor.Ended.DONE && seen != Supervisor.Ended.RESULTS) {
                     early.set(new Ending(waitedOf(seen), companion));
                     return Supervisor.Ended.CRASHED;
                 }
@@ -594,7 +590,8 @@ public final class Main {
 
     private static Waited waitedOf(Supervisor.Ended ended) {
         return switch (ended) {
-            case DONE -> Waited.DONE;
+            // A hold that has its results is as finished as a game that ended: both mean read the file.
+            case DONE, RESULTS -> Waited.DONE;
             case CRASHED -> Waited.CRASHED;
             case PROCESS_DIED -> Waited.PROCESS_DIED;
             case HEARTBEAT_LOST -> Waited.JVM_STOPPED;
@@ -660,52 +657,6 @@ public final class Main {
         }
     }
 
-    /**
-     * Wait for the suite to write its done footer, or for the game to stop being able to. What an
-     * {@code --attached} run still uses: it holds the server, which never says the run is over, so
-     * there is no agent event to wait for (see TODO.md).
-     *
-     * <p>Polled rather than watched: the file is appended to by another process on another
-     * filesystem path, and a second of latency on a run measured in minutes buys nothing worth the
-     * complication of a watch service.
-     *
-     * <p><b>Which of the failures happened is reported, because they send you to different
-     * places.</b> This returned a bare boolean once, and the caller printed "did not finish within 90
-     * minutes" for a client that had crashed in three — a confident, well-phrased sentence pointing
-     * at a budget that was never the problem, and sending the reader to look for a slow run instead
-     * of a crash report sitting right there.
-     *
-     * <p>The crash report is checked as well as the process, because a crashed game frequently does
-     * not exit. A modpack leaves non-daemon threads behind — a pool of {@code AwsEventLoop} threads
-     * was enough — so the JVM that has already written its crash report and closed its window stays
-     * in the process table forever, and waiting on {@code isAlive} spends the whole {@code --timeout}
-     * on a game that stopped being one 45 minutes earlier.
-     */
-    private static Waited awaitDoneFooter(Run run, Process game, CrashWatch crashes, Stall stall)
-            throws IOException, InterruptedException {
-        long start = System.nanoTime();
-        long limit = TimeUnit.MINUTES.toNanos(run.timeoutMinutes());
-        while (!expired(start, limit, System.nanoTime())) {
-            if (Files.isRegularFile(run.results())) {
-                for (String line : Files.readAllLines(run.results(), java.nio.charset.StandardCharsets.UTF_8)) {
-                    if (line.contains("\"type\":\"done\"")) return Waited.DONE;
-                }
-            }
-            // All checked AFTER the file, not before: a run that writes its footer and dies in the
-            // same second would otherwise be reported as having died with nothing to show.
-            if (crashes.fresh() != null) return Waited.CRASHED;
-            if (!game.isAlive()) return Waited.PROCESS_DIED;
-            if (stall.stalled()) return Waited.STALLED;
-            Thread.sleep(1000);
-        }
-        return Waited.TIMED_OUT;
-    }
-
-    /** Compared as a difference: a start plus a huge {@code --timeout} overflows to the past. */
-    static boolean expired(long startNanos, long limitNanos, long nowNanos) {
-        return nowNanos - startNanos >= limitNanos;
-    }
-
     /** Say how a run that did not finish ended, and — for a failed boot — what went wrong first. */
     private static void explain(Waited waited, Run run, String half, Process game, CrashWatch crashes,
                                 Path log, Path gameDir, long started) {
@@ -726,9 +677,6 @@ public final class Main {
             case CRASHED, PROCESS_DIED -> System.err.println("[stagewright] the " + half
                     + " stopped before the suite finished. This is not a slow run: " + crashes.describe()
                     + ", then " + log + ".");
-            case STALLED -> System.err.println("[stagewright] the " + half + " made no progress for "
-                    + run.stallMinutes() + (run.stallMinutes() == 1 ? " minute" : " minutes") + " (" + log
-                    + " stopped growing) and was killed: " + Stall.describe(game.toHandle()) + ".");
             case TIMED_OUT -> System.err.println("[stagewright] the run exceeded " + run.timeoutMinutes()
                     + " minutes and was killed — see " + log);
         }
@@ -914,38 +862,45 @@ public final class Main {
 
         CrashWatch crashes = CrashWatch.on(run.gameDir());
         long started = System.currentTimeMillis();
-        Process game = startServer(run, launch, List.of(), mods, runLog);
+        Path agent = AgentJar.stage(Main.class, run.artifacts());
         int attachedCode;
         boolean triggered;
         Waited waited;
-        try {
-            EndpointDescriptor descriptor = awaitEndpoint(endpoint, game, runLog, run.timeoutMinutes());
-            if (descriptor == null) {
-                System.err.println("[stagewright] ENV — the held server never published "
-                        + endpoint + ", so there was nothing to attach to. See " + runLog);
-                return 3;
-            }
-            System.out.println("[stagewright] attached to " + descriptor.wsUri()
-                    + " (topology " + descriptor.topology() + ", loader " + descriptor.loader() + ")");
-
-            try (StageWrightRpc rpc = attach(descriptor.wsUri())) {
-                DriverBinding binding = new RpcDriverBinding(rpc, 60_000);
-                attachedCode = runAttachedScenes(attachedDir, binding,
-                        descriptor.loader() != null ? descriptor.loader() : GameLaunch.loader(run.gameDir()),
-                        attachedResults, line -> System.out.println("[stagewright] " + line));
-
-                // Now the in-process half, on the same live server.
-                triggered = triggerInProcessSuite(binding, System.err::println);
-                waited = null;
-                if (triggered) {
-                    waited = awaitDoneFooter(run, game, crashes,
-                            new Stall(List.of(runLog, run.results(), run.progress()), run.stallMinutes()));
-                    explain(waited, run, "server", game, crashes, runLog, run.gameDir(), started);
+        try (Supervisor supervisor = Supervisor.open()) {
+            Process game = startServer(run, launch,
+                    List.of(supervisor.agentArgument(agent, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS)), mods, runLog);
+            try {
+                EndpointDescriptor descriptor = awaitEndpoint(endpoint, game, runLog, run.timeoutMinutes());
+                if (descriptor == null) {
+                    System.err.println("[stagewright] ENV — the held server never published "
+                            + endpoint + ", so there was nothing to attach to. See " + runLog);
+                    return 3;
                 }
+                System.out.println("[stagewright] attached to " + descriptor.wsUri()
+                        + " (topology " + descriptor.topology() + ", loader " + descriptor.loader() + ")");
+
+                try (StageWrightRpc rpc = attach(descriptor.wsUri())) {
+                    DriverBinding binding = new RpcDriverBinding(rpc, 60_000);
+                    attachedCode = runAttachedScenes(attachedDir, binding,
+                            descriptor.loader() != null ? descriptor.loader() : GameLaunch.loader(run.gameDir()),
+                            attachedResults, line -> System.out.println("[stagewright] " + line));
+
+                    // Now the in-process half, on the same live server.
+                    triggered = triggerInProcessSuite(binding, System.err::println);
+                    waited = null;
+                    if (triggered) {
+                        // The held game says its results are complete without ending itself, so this
+                        // wait ends on that and the kill below is the intended way for the run to stop.
+                        Watched watched = new Watched("server", supervisor, game, limits(run, run.stallMinutes()));
+                        Ending ending = awaitEnding(watched, List.of(), crashes, NoWindow.NEVER);
+                        waited = ending.waited();
+                        explain(waited, run, "server", game, crashes, runLog, run.gameDir(), started);
+                        explainSupervision(waited, run, ending.half(), NoWindow.NEVER);
+                    }
+                }
+            } finally {
+                kill(game);
             }
-        } finally {
-            game.destroyForcibly();
-            game.waitFor(30, TimeUnit.SECONDS);
         }
 
         Waited finished = waited;
@@ -1150,7 +1105,7 @@ public final class Main {
             System.err.println("  expected: " + run.results());
             // A stall has already been explained, with the state the process was in. The guesses
             // below would follow it with "it never loaded" about a game that loaded and then waited.
-            if (waited == Waited.STALLED || waited == Waited.NO_WINDOW || waited == Waited.NO_PROGRESS
+            if (waited == Waited.NO_WINDOW || waited == Waited.NO_PROGRESS
                     || waited == Waited.JVM_STOPPED) {
                 return new Verdict.Result(3, List.of("the run wrote no results"));
             }

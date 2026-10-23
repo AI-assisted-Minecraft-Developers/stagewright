@@ -22,6 +22,13 @@ public final class FakeGame {
             Thread.sleep(300_000);
             return;
         }
+        if (mode.equals("held")) {
+            // A hold: the results are complete and the JVM is meant to outlive them.
+            Thread.sleep(1_500);
+            call("resultsComplete", null, null);
+            Thread.sleep(60_000);
+            return;
+        }
         if (mode.equals("leak")) {
             Thread pool = new Thread(new Holder(), "mod-pool-1");
             pool.setDaemon(false);

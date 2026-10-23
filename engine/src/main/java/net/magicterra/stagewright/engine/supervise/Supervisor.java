@@ -38,6 +38,11 @@ public final class Supervisor implements AutoCloseable {
     public enum Ended {
         /** The game said its results are complete. */
         DONE,
+        /**
+         * The game said its results are complete and that it stays up: a hold. Nothing will end it
+         * but the caller, which has what it was waiting for.
+         */
+        RESULTS,
         /** The process is gone and never said it was done. */
         PROCESS_DIED,
         /** Connected, then silent for longer than the limit: the whole JVM has stopped. */
@@ -76,6 +81,7 @@ public final class Supervisor implements AutoCloseable {
     private boolean connected;
     private boolean connectionClosed;
     private boolean done;
+    private boolean resultsComplete;
     private boolean exiting;
     private long agentPid = -1;
     private long lastBeatNanos;
@@ -149,6 +155,7 @@ public final class Supervisor implements AutoCloseable {
         synchronized (lock) {
             while (true) {
                 if (done) return Ended.DONE;
+                if (resultsComplete) return Ended.RESULTS;
                 Ended external = probe.get();
                 if (external != null) return external;
                 Ended ended = evaluate(game, limits);
@@ -172,20 +179,30 @@ public final class Supervisor implements AutoCloseable {
     /** The endings the supervisor can see for itself. The lock is held. */
     private Ended evaluate(ProcessHandle game, Limits limits) {
         if (done) return Ended.DONE;
+        if (resultsComplete) return Ended.RESULTS;
         long now = System.nanoTime();
         if (!game.isAlive()) {
             // Its last lines may still be in flight. Once the connection has closed they have all been
             // read; a game that never connected has none to wait for.
             if (exitSeenNanos == 0) exitSeenNanos = now;
             if (!connected || connectionClosed || now - exitSeenNanos >= DRAIN_NANOS) return Ended.PROCESS_DIED;
-        } else if (!connected && now - openedNanos >= limits.connect().toNanos()) {
+        } else if (!connected && now - openedNanos >= nanos(limits.connect())) {
             return Ended.NEVER_CONNECTED;
-        } else if (connected && now - lastBeatNanos >= limits.heartbeat().toNanos()) {
+        } else if (connected && now - lastBeatNanos >= nanos(limits.heartbeat())) {
             return Ended.HEARTBEAT_LOST;
-        } else if (connected && now - lastProgressNanos >= limits.stall().toNanos()) {
+        } else if (connected && now - lastProgressNanos >= nanos(limits.stall())) {
             return Ended.STALLED;
         }
-        return now - openedNanos >= limits.total().toNanos() ? Ended.TIMED_OUT : null;
+        return now - openedNanos >= nanos(limits.total()) ? Ended.TIMED_OUT : null;
+    }
+
+    /** {@code Duration.toNanos} throws past about 292 years, which is what a huge --timeout asks for. */
+    private static long nanos(Duration limit) {
+        try {
+            return limit.toNanos();
+        } catch (ArithmeticException e) {
+            return Long.MAX_VALUE;
+        }
     }
 
     /**
@@ -377,6 +394,7 @@ public final class Supervisor implements AutoCloseable {
                     }
                 }
                 case "done" -> done = true;
+                case "results" -> resultsComplete = true;
                 case "exiting" -> exiting = true;
                 case "leaked" -> {
                     if (event.get("threads") instanceof List<?> threads) {

@@ -5,12 +5,11 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
-## `--attached` and holds are not supervised through the agent
+## The Gradle plugin's companion client is not supervised through the agent
 
-`--attached` of the command-line runner and the Gradle plugin's `Hold` task still read files from
-outside. A hold never says the run is over, so it needs a "results complete" event that does not end
-the JVM. The Gradle plugin's companion client is not supervised either. Design:
-`docs/design/supervision.md`.
+Only a gate's own game gets the agent. The companion client's JVM is started from values the
+plugin took from its run task, and nothing yet adds the agent argument to them or listens for it.
+The Gradle plugin's `Hold` task is left unsupervised on purpose. Design: `docs/design/supervision.md`.
 
 ## A stuck start is reported with stacks but not classified
 
@@ -21,7 +20,9 @@ not by the agent.
 
 ## The harness still forces a JVM down when no agent is attached
 
-`armExitWatchdog` stays for a game started without the agent, and goes when every launcher attaches one.
+`armExitWatchdog` stays for a game started without the agent: by hand, through a `--launch` that drops
+JVM arguments, or through a run task the plugin cannot put an argument on. It goes if and when none
+of those is supported.
 
 ## An attached scene cannot read a field of a held object
 

@@ -439,6 +439,9 @@ public final class StageWrightHarness {
             // idempotency guard would be destroying the server it is talking to.
             StageWrightCommon.LOG.info("[{}] suite complete ({} scenes executed) — held, so the"
                     + " server stays up", StageWrightCommon.MOD_ID, executed);
+            // Not done(): that starts the agent's countdown to ending this JVM, and a hold's whole
+            // purpose is to outlive its suite. Whoever supervises the hold learns the file is complete.
+            AgentBridge.system().resultsComplete();
             return;
         }
         StageWrightCommon.LOG.info("[{}] suite complete ({} scenes executed) — halting server",

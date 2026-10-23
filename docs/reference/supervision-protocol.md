@@ -44,6 +44,7 @@ Every line has `event`. The agent's events:
 | `heartbeat` | `atMs`, `phase`, `ticks`, `classes` when the JVM can say, and `stacks` once `idle` seconds have passed with none of the three changing | every second |
 | `phase` | `phase` | when the game reports a phase different from the last |
 | `done` | none | when the game reports the run over |
+| `results` | none | when a held game's results are complete; it stays up and the agent ends nothing |
 | `leaked` | `graceMs`, `threads` | once, when the JVM is still up `grace` seconds after `done` |
 | `exiting` | none | from a shutdown hook, when the JVM ends in an orderly way |
 
@@ -71,6 +72,7 @@ right after sending it: the results file, not the exit code, carries the verdict
 | Ended | When |
 |---|---|
 | `DONE` | the agent sent `done`. Checked before whether the process is alive: a game that says so and exits in the same second is done, not dead |
+| `RESULTS` | the agent sent `results`: a game held open on purpose has its results complete. Ranks with `DONE` above a crash probe; the caller ends the game, since nothing else will |
 | `PROCESS_DIED` | the process is gone and never said `done`, once its connection has closed so that its last lines are read |
 | `HEARTBEAT_LOST` | connected, and no line for longer than the limit: the whole JVM has stopped |
 | `NEVER_CONNECTED` | alive and silent for longer than the connect limit: it did not reach the agent |
@@ -92,3 +94,4 @@ JVM was not started with the agent, and none throws.
 | `phase(String)` | where the game is: `harness-ready`, `scenes-running` |
 | `ticks(long)` | server ticks delivered so far, sent with the next heartbeat |
 | `done()` | the run is over and its results file is complete |
+| `resultsComplete()` | the results file is complete and the JVM stays up, because it is held for something to attach to. Starts no grace period. Absent from an older agent, and the mod then loses only this report |

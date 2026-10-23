@@ -5,54 +5,18 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
- * Notices a game that has stopped making progress long before its {@code --timeout} would.
+ * What to say about a game that stopped making progress, once its agent has said it did.
  *
- * <p>Progress is anything the run writes: its log, its results, its heartbeat. A modpack loading
- * writes its log continuously and a suite running writes results, so minutes of silence from all of
- * them is a game that is stuck — and two ways of being stuck have been measured that look the same
- * from outside and need different fixes. Under Xwayland, LWJGL's own GLFW spins inside
- * {@code glfwCreateWindow} with a core at 100% and a six-line log. A failed hand-off from NeoForge's
- * early window leaves an AWT dialog waiting for a click, the process asleep. Either would otherwise
- * cost the whole {@code --timeout}; {@link #describe} says which one it is.
+ * <p>Two ways of being stuck have been measured that look the same from outside and need different
+ * fixes. Under Xwayland, LWJGL's own GLFW spins inside {@code glfwCreateWindow} with a core at 100%
+ * and a six-line log. A failed hand-off from NeoForge's early window leaves an AWT dialog waiting for
+ * a click, the process asleep. {@link #describe} says which one it is.
  */
 final class Stall {
 
     static final int DEFAULT_MINUTES = 5;
-
-    private final List<Path> watched;
-    private final long limitNanos;
-    private long lastSignature = Long.MIN_VALUE;
-    private long lastChange = System.nanoTime();
-
-    Stall(List<Path> watched, int minutes) {
-        this.watched = watched;
-        this.limitNanos = TimeUnit.MINUTES.toNanos(minutes);
-    }
-
-    /** True once nothing watched has changed for the limit. Called about once a second. */
-    boolean stalled() {
-        long signature = 0;
-        for (Path p : watched) {
-            try {
-                if (Files.isRegularFile(p)) {
-                    signature = signature * 31 + Files.size(p);
-                    signature = signature * 31 + Files.getLastModifiedTime(p).toMillis();
-                }
-            } catch (IOException e) {
-                // Being written as we look; the next poll sees it.
-            }
-        }
-        long now = System.nanoTime();
-        if (signature != lastSignature) {
-            lastSignature = signature;
-            lastChange = now;
-            return false;
-        }
-        return now - lastChange >= limitNanos;
-    }
 
     /**
      * What the stuck process is doing, from {@code /proc}: spinning or asleep. Two samples a few

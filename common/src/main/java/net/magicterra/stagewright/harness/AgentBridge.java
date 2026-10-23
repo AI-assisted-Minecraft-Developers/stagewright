@@ -21,11 +21,13 @@ public final class AgentBridge {
     private final Method phase;
     private final Method ticks;
     private final Method done;
+    private final Method resultsComplete;
 
-    private AgentBridge(Method phase, Method ticks, Method done) {
+    private AgentBridge(Method phase, Method ticks, Method done, Method resultsComplete) {
         this.phase = phase;
         this.ticks = ticks;
         this.done = done;
+        this.resultsComplete = resultsComplete;
     }
 
     /** The bridge to this JVM's agent, or an inert one when there is none. */
@@ -38,9 +40,19 @@ public final class AgentBridge {
         try {
             Class<?> control = Class.forName(className, true, loader);
             return new AgentBridge(control.getMethod("phase", String.class),
-                    control.getMethod("ticks", long.class), control.getMethod("done"));
+                    control.getMethod("ticks", long.class), control.getMethod("done"),
+                    optional(control, "resultsComplete"));
         } catch (ReflectiveOperationException | LinkageError e) {
-            return new AgentBridge(null, null, null);
+            return new AgentBridge(null, null, null, null);
+        }
+    }
+
+    /** A method an older agent may not have: its absence loses that one report, not the agent. */
+    private static Method optional(Class<?> control, String name) {
+        try {
+            return control.getMethod(name);
+        } catch (NoSuchMethodException e) {
+            return null;
         }
     }
 
@@ -62,6 +74,11 @@ public final class AgentBridge {
     /** The results file is complete and this JVM is about to be stopped. */
     void done() {
         call(done);
+    }
+
+    /** The results file is complete and this JVM stays up, held for something to attach to. */
+    void resultsComplete() {
+        call(resultsComplete);
     }
 
     private static void call(Method method, Object... arguments) {

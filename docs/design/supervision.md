@@ -87,8 +87,10 @@ argument file, where the JVM rather than the launcher reads it.
    that list, and calls `Runtime.halt(0)`. This replaces `armExitWatchdog`, and unlike it covers the
    client topology too, because the agent knows nothing about which side it is on.
 
-In a hold run there is no "done", so the agent never ends the JVM; the supervisor says which
-policy applies, by system property.
+In a hold run there is no "done", so the agent never ends the JVM. A held game instead reports
+`results` when its results file is complete, which ends the supervisor's wait and leaves ending the
+game to the caller. The command-line runner's `--attached` run waits on it; the Gradle plugin's hold
+task is not supervised, since it is meant to outlast the build.
 
 ## The bridge
 
@@ -203,9 +205,13 @@ Reading a file the toolchain generates instead was considered and does not work:
 | Goes | Replaced by |
 |---|---|
 | `Stall`, `NoWindow`, the polling in `awaitDoneFooter`, `drain` | the channel's events |
-| `armExitWatchdog` | the agent's end-of-run grace and leak report |
+| the polling in `awaitDoneFooter` | the `results` event, for `--attached` |
 | reflection in `SideProcesses` | the toolchain adapters |
 | `notCompatibleWithConfigurationCache` on the run task | values captured at configuration time |
+
+`armExitWatchdog` was meant to go here and stays. It is the only thing that ends a dedicated server
+started without an agent: by hand, through a `--launch` that drops JVM arguments, or through a run
+task the plugin cannot put an argument on. With an agent attached it does nothing.
 
 ## To verify before building on it
 
@@ -232,7 +238,8 @@ Each step leaves both loaders' checks green.
 3. The plugin's run task through the build service, which closes the wait for a process that
    cannot exit.
 4. The toolchain adapters for the companion, which closes the configuration-cache incompatibility.
-5. Remove `armExitWatchdog`, and bring the orchestration contract up to date with the channel.
+5. `--attached` through the channel, with the `results` event for a held game. `armExitWatchdog`
+   stays as the fallback for a game without an agent.
 
 Two test fixtures make the claims checkable rather than asserted: a mod that leaves a non-daemon
 thread running, which must be named with its jar; and a game that wedges before the harness loads,

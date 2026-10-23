@@ -24,6 +24,35 @@ class AgentBridgeTest {
         public static void done() {
             CALLS.add("done");
         }
+
+        public static void resultsComplete() {
+            CALLS.add("resultsComplete");
+        }
+    }
+
+    /** An agent from before holds were reported: everything but {@code resultsComplete}. */
+    public static final class OlderControl {
+        public static void phase(String name) {}
+
+        public static void ticks(long ticks) {}
+
+        public static void done() {
+            FakeControl.CALLS.add("older-done");
+        }
+    }
+
+    @Test void aHeldResultIsReportedWithoutEndingAnything() {
+        AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), FakeControl.class.getName());
+        bridge.resultsComplete();
+        assertEquals(List.of("resultsComplete"), FakeControl.CALLS);
+    }
+
+    @Test void anOlderAgentStillWorksAndJustLosesTheHeldReport() {
+        AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), OlderControl.class.getName());
+        assertTrue(bridge.attached());
+        assertDoesNotThrow(bridge::resultsComplete);
+        bridge.done();
+        assertEquals(List.of("older-done"), FakeControl.CALLS);
     }
 
     @BeforeEach void clear() {
