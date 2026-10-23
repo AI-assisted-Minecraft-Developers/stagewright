@@ -10,6 +10,25 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-23
+
+### The command-line runner is a module of the root build · compiled
+
+`cli/` used to be a Gradle build of its own, so it could not see the loader jars it bundles or the
+attached module except as published artifacts in `mavenLocal`, and a runner built before the root
+`publishToMavenLocal` quietly carried whatever framework had last been published there. It is now
+`:stagewright-cli` in the root build, scoped out of the loom pipeline like `:stagewright-junit` and
+`:stagewright-attached`, and takes the two loader jars and the attached module from the sibling
+modules. Building it builds them, and a skew between the runner and the mods inside it cannot
+exist. The engine reaches it through `includeBuild`, as it reaches the plugin.
+
+There are three builds now, not four. Build the jar with `./gradlew :stagewright-cli:jar`; the
+bootstrap sequence loses its separate runner step; the published coordinate
+`net.magicterra:stagewright-cli` and the jar's contents are unchanged. `./gradlew build` now
+includes the runner's tests.
+
+---
+
 ## 2026-10-20
 
 ### Attached scenes get a real arena and the whole scene context · green against the self-test server

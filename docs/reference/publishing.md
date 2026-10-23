@@ -5,20 +5,20 @@ picking the wrong one produces a link error rather than a version conflict.
 
 ## The build layout
 
-StageWright is not one Gradle build. It is four, and the split is structural rather than
+StageWright is not one Gradle build. It is three, and the split is structural rather than
 organisational:
 
 | Build | Root | Contains | Why separate |
 |---|---|---|---|
-| root | `settings.gradle` | `:stagewright-api`, `:stagewright-common`, `:stagewright-fabric`, `:stagewright-neoforge`, `:stagewright-attached`, `:stagewright-junit` | Applies loom and Architectury. |
+| root | `settings.gradle` | `:stagewright-api`, `:stagewright-common`, `:stagewright-fabric`, `:stagewright-neoforge`, `:stagewright-attached`, `:stagewright-junit`, `:stagewright-cli`; includes `engine` | Applies loom and Architectury. |
 | engine | `engine/settings.gradle` | `stagewright-engine` | Must never see a Minecraft classpath, and cannot be a subproject of the plugin, which is itself an included build of the root. |
 | Gradle plugin | `gradle-plugin/settings.gradle` | the plugin | Included by the root's `pluginManagement`; includes `engine`. |
-| CLI | `cli/settings.gradle` | the fat jar | Must never see a Minecraft or a Gradle-API classpath; includes `engine`. |
 
-Two of the root build's modules are scoped out of the loom pipeline by name —
-`stagewright-junit` and `stagewright-attached` — because both are plain-JVM libraries and
-putting a Minecraft classpath under a module whose whole contract is not having one would make
-it unconsumable by the CLI.
+Three of the root build's modules are scoped out of the loom pipeline by name —
+`stagewright-junit`, `stagewright-attached` and `stagewright-cli` — because all three are
+plain-JVM and putting a Minecraft classpath under a module whose whole contract is not having one
+would make it unconsumable by the command-line runner. The runner's fat jar carries the two loader
+jars as resources, taken from the sibling modules, so building it builds them.
 
 ### The Architectury transforms run one at a time
 
@@ -53,7 +53,7 @@ plugin under. Every build also publishes to `mavenLocal()` for local development
 
 ## Versions
 
-One version, for every artifact of all four builds: `<base>-build.<n>+<minecraft>`, such as
+One version, for every artifact of all three builds: `<base>-build.<n>+<minecraft>`, such as
 `0.1.0-build.42+1.21.1`.
 
 - `<base>` is in `gradle/version.gradle`.
@@ -64,7 +64,7 @@ One version, for every artifact of all four builds: `<base>-build.<n>+<minecraft
 
 A build without `BUILD_NUMBER` is `0.1.0-build.local+1.21.1`, which the Nexus publishing tasks
 refuse. The engine, the Gradle plugin and the command-line runner carry the Minecraft version too,
-although nothing in them depends on it: builds of the four are only ever used together.
+although nothing in them depends on it: builds of the three are only ever used together.
 
 Every build is a pre-release of `<base>`, so SemVer, and with it Fabric Loader, orders all of them
 below `0.1.0` itself. That is why a version range over StageWright or WorldDriver builds ends its
@@ -94,7 +94,7 @@ Group is `net.magicterra` throughout.
 
 Every jar above, `sources` and `dev` included, and the CLI's `stagewright.jar` carry
 `META-INF/COPYING` and `META-INF/COPYING.LESSER`, and every POM, the plugin marker's included,
-declares `LGPL-3.0-only` with its URL, plus the project and SCM URL. All four builds take both
+declares `LGPL-3.0-only` with its URL, plus the project and SCM URL. All three builds take both
 from `gradle/license.gradle`; `scripts/check_packaging.py` checks the built jars and POMs.
 
 ### Why the POM rules differ per artifact
@@ -199,36 +199,29 @@ Minecraft classpath beyond Minecraft itself.
    resolves at *configuration* time; without it a clean machine cannot get this far.
    StageWright's common module compiles against the development-mappings artifact this produces.
 3. **StageWright** — the rest of the root build: `:stagewright-common`, `:stagewright-fabric`,
-   `:stagewright-neoforge` and `:stagewright-junit`, each by its own task path. Not a root-wide
-   publish, which would publish `:stagewright-api` and `:stagewright-attached` a second time; nor
-   the engine or the Gradle plugin, which are separate builds.
-4. **StageWright** — the command-line runner, `-p cli`. Its build takes the engine from source and
-   the loader jars and `mc_stagewright-attached` from `mavenLocal` alone — the Nexus is not among
-   its repositories — so first run a root `publishToMavenLocal` from the same commit and with the
-   same `BUILD_NUMBER`. That publishes to `mavenLocal` only, and nothing to the Nexus.
-5. **WorldDriver** — its loader modules. Its test-mod source set compiles against the api's
+   `:stagewright-neoforge`, `:stagewright-junit` and `:stagewright-cli`, each by its own task path.
+   Not a root-wide publish, which would publish `:stagewright-api` and `:stagewright-attached` a
+   second time; nor the engine or the Gradle plugin, which are separate builds. The command-line
+   runner takes the engine from source and the loader jars and the attached module from the sibling
+   modules, so it needs nothing published before it.
+4. **WorldDriver** — its loader modules. Its test-mod source set compiles against the api's
    development-mappings artifact, and its development runs put the loader jars on the classpath.
 
 To try the sequence first, run it with `publishToMavenLocal` in place of the Nexus task and
-`BUILD_NUMBER` unset, so every version is `…-build.local+1.21.1`, and step 4's root publish is
-already done. Each side pins the version of the other it builds against, so point each at the
+`BUILD_NUMBER` unset, so every version is `…-build.local+1.21.1`. Each side pins the version of the other it builds against, so point each at the
 other's local build on every build of the rehearsal: `-Pworlddriver_version=0.1.0-build.local+1.21.1`
 on StageWright's root build, and `-Pstagewright_version=0.1.0-build.local+1.21.1` on WorldDriver's,
 which also selects the Gradle plugin version. Not with `BUILD_NUMBER=0`: `mavenLocal` is searched
 before the Nexus on both sides, so a rehearsed `build.0` would stand in for the published one on
 that machine from then on.
 
-Two problems come from publishing one version to `mavenLocal` more than once, which every build
+A problem comes from publishing one version to `mavenLocal` more than once, which every build
 without `BUILD_NUMBER` does, as `…-build.local`. Republishing does not invalidate loom's remapping
 cache, which is keyed on coordinates rather than on bytes — so a build can succeed against a
 previously remapped jar with no error and no warning, running code that no longer exists in the
 source tree. WorldDriver carries an explicit eviction pass and fails the build rather than letting
-that pass silently. And the command-line runner takes the framework jars it bundles, and
-`mc_stagewright-attached` it compiles against, from `mavenLocal` rather than from the root build, so
-a runner built before the root `publishToMavenLocal` carries the framework last published there; the
-engine it builds from source through `includeBuild`. Neither reaches CI: nothing in StageWright's
-own builds consumes a StageWright jar through loom, and CI builds the runner right after publishing
-the framework.
+that pass silently. It does not reach CI: nothing in StageWright's own builds consumes a
+StageWright jar through loom.
 
 ## Support matrix
 
@@ -272,7 +265,7 @@ patch and minor releases.
 Everything else carries no promise and may change without notice — scene execution timing,
 internal classes, and the `StageWrightRpc` wire details.
 
-Every artifact of all four builds carries the one version described under [Versions](#versions);
+Every artifact of all three builds carries the one version described under [Versions](#versions);
 there is no independent scheme for any of them.
 
 ## Local candidate pair

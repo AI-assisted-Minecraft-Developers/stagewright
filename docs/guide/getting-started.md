@@ -22,13 +22,11 @@ Every build of `master` publishes the runner to the Nexus. This fetches the newe
 curl -fLo stagewright.jar 'https://nexus.gardel.top/service/rest/v1/search/assets/download?repository=maven-releases&maven.groupId=net.magicterra&maven.artifactId=stagewright-cli&maven.extension=jar&maven.classifier=&sort=version'
 ```
 
-To build it from a checkout instead: it is its own build, so it is not produced by building the rest
-of the repository. Build it after publishing the engine and the loader jars it bundles:
+To build it from a checkout instead: it is a module of the root build, and it builds the two loader
+jars it bundles along the way.
 
 ```bash
-cd engine && ../gradlew publishToMavenLocal
-cd ..     && ./gradlew publishToMavenLocal
-cd cli    && ../gradlew jar            # -> cli/build/libs/stagewright.jar
+./gradlew :stagewright-cli:jar         # -> cli/build/libs/stagewright.jar
 ```
 
 ```

@@ -67,8 +67,7 @@ jobs:
         if: steps.companion.outputs.sha != ''
         run: ./scripts/build_driver_pair.sh .ci/worlddriver
 
-      # Only the CLI takes another build's output from mavenLocal: the framework jars the root build
-      # publishes there, so it follows Framework. The engine reaches the plugin and the CLI through
+      # The engine reaches the plugin and the root build (the CLI is a module of it) through
       # includeBuild, which leaves the order of the first three free.
       - name: Engine
         if: steps.companion.outputs.sha == ''
@@ -81,13 +80,10 @@ jobs:
       - name: Architecture boundaries
         run: python3 scripts/check_architecture.py
 
+      # Includes the command-line runner, which is a module of this build.
       - name: Framework
         if: steps.companion.outputs.sha == ''
         run: ./gradlew build publishToMavenLocal
-
-      - name: CLI
-        if: steps.companion.outputs.sha == ''
-        run: ./gradlew -p cli check jar
 
       - name: Packaging
         if: steps.companion.outputs.sha == ''
@@ -109,4 +105,3 @@ jobs:
           ./gradlew -p engine publishAllPublicationsToGardelNexusRepository
           ./gradlew -p gradle-plugin publishAllPublicationsToGardelNexusRepository
           ./gradlew publishAllPublicationsToGardelNexusRepository
-          ./gradlew -p cli publishAllPublicationsToGardelNexusRepository

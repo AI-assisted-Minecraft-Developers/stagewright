@@ -13,8 +13,9 @@
 // world — that is `:stagewright-api`'s SceneContext, and it stays there.
 //
 // NO MINECRAFT, NO LOADER, NO LOOM. Scoped out of the root `subprojects {}` block by name (see
-// the comment there). The CLI is a SEPARATE Gradle build with no Minecraft anywhere; if a
-// Minecraft classpath ever leaks in here, the out-of-process home simply cannot consume it.
+// the comment there). The CLI is scoped out of that block the same way and has no Minecraft
+// anywhere; if a Minecraft classpath ever leaks in here, the out-of-process home simply cannot
+// consume it.
 //
 // PACKAGE: net.magicterra.stagewright.contract — a NEW package, not a slice of
 // net.magicterra.stagewright.scene. api/build.gradle owns that package OUTRIGHT and explains

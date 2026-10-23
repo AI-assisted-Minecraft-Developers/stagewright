@@ -5,6 +5,6 @@
 // plugin either, because the plugin is itself an included build of the root — depending on a
 // sibling of its own includer would be circular.
 //
-// Standing alone, it is includeBuild'd by both consumers (the gradle plugin and the CLI) and
-// published to mavenLocal for anyone resolving it as a coordinate.
+// Standing alone, it is includeBuild'd by both consumers (the gradle plugin and the root build, whose
+// CLI module uses it) and published to mavenLocal for anyone resolving it as a coordinate.
 rootProject.name = 'stagewright-engine'

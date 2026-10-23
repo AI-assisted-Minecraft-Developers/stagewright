@@ -1,5 +1,5 @@
-// The version every StageWright artifact carries, for all four builds (root, engine, gradle-plugin,
-// cli): <base>-build.<n>+<minecraft>. CI sets BUILD_NUMBER to its run number, and a build published
+// The version every StageWright artifact carries, for all three builds (root, engine, gradle-plugin):
+// <base>-build.<n>+<minecraft>. CI sets BUILD_NUMBER to its run number, and a build published
 // by hand sets it to 0; without it the build is `local`, which is never published to the Nexus.
 // See docs/reference/publishing.md.
 def base = '0.1.0'

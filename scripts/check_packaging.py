@@ -65,7 +65,6 @@ BUILD_COMMANDS = [
      'generatePomFileForMavenJavaPublication'],
     ['./gradlew', '--console=plain', '-p', 'engine', 'jar', 'sourcesJar',
      'generatePomFileForMavenJavaPublication'],
-    ['./gradlew', '--console=plain', '-p', 'cli', 'jar'],
     ['./gradlew', '--console=plain', '-p', 'gradle-plugin', 'jar', 'generatePomFileForPluginMavenPublication',
      'generatePomFileForMcStageWrightPluginMarkerMavenPublication'],
 ]

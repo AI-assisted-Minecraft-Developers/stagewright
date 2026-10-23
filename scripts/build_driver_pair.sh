@@ -49,7 +49,6 @@ run_step "$stagewright_root" plugin ./gradlew -p gradle-plugin check publishToMa
 run_step "$stagewright_root" contracts ./gradlew :stagewright-api:publishToMavenLocal :stagewright-attached:publishToMavenLocal
 run_step "$worlddriver_root" driver-bootstrap ./gradlew :api:publishToMavenLocal :common:publishToMavenLocal -PworlddriverBootstrap "-Pstagewright_version=$stagewright_candidate"
 run_step "$stagewright_root" framework ./gradlew build publishToMavenLocal "-Pworlddriver_version=$worlddriver_candidate"
-run_step "$stagewright_root" cli ./gradlew -p cli check jar
 run_step "$worlddriver_root" driver ./gradlew build :api:generatePomFileForMavenJavaPublication :common:generatePomFileForMavenJavaPublication :fabric:generatePomFileForMavenJavaPublication :neoforge:generatePomFileForMavenJavaPublication "-Pstagewright_version=$stagewright_candidate"
 run_step "$stagewright_root" framework-packaging python3 scripts/check_packaging.py --build "--gradle-arg=-Pworlddriver_version=$worlddriver_candidate"
 run_step "$stagewright_root" framework-boundaries python3 scripts/check_architecture.py --jars

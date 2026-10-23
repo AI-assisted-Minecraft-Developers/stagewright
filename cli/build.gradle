@@ -4,14 +4,6 @@ plugins {
     id 'maven-publish'
 }
 
-apply from: '../gradle/version.gradle'
-
-group = 'net.magicterra'
-version = stagewrightVersion
-
-apply from: '../gradle/license.gradle'
-apply from: '../gradle/nexus.gradle'
-
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -19,7 +11,6 @@ java {
 }
 
 repositories {
-    mavenLocal()          // the loader jars staged below are published here by the root build
     mavenCentral()
     maven {
         // Rhino, for out-of-process scenes. Not on Maven Central, and FENCED to its own group.
@@ -37,21 +28,22 @@ repositories {
 // matching Minecraft version is the step that fails, and it fails looking exactly like the mod not
 // working. Publishing the mods and rebuilding this are one release, not two, which
 // gradle/version.gradle holds to one version.
-def frameworkVersion = stagewrightVersion
 configurations { bundledMods { transitive = false } }
 dependencies {
     // Built from engine/ through the includeBuild in settings.gradle, so this jar always carries
-    // the engine in the tree. The framework jars below come from mavenLocal instead: after
-    // changing them, run the root `publishToMavenLocal` before building this.
+    // the engine in the tree.
     implementation "net.magicterra:stagewright-engine:${stagewrightVersion}"
-    bundledMods "net.magicterra:mc_stagewright-neoforge:${frameworkVersion}"
-    bundledMods "net.magicterra:mc_stagewright-fabric:${frameworkVersion}"
 
-    // Out-of-process scenes. The SAME artifact and the SAME version the bundled mod jars shadow —
-    // which is the whole guarantee that one `.js` file behaves identically in both homes, and the
-    // reason `frameworkVersion` is used here rather than a second literal. A skew between this and
-    // the mods staged above would not fail loudly; it would make a scene mean two things.
-    implementation "net.magicterra:mc_stagewright-attached:${frameworkVersion}"
+    // The two loader jars, as the sibling projects build them (the remapped, shadow-bundled jar a
+    // loader loads), so building this builds them and a skew between the mods and this jar cannot
+    // exist.
+    bundledMods project(path: ':stagewright-neoforge', configuration: 'runtimeElements')
+    bundledMods project(path: ':stagewright-fabric', configuration: 'runtimeElements')
+
+    // Out-of-process scenes. The SAME module the bundled mod jars shadow — which is the whole
+    // guarantee that one `.js` file behaves identically in both homes. A skew between this and the
+    // mods staged above would not fail loudly; it would make a scene mean two things.
+    implementation project(':stagewright-attached')
 
     // Rhino and gson are compileOnly in that module, on purpose: inside the game both are already
     // present (worlddriver embeds Rhino, Minecraft ships gson), and bundling either into a mod jar
@@ -83,8 +75,7 @@ def stageBundledMods = tasks.register('stageBundledMods', Copy) {
 }
 tasks.named('processResources') { into('mods') { from stageBundledMods } }
 
-// What this jar was built from, printed by `--version` and at the start of every run: a stale
-// framework in mavenLocal is otherwise invisible.
+// What this jar was built from, printed by `--version` and at the start of every run.
 def buildInfo = tasks.register('buildInfo') {
     def out = layout.buildDirectory.file('generated/build-info/stagewright-cli-build.properties')
     def parts = configurations.runtimeClasspath.incoming.files + configurations.bundledMods
@@ -96,7 +87,7 @@ def buildInfo = tasks.register('buildInfo') {
     outputs.file(out)
     doLast {
         def lines = ["version=${version}"]
-        parts.files.findAll { it.name.startsWith('stagewright-engine') || it.name.startsWith('mc_stagewright-') }
+        parts.files.findAll { it.name.startsWith('stagewright-') || it.name.startsWith('mc_stagewright-') }
                 .sort { it.name }.each { f ->
             def sha1 = java.security.MessageDigest.getInstance('SHA-1').digest(f.bytes).encodeHex().toString()
             lines << "${f.name}=${java.time.Instant.ofEpochMilli(f.lastModified())} ${sha1.take(8)}"
