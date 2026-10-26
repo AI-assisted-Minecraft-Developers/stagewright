@@ -175,6 +175,13 @@ Per suite `<name>` the plugin registers:
 The engine is resolved as `net.magicterra:stagewright-testengine` at the plugin's own version, from
 the project's repositories, through the `stagewrightTestEngine` configuration.
 
+The tests run on a JUnit Platform inside the game. The loader jars nest it, but loom drops nested jars
+when it remaps a mod dependency, so the plugin adds it to every project whose `runTask` a suite starts
+from: JUnit's launcher, reporting and Jupiter engine, at the version StageWright is built with, into
+`forgeRuntimeLibrary` on a NeoForge or Forge project and `localRuntime` on a Fabric one. Projects not
+under loom get nothing; under ModDevGradle, if a run reports that JUnit is missing, add those three
+modules to its `additionalRuntimeClasspath` yourself.
+
 ## The `testmod` source-set convention
 
 This is the plugin's second, opt-in facet. It exists because tests belong out of the production jar:

@@ -16,3 +16,4 @@ def build = buildNumber ?: 'local'
 def rootProperties = new Properties()
 new File(buildscript.sourceFile.parentFile.parentFile, 'gradle.properties').withInputStream { rootProperties.load(it) }
 ext.stagewrightVersion = "${base}-build.${build}+${rootProperties.minecraft_version}".toString()
+ext.junitVersion = rootProperties.junit_version

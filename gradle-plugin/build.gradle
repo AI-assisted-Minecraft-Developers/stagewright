@@ -80,13 +80,15 @@ def stageBundledAgent = tasks.register('stageBundledAgent', Copy) {
 }
 tasks.named('processResources') { into('agent') { from stageBundledAgent } }
 
-// The plugin's own version, for the test-engine dependency it adds to a consumer.
+// The plugin's own version, for the test-engine dependency it adds to a consumer, and the JUnit its dev runs get.
 def versionResource = tasks.register('generateVersionResource') {
     def out = layout.buildDirectory.file('generated-resources/stagewright-plugin.properties')
     def v = stagewrightVersion
+    def junit = junitVersion
     outputs.file(out)
     inputs.property('version', v)
-    doLast { out.get().asFile.with { parentFile.mkdirs(); text = "version=${v}\n" } }
+    inputs.property('junit', junit)
+    doLast { out.get().asFile.with { parentFile.mkdirs(); text = "version=${v}\njunit=${junit}\n" } }
 }
 tasks.named('processResources') { from(versionResource) }
 

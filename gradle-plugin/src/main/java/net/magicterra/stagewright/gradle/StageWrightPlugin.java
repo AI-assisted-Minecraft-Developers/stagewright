@@ -110,6 +110,7 @@ public class StageWrightPlugin implements Plugin<Project> {
         });
 
         tests.all(suite -> registerTestSuiteTasks(project, suite, topologies));
+        DevJUnitRuntime.install(project, tests, topologies);
     }
 
     static final String TEST_ENGINE_CONFIGURATION = "stagewrightTestEngine";

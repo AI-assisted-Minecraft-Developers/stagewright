@@ -13,11 +13,22 @@ final class PluginVersion {
     private PluginVersion() {}
 
     static String get() {
+        return property("version");
+    }
+
+    /** The JUnit Jupiter version StageWright's in-game runner is built with. */
+    static String junit() {
+        return property("junit");
+    }
+
+    private static String property(String key) {
         try (InputStream in = PluginVersion.class.getResourceAsStream(RESOURCE)) {
             if (in == null) throw new IllegalStateException(RESOURCE + " is missing from the plugin jar");
             Properties properties = new Properties();
             properties.load(in);
-            return properties.getProperty("version");
+            String value = properties.getProperty(key);
+            if (value == null) throw new IllegalStateException(RESOURCE + " has no " + key);
+            return value;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
