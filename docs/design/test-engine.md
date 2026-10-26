@@ -51,6 +51,7 @@ command-line runner writes the same file from a game directory. The engine knows
 
 ## Not yet
 
-- Scene declarations apply `topology` only; any other key is refused rather than ignored.
+- Scene declarations apply `topology` and `world` ([scene file](../reference/scene-file.md)); `mods`, `files`,
+  `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
 - Scenes run one after another; tests within a game run one after another.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.

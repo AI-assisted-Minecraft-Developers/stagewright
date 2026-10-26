@@ -35,16 +35,21 @@ class StageWrightTestEngineTest {
         previous = System.getProperty(LaunchSpec.PROPERTY);
         Path specs = Files.createDirectories(temp.resolve("launches"));
         System.setProperty(LaunchSpec.PROPERTY, specs.toString());
-        for (String topology : List.of("pass", "assertFail", "crash", "undiscovered", "dynamic")) {
-            Path game = Files.createDirectories(temp.resolve("game-" + topology));
-            Files.writeString(specs.resolve(topology + ".json"), """
-                    {"gameDirectory": %s, "cleanWorld": true, "timeoutMinutes": 2, "stallMinutes": 0,
-                     "primary": {"java": %s, "jvmArgs": ["-cp", %s], "mainClass": %s, "args": [%s],
-                                 "workingDirectory": %s}}
-                    """.formatted(q(game.toString()), q(System.getProperty("java.home") + "/bin/java"),
-                    q(System.getProperty("java.class.path")), q(FakeGame.class.getName()), q(topology),
-                    q(game.toString())));
+        for (String topology : List.of("pass", "assertFail", "crash", "undiscovered", "dynamic", "world")) {
+            writeSpec(specs, topology, true);
         }
+        writeSpec(specs, "worldDirty", false);
+    }
+
+    private void writeSpec(Path specs, String topology, boolean cleanWorld) throws IOException {
+        Path game = Files.createDirectories(temp.resolve("game-" + topology));
+        Files.writeString(specs.resolve(topology + ".json"), """
+                {"gameDirectory": %s, "cleanWorld": %s, "timeoutMinutes": 2, "stallMinutes": 0,
+                 "primary": {"java": %s, "jvmArgs": ["-cp", %s], "mainClass": %s, "args": [%s],
+                             "workingDirectory": %s}}
+                """.formatted(q(game.toString()), cleanWorld, q(System.getProperty("java.home") + "/bin/java"),
+                q(System.getProperty("java.class.path")), q(FakeGame.class.getName()), q(topology),
+                q(game.toString())));
     }
 
     @AfterEach
@@ -135,6 +140,47 @@ class StageWrightTestEngineTest {
         assertEquals(2, r.testEvents().failed().count());
         String message = failureOf(r.testEvents(), "a()").getMessage();
         assertTrue(message.contains("world"), message);
+    }
+
+    @Test
+    void creationSettingsOnAWorldThatIsKeptFailTheSceneNamingCleanWorld() {
+        EngineExecutionResults r = run("WorldDirtyFixture");
+        assertEquals(0, r.testEvents().succeeded().count());
+        assertEquals(2, r.testEvents().failed().count());
+        String message = failureOf(r.testEvents(), "a()").getMessage();
+        assertTrue(message.contains("cleanWorld"), message);
+    }
+
+    @Test
+    void aWorldBlockReachesTheGameAndServerPropertiesComeBackAfterwards() throws IOException {
+        Path properties = temp.resolve("game-world").resolve("server.properties");
+        Files.writeString(properties, "server-port=1\n");
+        EngineExecutionResults r = run("WorldBlockFixture");
+        assertEquals(2, r.testEvents().succeeded().count(), "tests: " + r.testEvents().failed().stream()
+                .map(e -> failure(e).getMessage()).toList());
+        assertEquals(0, r.testEvents().failed().count());
+        assertEquals("server-port=1\n", Files.readString(properties));
+    }
+
+    @Test
+    void serverPropertiesTheSceneCreatedAreRemovedWhenThereWasNoneBefore() {
+        EngineExecutionResults r = run("WorldBlockFixture");
+        // The fake game reports no server-port=1 here, so its check fails; what matters is the file is gone again.
+        assertEquals(2, r.testEvents().failed().count());
+        assertTrue(!Files.exists(temp.resolve("game-world").resolve("server.properties")));
+    }
+
+    @Test
+    void theSceneNodePublishesItsWorldAsAReportEntry() {
+        EngineExecutionResults r = run("WorldBlockFixture");
+        List<Event> published = r.allEvents().reportingEntryPublished().stream()
+                .filter(e -> e.getTestDescriptor().getDisplayName().equals("worldBlock")).toList();
+        String world = published.stream()
+                .flatMap(e -> e.getPayload(org.junit.platform.engine.reporting.ReportEntry.class).stream())
+                .map(entry -> entry.getKeyValuePairs().get("world")).filter(java.util.Objects::nonNull)
+                .findFirst().orElseThrow(() -> new AssertionError("no world entry on the scene: " + published));
+        assertTrue(world.contains("seed=5471") && world.contains("preset=minecraft:flat")
+                && world.contains("time=6000"), world);
     }
 
     @Test

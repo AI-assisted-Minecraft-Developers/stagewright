@@ -19,6 +19,7 @@ import java.util.Set;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.harness.AgentBridge;
@@ -94,7 +95,14 @@ public final class JupiterRun {
             List<String> classes = listed != null ? split(listed) : indexed(loader);
             StageWrightCommon.LOG.info("[{}] running {} JUnit test classes in the game", StageWrightCommon.MOD_ID,
                     classes.size());
-            GameExtension.bind(new GameImpl(server));
+            GameImpl game = new GameImpl(server);
+            String world = System.getProperty(SceneWorld.PROPERTY);
+            if (world != null) {
+                JsonObject declared = JsonParser.parseString(world).getAsJsonObject();
+                StageWrightCommon.LOG.info("[{}] scene world: {}", StageWrightCommon.MOD_ID,
+                        game.onServer(s -> SceneWorld.apply(s, declared)));
+            }
+            GameExtension.bind(game);
             LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
                     .selectors(classes.stream().map(DiscoverySelectors::selectClass).toList())
                     .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")

@@ -31,11 +31,15 @@ public final class FakeGame {
             start(methodId(classes.get(0), "a"));
             System.exit(1);
         }
+        String worldProblem = scenario.equals("world") ? worldProblem() : null;
         for (String c : classes) {
             start(classId(c));
             for (String m : methods) {
                 start(methodId(c, m));
-                if (scenario.equals("assertFail") && m.equals("b")) {
+                if (worldProblem != null) {
+                    finish(methodId(c, m), "FAILED", "{\"class\":\"org.opentest4j.AssertionFailedError\","
+                            + "\"message\":" + q(worldProblem) + ",\"trace\":[]}");
+                } else if (scenario.equals("assertFail") && m.equals("b")) {
                     finish(methodId(c, m), "FAILED", "{\"class\":\"org.opentest4j.AssertionFailedError\","
                             + "\"message\":\"expected 1 but was 2\",\"trace\":[\"x.Y.m(Y.java:3)\"]}");
                 } else {
@@ -47,6 +51,19 @@ public final class FakeGame {
         test("{\"type\":\"ended\"}");
         done();
         System.exit(0);
+    }
+
+    /** What the engine should have handed a game of the "world" scenario; null when it did. */
+    private static String worldProblem() throws Exception {
+        String json = System.getProperty("stagewright.scene.world");
+        if (json == null) return "-Dstagewright.scene.world was not passed";
+        if (!json.contains("\"time\":6000")) return "-Dstagewright.scene.world lacks the declared time: " + json;
+        java.nio.file.Path file = java.nio.file.Path.of("server.properties").toAbsolutePath();
+        if (!java.nio.file.Files.isRegularFile(file)) return "no server.properties at " + file;
+        String text = java.nio.file.Files.readString(file);
+        if (!text.contains("level-seed=5471")) return "server.properties lacks level-seed=5471: " + text;
+        if (!text.contains("server-port=1")) return "server.properties lost server-port=1: " + text;
+        return null;
     }
 
     private static void dynamic(List<String> classes) throws Exception {

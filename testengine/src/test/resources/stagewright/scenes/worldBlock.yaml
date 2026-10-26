@@ -1,0 +1,5 @@
+topology: world
+world:
+  seed: 5471
+  preset: minecraft:flat
+  time: { at: noon }

@@ -35,6 +35,7 @@ built programs rely on, so they are stated as literal names, keys and codes.
 | [Instrument contract](reference/instrument-contract.md) | The instrumentation surface reachable from outside the game, and the permanent assertions and canaries by which the framework establishes that it is itself sound. |
 | [Attached protocol](reference/attached-protocol.md) | The seven hidden methods by which a scene file running outside the game gets an arena in it and calls into it: the run, the answers, and how values cross. |
 | [Supervision protocol](reference/supervision-protocol.md) | What the agent in a game's JVM sends its supervisor, the conclusions drawn from it, and how the mod talks to the agent. |
+| [Scene file](reference/scene-file.md) | A scene's declaration: its topology, and the world it runs on — what applies at creation, what is set once loaded, and the defaults. |
 | [Launch spec](reference/launch-spec.md) | The file that tells the test engine how to start one topology's games, and what the engine adds to the command. |
 | [Publishing and artifacts](reference/publishing.md) | What is published, which coordinate to depend on for which job, and why the wrong one fails to link rather than failing to resolve. |
 
