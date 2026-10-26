@@ -27,7 +27,8 @@ public interface Game {
     /**
      * Run {@code work} on the server thread and answer its result here, so a group of reads and writes happens
      * between two ticks with nothing else interleaved. Must not itself call a blocking {@code Game} method: the
-     * server thread would wait for itself, so that is refused at once.
+     * server thread would wait for itself, so that is refused at once. Called on the server thread, as from an
+     * {@link Await} condition, it runs {@code work} there and then.
      */
     <T> T onServer(Function<MinecraftServer, T> work);
 

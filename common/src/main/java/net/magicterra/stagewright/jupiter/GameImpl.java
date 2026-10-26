@@ -37,9 +37,8 @@ final class GameImpl implements Game {
 
     @Override
     public <T> T onServer(Function<MinecraftServer, T> work) {
-        if (server.isSameThread()) {
-            throw new IllegalStateException("onServer was called on the server thread, which would wait for itself");
-        }
+        // Already there, as an await condition is: nothing to wait for, so run it now.
+        if (server.isSameThread()) return work.apply(server);
         try {
             return server.submit(() -> work.apply(server)).join();
         } catch (CompletionException e) {
