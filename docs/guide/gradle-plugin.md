@@ -140,6 +140,41 @@ to open or which server to join — belongs to the **consuming project's own run
 this plugin. Those are lines in your loader plugin's run block, checked in beside the rest of the
 build.
 
+## Test suites: `tests { }`
+
+A suite runs JUnit tests through StageWright's [test engine](../design/test-engine.md), which starts
+a game per scene. It is separate from the gates above: a suite starts the games itself, from launch
+specs, rather than depending on a topology's run task.
+
+```groovy
+stagewright {
+    tests {
+        fabric {
+            classes.from(project(':common').sourceSets.testmod.output)
+            classpath.from(project(':common').sourceSets.testmod.compileClasspath)
+            topologies.put('dedicatedServerWithClient', 'dedicatedServerWithClientFabric')
+        }
+    }
+}
+```
+
+`classes` is the compiled test classes plus the resources (scene files) the engine scans.
+`classpath` is what those classes link against. Gradle loads every class under `classes` by name in
+the test JVM, without running it, and a class whose supertypes are missing there fails the task; with
+`classpath` set they load, and nothing on it is started.
+`topologies` maps the topology name a scene declares to a topology declared in `topologies { }`; an
+unknown target fails the build naming the suite and the topology.
+
+Per suite `<name>` the plugin registers:
+
+| Task | What it does |
+|---|---|
+| `stagewrightLaunchSpecs<Name>` | Writes `build/stagewright/launches/<name>/<sceneTopology>.json` from the mapped topology's `runTask` and `companionRunTask` ([format](../reference/launch-spec.md)). The classpath goes into an argument file beside them, referenced from `jvmArgs`. Runs the run tasks' own prerequisites first; never up to date. |
+| `stagewrightTest<Name>` | A `Test` task on the JUnit Platform with only the `stagewright` engine, passing `-Dstagewright.launches` pointing at that directory. Never up to date; not part of `check`, because it starts games. |
+
+The engine is resolved as `net.magicterra:stagewright-testengine` at the plugin's own version, from
+the project's repositories, through the `stagewrightTestEngine` configuration.
+
 ## The `testmod` source-set convention
 
 This is the plugin's second, opt-in facet. It exists because tests belong out of the production jar:

@@ -36,11 +36,23 @@ import org.gradle.api.tasks.SourceSet;
 public abstract class StageWrightExtension {
 
     private final NamedDomainObjectContainer<StageWrightTopology> topologies;
+    private final NamedDomainObjectContainer<StageWrightTestSuite> tests;
     private SourceSet testmodSourceSetRef;
 
     @javax.inject.Inject
-    public StageWrightExtension(NamedDomainObjectContainer<StageWrightTopology> topologies) {
+    public StageWrightExtension(NamedDomainObjectContainer<StageWrightTopology> topologies,
+                                NamedDomainObjectContainer<StageWrightTestSuite> tests) {
         this.topologies = topologies;
+        this.tests = tests;
+    }
+
+    /** Test suites: each gets a {@code stagewrightTest<Name>} task on the outer test engine. */
+    public NamedDomainObjectContainer<StageWrightTestSuite> getTests() {
+        return tests;
+    }
+
+    public void tests(Action<? super NamedDomainObjectContainer<StageWrightTestSuite>> action) {
+        action.execute(tests);
     }
 
     public NamedDomainObjectContainer<StageWrightTopology> getTopologies() {

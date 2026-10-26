@@ -44,6 +44,7 @@ final class CompanionLaunch {
     private final Provider<List<String>> jvmArguments;
     private final List<CommandLineArgumentProvider> jvmArgumentProviders;
     private final List<String> args;
+    private final List<CommandLineArgumentProvider> argumentProviders;
     private final FileCollection classpath;
     private final Map<String, String> environment;
     private final List<MapProperty<?, ?>> lateEnvironment;
@@ -60,6 +61,8 @@ final class CompanionLaunch {
         this.eagerJvmArgs = eagerJvmArgs(spec, jvmArgumentProviders);
         this.jvmArguments = spec.getJvmArguments();
         this.args = spec.getArgs() == null ? new ArrayList<>() : new ArrayList<>(spec.getArgs());
+        // Loom gives its program arguments this way, asked at exec: --port and --nogui live here, not in getArgs().
+        this.argumentProviders = new ArrayList<>(spec.getArgumentProviders());
         FileCollection cp = spec.getClasspath();
         for (Toolchain toolchain : toolchains) {
             FileCollection late = toolchain.lateClasspath(spec);
@@ -186,6 +189,41 @@ final class CompanionLaunch {
         return all;
     }
 
+    /**
+     * Everything that goes between the java binary and the main class: {@link #jvmArgs()} with argfile
+     * references unescaped, plus an {@code @file} carrying the classpath when those arguments do not
+     * already carry one. The file is written to {@code classpathArgFile}.
+     */
+    List<String> launchJvmArgs(File classpathArgFile) {
+        List<String> jvm = new ArrayList<>();
+        jvmArgs().forEach(a -> jvm.add(unescapeArgFileReference(a)));
+        if (!alreadyHasClasspath(jvm)) {
+            String reference = writeClasspathArgFile(classpathArgFile);
+            if (reference != null) jvm.add(reference);
+        }
+        return jvm;
+    }
+
+    /** The main class, resolved now: the loader has finished binding it by the time a game starts. */
+    String mainClassName() {
+        return mainClass.get();
+    }
+
+    /** The program arguments, the task's own and then its providers', argfile references unescaped. */
+    List<String> programArgs() {
+        List<String> out = new ArrayList<>();
+        args.forEach(a -> out.add(unescapeArgFileReference(a)));
+        for (CommandLineArgumentProvider provider : argumentProviders) {
+            provider.asArguments().forEach(a -> out.add(unescapeArgFileReference(a)));
+        }
+        return out;
+    }
+
+    /** The java binary, as {@link #start} would run it. */
+    String javaExecutable() {
+        return javaBinary();
+    }
+
     /** Append a source's arguments unless the target already carries all of them. */
     private static void appendUnlessPresent(List<String> target, List<String> extra) {
         if (extra.isEmpty() || target.containsAll(extra)) return;
@@ -201,17 +239,9 @@ final class CompanionLaunch {
     Process start(File logFile, Logger logger) {
         List<String> command = new ArrayList<>();
         command.add(javaBinary());
-        List<String> jvm = new ArrayList<>();
-        jvmArgs().forEach(a -> jvm.add(unescapeArgFileReference(a)));
-        command.addAll(jvm);
-        if (!alreadyHasClasspath(jvm)) {
-            String classpathArgFile = writeClasspathArgFile(logFile);
-            if (classpathArgFile != null) {
-                command.add(classpathArgFile);
-            }
-        }
+        command.addAll(launchJvmArgs(new File(logFile.getParentFile(), logFile.getName() + ".classpath.args")));
         command.add(mainClass.get());
-        args.forEach(a -> command.add(unescapeArgFileReference(a)));
+        command.addAll(programArgs());
         // ProcessBuilder answers a null element with a bare NullPointerException carrying no message
         // and no index — which is a terrible way to learn that a loader plugin left one of these
         // unset. Name it instead.
@@ -332,11 +362,10 @@ final class CompanionLaunch {
      * forward slashes in classpath entries on every platform, which makes normalising simpler and
      * safer than escaping.
      */
-    private String writeClasspathArgFile(File logFile) {
+    private String writeClasspathArgFile(File argFile) {
         String path = classpath.getAsPath();
         if (path == null || path.isBlank()) return null;
 
-        File argFile = new File(logFile.getParentFile(), logFile.getName() + ".classpath.args");
         String body = "-cp \"" + path.replace('\\', '/') + "\"\n";
         try {
             argFile.getParentFile().mkdirs();

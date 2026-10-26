@@ -1,8 +1,13 @@
 package net.magicterra.stagewright.gradle;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import org.gradle.api.artifacts.Configuration;
+import org.gradle.api.tasks.testing.Test;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.NamedDomainObjectContainer;
@@ -49,8 +54,12 @@ public class StageWrightPlugin implements Plugin<Project> {
                 project.getObjects().domainObjectContainer(StageWrightTopology.class,
                         name -> project.getObjects().newInstance(StageWrightTopology.class, name));
 
+        NamedDomainObjectContainer<StageWrightTestSuite> tests =
+                project.getObjects().domainObjectContainer(StageWrightTestSuite.class,
+                        name -> project.getObjects().newInstance(StageWrightTestSuite.class, name));
+
         StageWrightExtension ext = project.getExtensions()
-                .create("stagewright", StageWrightExtension.class, topologies);
+                .create("stagewright", StageWrightExtension.class, topologies, tests);
         ext.getTestmodSourceSet().convention(false);
 
         // A reaction, not a point-in-time check: this fires whether `java` was applied before or
@@ -99,6 +108,146 @@ public class StageWrightPlugin implements Plugin<Project> {
                         .map(f -> Map.of(companionLabel(topology), f)).orElse(Map.of()));
             });
         });
+
+        tests.all(suite -> registerTestSuiteTasks(project, suite, topologies));
+    }
+
+    static final String TEST_ENGINE_CONFIGURATION = "stagewrightTestEngine";
+    static final String LAUNCHES_PROPERTY = "stagewright.launches";
+
+    /**
+     * Per suite: {@code stagewrightLaunchSpecs<Name>}, which writes one launch spec per topology the
+     * suite maps, and {@code stagewrightTest<Name>}, a {@code Test} task that runs the outer engine
+     * against them. Not hooked into {@code check}: it starts games.
+     */
+    private void registerTestSuiteTasks(Project project, StageWrightTestSuite suite,
+                                        NamedDomainObjectContainer<StageWrightTopology> topologies) {
+        String suffix = capitalize(suite.getName());
+        var launchesDir = project.getLayout().getBuildDirectory()
+                .dir("stagewright/launches/" + suite.getName());
+
+        Configuration engine = project.getConfigurations().findByName(TEST_ENGINE_CONFIGURATION);
+        if (engine == null) {
+            engine = project.getConfigurations().create(TEST_ENGINE_CONFIGURATION, c -> {
+                c.setCanBeConsumed(false);
+                c.setCanBeResolved(true);
+                c.setDescription("The StageWright test engine, at the version of this plugin.");
+                c.getDependencies().add(project.getDependencies().create(
+                        "net.magicterra:stagewright-testengine:" + PluginVersion.get()));
+            });
+        }
+        Configuration engineConfiguration = engine;
+
+        TaskProvider<StageWrightLaunchSpecsTask> specs = project.getTasks().register(
+                "stagewrightLaunchSpecs" + suffix, StageWrightLaunchSpecsTask.class, task -> {
+                    task.setGroup(TASK_GROUP);
+                    task.setDescription("Writes the launch specs the " + suite.getName()
+                            + " test suite's games are started from.");
+                    task.getLaunchesDirectory().set(launchesDir);
+                    task.getEntries().set(project.provider(() -> launchEntries(project, suite, topologies)));
+                    // Resolved when the graph is built: the host's loader plugin registers its run
+                    // tasks after this one is applied. Both runs' own prerequisites, as for a companion.
+                    task.dependsOn(project.provider(() -> {
+                        List<Object> needs = new ArrayList<>();
+                        for (JavaExec run : launchRuns(project, suite, topologies)) {
+                            // A bare task name in a run's dependsOn means a task of the run's project, which
+                            // need not be this one ('configureLaunch' under loom), so it is qualified here.
+                            for (Object need : run.getDependsOn()) {
+                                needs.add(need instanceof CharSequence name && !name.toString().startsWith(":")
+                                        ? run.getProject().getPath().replaceAll(":$", "") + ":" + name
+                                        : need);
+                            }
+                            needs.add(run.getInputs().getFiles());
+                        }
+                        return needs;
+                    }));
+                });
+
+        project.getTasks().register("stagewrightTest" + suffix, Test.class, task -> {
+                    task.setGroup(TASK_GROUP);
+                    task.setDescription("Runs the " + suite.getName()
+                            + " test suite on the StageWright test engine, starting a game per scene.");
+                    task.useJUnitPlatform(options -> options.includeEngines("stagewright"));
+                    task.setTestClassesDirs(suite.getClasses());
+                    // The engine first: the suite's classpath may carry another copy of what it depends on.
+                    task.setClasspath(engineConfiguration.plus(suite.getClasses()).plus(suite.getClasspath()));
+                    task.dependsOn(specs);
+                    task.systemProperty(LAUNCHES_PROPERTY, launchesDir.get().getAsFile().getAbsolutePath());
+                    task.getOutputs().upToDateWhen(t -> false);
+                    // Set here, not left to the java plugin's conventions: the suite may live on a project without it.
+                    var build = project.getLayout().getBuildDirectory();
+                    task.getBinaryResultsDirectory().set(build.dir("test-results/" + task.getName() + "/binary"));
+                    task.getReports().getJunitXml().getOutputLocation().set(build.dir("test-results/" + task.getName()));
+                    task.getReports().getHtml().getOutputLocation().set(build.dir("reports/tests/" + task.getName()));
+                });
+    }
+
+    /** The declared topology for each scene-facing name, or a failure naming the suite and the topology. */
+    private static StageWrightTopology declared(StageWrightTestSuite suite,
+                                                NamedDomainObjectContainer<StageWrightTopology> topologies,
+                                                String sceneName, String declaredName) {
+        StageWrightTopology topology = topologies.findByName(declaredName);
+        if (topology == null) {
+            throw new GradleException("stagewright test suite '" + suite.getName() + "' maps topology '"
+                    + sceneName + "' to '" + declaredName + "', which is not declared in stagewright.topologies"
+                    + " (declared: " + String.join(", ", topologies.getNames()) + ")");
+        }
+        return topology;
+    }
+
+    private static JavaExec javaExec(Project project, StageWrightTestSuite suite, StageWrightTopology topology,
+                                     String taskName, String role) {
+        Task task = resolveRunTask(project, taskName);
+        if (!(task instanceof JavaExec exec)) {
+            throw new GradleException("stagewright test suite '" + suite.getName() + "': topology '"
+                    + topology.getName() + "' names " + role + " '" + taskName + "', which is "
+                    + (task == null ? "not a task in this build"
+                                    : "a " + task.getClass().getSimpleName() + " rather than a JavaExec")
+                    + " — a launch can only be taken from a dev run");
+        }
+        return exec;
+    }
+
+    private List<JavaExec> launchRuns(Project project, StageWrightTestSuite suite,
+                                      NamedDomainObjectContainer<StageWrightTopology> topologies) {
+        List<JavaExec> runs = new ArrayList<>();
+        for (Map.Entry<String, String> mapping : suite.getTopologies().get().entrySet()) {
+            StageWrightTopology topology = declared(suite, topologies, mapping.getKey(), mapping.getValue());
+            String runTask = topology.getRunTask().getOrNull();
+            if (runTask == null) {
+                throw new GradleException("stagewright topology '" + topology.getName()
+                        + "' declares no runTask (used by test suite '" + suite.getName() + "')");
+            }
+            runs.add(javaExec(project, suite, topology, runTask, "runTask"));
+            String companion = topology.getCompanionRunTask().getOrNull();
+            if (companion != null) runs.add(javaExec(project, suite, topology, companion, "companionRunTask"));
+        }
+        return runs;
+    }
+
+    private List<StageWrightLaunchSpecsTask.Entry> launchEntries(
+            Project project, StageWrightTestSuite suite,
+            NamedDomainObjectContainer<StageWrightTopology> topologies) {
+        List<StageWrightLaunchSpecsTask.Entry> entries = new ArrayList<>();
+        for (Map.Entry<String, String> mapping : suite.getTopologies().get().entrySet()) {
+            StageWrightTopology topology = declared(suite, topologies, mapping.getKey(), mapping.getValue());
+            String runTask = topology.getRunTask().getOrNull();
+            if (runTask == null) {
+                throw new GradleException("stagewright topology '" + topology.getName()
+                        + "' declares no runTask (used by test suite '" + suite.getName() + "')");
+            }
+            CompanionLaunch primary = CompanionLaunch.of(javaExec(project, suite, topology, runTask, "runTask"));
+            String companionName = topology.getCompanionRunTask().getOrNull();
+            CompanionLaunch companion = companionName == null ? null : CompanionLaunch.of(
+                    javaExec(project, suite, topology, companionName, "companionRunTask"));
+            entries.add(new StageWrightLaunchSpecsTask.Entry(mapping.getKey(),
+                    topology.getGameDirectory().get().getAsFile(),
+                    topology.getCleanWorld().getOrElse(true),
+                    topology.getTimeoutMinutes().getOrElse(DEFAULT_TIMEOUT_MINUTES),
+                    topology.getStallMinutes().getOrElse(DEFAULT_STALL_MINUTES),
+                    primary, companion));
+        }
+        return entries;
     }
 
     /** The companion client's topology label, and its key in coverage: one name so the two match. */

@@ -80,6 +80,16 @@ def stageBundledAgent = tasks.register('stageBundledAgent', Copy) {
 }
 tasks.named('processResources') { into('agent') { from stageBundledAgent } }
 
+// The plugin's own version, for the test-engine dependency it adds to a consumer.
+def versionResource = tasks.register('generateVersionResource') {
+    def out = layout.buildDirectory.file('generated-resources/stagewright-plugin.properties')
+    def v = stagewrightVersion
+    outputs.file(out)
+    inputs.property('version', v)
+    doLast { out.get().asFile.with { parentFile.mkdirs(); text = "version=${v}\n" } }
+}
+tasks.named('processResources') { from(versionResource) }
+
 def functionalTest = tasks.register('functionalTest', Test) {
     description = 'Runs the Gradle TestKit functional tests.'
     group = 'verification'
