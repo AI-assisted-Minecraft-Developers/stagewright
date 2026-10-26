@@ -8,19 +8,29 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 import net.magicterra.stagewright.test.DependsOn;
 import net.magicterra.stagewright.test.Game;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledIf;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.platform.engine.DiscoverySelector;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
@@ -55,6 +65,11 @@ class DependenciesTest {
         synchronized (RAN) {
             RAN.clear();
         }
+        MARKS.clear();
+        THREADS.clear();
+        FLAG.set(false);
+        COUNT.set(0);
+        SEEN_BY_DOWNSTREAM.set(-1);
     }
 
     private static void ran(String name) {
@@ -152,13 +167,169 @@ class DependenciesTest {
         }
     }
 
+    // ---- parallel samples ----------------------------------------------------------------------------------
+
+    /** Wall-clock marks (nanoTime) by name, and a flag the cross-class samples hand over. */
+    private static final Map<String, Long> MARKS = new ConcurrentHashMap<>();
+    private static final Set<String> THREADS = ConcurrentHashMap.newKeySet();
+    private static final AtomicBoolean FLAG = new AtomicBoolean();
+    private static final AtomicInteger COUNT = new AtomicInteger();
+    private static final AtomicInteger SEEN_BY_DOWNSTREAM = new AtomicInteger(-1);
+
+    private static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class SlowUpstream {
+        @Test
+        void upstream() {
+            MARKS.put("upstream.start", System.nanoTime());
+            sleep(300);
+            FLAG.set(true);
+            MARKS.put("upstream.end", System.nanoTime());
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class SlowDownstream {
+        @Test
+        @DependsOn(value = "upstream", in = SlowUpstream.class)
+        void downstream() {
+            MARKS.put("downstream.start", System.nanoTime());
+            assertTrue(FLAG.get(), "upstream's flag was not set yet");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class FailingUpstream {
+        @Test
+        void upstream() {
+            sleep(200);
+            fail("upstream is broken");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class FailingDownstream {
+        @Test
+        @DependsOn(value = "upstream", in = FailingUpstream.class)
+        void downstream() {
+            ran("FailingDownstream#downstream");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class BeforeAllBroken {
+        @BeforeAll
+        static void boom() {
+            sleep(100);
+            throw new IllegalStateException("beforeAll is broken");
+        }
+
+        @Test
+        void upstream() {
+            ran("BeforeAllBroken#upstream");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class BeforeAllDownstream {
+        @Test
+        @DependsOn(value = "upstream", in = BeforeAllBroken.class)
+        void downstream() {
+            ran("BeforeAllDownstream#downstream");
+        }
+    }
+
+    @Disabled("sample: disabled upstream class")
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class DisabledUpstream {
+        @Test
+        void upstream() {
+            ran("DisabledUpstream#upstream");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class DisabledDownstream {
+        @Test
+        @DependsOn(value = "upstream", in = DisabledUpstream.class)
+        void downstream() {
+            ran("DisabledDownstream#downstream");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class ParamUpstream {
+        @ParameterizedTest
+        @ValueSource(ints = {1, 2, 3})
+        void upstream(int i) {
+            sleep(150);
+            if (COUNT.incrementAndGet() == 3) MARKS.put("param.lastEnd", System.nanoTime());
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class ParamDownstream {
+        @Test
+        @DependsOn(value = "upstream", in = ParamUpstream.class)
+        void downstream() {
+            SEEN_BY_DOWNSTREAM.set(COUNT.get());
+            MARKS.put("param.downstream.start", System.nanoTime());
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class Locked {
+        // "a" sorts first by name yet depends on "b"; both hold the same write lock.
+        @Test
+        @ResourceLock("x")
+        @DependsOn("b")
+        void a() {
+            ran("Locked#a");
+        }
+
+        @Test
+        @ResourceLock("x")
+        void b() {
+            sleep(100);
+            ran("Locked#b");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class Plain {
+        @Test
+        void one() {
+            THREADS.add(Thread.currentThread().getName());
+            sleep(300);
+        }
+
+        @Test
+        void two() {
+            THREADS.add(Thread.currentThread().getName());
+            sleep(300);
+        }
+
+        @Test
+        void three() {
+            THREADS.add(Thread.currentThread().getName());
+            sleep(300);
+        }
+    }
+
     // ---- inner launcher ------------------------------------------------------------------------------------
 
     private record Finished(TestExecutionResult.Status status, String message) {}
 
     private static final class Recorder implements TestExecutionListener {
-        final List<String> started = new ArrayList<>();
-        final Map<String, Finished> finished = new LinkedHashMap<>();
+        final List<String> started = Collections.synchronizedList(new ArrayList<>());
+        final Map<String, Finished> finished = Collections.synchronizedMap(new LinkedHashMap<>());
 
         private static String name(TestIdentifier id) {
             if (!id.isTest() || !(id.getSource().orElse(null) instanceof MethodSource source)) return null;
@@ -233,6 +404,37 @@ class DependenciesTest {
         }
     }
 
+    /** As {@link #run}, configured like {@link JupiterRun}'s launcher: parallel, concurrent, ENDINGS passed. */
+    private static Recorder runParallel(Class<?>... classes) {
+        inLauncher = true;
+        try {
+            GameExtension.bind(stubGame());
+            List<DiscoverySelector> selectors = new ArrayList<>();
+            for (Class<?> c : classes) selectors.add(DiscoverySelectors.selectClass(c));
+            LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
+                    .selectors(selectors)
+                    .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")
+                    .configurationParameter("junit.jupiter.testmethod.order.default", DependencyOrder.class.getName())
+                    .configurationParameter("junit.jupiter.testclass.order.default", DependencyOrder.class.getName())
+                    .configurationParameter("junit.jupiter.execution.parallel.enabled", "true")
+                    .configurationParameter("junit.jupiter.execution.parallel.mode.default", "concurrent")
+                    .configurationParameter("junit.jupiter.execution.parallel.mode.classes.default", "concurrent")
+                    // Fixed, so the result does not depend on the build machine's core count.
+                    .configurationParameter("junit.jupiter.execution.parallel.config.strategy", "fixed")
+                    .configurationParameter("junit.jupiter.execution.parallel.config.fixed.parallelism", "4")
+                    .build();
+            Launcher launcher = LauncherFactory.create();
+            TestPlan plan = launcher.discover(request);
+            List<String> cycles = Dependencies.prepare(plan);
+            assertTrue(cycles.isEmpty(), "unexpected cycles: " + cycles);
+            Recorder recorder = new Recorder();
+            launcher.execute(plan, recorder, Dependencies.ENDINGS);
+            return recorder;
+        } finally {
+            inLauncher = false;
+        }
+    }
+
     // ---- cases ---------------------------------------------------------------------------------------------
 
     @Test
@@ -294,5 +496,88 @@ class DependenciesTest {
         assertEquals(List.of("First#first", "Second#second"), r.started);
         assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("First#first").status());
         assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("Second#second").status());
+    }
+
+    // ---- parallel cases ------------------------------------------------------------------------------------
+
+    @Test
+    @Timeout(60)
+    void parallelWaitsForUpstreamInAnotherClass() {
+        Recorder r = runParallel(SlowDownstream.class, SlowUpstream.class);
+        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("SlowUpstream#upstream").status());
+        Finished d = r.finished.get("SlowDownstream#downstream");
+        assertNotNull(d);
+        assertEquals(TestExecutionResult.Status.SUCCESSFUL, d.status(), d.message());
+        assertTrue(MARKS.get("downstream.start") >= MARKS.get("upstream.end"), "downstream began before upstream ended");
+    }
+
+    @Test
+    @Timeout(60)
+    void parallelFailedUpstreamAbortsDependent() {
+        Recorder r = runParallel(FailingDownstream.class, FailingUpstream.class);
+        assertEquals(TestExecutionResult.Status.FAILED, r.finished.get("FailingUpstream#upstream").status());
+        Finished d = r.finished.get("FailingDownstream#downstream");
+        assertNotNull(d);
+        assertEquals(TestExecutionResult.Status.ABORTED, d.status(), d.message());
+        assertTrue(d.message().contains("failed"), d.message());
+        assertFalse(didRun("FailingDownstream#downstream"));
+    }
+
+    @Test
+    @Timeout(60)
+    void parallelBeforeAllFailureAbortsDependentWithoutHanging() {
+        Recorder r = runParallel(BeforeAllDownstream.class, BeforeAllBroken.class);
+        assertFalse(didRun("BeforeAllBroken#upstream"));
+        Finished d = r.finished.get("BeforeAllDownstream#downstream");
+        assertNotNull(d);
+        assertEquals(TestExecutionResult.Status.ABORTED, d.status(), d.message());
+        assertTrue(d.message().contains("ended without running"), d.message());
+        assertFalse(didRun("BeforeAllDownstream#downstream"));
+    }
+
+    @Test
+    @Timeout(60)
+    void parallelDisabledUpstreamClassAbortsDependentWithoutHanging() {
+        Recorder r = runParallel(DisabledDownstream.class, DisabledUpstream.class);
+        assertFalse(didRun("DisabledUpstream#upstream"));
+        Finished d = r.finished.get("DisabledDownstream#downstream");
+        assertNotNull(d);
+        assertEquals(TestExecutionResult.Status.ABORTED, d.status(), d.message());
+        // A skipped class reports nothing for its methods; its skip marks them disabled.
+        assertTrue(d.message().contains("which is disabled"), d.message());
+        assertFalse(didRun("DisabledDownstream#downstream"));
+    }
+
+    @Test
+    @Timeout(60)
+    void parallelDependencyOnParameterizedUpstream() {
+        Recorder r = runParallel(ParamDownstream.class, ParamUpstream.class);
+        Finished d = r.finished.get("ParamDownstream#downstream");
+        assertNotNull(d);
+        assertEquals(TestExecutionResult.Status.SUCCESSFUL, d.status(), d.message());
+        assertEquals(3, COUNT.get(), "all three invocations ran");
+        assertEquals(3, SEEN_BY_DOWNSTREAM.get(), "downstream started after every invocation ended");
+        assertTrue(MARKS.get("param.downstream.start") > MARKS.get("param.lastEnd"));
+    }
+
+    @Test
+    @Timeout(60)
+    void parallelIntraClassDependencyUnderSharedLockDoesNotDeadlock() {
+        Recorder r = runParallel(Locked.class);
+        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("Locked#b").status());
+        Finished a = r.finished.get("Locked#a");
+        assertNotNull(a);
+        assertEquals(TestExecutionResult.Status.SUCCESSFUL, a.status(), a.message());
+        assertTrue(didRun("Locked#a") && didRun("Locked#b"));
+    }
+
+    @Test
+    @Timeout(60)
+    void parallelRunsIndependentTestsOfAPlainClassConcurrently() {
+        Recorder r = runParallel(Plain.class);
+        for (String name : List.of("Plain#one", "Plain#two", "Plain#three")) {
+            assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get(name).status(), name);
+        }
+        assertTrue(THREADS.size() > 1, "all tests ran on one thread: " + THREADS);
     }
 }

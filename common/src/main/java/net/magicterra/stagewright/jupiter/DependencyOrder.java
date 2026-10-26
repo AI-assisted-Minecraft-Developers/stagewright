@@ -3,6 +3,7 @@ package net.magicterra.stagewright.jupiter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.ClassOrdererContext;
 import org.junit.jupiter.api.MethodDescriptor;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.MethodOrdererContext;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 /**
  * The default method and class order of an in-game run: Jupiter's own order, except that a test runs after the
@@ -21,15 +23,34 @@ import org.junit.jupiter.api.MethodOrdererContext;
  */
 public final class DependencyOrder implements MethodOrderer, ClassOrderer {
 
+    /**
+     * Whether the class {@link #orderMethods} was last asked about has a test depending on another of its own. Jupiter
+     * asks {@link #getDefaultExecutionMode} straight after, for the same class, on the one discovery thread.
+     */
+    private boolean dependentWithin;
+
     @Override
     public void orderMethods(MethodOrdererContext context) {
+        boolean[] within = {false};
         sort(context.getMethodDescriptors(), m -> m.getMethod().getName(), m -> {
             List<String> before = new ArrayList<>();
             for (Dependencies.Ref ref : Dependencies.upstream(context.getTestClass(), m.getMethod())) {
                 if (ref.className().equals(context.getTestClass().getName())) before.add(ref.method());
             }
+            within[0] |= !before.isEmpty();
             return before;
         });
+        dependentWithin = within[0];
+    }
+
+    /**
+     * A class whose tests depend on one another runs them one at a time, in this order. Concurrently, a dependent test
+     * could start first and take a {@code @ResourceLock} before waiting for a test that needs the same lock, and
+     * neither would ever finish. Any other class leaves the mode to the run's configuration.
+     */
+    @Override
+    public Optional<ExecutionMode> getDefaultExecutionMode() {
+        return dependentWithin ? Optional.of(ExecutionMode.SAME_THREAD) : Optional.empty();
     }
 
     @Override

@@ -14,6 +14,8 @@ import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import com.google.gson.GsonBuilder;
@@ -25,6 +27,7 @@ import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.harness.AgentBridge;
 import net.magicterra.stagewright.harness.StageWrightHarness;
 import net.minecraft.server.MinecraftServer;
+import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
@@ -106,8 +109,13 @@ public final class JupiterRun {
             LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
                     .selectors(classes.stream().map(DiscoverySelectors::selectClass).toList())
                     .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")
-                    .configurationParameter("junit.jupiter.testmethod.order.default", DependencyOrder.class.getName())
-                    .configurationParameter("junit.jupiter.testclass.order.default", DependencyOrder.class.getName())
+                    // Below a junit-platform.properties on the game's class path, or a -D, so either may change them.
+                    .parentConfigurationParameters(new Defaults(Map.of(
+                            "junit.jupiter.testmethod.order.default", DependencyOrder.class.getName(),
+                            "junit.jupiter.testclass.order.default", DependencyOrder.class.getName(),
+                            "junit.jupiter.execution.parallel.enabled", "true",
+                            "junit.jupiter.execution.parallel.mode.default", "concurrent",
+                            "junit.jupiter.execution.parallel.mode.classes.default", "concurrent")))
                     .build();
             SummaryGeneratingListener summary = new SummaryGeneratingListener();
             StringWriter xmlLog = new StringWriter();
@@ -117,7 +125,7 @@ public final class JupiterRun {
             if (!cycles.isEmpty()) {
                 throw new IllegalStateException("@DependsOn cycles, so no test can go first: " + cycles);
             }
-            launcher.execute(plan, summary, relay,
+            launcher.execute(plan, summary, relay, Dependencies.ENDINGS,
                     new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
             writeSummary(reports.resolve("summary.json"), classes, summary.getSummary());
             StringWriter text = new StringWriter();
@@ -175,5 +183,29 @@ public final class JupiterRun {
         }
         o.add("failures", failures);
         Files.writeString(file, new GsonBuilder().setPrettyPrinting().create().toJson(o));
+    }
+
+    /** StageWright's defaults, consulted after everything the run's own configuration says. */
+    private record Defaults(Map<String, String> values) implements ConfigurationParameters {
+        @Override
+        public Optional<String> get(String key) {
+            return Optional.ofNullable(values.get(key));
+        }
+
+        @Override
+        public Optional<Boolean> getBoolean(String key) {
+            return get(key).map(Boolean::parseBoolean);
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public int size() {
+            return values.size();
+        }
+
+        @Override
+        public Set<String> keySet() {
+            return values.keySet();
+        }
     }
 }

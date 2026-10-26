@@ -42,6 +42,18 @@ decided before it starts, by system properties ([launch spec](../reference/launc
 When the game ends, everything it did not report is closed out as failed with the reason: the run's own error (a
 `@DependsOn` cycle), a test it never discovered, or how the game ended — crashed, stalled, timed out, exited.
 
+## Tests in a game run in parallel
+
+The game's launcher runs classes and methods concurrently unless the run's own configuration — a
+`junit-platform.properties` on the game's class path, or a `-D` — says otherwise; StageWright's defaults sit below
+both. What two tests share is declared the JUnit way: `@ResourceLock` on the locks `Locks` names, read-only where a
+test only reads, or `@Isolated` on a class that needs the game to itself. An override without its lock is refused.
+
+`@DependsOn` holds in a parallel run by waiting: a dependent test blocks until each test it names has ended, every
+invocation of it included, and the pool adds a thread for as long as it waits. A class whose tests depend on one
+another runs them one at a time in dependency order, since a dependent that took a lock first and then waited for a
+test needing the same lock would wait forever.
+
 ## Every test runs somewhere
 
 `@Requires` is checked in the game, which disables what its game lacks with a reason beginning `@Requires: `.
@@ -64,5 +76,5 @@ command-line runner writes the same file from a game directory. The engine knows
 
 - Scene declarations apply `topology` and `world` ([scene file](../reference/scene-file.md)); `mods`, `files`,
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
-- Scenes run one after another; tests within a game run one after another.
+- Scenes run one after another.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.
