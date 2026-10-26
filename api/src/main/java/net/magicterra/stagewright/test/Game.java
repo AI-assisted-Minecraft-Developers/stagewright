@@ -5,6 +5,7 @@ import java.util.function.Function;
 
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.GameRules;
 
 /**
  * The game instance a test runs in, injected as a test method or constructor parameter. Tests run on a test
@@ -43,4 +44,22 @@ public interface Game {
 
     /** Wait for a condition on the server; see {@link Await}. */
     Await await();
+
+    /**
+     * Set a game rule for the rest of this test; it is put back when the test ends. Needs
+     * {@code @ResourceLock(Locks.WORLD_RULES)}, as every override here needs the lock {@link Locks} names for it.
+     */
+    void override(GameRules.Key<GameRules.BooleanValue> rule, boolean value);
+
+    /** {@link #override(GameRules.Key, boolean)} for an integer rule. */
+    void override(GameRules.Key<GameRules.IntegerValue> rule, int value);
+
+    /** Set the overworld's time of day for the rest of this test. Needs {@link Locks#WORLD_CLOCK}. */
+    void overrideTime(long dayTime);
+
+    /** Set the weather for the rest of this test. Needs {@link Locks#WEATHER}. */
+    void overrideWeather(boolean raining, boolean thundering);
+
+    /** Set the server's tick rate for the rest of this test. Needs {@link Locks#TICK_RATE}. */
+    void overrideTickRate(float ticksPerSecond);
 }

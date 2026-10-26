@@ -10,9 +10,12 @@ import java.util.function.Function;
 
 import net.magicterra.stagewright.test.Await;
 import net.magicterra.stagewright.test.Game;
+import net.magicterra.stagewright.test.Locks;
 import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.storage.ServerLevelData;
 
 /** The {@link Game} of the server this JVM runs. */
 final class GameImpl implements Game {
@@ -52,6 +55,75 @@ final class GameImpl implements Game {
     @Override
     public Await await() {
         return new AwaitImpl();
+    }
+
+    @Override
+    public void override(GameRules.Key<GameRules.BooleanValue> rule, boolean value) {
+        TestScope scope = TestScope.current("game.override");
+        scope.require(Locks.WORLD_RULES, "Locks.WORLD_RULES", "game.override(" + rule.getId() + ")");
+        runOnServer(s -> {
+            boolean old = s.getGameRules().getRule(rule).get();
+            s.getGameRules().getRule(rule).set(value, s);
+            scope.onEnd(at -> at.getGameRules().getRule(rule).set(old, at));
+        });
+    }
+
+    @Override
+    public void override(GameRules.Key<GameRules.IntegerValue> rule, int value) {
+        TestScope scope = TestScope.current("game.override");
+        scope.require(Locks.WORLD_RULES, "Locks.WORLD_RULES", "game.override(" + rule.getId() + ")");
+        runOnServer(s -> {
+            int old = s.getGameRules().getRule(rule).get();
+            s.getGameRules().getRule(rule).set(value, s);
+            scope.onEnd(at -> at.getGameRules().getRule(rule).set(old, at));
+        });
+    }
+
+    @Override
+    public void overrideTime(long dayTime) {
+        TestScope scope = TestScope.current("game.overrideTime");
+        scope.require(Locks.WORLD_CLOCK, "Locks.WORLD_CLOCK", "game.overrideTime");
+        runOnServer(s -> {
+            long old = s.overworld().getDayTime();
+            s.overworld().setDayTime(dayTime);
+            scope.onEnd(at -> at.overworld().setDayTime(old));
+        });
+    }
+
+    @Override
+    public void overrideWeather(boolean raining, boolean thundering) {
+        TestScope scope = TestScope.current("game.overrideWeather");
+        scope.require(Locks.WEATHER, "Locks.WEATHER", "game.overrideWeather");
+        runOnServer(s -> {
+            ServerLevelData data = s.getWorldData().overworldData();
+            int clearTime = data.getClearWeatherTime();
+            int rainTime = data.getRainTime();
+            int thunderTime = data.getThunderTime();
+            boolean wasRaining = data.isRaining();
+            boolean wasThundering = data.isThundering();
+            // Long enough that the weather cycle does not end it mid-test.
+            int hold = 1_000_000;
+            s.overworld().setWeatherParameters(raining ? 0 : hold, raining ? hold : 0, raining, thundering);
+            scope.onEnd(at -> {
+                ServerLevelData d = at.getWorldData().overworldData();
+                d.setClearWeatherTime(clearTime);
+                d.setRainTime(rainTime);
+                d.setThunderTime(thunderTime);
+                d.setRaining(wasRaining);
+                d.setThundering(wasThundering);
+            });
+        });
+    }
+
+    @Override
+    public void overrideTickRate(float ticksPerSecond) {
+        TestScope scope = TestScope.current("game.overrideTickRate");
+        scope.require(Locks.TICK_RATE, "Locks.TICK_RATE", "game.overrideTickRate");
+        runOnServer(s -> {
+            float old = s.tickRateManager().tickrate();
+            s.tickRateManager().setTickRate(ticksPerSecond);
+            scope.onEnd(at -> at.tickRateManager().setTickRate(old));
+        });
     }
 
     /** Whether {@code condition} held within {@code budget} ticks. */
