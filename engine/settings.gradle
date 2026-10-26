@@ -13,3 +13,6 @@ rootProject.name = 'stagewright-engine'
 // real JVM with it, and so one includeBuild gives every consumer both coordinates.
 include 'stagewright-agent'
 project(':stagewright-agent').projectDir = file('../agent')
+
+include 'stagewright-testengine'
+project(':stagewright-testengine').projectDir = file('../testengine')

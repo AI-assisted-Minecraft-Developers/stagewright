@@ -1,0 +1,74 @@
+// The outer JUnit Platform engine, id `stagewright`. See docs/design/test-engine.md.
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+group = 'net.magicterra'
+version = rootProject.stagewrightVersion
+
+apply from: '../gradle/license.gradle'
+apply from: '../gradle/nexus.gradle'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    // The supervision agent, carried as a resource: a game loads it from a file, with -javaagent.
+    bundledAgent { transitive = false }
+}
+
+dependencies {
+    implementation project(':')
+    bundledAgent project(':stagewright-agent')
+
+    // The JUnit the game runs; the Test task that loads this engine brings its own launcher.
+    implementation platform('org.junit:junit-bom:5.11.3')
+    implementation 'org.junit.platform:junit-platform-engine'
+    // Reads test classes without loading them: their signatures name Minecraft, which is not here.
+    implementation 'org.ow2.asm:asm:9.7.1'
+    implementation 'org.yaml:snakeyaml:2.3'
+
+    testImplementation platform('org.junit:junit-bom:5.11.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.junit.platform:junit-platform-testkit'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
+}
+
+def stageBundledAgent = tasks.register('stageBundledAgent', Copy) {
+    from configurations.bundledAgent
+    into layout.buildDirectory.dir('bundled-agent')
+    rename(/^stagewright-agent-.*\.jar$/, 'stagewright-agent.jar')
+}
+tasks.named('processResources') { into('agent') { from stageBundledAgent } }
+
+tasks.named('test', Test) {
+    useJUnitPlatform {
+        // The fixtures under test are found by this engine, run from the tests through the test kit.
+        excludeEngines 'stagewright'
+    }
+    systemProperty 'stagewright.testClasses', sourceSets.test.output.classesDirs.asPath
+    // The fixtures are only read by name; Jupiter must not run them itself.
+    exclude 'net/magicterra/stagewright/testengine/fixtures/**'
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'stagewright-testengine'
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
+}

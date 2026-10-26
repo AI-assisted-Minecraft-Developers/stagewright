@@ -1,0 +1,120 @@
+package net.magicterra.stagewright.testengine;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Stream;
+
+import net.magicterra.stagewright.engine.supervise.AgentJar;
+import net.magicterra.stagewright.engine.supervise.Supervisor;
+import org.junit.platform.engine.EngineExecutionListener;
+import org.junit.platform.engine.TestDescriptor;
+import org.junit.platform.engine.TestExecutionResult;
+
+/**
+ * One scene: start its game (and the companion its topology names), select the scene's classes, relay what the game
+ * reports, and when the game is gone report everything it did not as failed with the reason it stopped.
+ */
+final class SceneRun {
+
+    private static final Duration CONNECT_LIMIT = Duration.ofMinutes(2);
+    private static final Duration HEARTBEAT_LIMIT = Duration.ofSeconds(60);
+    private static final int AGENT_GRACE_SECONDS = 30;
+    private static final int AGENT_IDLE_SECONDS = 20;
+
+    private final Nodes.Scene scene;
+    private final EngineExecutionListener listener;
+
+    SceneRun(Nodes.Scene scene, EngineExecutionListener listener) {
+        this.scene = scene;
+        this.listener = listener;
+    }
+
+    void run(ClassLoader loader) {
+        listener.executionStarted(scene);
+        Relay relay = new Relay(scene, listener);
+        TestExecutionResult result;
+        try {
+            SceneFile declaration = SceneFile.load(scene.name, loader);
+            LaunchSpec spec = LaunchSpec.load(declaration.topology());
+            result = launch(spec, relay);
+        } catch (Exception e) {
+            relay.closeOut(scene, "the scene could not start: " + e.getMessage());
+            result = TestExecutionResult.failed(e);
+        }
+        listener.executionFinished(scene, result);
+    }
+
+    private TestExecutionResult launch(LaunchSpec spec, Relay relay) throws IOException, InterruptedException {
+        Path artifacts = spec.gameDirectory().resolve("stagewright");
+        Path logs = artifacts.resolve("logs");
+        Files.createDirectories(logs);
+        if (spec.cleanWorld()) deleteTree(spec.gameDirectory().resolve("world"));
+        Path agentJar = AgentJar.stage(SceneRun.class, artifacts);
+        File gameLog = logs.resolve(scene.name + "-game.log").toFile();
+
+        List<String> classes = new ArrayList<>();
+        for (TestDescriptor c : scene.getChildren()) classes.add(((Nodes.TestClass) c).className);
+
+        Process companion = null;
+        try (Supervisor supervisor = Supervisor.open()) {
+            supervisor.onTest(relay);
+            List<String> extra = List.of(
+                    supervisor.agentArgument(agentJar, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS),
+                    // Also what keeps the topology's own scene suite from starting: the game runs these only.
+                    "-Dstagewright.junit.classes=" + String.join(",", classes),
+                    "-Dstagewright.junit.exitWhenDone=true");
+            Process game = start(spec.primary(), extra, gameLog);
+            if (spec.companion() != null) {
+                companion = start(spec.companion(), List.of(), logs.resolve(scene.name + "-companion.log").toFile());
+            }
+            Duration total = Duration.ofMinutes(spec.timeoutMinutes());
+            Duration stall = spec.stallMinutes() == 0 ? total : Duration.ofMinutes(spec.stallMinutes());
+            Supervisor.Ended ended = supervisor.await(game.toHandle(),
+                    new Supervisor.Limits(CONNECT_LIMIT, HEARTBEAT_LIMIT, stall, total));
+            if (ended != Supervisor.Ended.DONE) Supervisor.kill(game.toHandle());
+            // The supervisor's reader may still be handing over the last lines; they precede the end it saw.
+            supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(AGENT_GRACE_SECONDS + 10));
+            String why = describe(ended, supervisor, gameLog);
+            relay.closeOut(scene, why);
+            if (ended == Supervisor.Ended.DONE && relay.ended()) return TestExecutionResult.successful();
+            return TestExecutionResult.failed(new AssertionError("the game ended " + why));
+        } finally {
+            if (companion != null) Supervisor.kill(companion.toHandle());
+        }
+    }
+
+    private static Process start(LaunchSpec.Process p, List<String> extra, File log) throws IOException {
+        Files.createDirectories(p.workingDirectory());
+        ProcessBuilder builder = new ProcessBuilder(p.command(extra)).directory(p.workingDirectory().toFile())
+                .redirectErrorStream(true).redirectOutput(log);
+        builder.environment().putAll(p.environment());
+        return builder.start();
+    }
+
+    private static String describe(Supervisor.Ended ended, Supervisor supervisor, File log) {
+        String detail = switch (ended) {
+            case DONE -> "after its run, but without reporting every test";
+            case CRASHED -> "by crashing" + (supervisor.crashReport() == null ? "" : ": " + supervisor.crashReport());
+            case STALLED -> "stalled in phase " + supervisor.phase() + " at tick " + supervisor.ticks();
+            case TIMED_OUT -> "by running past its time limit";
+            case HEARTBEAT_LOST -> "by going silent";
+            case NEVER_CONNECTED -> "without ever reaching its supervision agent";
+            case PROCESS_DIED -> "by exiting without finishing its run";
+            default -> String.valueOf(ended);
+        };
+        return "(" + ended + ") " + detail + "; its log is " + log;
+    }
+
+    private static void deleteTree(Path root) throws IOException {
+        if (!Files.exists(root)) return;
+        try (Stream<Path> walk = Files.walk(root)) {
+            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) Files.delete(p);
+        }
+    }
+}

@@ -1,0 +1,138 @@
+package net.magicterra.stagewright.testengine;
+
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * A stand-in for the game: started by the engine as the primary process, it reports a scripted test run through the
+ * supervision agent's {@code Control}, the way the in-game JUnit run does. The one argument names the scenario.
+ */
+public final class FakeGame {
+
+    private static final String ENGINE = "[engine:junit-jupiter]";
+
+    private FakeGame() {}
+
+    public static void main(String[] args) throws Exception {
+        String scenario = args[0];
+        // The agent connects on its own thread and drops what the game sends before that; a real game takes seconds
+        // to reach its first event, this one has to wait the connection out.
+        Thread.sleep(1500);
+        List<String> classes = List.of(System.getProperty("stagewright.junit.classes", "").split(","));
+        if (scenario.equals("dynamic")) {
+            dynamic(classes);
+            return;
+        }
+        List<String> methods = scenario.equals("undiscovered") ? List.of("a") : List.of("a", "b");
+        plan(classes, methods);
+        if (scenario.equals("crash")) {
+            start(classId(classes.get(0)));
+            start(methodId(classes.get(0), "a"));
+            System.exit(1);
+        }
+        for (String c : classes) {
+            start(classId(c));
+            for (String m : methods) {
+                start(methodId(c, m));
+                if (scenario.equals("assertFail") && m.equals("b")) {
+                    finish(methodId(c, m), "FAILED", "{\"class\":\"org.opentest4j.AssertionFailedError\","
+                            + "\"message\":\"expected 1 but was 2\",\"trace\":[\"x.Y.m(Y.java:3)\"]}");
+                } else {
+                    finish(methodId(c, m), "SUCCESSFUL", null);
+                }
+            }
+            finish(classId(c), "SUCCESSFUL", null);
+        }
+        test("{\"type\":\"ended\"}");
+        done();
+        System.exit(0);
+    }
+
+    private static void dynamic(List<String> classes) throws Exception {
+        String c = classes.get(0);
+        List<String> nodes = new ArrayList<>();
+        nodes.add(node(ENGINE, null, "engine", false, null, null, null));
+        nodes.add(classNode(c));
+        String method = ENGINE + "/[class:" + c + "]/[test-template:rows(java.lang.String)]";
+        nodes.add(node(method, classId(c), "rows(String)", false, c, "rows", "java.lang.String"));
+        test("{\"type\":\"planned\",\"nodes\":[" + String.join(",", nodes) + "]}");
+        start(classId(c));
+        start(method);
+        for (int i = 1; i <= 2; i++) {
+            String id = method + "/[test-template-invocation:#" + i + "]";
+            test("{\"type\":\"dynamic\",\"node\":" + node(id, method, "[" + i + "] row", true, null, null, null) + "}");
+            start(id);
+            finish(id, "SUCCESSFUL", null);
+        }
+        finish(method, "SUCCESSFUL", null);
+        finish(classId(c), "SUCCESSFUL", null);
+        test("{\"type\":\"ended\"}");
+        done();
+        System.exit(0);
+    }
+
+    private static void plan(List<String> classes, List<String> methods) throws Exception {
+        List<String> nodes = new ArrayList<>();
+        nodes.add(node(ENGINE, null, "engine", false, null, null, null));
+        for (String c : classes) {
+            nodes.add(classNode(c));
+            for (String m : methods) nodes.add(node(methodId(c, m), classId(c), m + "()", true, c, m, ""));
+        }
+        test("{\"type\":\"planned\",\"nodes\":[" + String.join(",", nodes) + "]}");
+    }
+
+    private static String classNode(String c) {
+        return node(classId(c), ENGINE, c.substring(c.lastIndexOf('.') + 1), false, c, null, null);
+    }
+
+    private static String node(String id, String parent, String name, boolean test, String className, String method,
+                               String parameters) {
+        StringBuilder s = new StringBuilder("{\"id\":").append(q(id));
+        if (parent != null) s.append(",\"parent\":").append(q(parent));
+        s.append(",\"name\":").append(q(name)).append(",\"test\":").append(test);
+        if (className != null) s.append(",\"class\":").append(q(className));
+        if (method != null) s.append(",\"method\":").append(q(method));
+        if (parameters != null) s.append(",\"parameters\":").append(q(parameters));
+        return s.append('}').toString();
+    }
+
+    private static String classId(String c) {
+        return ENGINE + "/[class:" + c + "]";
+    }
+
+    private static String methodId(String c, String m) {
+        return classId(c) + "/[method:" + m + "()]";
+    }
+
+    private static void start(String id) throws Exception {
+        test("{\"type\":\"started\",\"id\":" + q(id) + "}");
+    }
+
+    private static void finish(String id, String status, String failure) throws Exception {
+        test("{\"type\":\"finished\",\"id\":" + q(id) + ",\"status\":" + q(status)
+                + (failure == null ? "" : ",\"failure\":" + failure) + "}");
+    }
+
+    private static String q(String s) {
+        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    private static void test(String json) throws Exception {
+        control("test", String.class, json);
+    }
+
+    private static void done() throws Exception {
+        control("done", null, null);
+    }
+
+    private static void control(String name, Class<?> type, Object arg) throws Exception {
+        Class<?> control = ClassLoader.getSystemClassLoader().loadClass("net.magicterra.stagewright.agent.Control");
+        if (type == null) {
+            control.getMethod(name).invoke(null);
+        } else {
+            Method m = control.getMethod(name, type);
+            m.invoke(null, arg);
+        }
+    }
+}

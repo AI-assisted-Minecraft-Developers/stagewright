@@ -1,0 +1,54 @@
+# Launch spec
+
+How the test engine starts the games of one topology. Whatever configures a test run — the Gradle plugin, the
+command-line runner — writes one file per topology, `<topology>.json`, into a directory, and passes that directory to
+the test JVM as `-Dstagewright.launches=<directory>`. A scene's declaration names its topology; the engine reads the
+matching file when it starts that scene. Why the engine does not ask Gradle is in
+[the test engine's design](../design/test-engine.md).
+
+## The file
+
+```json
+{
+  "topology": "dedicatedServerWithClient",
+  "gameDirectory": "/abs/run-stagewright-with-client",
+  "cleanWorld": true,
+  "timeoutMinutes": 20,
+  "stallMinutes": 5,
+  "primary": {
+    "java": "/usr/lib/jvm/java-21-openjdk/bin/java",
+    "jvmArgs": ["-Xmx2g", "-Dstagewright.awaitPlayer=true", "@/abs/argfile"],
+    "mainClass": "net.fabricmc.devlaunchinjector.Main",
+    "args": ["--nogui", "--port", "25601"],
+    "workingDirectory": "/abs/run-stagewright-with-client",
+    "environment": {}
+  },
+  "companion": { "...": "the same fields, for the client that joins" }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `topology` | the name, as the scene declaration spells it |
+| `gameDirectory` | where the primary game writes; the engine keeps its logs and the agent jar under `stagewright/` in it |
+| `cleanWorld` | delete `<gameDirectory>/world` before each scene starts; default true |
+| `timeoutMinutes` | the longest a scene's game may run; default 20 |
+| `stallMinutes` | how long the game may go without changing phase, ticks or loaded classes before it is ended; 0 turns this off; default 5 |
+| `primary` | the game the tests run in |
+| `companion` | optional: a second game started with it and ended after it, such as the client that joins a dedicated server |
+
+A process is `java jvmArgs… mainClass args…` run in `workingDirectory` with `environment` added to the engine's own.
+`jvmArgs` holds everything before the main class, class path included, in the order the run would have used.
+
+## What the engine adds
+
+To the primary only, placed after the run's own system properties and before the first `-cp` or argument file, so
+that a `-D` here overrides the run's and the JVM rather than a launcher reads it:
+
+| Argument | Why |
+|---|---|
+| `-javaagent:<agent jar>=…` | the supervision agent, which also carries the test events back ([protocol](supervision-protocol.md)) |
+| `-Dstagewright.junit.classes=<classes>` | the scene's test classes, comma-separated: the game runs these and only these. A game with this property set does not start the scene suite, whatever the run's `stagewright.autorun` says — a loader may set its run's properties after the JVM has read the command line, so overriding that one here would not hold |
+| `-Dstagewright.junit.exitWhenDone=true` | the game ends itself once its run is over |
+
+The companion gets nothing added. Its output and the primary's go to `<gameDirectory>/stagewright/logs/`.

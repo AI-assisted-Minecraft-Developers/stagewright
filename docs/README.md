@@ -35,6 +35,7 @@ built programs rely on, so they are stated as literal names, keys and codes.
 | [Instrument contract](reference/instrument-contract.md) | The instrumentation surface reachable from outside the game, and the permanent assertions and canaries by which the framework establishes that it is itself sound. |
 | [Attached protocol](reference/attached-protocol.md) | The seven hidden methods by which a scene file running outside the game gets an arena in it and calls into it: the run, the answers, and how values cross. |
 | [Supervision protocol](reference/supervision-protocol.md) | What the agent in a game's JVM sends its supervisor, the conclusions drawn from it, and how the mod talks to the agent. |
+| [Launch spec](reference/launch-spec.md) | The file that tells the test engine how to start one topology's games, and what the engine adds to the command. |
 | [Publishing and artifacts](reference/publishing.md) | What is published, which coordinate to depend on for which job, and why the wrong one fails to link rather than failing to resolve. |
 
 ## Design — why it is shaped this way
@@ -47,6 +48,7 @@ wants to know what it was weighed against.
 | [Attached scenes](design/attached-scenes.md) | Running scenes outside the game process: where that capability lives, what it can honestly offer, and what it must refuse rather than approximate. |
 | [Scene capabilities](design/scene-capabilities.md) | Moving from scenes that place blocks to scenes that test processes: the constraints that determined the shape, and the silent-failure modes it has to defend against. |
 | [Capability extensions](design/capability-extensions.md) | The two routes by which a third-party mod or a modpack teaches the framework something new, and the rule that makes the reflective route sound. |
+| [The test engine](design/test-engine.md) | Tests run inside the game and are reported by an outer JUnit engine: finding them without loading them, matching the two trees, the one channel back, and why it reads a launch spec instead of a Gradle task. |
 | [Supervision](design/supervision.md) | How a launcher learns that a run finished, stalled, crashed or cannot exit: an agent inside the game's JVM reporting over a local channel, instead of reading files from outside. |
 
 ## Archive — historical records
