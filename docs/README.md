@@ -49,6 +49,7 @@ wants to know what it was weighed against.
 | [Attached scenes](design/attached-scenes.md) | Running scenes outside the game process: where that capability lives, what it can honestly offer, and what it must refuse rather than approximate. |
 | [Scene capabilities](design/scene-capabilities.md) | Moving from scenes that place blocks to scenes that test processes: the constraints that determined the shape, and the silent-failure modes it has to defend against. |
 | [Capability extensions](design/capability-extensions.md) | The two routes by which a third-party mod or a modpack teaches the framework something new, and the rule that makes the reflective route sound. |
+| [Test queries](design/test-queries.md) | StageWright's own `mc.test.*` questions — chunks, recipes, loot, advancements, structures: one method per subject, generated callers, and what is an answer rather than a failure. |
 | [The test engine](design/test-engine.md) | Tests run inside the game and are reported by an outer JUnit engine: finding them without loading them, matching the two trees, the one channel back, and why it reads a launch spec instead of a Gradle task. |
 | [Supervision](design/supervision.md) | How a launcher learns that a run finished, stalled, crashed or cannot exit: an agent inside the game's JVM reporting over a local channel, instead of reading files from outside. |
 

@@ -17,4 +17,18 @@ public interface TestQueriesApi {
 
     @Spec(value = ChunksContracts.class, spec = "CHUNKS")
     CompletionStage<ChunksContracts.ChunksReply> chunks(ChunksContracts.ChunksOp op, CallContext ctx);
+
+    @Spec(value = RecipesContracts.class, spec = "RECIPES")
+    CompletionStage<RecipesContracts.RecipesReply> recipes(RecipesContracts.RecipesOp op, CallContext ctx);
+
+    @Spec(value = LootContracts.class, spec = "LOOT")
+    CompletionStage<LootContracts.LootReply> loot(LootContracts.LootOp op, CallContext ctx);
+
+    @Spec(value = AdvancementsContracts.class, spec = "ADVANCEMENTS")
+    CompletionStage<AdvancementsContracts.AdvancementsReply> advancements(
+            AdvancementsContracts.AdvancementsOp op, CallContext ctx);
+
+    @Spec(value = StructuresContracts.class, spec = "STRUCTURES")
+    CompletionStage<StructuresContracts.StructuresReply> structures(
+            StructuresContracts.StructuresOp op, CallContext ctx);
 }

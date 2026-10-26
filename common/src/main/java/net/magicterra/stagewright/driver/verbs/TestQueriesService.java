@@ -1,5 +1,9 @@
 package net.magicterra.stagewright.driver.verbs;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -19,7 +23,29 @@ import net.magicterra.worlddriver.api.schema.ApiError;
 import net.magicterra.worlddriver.api.schema.ApiException;
 import net.magicterra.worlddriver.api.schema.ApiIssue;
 import net.magicterra.worlddriver.api.thread.ServerThreadGuard;
+import net.magicterra.stagewright.test.methods.AdvancementsContracts;
+import net.magicterra.stagewright.test.methods.LootContracts;
+import net.magicterra.stagewright.test.methods.RecipesContracts;
+import net.magicterra.stagewright.test.methods.StructuresContracts;
+import net.magicterra.worlddriver.bot.BotRegistry;
+import net.minecraft.advancements.AdvancementHolder;
+import net.minecraft.advancements.AdvancementProgress;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.server.PlayerAdvancements;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.LootTable;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -42,6 +68,191 @@ final class TestQueriesService implements TestQueriesApi {
             case Unload u -> unload(level(server, u.dimension()), u.pos(), u.withinTicks());
             case Reload r -> reload(level(server, r.dimension()), r.pos(), r.withinTicks());
         });
+    }
+
+    @Override
+    public CompletionStage<RecipesContracts.RecipesReply> recipes(RecipesContracts.RecipesOp op, CallContext ctx) {
+        return onServer(server -> {
+            RecipeGraph graph = new RecipeGraph(server.overworld());
+            RecipesContracts.RecipesReply reply = switch (op) {
+                case RecipesContracts.Producing p -> graph.producing(p.item());
+                case RecipesContracts.Ingredients i -> graph.ingredients(i.recipe());
+                case RecipesContracts.ClosureOf c -> graph.closure(c.item(),
+                        c.maxNodes().orElse(RecipesContracts.DEFAULT_MAX_NODES),
+                        c.maxDepth().orElse(RecipesContracts.DEFAULT_MAX_DEPTH));
+                case RecipesContracts.Uncraftable u -> graph.uncraftable();
+                case RecipesContracts.Audit a -> graph.audit();
+            };
+            return CompletableFuture.completedFuture(reply);
+        });
+    }
+
+    /**
+     * Loot tables are rolled with chest parameters at the overworld origin. A table of another context set is
+     * refused up front: the game would not, it returns an empty list, which reads as "this table drops nothing".
+     */
+    @Override
+    public CompletionStage<LootContracts.LootReply> loot(LootContracts.LootOp op, CallContext ctx) {
+        return onServer(server -> {
+            LootContracts.LootReply reply = switch (op) {
+                case LootContracts.Exists e -> new LootContracts.Existence(lootTable(server, e.table()) != LootTable.EMPTY);
+                case LootContracts.Roll r -> roll(server, r);
+            };
+            return CompletableFuture.completedFuture(reply);
+        });
+    }
+
+    private static LootTable lootTable(MinecraftServer server, String id) {
+        ResourceLocation location = ResourceLocation.tryParse(id);
+        if (location == null) {
+            throw ApiException.invalidParam("/table", ApiIssue.Code.INVALID_VALUE, id + " is not a resource id");
+        }
+        // getLootTable answers the EMPTY stand-in, not null, for an id nothing registered.
+        return server.reloadableRegistries().getLootTable(ResourceKey.create(Registries.LOOT_TABLE, location));
+    }
+
+    private static LootContracts.Rolled roll(MinecraftServer server, LootContracts.Roll r) {
+        LootTable table = lootTable(server, r.table());
+        if (table == LootTable.EMPTY) {
+            throw ApiException.invalidParam("/table", ApiIssue.Code.INVALID_VALUE,
+                    "no loot table is registered as " + r.table());
+        }
+        if (table.getParamSet() != LootContextParamSets.CHEST) {
+            throw ApiException.invalidParam("/table", ApiIssue.Code.INVALID_VALUE, r.table()
+                    + " is not a chest-shaped loot table; rolling it needs a killer, a tool or a block state");
+        }
+        LootParams params = new LootParams.Builder(server.overworld())
+                .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(BlockPos.ZERO))
+                .create(LootContextParamSets.CHEST);
+        Map<String, long[]> counts = new LinkedHashMap<>(); // item -> {stacks, total}
+        int empty = 0;
+        for (int i = 0; i < r.times(); i++) {
+            boolean any = false;
+            for (ItemStack stack : table.getRandomItems(params)) {
+                if (stack.isEmpty()) continue;
+                any = true;
+                long[] c = counts.computeIfAbsent(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(),
+                        k -> new long[2]);
+                c[0]++;
+                c[1] += stack.getCount();
+            }
+            if (!any) empty++;
+        }
+        List<LootContracts.ItemCount> items = new ArrayList<>();
+        counts.forEach((id, c) -> items.add(new LootContracts.ItemCount(id, (int) c[0], c[1])));
+        return new LootContracts.Rolled(r.times(), empty, items);
+    }
+
+    @Override
+    public CompletionStage<AdvancementsContracts.AdvancementsReply> advancements(
+            AdvancementsContracts.AdvancementsOp op, CallContext ctx) {
+        return onServer(server -> {
+            AdvancementsContracts.AdvancementsReply reply = switch (op) {
+                case AdvancementsContracts.Grant g -> {
+                    ServerPlayer player = player(server, g.bot());
+                    AdvancementHolder holder = advancement(server, g.id());
+                    PlayerAdvancements progress = player.getAdvancements();
+                    // Snapshot before awarding: these are exactly the criteria this call is responsible for.
+                    List<String> awarded = new ArrayList<>();
+                    progress.getOrStartProgress(holder).getRemainingCriteria().forEach(awarded::add);
+                    for (String criterion : awarded) progress.award(holder, criterion);
+                    yield new AdvancementsContracts.Granted(progress.getOrStartProgress(holder).isDone(), awarded);
+                }
+                case AdvancementsContracts.Revoke v -> {
+                    ServerPlayer player = player(server, v.bot());
+                    AdvancementHolder holder = advancement(server, v.id());
+                    PlayerAdvancements progress = player.getAdvancements();
+                    List<String> completed = new ArrayList<>();
+                    progress.getOrStartProgress(holder).getCompletedCriteria().forEach(completed::add);
+                    for (String criterion : completed) progress.revoke(holder, criterion);
+                    yield new AdvancementsContracts.Revoked(progress.getOrStartProgress(holder).isDone(), completed);
+                }
+                case AdvancementsContracts.Progress p -> {
+                    ServerPlayer player = player(server, p.bot());
+                    AdvancementProgress progress = player.getAdvancements().getOrStartProgress(advancement(server, p.id()));
+                    List<String> completed = new ArrayList<>();
+                    progress.getCompletedCriteria().forEach(completed::add);
+                    List<String> remaining = new ArrayList<>();
+                    progress.getRemainingCriteria().forEach(remaining::add);
+                    yield new AdvancementsContracts.Progressed(progress.isDone(), completed, remaining);
+                }
+            };
+            return CompletableFuture.completedFuture(reply);
+        });
+    }
+
+    private static ServerPlayer player(MinecraftServer server, String ref) {
+        ServerPlayer player = BotRegistry.serverPlayer(server, ref);
+        if (player == null) {
+            throw ApiException.invalidParam("/bot", ApiIssue.Code.INVALID_VALUE, "no server player " + ref);
+        }
+        return player;
+    }
+
+    private static AdvancementHolder advancement(MinecraftServer server, String id) {
+        ResourceLocation location = ResourceLocation.tryParse(id);
+        AdvancementHolder holder = location == null ? null : server.getAdvancements().get(location);
+        if (holder == null) {
+            throw ApiException.invalidParam("/id", ApiIssue.Code.INVALID_VALUE, "no advancement is registered as " + id);
+        }
+        return holder;
+    }
+
+    @Override
+    public CompletionStage<StructuresContracts.StructuresReply> structures(
+            StructuresContracts.StructuresOp op, CallContext ctx) {
+        return onServer(server -> {
+            StructuresContracts.StructuresReply reply = switch (op) {
+                case StructuresContracts.Registered r -> new StructuresContracts.IsRegistered(
+                        structureRegistry(server.overworld()).containsKey(structureId(r.id())));
+                case StructuresContracts.At a -> {
+                    ServerLevel level = level(server, a.dimension());
+                    BlockPos pos = new BlockPos(a.pos().x(), a.pos().y(), a.pos().z());
+                    Registry<Structure> registry = structureRegistry(level);
+                    List<String> out = new ArrayList<>();
+                    for (ResourceLocation id : registry.keySet()) {
+                        Structure structure = registry.get(id);
+                        if (structure == null) continue;
+                        StructureStart start = level.structureManager().getStructureAt(pos, structure);
+                        if (start != null && start.isValid()) out.add(id.toString());
+                    }
+                    out.sort(String::compareTo);
+                    yield new StructuresContracts.Covering(out);
+                }
+                case StructuresContracts.Locate l -> locate(level(server, l.dimension()), l);
+            };
+            return CompletableFuture.completedFuture(reply);
+        });
+    }
+
+    /** Expensive: it scans and generates chunks, so the milliseconds are reported found or not. */
+    private static StructuresContracts.Located locate(ServerLevel level, StructuresContracts.Locate l) {
+        Registry<Structure> registry = structureRegistry(level);
+        Structure structure = registry.get(structureId(l.id()));
+        if (structure == null) {
+            throw ApiException.invalidParam("/id", ApiIssue.Code.INVALID_VALUE, "no structure is registered as " + l.id());
+        }
+        Holder<Structure> holder = registry.wrapAsHolder(structure);
+        BlockPos from = new BlockPos(l.pos().x(), l.pos().y(), l.pos().z());
+        long startedAt = System.currentTimeMillis();
+        var found = level.getChunkSource().getGenerator().findNearestMapStructure(
+                level, HolderSet.direct(holder), from, l.chunkRadius(), false);
+        long ms = System.currentTimeMillis() - startedAt;
+        if (found == null) return new StructuresContracts.Located(false, Optional.empty(), ms);
+        BlockPos at = found.getFirst();
+        return new StructuresContracts.Located(true, Optional.of(new BlockPosition(at.getX(), at.getY(), at.getZ())), ms);
+    }
+
+    private static Registry<Structure> structureRegistry(ServerLevel level) {
+        return level.registryAccess().registryOrThrow(Registries.STRUCTURE);
+    }
+
+    private static ResourceLocation structureId(String id) {
+        ResourceLocation location = ResourceLocation.tryParse(id);
+        if (location == null) {
+            throw ApiException.invalidParam("/id", ApiIssue.Code.INVALID_VALUE, id + " is not a resource id");
+        }
+        return location;
     }
 
     private static CompletionStage<ChunksReply> unload(ServerLevel level, BlockPosition pos, int within) {
