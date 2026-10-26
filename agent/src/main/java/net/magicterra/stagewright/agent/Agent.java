@@ -112,6 +112,12 @@ public final class Agent {
         send(Lines.event("done"));
     }
 
+    /** One event of the in-game test run, already a JSON object; passed on as the line's {@code data}. */
+    void test(String json) {
+        if (json == null || json.isBlank()) return;
+        send(Lines.event("test").raw("data", json));
+    }
+
     /** The results are complete and the JVM is being held open on purpose: reported, and nothing is ended. */
     void resultsComplete() {
         send(Lines.event("results"));

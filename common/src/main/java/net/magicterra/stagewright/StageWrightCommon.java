@@ -176,6 +176,9 @@ public final class StageWrightCommon {
         if (holding()) {
             LOG.info("[{}] HELD — the suite will not run itself ({} scenes registered, mc.test.run"
                     + " still works). Stop the run to end the hold.", MOD_ID, resolvedScenes.size());
+        } else if (JupiterRun.selected()) {
+            LOG.info("[{}] running the JUnit tests the test engine selected; the scene suite will not run",
+                    MOD_ID);
         } else if (Boolean.getBoolean("stagewright.autorun")) {
             if (Boolean.getBoolean(AWAIT_PLAYER)) {
                 // Production topology: a dedicated server with a real client connected to it. The
@@ -399,7 +402,7 @@ public final class StageWrightCommon {
         }
         AttachedSessions.tick(server);
         JupiterRun.tick(server);
-        if (harness == null && !registryFailureRecorded && armed && !holding()
+        if (harness == null && !registryFailureRecorded && armed && !holding() && !JupiterRun.selected()
                 && Boolean.getBoolean("stagewright.autorun")
                 && Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() > 0) {
             armDeferredSuite(server);

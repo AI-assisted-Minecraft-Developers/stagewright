@@ -22,12 +22,14 @@ public final class AgentBridge {
     private final Method ticks;
     private final Method done;
     private final Method resultsComplete;
+    private final Method test;
 
-    private AgentBridge(Method phase, Method ticks, Method done, Method resultsComplete) {
+    private AgentBridge(Method phase, Method ticks, Method done, Method resultsComplete, Method test) {
         this.phase = phase;
         this.ticks = ticks;
         this.done = done;
         this.resultsComplete = resultsComplete;
+        this.test = test;
     }
 
     /** The bridge to this JVM's agent, or an inert one when there is none. */
@@ -41,16 +43,16 @@ public final class AgentBridge {
             Class<?> control = Class.forName(className, true, loader);
             return new AgentBridge(control.getMethod("phase", String.class),
                     control.getMethod("ticks", long.class), control.getMethod("done"),
-                    optional(control, "resultsComplete"));
+                    optional(control, "resultsComplete"), optional(control, "test", String.class));
         } catch (ReflectiveOperationException | LinkageError e) {
-            return new AgentBridge(null, null, null, null);
+            return new AgentBridge(null, null, null, null, null);
         }
     }
 
     /** A method an older agent may not have: its absence loses that one report, not the agent. */
-    private static Method optional(Class<?> control, String name) {
+    private static Method optional(Class<?> control, String name, Class<?>... parameters) {
         try {
-            return control.getMethod(name);
+            return control.getMethod(name, parameters);
         } catch (NoSuchMethodException e) {
             return null;
         }
@@ -74,6 +76,11 @@ public final class AgentBridge {
     /** The results file is complete and this JVM is about to be stopped. */
     public void done() {
         call(done);
+    }
+
+    /** One event of the in-game test run, a JSON object, relayed to whoever started this game. */
+    public void test(String json) {
+        call(test, json);
     }
 
     /** The results file is complete and this JVM stays up, held for something to attach to. */

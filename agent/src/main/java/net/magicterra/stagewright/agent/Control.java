@@ -40,6 +40,15 @@ public final class Control {
     }
 
     /**
+     * One event of the in-game test run, as a JSON object, for whoever started the game to report as its own.
+     * The agent does not read it: what the object holds is between the game and that supervisor.
+     */
+    public static void test(String json) {
+        Agent agent = Agent.running();
+        if (agent != null) agent.test(json);
+    }
+
+    /**
      * The results are complete and the JVM stays up, because it is held for something to attach to.
      * Unlike {@link #done()} this starts no grace period and ends nothing: whoever is supervising the
      * hold decides when it is over.

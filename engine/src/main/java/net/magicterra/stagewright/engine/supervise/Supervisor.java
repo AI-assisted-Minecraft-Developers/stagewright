@@ -15,6 +15,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import net.magicterra.stagewright.engine.Json;
@@ -331,6 +332,17 @@ public final class Supervisor implements AutoCloseable {
         }
     }
 
+    private volatile Consumer<Map<String, Object>> testListener = event -> { };
+
+    /**
+     * Receive each {@code test} event's {@code data}, in the order the game sent them, on the thread that reads
+     * the game's connection. Set it before the game starts; an event that arrives earlier is not kept.
+     */
+    public void onTest(Consumer<Map<String, Object>> listener) {
+        testListener = listener;
+    }
+
+    @SuppressWarnings("unchecked")
     private void read(Socket socket) {
         boolean mine = false;
         try (socket; BufferedReader in = new BufferedReader(
@@ -349,6 +361,15 @@ public final class Supervisor implements AutoCloseable {
                     mine = true;
                 }
                 apply(event);
+                // Outside the lock and on this one reader thread: in the order the game sent them, and a
+                // listener that asks this supervisor something cannot deadlock against apply().
+                if ("test".equals(event.get("event")) && event.get("data") instanceof Map<?, ?> data) {
+                    try {
+                        testListener.accept((Map<String, Object>) data);
+                    } catch (RuntimeException e) {
+                        // A listener's own failure is its own; the game's supervision carries on.
+                    }
+                }
             }
         } catch (IOException ignored) {
             // A reset connection is a game that went away; the state below says so.

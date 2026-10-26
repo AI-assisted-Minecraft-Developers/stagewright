@@ -21,6 +21,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
 import net.magicterra.stagewright.StageWrightCommon;
+import net.magicterra.stagewright.harness.AgentBridge;
 import net.magicterra.stagewright.harness.StageWrightHarness;
 import net.minecraft.server.MinecraftServer;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
@@ -47,10 +48,20 @@ public final class JupiterRun {
     static final String CLASSES = "stagewright.junit.classes";
     static final String EXIT = "stagewright.junit.exitWhenDone";
     static final String INDEX = "META-INF/stagewright/tests";
+    static final String AWAIT_PLAYER = "stagewright.awaitPlayer";
 
     private static volatile boolean started;
 
     private JupiterRun() {}
+
+    /**
+     * Whether the test engine chose this game's tests. Such a game runs them and not the scene suite: the run task's
+     * own {@code stagewright.autorun} cannot be overridden from the command line, since a loader may set its run
+     * properties after the JVM has read the command line's.
+     */
+    public static boolean selected() {
+        return System.getProperty(CLASSES) != null;
+    }
 
     /** Server thread, every settled tick: answer pending waits, and start the run the first time it may. */
     public static void tick(MinecraftServer server) {
@@ -58,6 +69,8 @@ public final class JupiterRun {
         if (started) return;
         String listed = System.getProperty(CLASSES);
         if (listed == null && !Boolean.getBoolean(ENABLED)) return;
+        // A topology with a real client holds the tests until it has joined, as it holds the scene suite.
+        if (Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() == 0) return;
         started = true;
         // The server thread's context loader, the one scene discovery's ServiceLoader uses.
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
@@ -75,6 +88,7 @@ public final class JupiterRun {
 
     private static void run(MinecraftServer server, String listed, ClassLoader loader) {
         Path reports = server.getServerDirectory().resolve("stagewright/junit");
+        AgentEvents relay = new AgentEvents(AgentBridge.system());
         try {
             Files.createDirectories(reports);
             List<String> classes = listed != null ? split(listed) : indexed(loader);
@@ -95,7 +109,8 @@ public final class JupiterRun {
             if (!cycles.isEmpty()) {
                 throw new IllegalStateException("@DependsOn cycles, so no test can go first: " + cycles);
             }
-            launcher.execute(plan, summary, new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
+            launcher.execute(plan, summary, relay,
+                    new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
             writeSummary(reports.resolve("summary.json"), classes, summary.getSummary());
             StringWriter text = new StringWriter();
             summary.getSummary().printTo(new PrintWriter(text));
@@ -103,6 +118,7 @@ public final class JupiterRun {
             StageWrightCommon.LOG.info("[{}] JUnit run finished:\n{}", StageWrightCommon.MOD_ID, text);
         } catch (Throwable t) {
             StageWrightCommon.LOG.error("[{}] the JUnit run could not complete", StageWrightCommon.MOD_ID, t);
+            relay.error(t);
             try {
                 Files.writeString(reports.resolve("summary.json"), "{\"error\":" + new com.google.gson.Gson().toJson(
                         String.valueOf(t)) + "}");

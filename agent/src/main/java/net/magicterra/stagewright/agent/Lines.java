@@ -56,6 +56,13 @@ final class Lines {
         return this;
     }
 
+    /** A value that is already one complete JSON value, written as it is. */
+    Lines raw(String key, String json) {
+        key(key);
+        out.append(json);
+        return this;
+    }
+
     String build() {
         return out + "}";
     }

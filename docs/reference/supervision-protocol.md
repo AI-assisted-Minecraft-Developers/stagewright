@@ -48,6 +48,7 @@ Every line has `event`. The agent's events:
 | `crash` | `report` (the path) | once for each file that appears in `<working directory>/crash-reports` after the agent started; the listing is taken in `premain`, so a previous run's reports are not this run's. Looked for once a second |
 | `leaked` | `graceMs`, `threads` | once, when the JVM is still up `grace` seconds after `done` |
 | `exiting` | none | from a shutdown hook, when the JVM ends in an orderly way |
+| `test` | `data`, one object of the in-game test run (see [Test events](#test-events)) | each time the game relays one |
 
 Any event counts as a sign of life. A thread in `leaked.threads` has:
 
@@ -105,3 +106,26 @@ JVM was not started with the agent, and none throws.
 | `ticks(long)` | server ticks delivered so far, sent with the next heartbeat |
 | `done()` | the run is over and its results file is complete |
 | `resultsComplete()` | the results file is complete and the JVM stays up, because it is held for something to attach to. Starts no grace period. Absent from an older agent, and the mod then loses only this report |
+| `test(String)` | one event of the in-game test run, a JSON object, sent on as a `test` line's `data`. The agent does not read it. Absent from an older agent, and the game's tests then reach no one outside |
+
+## Test events
+
+The in-game JUnit run reports itself through `test`, in the order it happens; the supervisor hands each
+`data` to its listener on the thread reading the connection, so that order is kept. Every object has `type`:
+
+| `type` | Fields | Sent |
+|---|---|---|
+| `planned` | `nodes`: every node of the plan, parents before children | once, before anything runs |
+| `dynamic` | `node`: one node registered while running, such as an invocation of a parameterized test | when it is registered |
+| `started` | `id` | when a node starts |
+| `skipped` | `id`, `reason` | instead of `started` and `finished` |
+| `finished` | `id`, `status` (`SUCCESSFUL`, `FAILED`, `ABORTED`), `failure` when there is one | when a node ends |
+| `ended` | none | once, after the last node; `done` follows when the game was told to exit |
+| `error` | `failure` | instead of `planned`, when the run could not start, such as a `@DependsOn` cycle |
+
+A node has `id` (JUnit's unique id in the game), `parent` (absent on an engine), `name` (the display name),
+`test` (whether it is a test rather than a container), and from its source `class`, and for a method `method`
+and `parameters` (the parameter types, comma-separated, as JUnit's `MethodSource` spells them).
+
+A `failure` has `class` (the throwable's class name), `message` when it has one, `trace` (at most the top 64
+frames, as `StackTraceElement.toString` gives them), and `cause`, a failure of the same shape, when there is one.
