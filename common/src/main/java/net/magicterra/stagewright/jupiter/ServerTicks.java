@@ -8,9 +8,10 @@ import java.util.function.BooleanSupplier;
 /**
  * Conditions a test thread waits on, checked on the server thread at the end of every tick. A waiter is answered
  * {@code true} the first tick its condition holds and {@code false} once its budget of ticks has passed; a
- * condition that throws fails the wait with that throwable.
+ * condition that throws fails the wait with that throwable. Also what the {@code mc.test.*} methods that span
+ * ticks wait on.
  */
-final class ServerTicks {
+public final class ServerTicks {
 
     private static final List<Waiter> WAITERS = new CopyOnWriteArrayList<>();
 
@@ -29,7 +30,7 @@ final class ServerTicks {
     }
 
     /** A wait of at most {@code budget} ticks for {@code condition}. */
-    static CompletableFuture<Boolean> await(BooleanSupplier condition, int budget) {
+    public static CompletableFuture<Boolean> await(BooleanSupplier condition, int budget) {
         Waiter w = new Waiter(condition, Math.max(0, budget));
         WAITERS.add(w);
         return w.done;

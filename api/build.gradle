@@ -47,6 +47,8 @@ dependencies {
     // The JUnit-native test API (net.magicterra.stagewright.test) hands out WorldDriver's registry and callers.
     // WorldDriver's :api depends on nothing of ours, so it is published first and the graph stays acyclic.
     api "net.magicterra:worlddriver-api:${rootProject.worlddriver_version}:dev"
+    // Generates the callers of StageWright's own mc.test.* families, as it does WorldDriver's (docs/design/test-queries.md).
+    annotationProcessor "net.magicterra:worlddriver-api-processor:${rootProject.worlddriver_version}"
 
     // Plain JUnit, no game: only the logic that never touches a live level is tested here.
     testImplementation platform('org.junit:junit-bom:5.11.3')

@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.driver.verbs;
 
 import java.util.ArrayList;
+import net.magicterra.stagewright.test.methods.TestQueriesApiBinding;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -114,6 +115,7 @@ public final class TestMethods {
                 new ApiMethod<>(HELD_KEYS, onClient(HELD_KEYS, (bot, p) -> new Keys(bot.heldKeys()))),
                 new ApiMethod<>(USE_ON_BLOCK, onClient(USE_ON_BLOCK, BotApi::useOnBlock))));
         all.addAll(TestHarnessApiBinding.methods(new HarnessService()));
+        all.addAll(TestQueriesApiBinding.methods(new TestQueriesService()));
         all.addAll(AttachedMethods.methods());
         return all;
     }
