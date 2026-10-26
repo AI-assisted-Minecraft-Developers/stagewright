@@ -57,6 +57,11 @@ final class TestScope {
         CURRENT.remove();
     }
 
+    /** The test on this thread, or null. */
+    static TestScope bound() {
+        return CURRENT.get();
+    }
+
     /** The test on this thread; refuses when there is none. */
     static TestScope current(String what) {
         TestScope scope = CURRENT.get();
@@ -77,6 +82,11 @@ final class TestScope {
     /** Server thread: remember how to put back what an override just changed. */
     synchronized void onEnd(Consumer<MinecraftServer> restore) {
         undo.push(restore);
+    }
+
+    /** Whether an override is waiting to be undone. */
+    synchronized boolean changedAnything() {
+        return !undo.isEmpty();
     }
 
     /** Server thread: undo every override, last first; the first failure is rethrown once all have run. */

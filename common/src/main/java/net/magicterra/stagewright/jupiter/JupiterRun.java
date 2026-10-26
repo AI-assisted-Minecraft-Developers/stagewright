@@ -26,6 +26,7 @@ import net.minecraft.server.MinecraftServer;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
+import org.junit.platform.launcher.TestPlan;
 import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
 import org.junit.platform.launcher.core.LauncherFactory;
 import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
@@ -83,12 +84,18 @@ public final class JupiterRun {
             LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
                     .selectors(classes.stream().map(DiscoverySelectors::selectClass).toList())
                     .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")
+                    .configurationParameter("junit.jupiter.testmethod.order.default", DependencyOrder.class.getName())
+                    .configurationParameter("junit.jupiter.testclass.order.default", DependencyOrder.class.getName())
                     .build();
             SummaryGeneratingListener summary = new SummaryGeneratingListener();
             StringWriter xmlLog = new StringWriter();
             Launcher launcher = LauncherFactory.create();
-            launcher.execute(request, summary,
-                    new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
+            TestPlan plan = launcher.discover(request);
+            List<String> cycles = Dependencies.prepare(plan);
+            if (!cycles.isEmpty()) {
+                throw new IllegalStateException("@DependsOn cycles, so no test can go first: " + cycles);
+            }
+            launcher.execute(plan, summary, new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
             writeSummary(reports.resolve("summary.json"), classes, summary.getSummary());
             StringWriter text = new StringWriter();
             summary.getSummary().printTo(new PrintWriter(text));

@@ -1,0 +1,82 @@
+package net.magicterra.stagewright.jupiter;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.function.Function;
+
+import org.junit.jupiter.api.ClassDescriptor;
+import org.junit.jupiter.api.ClassOrderer;
+import org.junit.jupiter.api.ClassOrdererContext;
+import org.junit.jupiter.api.MethodDescriptor;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.MethodOrdererContext;
+
+/**
+ * The default method and class order of an in-game run: Jupiter's own order, except that a test runs after the
+ * tests its {@code @DependsOn} names, and a class after the classes it names with {@code in}. Stable, so tests
+ * with no dependencies keep their places. A cycle leaves its members where they were; the run refuses it before
+ * this is asked.
+ */
+public final class DependencyOrder implements MethodOrderer, ClassOrderer {
+
+    @Override
+    public void orderMethods(MethodOrdererContext context) {
+        sort(context.getMethodDescriptors(), m -> m.getMethod().getName(), m -> {
+            List<String> before = new ArrayList<>();
+            for (Dependencies.Ref ref : Dependencies.upstream(context.getTestClass(), m.getMethod())) {
+                if (ref.className().equals(context.getTestClass().getName())) before.add(ref.method());
+            }
+            return before;
+        });
+    }
+
+    @Override
+    public void orderClasses(ClassOrdererContext context) {
+        sort(context.getClassDescriptors(), c -> c.getTestClass().getName(), c -> {
+            Set<String> before = new HashSet<>();
+            for (var method : c.getTestClass().getDeclaredMethods()) {
+                for (Dependencies.Ref ref : Dependencies.upstream(c.getTestClass(), method)) {
+                    if (!ref.className().equals(c.getTestClass().getName())) before.add(ref.className());
+                }
+            }
+            return List.copyOf(before);
+        });
+    }
+
+    /** Reorder {@code items} in place: each after every item {@code before} names, otherwise as they were. */
+    private static <T> void sort(List<T> items, Function<T, String> key, Function<T, List<String>> before) {
+        Set<String> present = new HashSet<>();
+        for (T item : items) present.add(key.apply(item));
+        List<T> remaining = new ArrayList<>(items);
+        List<T> ordered = new ArrayList<>(items.size());
+        Set<String> placed = new HashSet<>();
+        while (!remaining.isEmpty()) {
+            T next = null;
+            for (T item : remaining) {
+                boolean ready = true;
+                for (String dep : before.apply(item)) {
+                    if (present.contains(dep) && !placed.contains(dep)) {
+                        ready = false;
+                        break;
+                    }
+                }
+                if (ready) {
+                    next = item;
+                    break;
+                }
+            }
+            // Only a cycle leaves nothing ready: keep the rest in their original order.
+            if (next == null) {
+                ordered.addAll(remaining);
+                break;
+            }
+            remaining.remove(next);
+            ordered.add(next);
+            placed.add(key.apply(next));
+        }
+        items.clear();
+        items.addAll(ordered);
+    }
+}

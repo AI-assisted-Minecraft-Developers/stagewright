@@ -57,8 +57,10 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
     @Override
     public void afterEach(ExtensionContext context) {
         try {
-            TestScope scope = TestScope.current("afterEach");
-            game().runOnServer(scope::restore);
+            // Unbound when an earlier extension aborted the test before beforeEach got here; nothing to undo then,
+            // and throwing would replace that abort with a failure.
+            TestScope scope = TestScope.bound();
+            if (scope != null && scope.changedAnything()) game().runOnServer(scope::restore);
         } finally {
             TestScope.unbind();
         }
