@@ -1,2 +1,4 @@
 net.magicterra.stagewright.jupiter.Dependencies
 net.magicterra.stagewright.jupiter.GameExtension
+net.magicterra.stagewright.jupiter.RequiresCondition
+net.magicterra.stagewright.jupiter.KnownIssueExtension

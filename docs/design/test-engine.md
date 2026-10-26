@@ -42,6 +42,17 @@ decided before it starts, by system properties ([launch spec](../reference/launc
 When the game ends, everything it did not report is closed out as failed with the reason: the run's own error (a
 `@DependsOn` cycle), a test it never discovered, or how the game ended — crashed, stalled, timed out, exited.
 
+## Every test runs somewhere
+
+`@Requires` is checked in the game, which disables what its game lacks with a reason beginning `@Requires: `.
+The engine collects those skips across every scene of the run. A test some game started is covered; a test that
+every scene it names disabled for `@Requires` never ran at all, and the engine itself finishes failed, listing each
+such test with what every scene lacked. Other skips — `@Disabled`, a failed assumption — are the test author's
+choice and do not count.
+
+`@KnownIssue` changes only how one test's result is read: a failure becomes an abort carrying the reason, and a
+pass becomes a failure, so the annotation comes off once the issue is fixed.
+
 ## Why a launch spec, not a Gradle task
 
 The engine runs inside Gradle's test worker, which cannot run another task. The loader plugin is still the only thing

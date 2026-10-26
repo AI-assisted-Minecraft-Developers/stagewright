@@ -32,9 +32,23 @@ public final class FakeGame {
             System.exit(1);
         }
         String worldProblem = scenario.equals("world") ? worldProblem() : null;
+        String skipReason = switch (scenario) {
+            case "reqSkip", "classSkip" -> "@Requires: this game has no CLIENT";
+            case "otherSkip", "classSkipOther" -> "@Disabled";
+            default -> null;
+        };
         for (String c : classes) {
+            if (scenario.startsWith("classSkip")) {
+                // Jupiter reports a skipped class as that one node; nothing under it is reported.
+                skip(classId(c), skipReason);
+                continue;
+            }
             start(classId(c));
             for (String m : methods) {
+                if (skipReason != null && m.equals("b")) {
+                    skip(methodId(c, m), skipReason);
+                    continue;
+                }
                 start(methodId(c, m));
                 if (worldProblem != null) {
                     finish(methodId(c, m), "FAILED", "{\"class\":\"org.opentest4j.AssertionFailedError\","
@@ -124,6 +138,10 @@ public final class FakeGame {
 
     private static void start(String id) throws Exception {
         test("{\"type\":\"started\",\"id\":" + q(id) + "}");
+    }
+
+    private static void skip(String id, String reason) throws Exception {
+        test("{\"type\":\"skipped\",\"id\":" + q(id) + ",\"reason\":" + q(reason) + "}");
     }
 
     private static void finish(String id, String status, String failure) throws Exception {

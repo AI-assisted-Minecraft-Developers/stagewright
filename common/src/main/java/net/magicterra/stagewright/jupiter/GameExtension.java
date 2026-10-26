@@ -66,7 +66,7 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
         }
     }
 
-    private static Game game() {
+    static Game game() {
         Game g = game;
         if (g == null) {
             throw new ParameterResolutionException("no Game: these tests run inside a game StageWright started");

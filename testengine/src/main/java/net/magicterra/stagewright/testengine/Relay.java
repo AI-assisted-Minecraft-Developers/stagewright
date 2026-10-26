@@ -21,6 +21,8 @@ import org.junit.platform.engine.support.descriptor.MethodSource;
 final class Relay implements Consumer<Map<String, Object>> {
 
     private final EngineExecutionListener listener;
+    private final String sceneName;
+    private final Coverage coverage;
     private final Map<String, Nodes.TestClass> classes = new HashMap<>();
     private final Map<String, Nodes.TestMethod> methods = new HashMap<>();
     private final Map<String, TestDescriptor> byGameId = new HashMap<>();
@@ -31,8 +33,10 @@ final class Relay implements Consumer<Map<String, Object>> {
     private boolean ended;
     private Throwable error;
 
-    Relay(Nodes.Scene scene, EngineExecutionListener listener) {
+    Relay(Nodes.Scene scene, EngineExecutionListener listener, Coverage coverage) {
         this.listener = listener;
+        this.sceneName = scene.name;
+        this.coverage = coverage;
         for (TestDescriptor c : scene.getChildren()) {
             Nodes.TestClass tc = (Nodes.TestClass) c;
             classes.put(tc.className, tc);
@@ -55,11 +59,23 @@ final class Relay implements Consumer<Map<String, Object>> {
             case "dynamic" -> {
                 if (event.get("node") instanceof Map<?, ?> node) register(node);
             }
-            case "started" -> start(byGameId.get(String.valueOf(event.get("id"))));
+            case "started" -> {
+                TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
+                if (d instanceof Nodes.TestMethod m) coverage.ran(m);
+                start(d);
+            }
             case "skipped" -> {
                 TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
+                String reason = String.valueOf(event.get("reason"));
                 if (d != null && !started.contains(d) && finished.add(d)) {
-                    listener.executionSkipped(d, String.valueOf(event.get("reason")));
+                    listener.executionSkipped(d, reason);
+                    if (d instanceof Nodes.TestMethod m) coverage.skipped(m, sceneName, reason);
+                    // Skipping a node skips what is under it without an event of its own; closing those out
+                    // later would report them as never run.
+                    for (TestDescriptor child : d.getDescendants()) {
+                        finished.add(child);
+                        if (child instanceof Nodes.TestMethod m) coverage.skipped(m, sceneName, reason);
+                    }
                 }
             }
             case "finished" -> {

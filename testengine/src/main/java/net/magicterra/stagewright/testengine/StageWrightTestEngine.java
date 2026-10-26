@@ -18,6 +18,7 @@ import org.junit.platform.engine.EngineDiscoveryRequest;
 import org.junit.platform.engine.ExecutionRequest;
 import org.junit.platform.engine.TestDescriptor;
 import org.junit.platform.engine.TestEngine;
+import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.UniqueId;
 import org.junit.platform.engine.discovery.ClassSelector;
 import org.junit.platform.engine.discovery.ClasspathRootSelector;
@@ -103,11 +104,15 @@ public final class StageWrightTestEngine implements TestEngine {
         TestDescriptor engine = request.getRootTestDescriptor();
         request.getEngineExecutionListener().executionStarted(engine);
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        Coverage coverage = new Coverage();
         for (TestDescriptor scene : new ArrayList<>(engine.getChildren())) {
-            new SceneRun((Nodes.Scene) scene, request.getEngineExecutionListener()).run(loader);
+            new SceneRun((Nodes.Scene) scene, request.getEngineExecutionListener(), coverage).run(loader);
         }
-        request.getEngineExecutionListener().executionFinished(engine,
-                org.junit.platform.engine.TestExecutionResult.successful());
+        List<String> neverRan = coverage.neverRan();
+        request.getEngineExecutionListener().executionFinished(engine, neverRan.isEmpty()
+                ? TestExecutionResult.successful()
+                : TestExecutionResult.failed(new AssertionError(neverRan.size() + " test(s) ran in no scene, every"
+                        + " scene they name lacking what their @Requires asks for:\n  " + String.join("\n  ", neverRan))));
     }
 
     /** A re-run of one node: its class (and method) are selected, in the scene its id names. */

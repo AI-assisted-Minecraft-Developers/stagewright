@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * What is actually installed in this run: mod ids and versions.
@@ -60,6 +61,11 @@ public final class Mods {
     /** Whether the loader ever installed a list — for the harness's own self-check, not for scenes. */
     public static boolean isInstalled() {
         return installed != null;
+    }
+
+    /** The installed ids, for code that has no scene context; empty when the loader never installed a list. */
+    public static Set<String> installedIds() {
+        return raw().keySet();
     }
 
     /** Whether this mod id is loaded. */

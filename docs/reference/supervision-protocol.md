@@ -118,7 +118,7 @@ The in-game JUnit run reports itself through `test`, in the order it happens; th
 | `planned` | `nodes`: every node of the plan, parents before children | once, before anything runs |
 | `dynamic` | `node`: one node registered while running, such as an invocation of a parameterized test | when it is registered |
 | `started` | `id` | when a node starts |
-| `skipped` | `id`, `reason` | instead of `started` and `finished` |
+| `skipped` | `id`, `reason` | instead of `started` and `finished`, and for none of the node's children; a `reason` beginning `@Requires: ` is an unmet requirement |
 | `finished` | `id`, `status` (`SUCCESSFUL`, `FAILED`, `ABORTED`), `failure` when there is one | when a node ends |
 | `ended` | none | once, after the last node; `done` follows when the game was told to exit |
 | `error` | `failure` | instead of `planned`, when the run could not start, such as a `@DependsOn` cycle |

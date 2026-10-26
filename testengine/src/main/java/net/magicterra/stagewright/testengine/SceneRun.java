@@ -37,15 +37,17 @@ final class SceneRun {
 
     private final Nodes.Scene scene;
     private final EngineExecutionListener listener;
+    private final Coverage coverage;
 
-    SceneRun(Nodes.Scene scene, EngineExecutionListener listener) {
+    SceneRun(Nodes.Scene scene, EngineExecutionListener listener, Coverage coverage) {
         this.scene = scene;
         this.listener = listener;
+        this.coverage = coverage;
     }
 
     void run(ClassLoader loader) {
         listener.executionStarted(scene);
-        Relay relay = new Relay(scene, listener);
+        Relay relay = new Relay(scene, listener, coverage);
         TestExecutionResult result;
         try {
             SceneFile declaration = SceneFile.load(scene.name, loader);

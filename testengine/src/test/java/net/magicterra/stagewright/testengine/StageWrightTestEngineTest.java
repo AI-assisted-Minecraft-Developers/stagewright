@@ -35,7 +35,8 @@ class StageWrightTestEngineTest {
         previous = System.getProperty(LaunchSpec.PROPERTY);
         Path specs = Files.createDirectories(temp.resolve("launches"));
         System.setProperty(LaunchSpec.PROPERTY, specs.toString());
-        for (String topology : List.of("pass", "assertFail", "crash", "undiscovered", "dynamic", "world")) {
+        for (String topology : List.of("pass", "assertFail", "crash", "undiscovered", "dynamic", "world",
+                "reqSkip", "otherSkip", "classSkip", "classSkipOther")) {
             writeSpec(specs, topology, true);
         }
         writeSpec(specs, "worldDirty", false);
@@ -181,6 +182,82 @@ class StageWrightTestEngineTest {
                 .findFirst().orElseThrow(() -> new AssertionError("no world entry on the scene: " + published));
         assertTrue(world.contains("seed=5471") && world.contains("preset=minecraft:flat")
                 && world.contains("time=6000"), world);
+    }
+
+    /** How the engine descriptor itself finished. */
+    private static TestExecutionResult engineResult(EngineExecutionResults r) {
+        return r.containerEvents().finished().stream()
+                .filter(e -> e.getTestDescriptor().getParent().isEmpty())
+                .map(e -> e.getPayload(TestExecutionResult.class).orElseThrow())
+                .findFirst().orElseThrow(() -> new AssertionError("the engine descriptor never finished"));
+    }
+
+    private static void assertEngineSuccessful(EngineExecutionResults r) {
+        assertEquals(TestExecutionResult.Status.SUCCESSFUL, engineResult(r).getStatus(),
+                () -> String.valueOf(engineResult(r).getThrowable().orElse(null)));
+    }
+
+    private static String skipReason(EngineExecutionResults r, String displayName) {
+        return r.testEvents().skipped().stream()
+                .filter(e -> e.getTestDescriptor().getDisplayName().equals(displayName))
+                .map(e -> e.getPayload(String.class).orElse(null)).findFirst()
+                .orElseThrow(() -> new AssertionError("not reported skipped: " + displayName));
+    }
+
+    @Test
+    void aTestSkippedForARequirementInEveryItsSceneFailsTheEngineNamingIt() {
+        EngineExecutionResults r = run("ReqSkipFixture");
+        TestExecutionResult engine = engineResult(r);
+        assertEquals(TestExecutionResult.Status.FAILED, engine.getStatus());
+        String message = engine.getThrowable().orElseThrow().getMessage();
+        assertTrue(message.contains("ReqSkipFixture#b"), message);
+        assertTrue(message.contains("reqSkip"), message);
+        assertTrue(message.contains("this game has no CLIENT"), message);
+        assertTrue(!message.contains("ReqSkipFixture#a"), message);
+        // The test itself is skipped, not failed; the failure belongs to the run.
+        assertEquals(1, r.testEvents().skipped().count());
+        assertTrue(skipReason(r, "b()").startsWith("@Requires: "));
+        assertEquals(0, r.testEvents().failed().count());
+        assertEquals(1, r.testEvents().succeeded().count());
+    }
+
+    @Test
+    void aRequirementMetInAnotherSceneKeepsTheEngineSuccessful() {
+        EngineExecutionResults r = run("TwoScenesFixture");
+        assertEngineSuccessful(r);
+        assertEquals(0, r.testEvents().failed().count());
+        assertEquals(1, r.testEvents().skipped().count());
+        assertEquals(3, r.testEvents().succeeded().count());
+    }
+
+    @Test
+    void aSkipForAnyOtherReasonEverywhereKeepsTheEngineSuccessful() {
+        EngineExecutionResults r = run("OtherSkipFixture");
+        assertEngineSuccessful(r);
+        assertEquals(0, r.testEvents().failed().count());
+        assertEquals("@Disabled", skipReason(r, "b()"));
+    }
+
+    @Test
+    void aClassLevelRequirementSkipDoesNotFailItsMethodsAsUndiscoveredButFailsTheEngine() {
+        EngineExecutionResults r = run("ClassSkipFixture");
+        assertEquals(0, r.testEvents().failed().count(), () -> r.testEvents().failed().stream()
+                .map(e -> failure(e).getMessage()).toList().toString());
+        assertEquals(0, containersFailed(r).stream()
+                .filter(e -> e.getTestDescriptor().getParent().isPresent()).count());
+        TestExecutionResult engine = engineResult(r);
+        assertEquals(TestExecutionResult.Status.FAILED, engine.getStatus());
+        String message = engine.getThrowable().orElseThrow().getMessage();
+        assertTrue(message.contains("ClassSkipFixture#a") && message.contains("ClassSkipFixture#b"), message);
+    }
+
+    @Test
+    void aClassLevelSkipForAnyOtherReasonLeavesNothingFailed() {
+        EngineExecutionResults r = run("ClassSkipOtherFixture");
+        assertEquals(0, r.testEvents().failed().count(), () -> r.testEvents().failed().stream()
+                .map(e -> failure(e).getMessage()).toList().toString());
+        assertEquals(0, containersFailed(r).count());
+        assertEngineSuccessful(r);
     }
 
     @Test
