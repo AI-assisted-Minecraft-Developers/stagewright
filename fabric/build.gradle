@@ -46,6 +46,9 @@ dependencies {
     common(project(path: ':stagewright-common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':stagewright-common', configuration: 'transformProductionFabric')
 
+    // The JUnit Platform the in-game test runner uses, nested (Jar-in-Jar) as libraries.
+    rootProject.junitPlatformJars.each { include it }
+
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'

@@ -17,6 +17,7 @@ import net.magicterra.stagewright.harness.SuiteRegistry;
 import net.magicterra.stagewright.scene.Scene;
 import net.magicterra.stagewright.harness.SceneFilter;
 import net.magicterra.stagewright.harness.Scenes;
+import net.magicterra.stagewright.jupiter.JupiterRun;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -208,6 +209,7 @@ public final class StageWrightCommon {
     public static synchronized void onServerStopping(MinecraftServer server) {
         if (server != armedServer) return;
         try {
+            JupiterRun.stop();
             AttachedSessions.stop(server);
             if (harness != null) harness.stop();
         } finally {
@@ -396,6 +398,7 @@ public final class StageWrightCommon {
             if (!settled) return;
         }
         AttachedSessions.tick(server);
+        JupiterRun.tick(server);
         if (harness == null && !registryFailureRecorded && armed && !holding()
                 && Boolean.getBoolean("stagewright.autorun")
                 && Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() > 0) {

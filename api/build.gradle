@@ -8,17 +8,16 @@
 // task graph. Across two independently PUBLISHED artifacts it would be a version cycle, so the
 // contract is split out here where it depends on nobody:
 //
-//     stagewright-api      (this: Minecraft only, zero worlddriver)
-//         ^         ^
-//         |         `-- stagewright-common/-fabric/-neoforge  (+ worlddriver)
-//         `------------ worlddriver :common testmod
+//     worlddriver :api  <-  stagewright-api  <-  worlddriver :common testmod
+//                                ^
+//                                `-- stagewright-common/-fabric/-neoforge  (+ worlddriver)
 //
-// Release order follows the arrows: stagewright-api -> worlddriver -> stagewright runtime.
+// Release order follows the arrows: worlddriver :api -> stagewright-api -> worlddriver -> stagewright runtime.
 // Being interfaces + value types, this artifact changes rarely, which is what keeps that
 // ordering from being a daily tax.
 //
-// KEEP IT DEPENDENCY-FREE. Anything added here that reaches for worlddriver, the harness, or
-// the results writer reintroduces the cycle the split exists to remove. It also owns the
+// Nothing beyond worlddriver's :api: reaching for worlddriver's :common, the harness, or the results
+// writer reintroduces the cycle the split exists to remove. It also owns the
 // package net.magicterra.stagewright.scene OUTRIGHT — Scenes (the built-in registry) lives in
 // .harness precisely so this package is not split across two modules, which FML resolves as a
 // hard java.lang.module.ResolutionException at boot.
@@ -44,6 +43,10 @@ dependencies {
     // It carries its OWN package (net.magicterra.stagewright.contract) rather than a slice of this
     // one — see the package-ownership note above, which is about exactly this and is load-bearing.
     api project(':stagewright-attached')
+
+    // The JUnit-native test API (net.magicterra.stagewright.test) hands out WorldDriver's registry and callers.
+    // WorldDriver's :api depends on nothing of ours, so it is published first and the graph stays acyclic.
+    api "net.magicterra:worlddriver-api:${rootProject.worlddriver_version}:dev"
 
     // Plain JUnit, no game: only the logic that never touches a live level is tested here.
     testImplementation platform('org.junit:junit-bom:5.11.3')

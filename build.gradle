@@ -42,6 +42,18 @@ ext.worlddriverVersionRange = {
     "[${floor},${major == 0 ? "0.${minor + 1}.0" : "${major + 1}.0.0"}-0)".toString()
 }()
 
+// The JUnit Platform the in-game runner uses, each jar named: loom's `include` is not transitive.
+ext.junitPlatformJars = [
+        'org.junit.platform:junit-platform-launcher:1.11.3',
+        'org.junit.platform:junit-platform-engine:1.11.3',
+        'org.junit.platform:junit-platform-commons:1.11.3',
+        'org.junit.platform:junit-platform-reporting:1.11.3',
+        'org.junit.jupiter:junit-jupiter-engine:5.11.3',
+        'org.junit.jupiter:junit-jupiter-api:5.11.3',
+        'org.opentest4j:opentest4j:1.3.0',
+        'org.apiguardian:apiguardian-api:1.1.2',
+]
+
 apply from: 'gradle/version.gradle'
 
 allprojects {

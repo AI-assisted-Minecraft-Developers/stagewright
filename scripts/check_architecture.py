@@ -31,6 +31,11 @@ def main():
                         errors.append(f'{relative}: game dependency in a JVM module: {dependency}')
             if module == 'common' and '/stagewright/driver/' in path.as_posix():
                 continue
+            # The JUnit-native test API and its runtime are built on WorldDriver's API by design.
+            if module == 'api' and '/stagewright/test/' in path.as_posix():
+                continue
+            if module == 'common' and '/stagewright/jupiter/' in path.as_posix():
+                continue
             if 'net.magicterra.worlddriver.' in text:
                 errors.append(f'{relative}: WorldDriver dependency belongs in common driver/')
     if args.jars:

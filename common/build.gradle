@@ -22,6 +22,12 @@ dependencies {
     // Its api is a module of its own; the `dev` jars declare no dependencies, so name it too.
     implementation "net.magicterra:worlddriver-api:${rootProject.worlddriver_version}:dev"
 
+    // The JUnit Platform the game runs tests on (jupiter/JupiterRun); the loader jars must ship it.
+    implementation platform('org.junit:junit-bom:5.11.3')
+    implementation 'org.junit.platform:junit-platform-launcher'
+    implementation 'org.junit.platform:junit-platform-reporting'
+    implementation 'org.junit.jupiter:junit-jupiter-engine'
+
     // WorldDriver provides the required runtime copy; do not embed Rhino a second time.
     compileOnly "dev.latvian.mods:rhino:${rootProject.rhino_version}"
 
