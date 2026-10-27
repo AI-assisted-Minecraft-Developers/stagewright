@@ -49,6 +49,7 @@ final class DevJUnitRuntime {
                                            NamedDomainObjectContainer<StageWrightTopology> topologies) {
         Set<String> projects = new HashSet<>();
         for (StageWrightTestSuite suite : tests) {
+            if (GeneratedRuns.generates(suite)) projects.add(GeneratedRuns.loader(plugin, suite).getPath());
             for (String declared : suite.getTopologies().get().values()) {
                 StageWrightTopology topology = topologies.findByName(declared);
                 String runTask = topology == null ? null : topology.getRunTask().getOrNull();

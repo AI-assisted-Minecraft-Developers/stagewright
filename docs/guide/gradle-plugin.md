@@ -152,7 +152,8 @@ stagewright {
         fabric {
             classes.from(project(':common').sourceSets.testmod.output)
             classpath.from(project(':common').sourceSets.testmod.compileClasspath)
-            topologies.put('dedicatedServerWithClient', 'dedicatedServerWithClientFabric')
+            loaderProject = ':fabric'
+            jvmArgs.add('-Xmx2g')
         }
     }
 }
@@ -162,14 +163,30 @@ stagewright {
 `classpath` is what those classes link against. Gradle loads every class under `classes` by name in
 the test JVM, without running it, and a class whose supertypes are missing there fails the task; with
 `classpath` set they load, and nothing on it is started.
-`topologies` maps the topology name a scene declares to a topology declared in `topologies { }`; an
-unknown target fails the build naming the suite and the topology.
+
+`loaderProject` names the loom project the games run from. The plugin declares the suite's runs in
+that project's `loom.runs`, so loom still builds each launch, and gives a scene two topologies to
+name:
+
+| Topology | Runs | Directory under `<loaderProject>/run-stagewright/<name>/` |
+|---|---|---|
+| `dedicatedServer` | `stagewright<Name>DedicatedServer` | `dedicated-server` |
+| `dedicatedServerWithClient` | `stagewright<Name>DedicatedServerWithClient`, holding its tests until `stagewright<Name>JoiningClient` joins | `with-client`, and `joining-client` for the client |
+
+The runs start from the project's `testmod` source set when it has one, else `main`
+(`runSourceSet` chooses another), so `runClient` goes without the tests; they get no IDE run
+configuration. `jvmArgs` and `systemProperties` go on all of them, the servers listen on `serverPort`
+(default 25621), and `timeoutMinutes` (default 20) bounds one scene. The engine accepts the EULA in a
+server's directory itself, so nothing has to be prepared beforehand. Under a loader plugin other than
+loom, declare the runs there and map them instead: `topologies.put('dedicatedServerWithClient',
+'myTopology')` maps the name a scene declares to a topology declared in `topologies { }`; an unknown
+target fails the build naming the suite and the topology.
 
 Per suite `<name>` the plugin registers:
 
 | Task | What it does |
 |---|---|
-| `stagewrightLaunchSpecs<Name>` | Writes `build/stagewright/launches/<name>/<sceneTopology>.json` from the mapped topology's `runTask` and `companionRunTask` ([format](../reference/launch-spec.md)). The classpath goes into an argument file beside them, referenced from `jvmArgs`. Runs the run tasks' own prerequisites first; never up to date. |
+| `stagewrightLaunchSpecs<Name>` | Writes `build/stagewright/launches/<name>/<sceneTopology>.json` from each topology's run tasks, generated or mapped ([format](../reference/launch-spec.md)). The classpath goes into an argument file beside them, referenced from `jvmArgs`. Runs the run tasks' own prerequisites first; never up to date. |
 | `stagewrightTest<Name>` | A `Test` task on the JUnit Platform with only the `stagewright` engine, passing `-Dstagewright.launches` pointing at that directory. Never up to date; not part of `check`, because it starts games. |
 
 The engine is resolved as `net.magicterra:stagewright-testengine` at the plugin's own version, from

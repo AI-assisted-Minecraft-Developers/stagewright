@@ -109,7 +109,15 @@ public class StageWrightPlugin implements Plugin<Project> {
             });
         });
 
-        tests.all(suite -> registerTestSuiteTasks(project, suite, topologies));
+        tests.all(suite -> {
+            suite.getServerPort().convention(GeneratedRuns.DEFAULT_SERVER_PORT);
+            suite.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
+            registerTestSuiteTasks(project, suite, topologies);
+        });
+        // Once this build script has set the suites up; each loader project's runs follow its own evaluation.
+        project.afterEvaluate(p -> tests.forEach(suite -> {
+            if (GeneratedRuns.generates(suite)) GeneratedRuns.declare(p, suite);
+        }));
         DevJUnitRuntime.install(project, tests, topologies);
     }
 
@@ -200,12 +208,12 @@ public class StageWrightPlugin implements Plugin<Project> {
         return topology;
     }
 
-    private static JavaExec javaExec(Project project, StageWrightTestSuite suite, StageWrightTopology topology,
+    private static JavaExec javaExec(Project project, StageWrightTestSuite suite, String topology,
                                      String taskName, String role) {
         Task task = resolveRunTask(project, taskName);
         if (!(task instanceof JavaExec exec)) {
             throw new GradleException("stagewright test suite '" + suite.getName() + "': topology '"
-                    + topology.getName() + "' names " + role + " '" + taskName + "', which is "
+                    + topology + "' names " + role + " '" + taskName + "', which is "
                     + (task == null ? "not a task in this build"
                                     : "a " + task.getClass().getSimpleName() + " rather than a JavaExec")
                     + " — a launch can only be taken from a dev run");
@@ -213,9 +221,15 @@ public class StageWrightPlugin implements Plugin<Project> {
         return exec;
     }
 
-    private List<JavaExec> launchRuns(Project project, StageWrightTestSuite suite,
+    /** The topologies a suite's scenes may name: generated for it, or the build's, as it maps them. */
+    static List<SuiteLaunch> launches(Project project, StageWrightTestSuite suite,
                                       NamedDomainObjectContainer<StageWrightTopology> topologies) {
-        List<JavaExec> runs = new ArrayList<>();
+        if (GeneratedRuns.generates(suite)) return GeneratedRuns.launches(project, suite);
+        if (suite.getTopologies().get().isEmpty()) {
+            throw new GradleException("stagewright test suite '" + suite.getName() + "' has no games to run in: set"
+                    + " loaderProject, for runs the plugin declares, or map topologies the build declares");
+        }
+        List<SuiteLaunch> launches = new ArrayList<>();
         for (Map.Entry<String, String> mapping : suite.getTopologies().get().entrySet()) {
             StageWrightTopology topology = declared(suite, topologies, mapping.getKey(), mapping.getValue());
             String runTask = topology.getRunTask().getOrNull();
@@ -223,9 +237,23 @@ public class StageWrightPlugin implements Plugin<Project> {
                 throw new GradleException("stagewright topology '" + topology.getName()
                         + "' declares no runTask (used by test suite '" + suite.getName() + "')");
             }
-            runs.add(javaExec(project, suite, topology, runTask, "runTask"));
-            String companion = topology.getCompanionRunTask().getOrNull();
-            if (companion != null) runs.add(javaExec(project, suite, topology, companion, "companionRunTask"));
+            launches.add(new SuiteLaunch(mapping.getKey(), runTask, topology.getCompanionRunTask().getOrNull(),
+                    topology.getGameDirectory().get().getAsFile(), topology.getCleanWorld().getOrElse(true),
+                    topology.getTimeoutMinutes().getOrElse(DEFAULT_TIMEOUT_MINUTES),
+                    topology.getStallMinutes().getOrElse(DEFAULT_STALL_MINUTES),
+                    !topology.getClient().getOrElse(false)));
+        }
+        return launches;
+    }
+
+    private List<JavaExec> launchRuns(Project project, StageWrightTestSuite suite,
+                                      NamedDomainObjectContainer<StageWrightTopology> topologies) {
+        List<JavaExec> runs = new ArrayList<>();
+        for (SuiteLaunch launch : launches(project, suite, topologies)) {
+            runs.add(javaExec(project, suite, launch.topology(), launch.runTask(), "runTask"));
+            if (launch.companionRunTask() != null) {
+                runs.add(javaExec(project, suite, launch.topology(), launch.companionRunTask(), "companionRunTask"));
+            }
         }
         return runs;
     }
@@ -234,22 +262,13 @@ public class StageWrightPlugin implements Plugin<Project> {
             Project project, StageWrightTestSuite suite,
             NamedDomainObjectContainer<StageWrightTopology> topologies) {
         List<StageWrightLaunchSpecsTask.Entry> entries = new ArrayList<>();
-        for (Map.Entry<String, String> mapping : suite.getTopologies().get().entrySet()) {
-            StageWrightTopology topology = declared(suite, topologies, mapping.getKey(), mapping.getValue());
-            String runTask = topology.getRunTask().getOrNull();
-            if (runTask == null) {
-                throw new GradleException("stagewright topology '" + topology.getName()
-                        + "' declares no runTask (used by test suite '" + suite.getName() + "')");
-            }
-            CompanionLaunch primary = CompanionLaunch.of(javaExec(project, suite, topology, runTask, "runTask"));
-            String companionName = topology.getCompanionRunTask().getOrNull();
-            CompanionLaunch companion = companionName == null ? null : CompanionLaunch.of(
-                    javaExec(project, suite, topology, companionName, "companionRunTask"));
-            entries.add(new StageWrightLaunchSpecsTask.Entry(mapping.getKey(),
-                    topology.getGameDirectory().get().getAsFile(),
-                    topology.getCleanWorld().getOrElse(true),
-                    topology.getTimeoutMinutes().getOrElse(DEFAULT_TIMEOUT_MINUTES),
-                    topology.getStallMinutes().getOrElse(DEFAULT_STALL_MINUTES),
+        for (SuiteLaunch launch : launches(project, suite, topologies)) {
+            CompanionLaunch primary = CompanionLaunch.of(
+                    javaExec(project, suite, launch.topology(), launch.runTask(), "runTask"));
+            CompanionLaunch companion = launch.companionRunTask() == null ? null : CompanionLaunch.of(
+                    javaExec(project, suite, launch.topology(), launch.companionRunTask(), "companionRunTask"));
+            entries.add(new StageWrightLaunchSpecsTask.Entry(launch.topology(), launch.gameDirectory(),
+                    launch.cleanWorld(), launch.timeoutMinutes(), launch.stallMinutes(), launch.server(),
                     primary, companion));
         }
         return entries;

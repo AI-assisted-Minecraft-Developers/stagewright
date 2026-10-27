@@ -35,16 +35,19 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
         final boolean cleanWorld;
         final int timeoutMinutes;
         final int stallMinutes;
+        /** The primary is a dedicated server, so the engine prepares its directory as one. */
+        final boolean server;
         final CompanionLaunch primary;
         final CompanionLaunch companion;
 
         Entry(String topology, File gameDirectory, boolean cleanWorld, int timeoutMinutes,
-              int stallMinutes, CompanionLaunch primary, CompanionLaunch companion) {
+              int stallMinutes, boolean server, CompanionLaunch primary, CompanionLaunch companion) {
             this.topology = topology;
             this.gameDirectory = gameDirectory;
             this.cleanWorld = cleanWorld;
             this.timeoutMinutes = timeoutMinutes;
             this.stallMinutes = stallMinutes;
+            this.server = server;
             this.primary = primary;
             this.companion = companion;
         }
@@ -73,6 +76,7 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
                     .add("cleanWorld", entry.cleanWorld)
                     .add("timeoutMinutes", entry.timeoutMinutes)
                     .add("stallMinutes", entry.stallMinutes)
+                    .add("server", entry.server)
                     .add("primary", process(entry.primary, new File(argFiles, entry.topology + ".primary.args")));
             if (entry.companion != null) {
                 json.add("companion", process(entry.companion,

@@ -27,8 +27,9 @@ did not ask for. `mods`, `files`, `clients` and `world.from` are not applied yet
 
 ## `topology`
 
-Required. The name a [launch spec](launch-spec.md) was written for; the Gradle plugin's `tests { topologies.put(…) }`
-maps it to a topology the build declares.
+Required. The name a [launch spec](launch-spec.md) was written for. A Gradle suite with a `loaderProject` has
+`dedicatedServer` and `dedicatedServerWithClient`; `tests { topologies.put(…) }` maps other names to topologies the
+build declares.
 
 ## `world` — at creation
 
