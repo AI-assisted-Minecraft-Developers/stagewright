@@ -10,6 +10,23 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-28
+
+### A Java test can depend on a script test, and the two kinds run side by side · green in the self-test suite
+
+Script tests used to start once every Java test had ended, so only a script could depend on a Java test.
+The two now run at once, and `@DependsOn(scripts = "stagewright/tests/x.js#name")` waits for a script
+test as a script's `dependsOn` waits for a Java one. Every test also takes its locks in a set both kinds
+share, so a Java test holding `Locks.WEATHER` and a script holding `weather` no longer overlap. A kind run
+one at a time runs each of its tests alone, scripts included. The supervision protocol sends `planned`
+once per kind, and `ended` once after both.
+
+### `stagewright test --client <spec>` runs the scenes with a client too · green on a production Fabric and a production NeoForge pack, all three topologies
+
+A pack's `integratedServer` and `dedicatedServerWithClient` scenes used to be refused for want of a launch spec. With
+`--client`, the CLI installs that client and writes both specs; the client runs in `stagewright/client` with the
+server's mods, or those `--client-mods` names.
+
 ## 2026-10-27
 
 ### `stagewright test <server-dir>` runs a pack's script tests without a build · green on a production Fabric and a production NeoForge server

@@ -56,12 +56,12 @@ cannot swallow its own failure.
 The options are `scene`, `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`, counted toward
 coverage as `@Requires` is), `dependsOn` (a test's name in the same file, `file.js#name`, or a Java test as
 `com.example.SomeTest#method`; a test waits for those, and aborts when one did not pass), `knownIssue` (the reason,
-read as `@KnownIssue` is), `locks` and `isolated`. Script tests run after the game's Java tests, concurrently as
-Jupiter's do (`stagewright.script.parallel.enabled` turns it off, `stagewright.script.parallel.threads` sizes it).
-Tests naming one lock never run at once, and an `isolated` test runs alone; the locks are `Locks`' names without
-`stagewright.` (`worldRules`, `worldClock`, `weather`, `tickRate`, `player:<name>`) or any the tests agree on, and an
-override is refused without its lock, as in Java. `waitUntil` and `settle` check their condition on the test thread
-once a tick, since a condition usually calls WorldDriver.
+read as `@KnownIssue` is), `locks` and `isolated`. Script tests run beside the game's Java tests, and concurrently
+among themselves as Jupiter's do (`stagewright.script.parallel.enabled` turns it off, `stagewright.script.parallel.threads`
+sizes it). Tests naming one lock never run at once, and an `isolated` test runs alone; the locks are `Locks`' names
+without `stagewright.` (`worldRules`, `worldClock`, `weather`, `tickRate`, `player:<name>`) or any the tests agree on,
+and an override is refused without its lock, as in Java. `waitUntil` and `settle` check their condition on the test
+thread once a tick, since a condition usually calls WorldDriver.
 
 A test written in YAML sits beside them, in a file with a `tests` list and an optional `scene` for all of them; a
 test takes the same options, plus `plot: {size}`, and `given`/`when`/`then` or `steps`. A step is `call: method`
@@ -116,6 +116,18 @@ invocation of it included, and the pool adds a thread for as long as it waits. A
 another runs them one at a time in dependency order, since a dependent that took a lock first and then waited for a
 test needing the same lock would wait forever.
 
+The script tests are a second plan, run on a thread of their own beside Jupiter's, so either kind can wait for the
+other: `@DependsOn(scripts = "stagewright/tests/setup.js#builds the base")` in Java, a `com.example.SomeTest#method`
+in a script's `dependsOn`. The scripts are discovered first, and the Java tests are ordered through them: a test whose
+script dependency depends on another Java test runs after that test, as if it named it. A cycle through a Java test
+refuses the run before any test starts; one of script tests alone fails only those tests.
+
+Jupiter's locks are its own, so every test, of either kind, also takes its locks in a set the two share, after its
+dependencies have ended: read-only where a Java test declared that, `isolated` and `@Isolated` alone. A kind run one
+at a time runs each of its tests alone, since a test written for a sequential run may assume no other test runs
+beside it. A lock a script names is `stagewright.` and the name, so a Java test sharing a name of its own with
+scripts spells it that way.
+
 ## Every test runs somewhere
 
 `@Requires` is checked in the game, which disables what its game lacks with a reason beginning `@Requires: `.
@@ -142,14 +154,18 @@ command-line runner writes the same file from a game directory. The engine knows
 with StageWright's loader jar as it hands any mod — `-Dfabric.addMods`, or `--fml.mods` — and writes the
 `dedicatedServer` launch spec from the start command it detects. It then runs this engine in its own JVM and writes
 JUnit XML. The server plays in `stagewright/world` (`--universe`, and the spec's `worldDirectory`), so the world each
-scene starts afresh is never the pack's. Only `dedicatedServer` scenes run there; Java tests need a build.
+scene starts afresh is never the pack's. With `--client <spec>` it also installs that client as the scene runner does
+and writes the other two specs: `integratedServer`, the client alone in `saves/StageWright`, and
+`dedicatedServerWithClient`, the pack's server waiting for that client to join. The client runs in
+`stagewright/client`, never a player's directory, since the engine deletes a client's saves before each scene, and
+loads the jars of `--client-mods` (the server's `mods/` by default) linked into its own `mods/`. Java tests need a
+build.
 
 ## Not yet
 
 - Scene declarations apply `topology` and `world` ([scene file](../reference/scene-file.md)); `mods`, `files`,
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
 - Scenes run one after another.
-- A Java test cannot depend on a script test: the scripts run after every Java test of the game.
 - `perf` counts frames only of a client in the game's own JVM, not of a joining one; `insert` and `container` reach only
   containers that are vanilla `Container`s, in the overworld.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.
