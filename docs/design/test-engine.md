@@ -69,6 +69,13 @@ the leased plot is `${plot}`. There is no expression language. A step's `knownIs
 `{field: value, reason}`, takes the items they match out of every list in its result before `expect` is checked; an
 issue that took nothing out fails the step, so the list shrinks as things are fixed.
 
+`perf: {phases: [{name, steps}], warmup, sample, repeat}` (in JavaScript `t.perf`, a phase's `run` a function)
+measures phases one after another in the same run: each runs its steps, waits `warmup` ticks, then samples `repeat`
+windows of `sample` ticks and keeps their median — `ticks`, `wallMs`, `tps`, `msptMean`, `msptP99`, `heapMib`, and
+against the first phase `tpsDrop` and `heapGrowthMib`. A test compares against the baseline it just took, never
+against a constant, which would encode the machine it was written on. The tick times are taken by the wait's own
+condition, so nothing is added to the tick when no test measures.
+
 Both kinds share the built-in steps `place: {at, block, as}`, `insert: {into, items}`, `container: {of, …}` (what
 the container holds, item id to count, its other keys an expectation of that), `chunk.unload` and `chunk.reload`
 (`at`, or `{at, within}`). A position there is a handle a `place` named with `as` (in YAML also `${name}`),
@@ -122,6 +129,6 @@ command-line runner writes the same file from a game directory. The engine knows
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
 - Scenes run one after another, and a game's script tests one after another.
 - A script test cannot yet depend on a Java test, nor a Java test on a script test.
-- YAML has no `java:` step and no `perf`; `insert` and `container` reach only
+- YAML has no `java:` step; `perf` reports no CPU load or client frame rate yet; `insert` and `container` reach only
   containers that are vanilla `Container`s, in the overworld.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.

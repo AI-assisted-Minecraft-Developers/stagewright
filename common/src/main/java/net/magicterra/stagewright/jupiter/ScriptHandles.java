@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,6 +67,24 @@ final class ScriptHandles {
             game.overrideWeather(Expectations.truthy(args.length > 0 ? args[0] : null),
                     Expectations.truthy(args.length > 1 ? args[1] : null));
             return null;
+        });
+        // {warmup, sample, repeat, phases: [{name, run}]}: as YAML's perf, a phase's run a function, or none.
+        t.put("perf", (Scripting.Function) args -> {
+            if (!(args.length > 0 && args[0] instanceof Map<?, ?> perf) || !(perf.get("phases") instanceof List<?> list)) {
+                throw new IllegalArgumentException("t.perf({phases: [{name, run}], warmup, sample, repeat})");
+            }
+            List<PerfSampler.Phase> phases = new ArrayList<>();
+            for (Object p : list) {
+                if (!(p instanceof Map<?, ?> phase) || !(phase.get("name") instanceof String name)) {
+                    throw new IllegalArgumentException("t.perf: a phase is {name, run}");
+                }
+                Scripting.Function run = phase.get("run") instanceof Scripting.Function f ? f : null;
+                phases.add(new PerfSampler.Phase(name, () -> {
+                    if (run != null) run.call();
+                }));
+            }
+            return PerfSampler.measure(game, phases, count(perf, "warmup", 200), count(perf, "sample", 600),
+                    count(perf, "repeat", 3));
         });
         t.put("overrideTickRate", (Scripting.Function) args -> {
             if (!(args.length > 0 && args[0] instanceof Number n)) {
@@ -152,6 +171,10 @@ final class ScriptHandles {
         });
         if (found[0] == null) throw new IllegalArgumentException("no game rule '" + id + "'");
         return found[0];
+    }
+
+    private static int count(Map<?, ?> map, String key, int fallback) {
+        return map.containsKey(key) ? whole(map.get(key), "perf " + key) : fallback;
     }
 
     private static Object arg(Object[] args, int i) {

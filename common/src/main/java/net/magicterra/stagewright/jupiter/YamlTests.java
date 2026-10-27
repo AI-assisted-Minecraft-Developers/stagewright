@@ -106,9 +106,16 @@ final class YamlTests {
     private static void run(ScriptContext context, Integer plot, List<Map<?, ?>> steps) {
         Map<String, Object> saved = new HashMap<>();
         if (plot != null) saved.put("plot", context.plot(plot));
+        run(context, steps, saved, "step ");
+    }
+
+    /** {@code steps} in order; a failure names the step by {@code label} and its position. */
+    private static void run(ScriptContext context, List<?> steps, Map<String, Object> saved, String label) {
         for (int i = 0; i < steps.size(); i++) {
-            Map<?, ?> step = steps.get(i);
-            String verb = verb(step, "");
+            if (!(steps.get(i) instanceof Map<?, ?> step)) {
+                throw new IllegalArgumentException(label + (i + 1) + ": a step is a map, not " + steps.get(i));
+            }
+            String verb = verb(step, label + (i + 1));
             try {
                 Object result = step(context, verb, step, saved);
                 KnownIssues known = step.containsKey("knownIssues") ? new KnownIssues(step.get("knownIssues")) : null;
@@ -116,21 +123,47 @@ final class YamlTests {
                 if (step.containsKey("expect")) Expectations.expect(result, substitute(step.get("expect"), saved));
                 if (known != null) {
                     known.checkAllSeen();
-                    context.record("step " + (i + 1) + " known issues", known.count());
+                    context.record(label + (i + 1) + " known issues", known.count());
                 }
                 if (step.get("save") instanceof String name) saved.put(name, result);
                 // A handle a built-in step named is readable as ${name} too.
                 saved.putAll(context.handles());
             } catch (AssertionError e) {
-                throw new AssertionError("step " + (i + 1) + " (" + verb + "): " + e.getMessage(), e);
+                throw new AssertionError(label + (i + 1) + " (" + verb + "): " + e.getMessage(), e);
             } catch (RuntimeException e) {
-                throw new IllegalStateException("step " + (i + 1) + " (" + verb + "): " + e.getMessage(), e);
+                throw new IllegalStateException(label + (i + 1) + " (" + verb + "): " + e.getMessage(), e);
             }
         }
     }
 
+    /**
+     * {@code perf: {phases: [{name, steps}], warmup, sample, repeat}}: each phase's steps, then its measurement
+     * ({@link PerfSampler}); the result is each phase's median window by name, kept in the report too.
+     */
+    private static Object perf(ScriptContext context, Object value, Map<String, Object> saved) {
+        if (!(value instanceof Map<?, ?> perf) || !(perf.get("phases") instanceof List<?> list) || list.isEmpty()) {
+            throw new IllegalArgumentException("perf: {phases: [{name, steps}], warmup, sample, repeat}");
+        }
+        List<PerfSampler.Phase> phases = new ArrayList<>();
+        for (Object p : list) {
+            if (!(p instanceof Map<?, ?> phase) || !(phase.get("name") instanceof String name)) {
+                throw new IllegalArgumentException("perf: a phase is {name, steps}");
+            }
+            List<?> steps = phase.get("steps") instanceof List<?> s ? s : List.of();
+            phases.add(new PerfSampler.Phase(name, () -> run(context, steps, saved, "phase " + name + ", step ")));
+        }
+        Map<String, Object> result = PerfSampler.measure(context.game(), phases, count(perf, "warmup", 200),
+                count(perf, "sample", 600), count(perf, "repeat", 3));
+        context.record("perf", result);
+        return result;
+    }
+
+    private static int count(Map<?, ?> map, String key, int fallback) {
+        return map.containsKey(key) ? ScriptContext.ticks(map.get(key), "perf " + key) : fallback;
+    }
+
     private static Object step(ScriptContext context, String verb, Map<?, ?> step, Map<String, Object> saved) {
-        Object value = substitute(step.get(verb), saved);
+        Object value = verb.equals("perf") ? null : substitute(step.get(verb), saved);
         Map<String, Object> options = new HashMap<>();
         for (String key : List.of("within", "ticks", "as")) if (step.containsKey(key)) options.put(key, step.get(key));
         return switch (verb) {
@@ -142,6 +175,8 @@ final class YamlTests {
                 context.ticks(ScriptContext.ticks(value, "wait"));
                 yield null;
             }
+            // Its phases' steps are read raw: a ${name} in them means the value when the phase runs.
+            case "perf" -> perf(context, step.get(verb), saved);
             case "waitUntil", "settle" -> {
                 int run = verb.equals("settle")
                         ? (options.containsKey("ticks") ? ScriptContext.ticks(options.get("ticks"), "ticks") : 20) : 1;
@@ -152,7 +187,7 @@ final class YamlTests {
             }
             default -> {
                 if (!context.hasStep(verb)) {
-                    throw new IllegalArgumentException("'" + verb + "' is neither call, wait, waitUntil, settle, a"
+                    throw new IllegalArgumentException("'" + verb + "' is neither call, wait, waitUntil, settle, perf, a"
                             + " built-in step " + BuiltinSteps.NAMES + " nor one a script registered");
                 }
                 yield context.step(verb, value);
