@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -103,10 +104,20 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
      */
     static String worldDirectory(List<String> jvmArgs) {
         String prefix = "-Dstagewright.client.world=";
+        String found = null;
         for (String arg : jvmArgs) {
-            if (arg.startsWith(prefix)) return "saves/" + arg.substring(prefix.length());
+            List<String> tokens = List.of(arg);
+            // ModDevGradle puts a run's system properties in an argument file; the last one the JVM reads wins.
+            if (arg.startsWith("@")) {
+                try {
+                    tokens = List.of(Files.readString(Path.of(arg.substring(1))).split("\\s+"));
+                } catch (IOException | RuntimeException e) {
+                    tokens = List.of();
+                }
+            }
+            for (String t : tokens) if (t.startsWith(prefix)) found = "saves/" + t.substring(prefix.length());
         }
-        return null;
+        return found;
     }
 
     private static JsonObject process(CompanionLaunch launch, File classpathArgFile) {
