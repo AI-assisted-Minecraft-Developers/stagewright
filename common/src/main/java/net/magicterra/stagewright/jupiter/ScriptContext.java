@@ -34,6 +34,7 @@ final class ScriptContext {
 
     private final Game game;
     private final Map<String, Scripting.Function> steps;
+    private final JavaSteps javaSteps;
     private final TestDescriptor test;
     private final EngineExecutionListener listener;
     /** What the body leased — plots, bots — in the order it did. */
@@ -42,10 +43,11 @@ final class ScriptContext {
     private final Map<String, BlockPos> handles = new LinkedHashMap<>();
     private Map<String, Object> script;
 
-    ScriptContext(Game game, Map<String, Scripting.Function> steps, TestDescriptor test,
+    ScriptContext(Game game, Map<String, Scripting.Function> steps, JavaSteps javaSteps, TestDescriptor test,
                   EngineExecutionListener listener) {
         this.game = game;
         this.steps = steps;
+        this.javaSteps = javaSteps;
         this.test = test;
         this.listener = listener;
     }
@@ -112,7 +114,7 @@ final class ScriptContext {
         return step(string(args, 0, "t.step(name, args)"), args.length > 1 ? args[1] : null);
     }
 
-    /** The step a script registered as {@code name}, or the built-in one, given this context and {@code args}. */
+    /** The step named {@code name} — a script's, a built-in one, or a Java {@code @Step} — given {@code args}. */
     Object step(String name, Object args) {
         Scripting.Function body;
         synchronized (steps) {
@@ -120,14 +122,15 @@ final class ScriptContext {
         }
         if (body != null) return body.call(asScript(), args);
         if (BuiltinSteps.NAMES.contains(name)) return BuiltinSteps.run(this, name, args);
+        if (javaSteps.has(name)) return javaSteps.run(name, game, args);
         throw new IllegalArgumentException("no step named '" + name + "'; built in: " + BuiltinSteps.NAMES
-                + ", registered: " + steps.keySet());
+                + ", registered by scripts: " + steps.keySet() + ", @Step: " + javaSteps.names());
     }
 
-    /** Whether a step is registered or built in as {@code name}. */
+    /** Whether a step is registered, built in, or a Java {@code @Step} as {@code name}. */
     boolean hasStep(String name) {
         synchronized (steps) {
-            return steps.containsKey(name) || BuiltinSteps.NAMES.contains(name);
+            return steps.containsKey(name) || BuiltinSteps.NAMES.contains(name) || javaSteps.has(name);
         }
     }
 

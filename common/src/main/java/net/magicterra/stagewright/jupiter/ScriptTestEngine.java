@@ -56,15 +56,22 @@ public final class ScriptTestEngine implements TestEngine {
     @Override
     public TestDescriptor discover(EngineDiscoveryRequest request, UniqueId uniqueId) {
         EngineDescriptor engine = new EngineDescriptor(uniqueId, "StageWright scripts");
-        Map<String, Scripting.Function> steps = new LinkedHashMap<>();
+        Steps steps = new Steps(new LinkedHashMap<>(), JavaSteps.none());
+        RuntimeException javaStepsError = null;
+        try {
+            steps = new Steps(steps.scripts(), JavaSteps.load(Thread.currentThread().getContextClassLoader()));
+        } catch (RuntimeException e) {
+            // Every file fails with it: which of them would have taken a step that is missing cannot be told.
+            javaStepsError = e;
+        }
         for (ClasspathResourceSelector selector : request.getSelectorsByType(ClasspathResourceSelector.class)) {
             String resource = selector.getClasspathResourceName();
-            if (resource.endsWith(".js")) engine.addChild(File.load(engine, resource, steps));
+            if (resource.endsWith(".js")) engine.addChild(File.load(engine, resource, steps, javaStepsError));
         }
         // YAML after JavaScript: a YAML step may be one a script registers.
         for (ClasspathResourceSelector selector : request.getSelectorsByType(ClasspathResourceSelector.class)) {
             String resource = selector.getClasspathResourceName();
-            if (isYaml(resource)) engine.addChild(File.load(engine, resource, steps));
+            if (isYaml(resource)) engine.addChild(File.load(engine, resource, steps, javaStepsError));
         }
         return engine;
     }
@@ -96,6 +103,9 @@ public final class ScriptTestEngine implements TestEngine {
         void run(ScriptContext context);
     }
 
+    /** The named steps of one run: those scripts register as they load, and the Java {@code @Step} methods. */
+    record Steps(Map<String, Scripting.Function> scripts, JavaSteps java) {}
+
     static boolean isYaml(String resource) {
         return resource.endsWith(".yaml") || resource.endsWith(".yml");
     }
@@ -103,17 +113,21 @@ public final class ScriptTestEngine implements TestEngine {
     /** One script file: what it registered, or why it registered nothing. */
     static final class File extends AbstractTestDescriptor {
         final String resource;
-        final Map<String, Scripting.Function> steps;
+        final Steps steps;
         private RuntimeException loadError;
 
-        private File(UniqueId id, String resource, Map<String, Scripting.Function> steps) {
+        private File(UniqueId id, String resource, Steps steps) {
             super(id, resource, ClasspathResourceSource.from(resource));
             this.resource = resource;
             this.steps = steps;
         }
 
-        static File load(TestDescriptor engine, String resource, Map<String, Scripting.Function> steps) {
+        static File load(TestDescriptor engine, String resource, Steps steps, RuntimeException javaStepsError) {
             File file = new File(engine.getUniqueId().append("script", resource), resource, steps);
+            if (javaStepsError != null) {
+                file.loadError = javaStepsError;
+                return file;
+            }
             try {
                 if (isYaml(resource)) {
                     for (YamlTests.Test test : YamlTests.read(resource, source(resource))) {
@@ -189,8 +203,11 @@ public final class ScriptTestEngine implements TestEngine {
             if (BuiltinSteps.NAMES.contains(name)) {
                 throw new IllegalArgumentException("step '" + name + "' is built in; give yours another name");
             }
-            synchronized (steps) {
-                if (steps.putIfAbsent(name, body) != null) {
+            if (steps.java().has(name)) {
+                throw new IllegalArgumentException("step '" + name + "' is a Java @Step; give yours another name");
+            }
+            synchronized (steps.scripts()) {
+                if (steps.scripts().putIfAbsent(name, body) != null) {
                     throw new IllegalArgumentException("step '" + name + "' is already registered");
                 }
             }
@@ -346,7 +363,8 @@ public final class ScriptTestEngine implements TestEngine {
         }
 
         private TestExecutionResult run(EngineExecutionListener listener) {
-            ScriptContext context = new ScriptContext(GameExtension.game(), file.steps, this, listener);
+            ScriptContext context = new ScriptContext(GameExtension.game(), file.steps.scripts(), file.steps.java(), this,
+                    listener);
             TestScope.bind(TestScope.ofScript(getDisplayName()));
             Throwable failure = null;
             try {

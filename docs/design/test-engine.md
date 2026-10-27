@@ -82,7 +82,10 @@ Both kinds share the built-in steps `place: {at, block, as}`, `insert: {into, it
 the container holds, item id to count, its other keys an expectation of that), `chunk.unload` and `chunk.reload`
 (`at`, or `{at, within}`). A position there is a handle a `place` named with `as` (in YAML also `${name}`),
 `[x, y, z]` inside the test's plot, or `{x, y, z}` in the world. A script may not register a step under a built-in
-name. The game reads YAML with a snakeyaml relocated into
+name. A Java method annotated `@Step("name")` is a named step too, taken the same way: it is public and static, takes
+by type what it needs of `Game`, a `Map` of its arguments and the arguments as given (`Object`), and its class is
+listed, one per line, in a `META-INF/stagewright/steps` resource on the game's class path. A clash between a script's
+step, a built-in one and a Java one is refused when the files load. The game reads YAML with a snakeyaml relocated into
 StageWright's loader jars; the engine outside reads only the names and scenes.
 
 ## One channel back
