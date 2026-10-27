@@ -186,6 +186,9 @@ public final class ScriptTestEngine implements TestEngine {
             if (args.length != 2 || !(args[0] instanceof String name) || !(args[1] instanceof Scripting.Function body)) {
                 throw new IllegalArgumentException("step(name, body) takes a name and a function");
             }
+            if (BuiltinSteps.NAMES.contains(name)) {
+                throw new IllegalArgumentException("step '" + name + "' is built in; give yours another name");
+            }
             synchronized (steps) {
                 if (steps.putIfAbsent(name, body) != null) {
                     throw new IllegalArgumentException("step '" + name + "' is already registered");

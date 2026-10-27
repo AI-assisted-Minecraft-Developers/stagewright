@@ -65,7 +65,13 @@ with `params`, `wait`, `waitUntil`/`settle` (a `{call, params, expect}` conditio
 step a script registered, `name: args`; JavaScript files load first so their steps are there. Any step may carry
 `expect`, whose keys are operators (`equals`, `contains`, `empty`, `gt`, `lt`, `atLeast`, `atMost`, `anyOf`,
 `allOf`) or field paths (`audit.count: {gt: 0}`), and `save: name`, read later as `${name}` or `${name.field}`;
-the leased plot is `${plot}`. There is no expression language. The game reads YAML with a snakeyaml relocated into
+the leased plot is `${plot}`. There is no expression language.
+
+Both kinds share the built-in steps `place: {at, block, as}`, `insert: {into, items}`, `container: {of, …}` (what
+the container holds, item id to count, its other keys an expectation of that), `chunk.unload` and `chunk.reload`
+(`at`, or `{at, within}`). A position there is a handle a `place` named with `as` (in YAML also `${name}`),
+`[x, y, z]` inside the test's plot, or `{x, y, z}` in the world. A script may not register a step under a built-in
+name. The game reads YAML with a snakeyaml relocated into
 StageWright's loader jars; the engine outside reads only the names and scenes.
 
 ## One channel back
@@ -114,6 +120,6 @@ command-line runner writes the same file from a game directory. The engine knows
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
 - Scenes run one after another, and a game's script tests one after another.
 - A script test cannot yet depend on a Java test, nor a Java test on a script test.
-- YAML has no built-in steps yet (`place`, `insert`, `chunk.unload`, `container`), no `knownIssues` subtraction,
-  no `java:` step and no `perf`.
+- YAML has no `knownIssues` subtraction, no `java:` step and no `perf`; `insert` and `container` reach only
+  containers that are vanilla `Container`s, in the overworld.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.

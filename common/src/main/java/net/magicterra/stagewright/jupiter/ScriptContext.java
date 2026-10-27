@@ -14,6 +14,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 
 import net.magicterra.stagewright.test.Game;
+import net.minecraft.core.BlockPos;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
@@ -37,6 +38,8 @@ final class ScriptContext {
     private final EngineExecutionListener listener;
     /** What the body leased — plots, bots — in the order it did. */
     private final List<CloseableResource> leases = new ArrayList<>();
+    /** Positions the test's steps named with {@code as}. */
+    private final Map<String, BlockPos> handles = new LinkedHashMap<>();
     private Map<String, Object> script;
 
     ScriptContext(Game game, Map<String, Scripting.Function> steps, TestDescriptor test,
@@ -109,21 +112,55 @@ final class ScriptContext {
         return step(string(args, 0, "t.step(name, args)"), args.length > 1 ? args[1] : null);
     }
 
-    /** The step registered as {@code name}, given this context and {@code args}; null when there is none. */
+    /** The step a script registered as {@code name}, or the built-in one, given this context and {@code args}. */
     Object step(String name, Object args) {
         Scripting.Function body;
         synchronized (steps) {
             body = steps.get(name);
         }
-        if (body == null) throw new IllegalArgumentException("no step named '" + name + "'; registered: " + steps.keySet());
-        return body.call(asScript(), args);
+        if (body != null) return body.call(asScript(), args);
+        if (BuiltinSteps.NAMES.contains(name)) return BuiltinSteps.run(this, name, args);
+        throw new IllegalArgumentException("no step named '" + name + "'; built in: " + BuiltinSteps.NAMES
+                + ", registered: " + steps.keySet());
     }
 
-    /** Whether a step is registered as {@code name}. */
+    /** Whether a step is registered or built in as {@code name}. */
     boolean hasStep(String name) {
         synchronized (steps) {
-            return steps.containsKey(name);
+            return steps.containsKey(name) || BuiltinSteps.NAMES.contains(name);
         }
+    }
+
+    Game game() {
+        return game;
+    }
+
+    /** Remember {@code pos} as the handle {@code name}, for later steps of this test. */
+    void name(String name, BlockPos pos) {
+        handles.put(name, pos);
+    }
+
+    BlockPos named(String name) {
+        BlockPos pos = handles.get(name);
+        if (pos == null) {
+            throw new IllegalArgumentException("no handle '" + name + "': a place step names one with as; named so far: "
+                    + handles.keySet());
+        }
+        return pos;
+    }
+
+    /** The handles named so far, each as {@code {x, y, z}}. */
+    Map<String, Object> handles() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        handles.forEach((name, pos) -> out.put(name, ScriptHandles.position(pos)));
+        return out;
+    }
+
+    /** The first plot the test leased; a position inside a plot needs one. */
+    PlotImpl plotOrFail() {
+        for (CloseableResource lease : leases) if (lease instanceof PlotImpl plot) return plot;
+        throw new IllegalArgumentException("[x, y, z] is a position in the test's plot, and it leased none: give the"
+                + " test plot: {size}, or call t.plot() first");
     }
 
     /** {@code t.wait(ticks)}. */

@@ -113,7 +113,7 @@ final class ScriptHandles {
         return out;
     }
 
-    private static Map<String, Object> position(BlockPos pos) {
+    static Map<String, Object> position(BlockPos pos) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("x", pos.getX());
         out.put("y", pos.getY());

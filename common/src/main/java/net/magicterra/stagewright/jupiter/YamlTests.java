@@ -112,6 +112,8 @@ final class YamlTests {
                 Object result = step(context, verb, step, saved);
                 if (step.containsKey("expect")) Expectations.expect(result, substitute(step.get("expect"), saved));
                 if (step.get("save") instanceof String name) saved.put(name, result);
+                // A handle a built-in step named is readable as ${name} too.
+                saved.putAll(context.handles());
             } catch (AssertionError e) {
                 throw new AssertionError("step " + (i + 1) + " (" + verb + "): " + e.getMessage(), e);
             } catch (RuntimeException e) {
@@ -143,8 +145,8 @@ final class YamlTests {
             }
             default -> {
                 if (!context.hasStep(verb)) {
-                    throw new IllegalArgumentException("'" + verb + "' is neither call, wait, waitUntil, settle nor"
-                            + " a registered step");
+                    throw new IllegalArgumentException("'" + verb + "' is neither call, wait, waitUntil, settle, a"
+                            + " built-in step " + BuiltinSteps.NAMES + " nor one a script registered");
                 }
                 yield context.step(verb, value);
             }
