@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 
 import net.magicterra.stagewright.harness.AgentBridge;
 import org.junit.platform.engine.TestExecutionResult;
+import org.junit.platform.engine.reporting.ReportEntry;
 import org.junit.platform.engine.support.descriptor.ClassSource;
 import org.junit.platform.engine.support.descriptor.ClasspathResourceSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
@@ -81,6 +82,16 @@ final class AgentEvents implements TestExecutionListener {
         o.addProperty("id", id.getUniqueId());
         o.addProperty("status", result.getStatus().name());
         result.getThrowable().ifPresent(t -> o.add("failure", failure(t)));
+        send(o);
+    }
+
+    @Override
+    public void reportingEntryPublished(TestIdentifier id, ReportEntry entry) {
+        JsonObject o = event("report");
+        o.addProperty("id", id.getUniqueId());
+        JsonObject entries = new JsonObject();
+        entry.getKeyValuePairs().forEach(entries::addProperty);
+        o.add("entries", entries);
         send(o);
     }
 

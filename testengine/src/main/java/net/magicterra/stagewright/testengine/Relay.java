@@ -2,6 +2,7 @@ package net.magicterra.stagewright.testengine;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -11,6 +12,7 @@ import org.junit.platform.engine.EngineExecutionListener;
 import org.junit.platform.engine.TestDescriptor;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.UniqueId;
+import org.junit.platform.engine.reporting.ReportEntry;
 import org.junit.platform.engine.support.descriptor.MethodSource;
 
 /**
@@ -104,7 +106,15 @@ final class Relay implements Consumer<Map<String, Object>> {
                 }
                 finish(d, result);
             }
-            case "error" -> error = event.get("failure") instanceof Map<?, ?> f ? Relayed.failure(f, false)
+            case "report" -> {
+                TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
+                if (d != null && event.get("entries") instanceof Map<?, ?> entries && !entries.isEmpty()) {
+                    Map<String, String> values = new LinkedHashMap<>();
+                    entries.forEach((k, v) -> values.put(String.valueOf(k), String.valueOf(v)));
+                    listener.reportingEntryPublished(d, ReportEntry.from(values));
+                }
+            }
+            case "error" -> error =event.get("failure") instanceof Map<?, ?> f ? Relayed.failure(f, false)
                     : new IllegalStateException("the game's test run could not start");
             case "ended" -> ended = true;
             default -> {

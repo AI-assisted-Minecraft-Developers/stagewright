@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.platform.engine.TestExecutionResult;
+import org.junit.platform.engine.reporting.ReportEntry;
 import org.junit.platform.testkit.engine.EngineExecutionResults;
 import org.junit.platform.testkit.engine.EngineTestKit;
 import org.junit.platform.testkit.engine.Event;
@@ -276,6 +277,10 @@ class StageWrightTestEngineTest {
                 .selectors(selectClasspathResource("stagewright/tests/arithmetic.js")).execute();
         assertEquals(1, r.testEvents().succeeded().count());
         assertEquals("adds", r.testEvents().succeeded().list().get(0).getTestDescriptor().getDisplayName());
+        // What the test recorded in the game is published here too.
+        assertEquals(List.of("2"), r.allEvents().reportingEntryPublished().stream()
+                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs().get("sum"))
+                .filter(java.util.Objects::nonNull).toList());
         assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
     }
 
