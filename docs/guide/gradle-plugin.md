@@ -146,23 +146,60 @@ A suite runs JUnit tests through StageWright's [test engine](../design/test-engi
 a game per scene. It is separate from the gates above: a suite starts the games itself, from launch
 specs, rather than depending on a topology's run task.
 
+On a single-loader loom project, the whole of it:
+
 ```groovy
-stagewright {
-    tests {
-        fabric {
-            classes.from(project(':common').sourceSets.testmod.output)
-            classpath.from(project(':common').sourceSets.testmod.compileClasspath)
-            loaderProject = ':fabric'
-            jvmArgs.add('-Xmx2g')
-        }
-    }
-}
+// build.gradle — beside `id 'fabric-loom'` or `id 'dev.architectury.loom'`
+plugins { id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1' }
+stagewright { tests { fabric { } } }
 ```
+
+Tests go in `src/testmod/java` and `src/testmod/resources`, and `./gradlew stagewrightTestFabric` runs
+them. A Fabric Loom project in Mojang names with Fabric API and no other change has passed this way.
+The rest is conventions, each of which a suite may set:
+
+| Property | Convention |
+|---|---|
+| `loaderProject` | the project the plugin is applied to, when it applies loom |
+| `runSourceSet` | `testmod`, created seeing `main` when the project has none |
+| `classes`, `classpath` | that source set's output and compile classpath |
+| `testDependencies` | true: StageWright's api and WorldDriver's (`:dev`, Mojang names) and JUnit Jupiter's api go on its `compileOnly` |
+| `includeWorldDriver` | true: WorldDriver's loader mod goes into the runs with StageWright's, and the Architectury API it needs unless the project already declares one |
+| `serverPort`, `timeoutMinutes` | 25621, 20 |
+
+The plugin also appends the repositories these come from to every loom project and its own, each asked
+for its group only: the StageWright Nexus for `net.magicterra`, Architectury's for `dev.architectury`,
+and mavenLocal for a local build of StageWright. When `dependencyResolutionManagement` keeps
+repositories in the settings, it adds none, and the settings have to list them.
+
+A multi-loader build applies the plugin at the root and names each loader, pointing at the tests where
+they live:
+
+```groovy
+stagewright { tests {
+    ['fabric', 'neoforge'].each { loader -> create(loader) {
+        classes.from({ project(':common').sourceSets.testmod.output })
+        classpath.from({ project(':common').sourceSets.testmod.compileClasspath })
+        loaderProject = ":${loader}"
+        jvmArgs.add('-Xmx2g')
+    } }
+} }
+```
+
+Each loader project still needs a `testmod` source set that carries `:common`'s into its runs:
+on Fabric on its runtime classpath, on NeoForge through `loom.mods` only, since FML would otherwise
+make a second module of the same packages.
 
 `classes` is the compiled test classes plus the resources (scene files) the engine scans.
 `classpath` is what those classes link against. Gradle loads every class under `classes` by name in
 the test JVM, without running it, and a class whose supertypes are missing there fails the task; with
 `classpath` set they load, and nothing on it is started.
+
+StageWright's loader mod, and WorldDriver's, reach the runs through a loom remap configuration of the
+plugin's own, `modStagewrightTestRuntime`, on the run source set: remapped like any `mod*` dependency,
+present in the generated runs and in any other run of that source set, absent from `runClient`. Nothing
+goes in `modLocalRuntime`. It is not transitive: the mods carry what they need, and what Architectury
+asks for — Fabric Loader, Fabric API — is the project's own.
 
 `loaderProject` names the loom project the games run from. The plugin declares the suite's runs in
 that project's `loom.runs`, so loom still builds each launch, and gives a scene two topologies to
@@ -173,8 +210,7 @@ name:
 | `dedicatedServer` | `stagewright<Name>DedicatedServer` | `dedicated-server` |
 | `dedicatedServerWithClient` | `stagewright<Name>DedicatedServerWithClient`, holding its tests until `stagewright<Name>JoiningClient` joins | `with-client`, and `joining-client` for the client |
 
-The runs start from the project's `testmod` source set when it has one, else `main`
-(`runSourceSet` chooses another), so `runClient` goes without the tests; they get no IDE run
+The runs start from the run source set, so `runClient` goes without the tests; they get no IDE run
 configuration. `jvmArgs` and `systemProperties` go on all of them, the servers listen on `serverPort`
 (default 25621), and `timeoutMinutes` (default 20) bounds one scene. The engine accepts the EULA in a
 server's directory itself, so nothing has to be prepared beforehand. Under a loader plugin other than

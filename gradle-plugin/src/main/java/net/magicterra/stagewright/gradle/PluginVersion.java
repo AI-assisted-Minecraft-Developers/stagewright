@@ -21,6 +21,16 @@ final class PluginVersion {
         return property("junit");
     }
 
+    /** The WorldDriver build StageWright is built against, the one a test run gets unless told otherwise. */
+    static String worldDriver() {
+        return property("worlddriver");
+    }
+
+    /** The Architectury API WorldDriver is built against, which it needs beside it at run time. */
+    static String architectury() {
+        return property("architectury");
+    }
+
     private static String property(String key) {
         try (InputStream in = PluginVersion.class.getResourceAsStream(RESOURCE)) {
             if (in == null) throw new IllegalStateException(RESOURCE + " is missing from the plugin jar");

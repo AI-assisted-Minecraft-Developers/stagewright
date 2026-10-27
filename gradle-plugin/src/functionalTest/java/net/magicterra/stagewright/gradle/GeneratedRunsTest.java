@@ -25,6 +25,10 @@ class GeneratedRunsTest {
     Path dir;
 
     private void consumer(String suiteBody) throws Exception {
+        consumer(suiteBody, "sourceSets { testmod {} }");
+    }
+
+    private void consumer(String suiteBody, String loaderSourceSets) throws Exception {
         Files.writeString(dir.resolve("settings.gradle"), "rootProject.name = 'consumer'\ninclude 'loader'\n");
         Files.writeString(dir.resolve("build.gradle"), """
                 plugins { id 'net.magicterra.stagewright' }
@@ -35,7 +39,7 @@ class GeneratedRunsTest {
         Files.createDirectories(dir.resolve("loader"));
         Files.writeString(dir.resolve("loader/build.gradle"), """
                 plugins { id 'java' }
-                sourceSets { testmod {} }
+                %s
 
                 class FakeRun implements Named {
                     final String name
@@ -75,7 +79,7 @@ class GeneratedRunsTest {
                 tasks.register('inspectRuns') {
                     doLast { runs.each { println 'RUN ' + it.name + ' ide=' + it.ide + ' source=' + it.src.name } }
                 }
-                """);
+                """.formatted(loaderSourceSets));
     }
 
     private GradleRunner runner(String... args) {
@@ -134,6 +138,21 @@ class GeneratedRunsTest {
         assertEquals("[\"--port\",\"25700\"]", spec("dedicatedServer").get("primary").asObject().get("args").toString());
         assertTrue(runner(":loader:inspectRuns", "-q").build().getOutput()
                 .contains("RUN stagewrightFabricJoiningClient ide=false source=main"));
+    }
+
+    @Test
+    void withoutATestmodOneIsCreatedAndItsClassesAreTheSuites() throws Exception {
+        consumer("loaderProject = ':loader'", "");
+        Files.writeString(dir.resolve("build.gradle"), Files.readString(dir.resolve("build.gradle")) + """
+                tasks.register('inspectSuite') {
+                    def dirs = tasks.named('stagewrightTestFabric').map { it.testClassesDirs.files }
+                    doLast { dirs.get().each { println 'CLASSES ' + it } }
+                }
+                """);
+
+        String out = runner("inspectSuite", ":loader:inspectRuns", "-q").build().getOutput();
+        assertTrue(out.contains("RUN stagewrightFabricDedicatedServer ide=false source=testmod"), out);
+        assertTrue(out.contains("CLASSES " + dir.resolve("loader/build/classes/java/testmod")), out);
     }
 
     @Test

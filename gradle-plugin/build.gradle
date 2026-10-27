@@ -85,10 +85,19 @@ def versionResource = tasks.register('generateVersionResource') {
     def out = layout.buildDirectory.file('generated-resources/stagewright-plugin.properties')
     def v = stagewrightVersion
     def junit = junitVersion
+    def worlddriver = worlddriverVersion
+    def architectury = architecturyVersion
     outputs.file(out)
     inputs.property('version', v)
     inputs.property('junit', junit)
-    doLast { out.get().asFile.with { parentFile.mkdirs(); text = "version=${v}\njunit=${junit}\n" } }
+    inputs.property('worlddriver', worlddriver)
+    inputs.property('architectury', architectury)
+    doLast {
+        out.get().asFile.with {
+            parentFile.mkdirs()
+            text = "version=${v}\njunit=${junit}\nworlddriver=${worlddriver}\narchitectury=${architectury}\n"
+        }
+    }
 }
 tasks.named('processResources') { from(versionResource) }
 

@@ -59,7 +59,8 @@ public abstract class StageWrightTestSuite implements Named {
      * The loom project whose runs this suite's games are, such as {@code ':fabric'}. The plugin declares them there:
      * {@code stagewright<Name>DedicatedServer}, {@code stagewright<Name>DedicatedServerWithClient} and the
      * {@code stagewright<Name>JoiningClient} that joins it, each in its own directory under
-     * {@code run-stagewright/<name>/}, with no IDE run configuration.
+     * {@code run-stagewright/<name>/}, with no IDE run configuration. Convention: the project the plugin is applied
+     * to, when it applies loom.
      */
     public abstract Property<String> getLoaderProject();
 
@@ -81,4 +82,17 @@ public abstract class StageWrightTestSuite implements Named {
 
     /** The longest one scene's games may run on a generated topology, in minutes. Convention: 20. */
     public abstract Property<Integer> getTimeoutMinutes();
+
+    /**
+     * Whether the plugin brings WorldDriver as well as StageWright into the generated runs, and its api onto the
+     * tests' compile classpath. Convention: true; WorldDriver's own build, which is WorldDriver, turns it off.
+     */
+    public abstract Property<Boolean> getIncludeWorldDriver();
+
+    /**
+     * Whether the plugin adds what tests compile against to the run source set: StageWright's api and WorldDriver's,
+     * both in Mojang names, and JUnit Jupiter's. Convention: true; a build in other mappings turns it off and adds
+     * its own.
+     */
+    public abstract Property<Boolean> getTestDependencies();
 }

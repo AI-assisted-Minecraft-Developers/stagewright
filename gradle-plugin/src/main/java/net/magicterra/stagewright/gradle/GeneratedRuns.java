@@ -26,6 +26,7 @@ final class GeneratedRuns {
     static final String DEDICATED_SERVER = "dedicatedServer";
     static final String DEDICATED_SERVER_WITH_CLIENT = "dedicatedServerWithClient";
     static final int DEFAULT_SERVER_PORT = 25621;
+    static final String TESTMOD = "testmod";
 
     private GeneratedRuns() {}
 
@@ -110,15 +111,31 @@ final class GeneratedRuns {
         });
     }
 
-    private static SourceSet sourceSet(Project loader, StageWrightTestSuite suite) {
+    /**
+     * The source set the suite's runs start from and its tests live in: {@link StageWrightTestSuite#getRunSourceSet()},
+     * else {@code testmod}, created when the project has none and seeing {@code main} as the plugin's
+     * {@code testmodSourceSet} would wire it.
+     */
+    static SourceSet sourceSet(Project loader, StageWrightTestSuite suite) {
         SourceSetContainer sets = loader.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
-        String name = suite.getRunSourceSet().getOrElse(sets.findByName("testmod") != null ? "testmod" : "main");
+        if (!suite.getRunSourceSet().isPresent() && sets.findByName(TESTMOD) == null) {
+            return StageWrightPlugin.testmodSourceSet(loader);
+        }
+        String name = suite.getRunSourceSet().getOrElse(TESTMOD);
         SourceSet set = sets.findByName(name);
         if (set == null) {
             throw new GradleException("stagewright test suite '" + suite.getName() + "': " + loader.getPath()
                     + " has no source set '" + name + "' to start its runs from (has: " + sets.getNames() + ")");
         }
         return set;
+    }
+
+    /** The suite generating runs in {@code project}, or null. */
+    static StageWrightTestSuite suiteOf(Project project, Iterable<StageWrightTestSuite> suites) {
+        for (StageWrightTestSuite suite : suites) {
+            if (generates(suite) && loader(project, suite) == project) return suite;
+        }
+        return null;
     }
 
     private static String runName(StageWrightTestSuite suite, String what) {

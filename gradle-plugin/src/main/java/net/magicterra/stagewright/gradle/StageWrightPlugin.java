@@ -112,6 +112,18 @@ public class StageWrightPlugin implements Plugin<Project> {
         tests.all(suite -> {
             suite.getServerPort().convention(GeneratedRuns.DEFAULT_SERVER_PORT);
             suite.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
+            // A single-loader project is its own loader; null leaves it unset elsewhere.
+            suite.getLoaderProject().convention(project.provider(() ->
+                    project.getExtensions().findByName("loom") != null ? project.getPath() : null));
+            suite.getIncludeWorldDriver().convention(true);
+            suite.getTestDependencies().convention(true);
+            // The tests are the run source set's, unless the build points elsewhere, as a multi-loader one does.
+            suite.getClasses().convention(project.provider(() -> GeneratedRuns.generates(suite)
+                    ? GeneratedRuns.sourceSet(GeneratedRuns.loader(project, suite), suite).getOutput()
+                    : project.files()));
+            suite.getClasspath().convention(project.provider(() -> GeneratedRuns.generates(suite)
+                    ? GeneratedRuns.sourceSet(GeneratedRuns.loader(project, suite), suite).getCompileClasspath()
+                    : project.files()));
             registerTestSuiteTasks(project, suite, topologies);
         });
         // Once this build script has set the suites up; each loader project's runs follow its own evaluation.
@@ -119,6 +131,7 @@ public class StageWrightPlugin implements Plugin<Project> {
             if (GeneratedRuns.generates(suite)) GeneratedRuns.declare(p, suite);
         }));
         DevJUnitRuntime.install(project, tests, topologies);
+        SuiteDependencies.install(project, tests);
     }
 
     static final String TEST_ENGINE_CONFIGURATION = "stagewrightTestEngine";
@@ -689,19 +702,32 @@ public class StageWrightPlugin implements Plugin<Project> {
     /** v1 boundary: classpath wiring only — testmod sees main's output plus main's own compile and
      *  runtime classpaths, and nothing else changes. */
     private void registerTestmodSourceSet(Project project, StageWrightExtension ext) {
+        SourceSet testmod = project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets()
+                .maybeCreate("testmod");
+        seeMain(project, testmod);
+        ext.setTestmodSourceSetRef(testmod);
+    }
+
+    /** {@code testmod}, created once and wired to see {@code main}; an existing one is returned as it is. */
+    static SourceSet testmodSourceSet(Project project) {
         SourceSetContainer sourceSets =
                 project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
-        SourceSet main = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
-        SourceSet testmod = sourceSets.maybeCreate("testmod");
+        SourceSet existing = sourceSets.findByName("testmod");
+        if (existing != null) return existing;
+        SourceSet testmod = sourceSets.create("testmod");
+        seeMain(project, testmod);
+        return testmod;
+    }
 
+    private static void seeMain(Project project, SourceSet testmod) {
+        SourceSet main = project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets()
+                .getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         testmod.setCompileClasspath(testmod.getCompileClasspath()
                 .plus(main.getOutput())
                 .plus(project.getConfigurations().getByName(main.getCompileClasspathConfigurationName())));
         testmod.setRuntimeClasspath(testmod.getRuntimeClasspath()
                 .plus(main.getOutput())
                 .plus(project.getConfigurations().getByName(main.getRuntimeClasspathConfigurationName())));
-
-        ext.setTestmodSourceSetRef(testmod);
     }
 
     private static String capitalize(String s) {
