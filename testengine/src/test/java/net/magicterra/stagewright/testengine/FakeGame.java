@@ -24,6 +24,10 @@ public final class FakeGame {
             dynamic(classes);
             return;
         }
+        if (scenario.equals("script")) {
+            script(System.getProperty("stagewright.junit.scripts", ""));
+            return;
+        }
         List<String> methods = scenario.equals("undiscovered") ? List.of("a") : List.of("a", "b");
         plan(classes, methods);
         if (scenario.equals("crash")) {
@@ -101,6 +105,35 @@ public final class FakeGame {
         test("{\"type\":\"ended\"}");
         done();
         System.exit(0);
+    }
+
+    /** The in-game script engine's events for a file registering "adds", which passes, and "fails", which does not. */
+    private static void script(String resource) throws Exception {
+        String engine = "[engine:stagewright-script]";
+        String file = engine + "/[script:" + resource + "]";
+        String scene = System.getProperty("stagewright.junit.scene");
+        List<String> nodes = new ArrayList<>();
+        nodes.add(node(engine, null, "StageWright scripts", false, null, null, null));
+        nodes.add(scriptNode(file, engine, resource, false, resource));
+        for (String t : List.of("adds", "fails")) nodes.add(scriptNode(file + "/[test:" + t + "]", file, t, true, resource));
+        test("{\"type\":\"planned\",\"nodes\":[" + String.join(",", nodes) + "]}");
+        start(file);
+        start(file + "/[test:adds]");
+        if ("script".equals(scene)) finish(file + "/[test:adds]", "SUCCESSFUL", null);
+        else finish(file + "/[test:adds]", "FAILED", "{\"class\":\"java.lang.AssertionError\",\"message\":"
+                + q("-Dstagewright.junit.scene was " + scene) + ",\"trace\":[]}");
+        start(file + "/[test:fails]");
+        finish(file + "/[test:fails]", "FAILED", "{\"class\":\"java.lang.AssertionError\","
+                + "\"message\":\"expected 3 but was 2\",\"trace\":[]}");
+        finish(file, "SUCCESSFUL", null);
+        test("{\"type\":\"ended\"}");
+        done();
+        System.exit(0);
+    }
+
+    private static String scriptNode(String id, String parent, String name, boolean test, String resource) {
+        String n = node(id, parent, name, test, null, null, null);
+        return n.substring(0, n.length() - 1) + ",\"script\":" + q(resource) + "}";
     }
 
     private static void plan(List<String> classes, List<String> methods) throws Exception {

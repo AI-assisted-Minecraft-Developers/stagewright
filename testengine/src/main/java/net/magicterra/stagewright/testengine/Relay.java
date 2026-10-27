@@ -15,7 +15,7 @@ import org.junit.platform.engine.support.descriptor.MethodSource;
 
 /**
  * Turns one game's test events into the outer tree's: a game node is matched to an outer one by class, method and
- * parameter types, and reported under the outer node's id. Called on the supervisor's reader thread while the game
+ * parameter types, or by script file and test name, and reported under the outer node's id. Called on the supervisor's reader thread while the game
  * runs, then once more from the engine's thread to close out what the game never reported, hence synchronized.
  */
 final class Relay implements Consumer<Map<String, Object>> {
@@ -25,6 +25,8 @@ final class Relay implements Consumer<Map<String, Object>> {
     private final Coverage coverage;
     private final Map<String, Nodes.TestClass> classes = new HashMap<>();
     private final Map<String, Nodes.TestMethod> methods = new HashMap<>();
+    private final Map<String, TestDescriptor> scriptFiles = new HashMap<>();
+    private final Map<String, TestDescriptor> scriptTests = new HashMap<>();
     private final Map<String, TestDescriptor> byGameId = new HashMap<>();
     private final Set<TestDescriptor> planned = new HashSet<>();
     private final Set<TestDescriptor> started = new HashSet<>();
@@ -38,6 +40,11 @@ final class Relay implements Consumer<Map<String, Object>> {
         this.sceneName = scene.name;
         this.coverage = coverage;
         for (TestDescriptor c : scene.getChildren()) {
+            if (c instanceof Nodes.ScriptFile file) {
+                scriptFiles.put(file.resource, file);
+                for (TestDescriptor t : file.getChildren()) scriptTests.put(((Nodes.ScriptTest) t).key(), t);
+                continue;
+            }
             Nodes.TestClass tc = (Nodes.TestClass) c;
             classes.put(tc.className, tc);
             for (TestDescriptor m : tc.getChildren()) {
@@ -61,7 +68,8 @@ final class Relay implements Consumer<Map<String, Object>> {
             }
             case "started" -> {
                 TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
-                if (d instanceof Nodes.TestMethod m) coverage.ran(m);
+                String key = key(d);
+                if (key != null) coverage.ran(key);
                 start(d);
             }
             case "skipped" -> {
@@ -69,12 +77,12 @@ final class Relay implements Consumer<Map<String, Object>> {
                 String reason = String.valueOf(event.get("reason"));
                 if (d != null && !started.contains(d) && finished.add(d)) {
                     listener.executionSkipped(d, reason);
-                    if (d instanceof Nodes.TestMethod m) coverage.skipped(m, sceneName, reason);
+                    if (key(d) != null) coverage.skipped(key(d), sceneName, reason);
                     // Skipping a node skips what is under it without an event of its own; closing those out
                     // later would report them as never run.
                     for (TestDescriptor child : d.getDescendants()) {
                         finished.add(child);
-                        if (child instanceof Nodes.TestMethod m) coverage.skipped(m, sceneName, reason);
+                        if (key(child) != null) coverage.skipped(key(child), sceneName, reason);
                     }
                 }
             }
@@ -120,7 +128,7 @@ final class Relay implements Consumer<Map<String, Object>> {
             for (TestDescriptor m : c.getChildren()) anyClosed |= closeOut(m, gameEnded);
             if (finished.contains(c)) continue;
             start(c);
-            finish(c, anyClosed ? TestExecutionResult.failed(new AssertionError("not every test of this class ran"))
+            finish(c, anyClosed ? TestExecutionResult.failed(new AssertionError("not every test in it ran"))
                     : TestExecutionResult.successful());
         }
     }
@@ -136,6 +144,10 @@ final class Relay implements Consumer<Map<String, Object>> {
 
     private Throwable why(TestDescriptor d, String gameEnded) {
         if (error != null) return error;
+        if (plan && !planned.contains(d) && (d instanceof Nodes.ScriptFile || d instanceof Nodes.ScriptTest)) {
+            return new AssertionError("the game did not register this script test: the file failed to evaluate there,"
+                    + " registered it only outside the game, or is not the file read here. The game's log says which");
+        }
         if (plan && !planned.contains(d) && !(d instanceof Nodes.Dynamic)) {
             return new AssertionError("the game did not discover this test: its class failed to load there, or the"
                     + " class the game has is not the one scanned here. The game's log says which");
@@ -143,7 +155,23 @@ final class Relay implements Consumer<Map<String, Object>> {
         return new AssertionError("the game ended before this test finished: " + gameEnded);
     }
 
+    /** A test's key for coverage, the same in every scene; null for a container. */
+    private static String key(TestDescriptor d) {
+        if (d instanceof Nodes.TestMethod m) return m.key();
+        if (d instanceof Nodes.ScriptTest t) return t.key();
+        return null;
+    }
+
     private void match(Map<?, ?> node) {
+        if (node.get("script") instanceof String script) {
+            TestDescriptor d = Boolean.TRUE.equals(node.get("test"))
+                    ? scriptTests.get(script + "#" + node.get("name"))
+                    : scriptFiles.get(script);
+            if (d == null) return;
+            byGameId.put(String.valueOf(node.get("id")), d);
+            planned.add(d);
+            return;
+        }
         String className = node.get("class") instanceof String s ? s : null;
         if (className == null) return;
         TestDescriptor d = node.get("method") instanceof String method

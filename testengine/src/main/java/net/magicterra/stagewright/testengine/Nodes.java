@@ -4,11 +4,13 @@ import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.UniqueId;
 import org.junit.platform.engine.support.descriptor.AbstractTestDescriptor;
 import org.junit.platform.engine.support.descriptor.ClassSource;
+import org.junit.platform.engine.support.descriptor.ClasspathResourceSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
 
 /**
- * The outer tree: engine, then one node per scene, per test class in it, per test method, plus the invocations a
- * game registers while running. A class named by several scenes sits under each, and runs in each.
+ * The outer tree: engine, then one node per scene, per test class or script file in it, per test method or script
+ * test, plus the invocations a game registers while running. A class or script test named by several scenes sits
+ * under each, and runs in each.
  */
 final class Nodes {
 
@@ -70,6 +72,58 @@ final class Nodes {
         @Override
         public boolean mayRegisterTests() {
             return method.container();
+        }
+    }
+
+    /** A script test file within one scene, holding the tests it registered for that scene. */
+    static final class ScriptFile extends AbstractTestDescriptor {
+        final String resource;
+
+        ScriptFile(UniqueId parent, String resource) {
+            super(parent.append("script", resource), resource, ClasspathResourceSource.from(resource));
+            this.resource = resource;
+        }
+
+        @Override
+        public Type getType() {
+            return Type.CONTAINER;
+        }
+    }
+
+    /** One test a script registered, within one scene. */
+    static final class ScriptTest extends AbstractTestDescriptor {
+        final String resource;
+        final String name;
+
+        ScriptTest(UniqueId parent, String resource, String name) {
+            super(parent.append("test", name), name, ClasspathResourceSource.from(resource));
+            this.resource = resource;
+            this.name = name;
+        }
+
+        /** The key the game's nodes are matched on. */
+        String key() {
+            return resource + "#" + name;
+        }
+
+        @Override
+        public Type getType() {
+            return Type.TEST;
+        }
+    }
+
+    /** A script file that could not be read here, so it has no scene to run in; it fails, saying why. */
+    static final class Unreadable extends AbstractTestDescriptor {
+        final String error;
+
+        Unreadable(UniqueId engine, String resource, String error) {
+            super(engine.append("script", resource), resource, ClasspathResourceSource.from(resource));
+            this.error = error;
+        }
+
+        @Override
+        public Type getType() {
+            return Type.TEST;
         }
     }
 

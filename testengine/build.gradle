@@ -2,6 +2,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'com.gradleup.shadow' version '8.3.6'
 }
 
 group = 'net.magicterra'
@@ -19,11 +20,16 @@ java {
 
 repositories {
     mavenCentral()
+    maven { url = 'https://maven.latvian.dev/releases' }
 }
 
 configurations {
     // The supervision agent, carried as a resource: a game loads it from a file, with -javaagent.
     bundledAgent { transitive = false }
+    // Rhino, relocated into the jar to read script tests (docs/design/test-engine.md, "Script tests").
+    bundledRhino { transitive = false }
+    compileOnly.extendsFrom bundledRhino
+    testImplementation.extendsFrom bundledRhino
 }
 
 dependencies {
@@ -36,6 +42,7 @@ dependencies {
     // Reads test classes without loading them: their signatures name Minecraft, which is not here.
     implementation 'org.ow2.asm:asm:9.7.1'
     implementation 'org.yaml:snakeyaml:2.3'
+    bundledRhino "dev.latvian.mods:rhino:${rootProject.rhinoVersion}"
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -60,6 +67,30 @@ tasks.named('test', Test) {
     // The fixtures are only read by name; Jupiter must not run them itself.
     exclude 'net/magicterra/stagewright/testengine/fixtures/**'
 }
+
+// The relocated jar is the artifact, for consumers and the POM alike; the plain one stays behind.
+// Shadow unpacks any jar it meets, so the agent is added after it, by a plain Jar task.
+def relocated = tasks.named('shadowJar') {
+    archiveClassifier = 'relocated'
+    configurations = [project.configurations.bundledRhino]
+    relocate 'dev.latvian.mods.rhino', 'net.magicterra.stagewright.testengine.shadow.rhino'
+    exclude 'agent/**'
+}
+def engineJar = tasks.register('engineJar', Jar) {
+    from(zipTree(relocated.flatMap { it.archiveFile }))
+    into('agent') { from stageBundledAgent }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+tasks.named('jar') { archiveClassifier = 'plain' }
+tasks.named('assemble') { dependsOn engineJar }
+['apiElements', 'runtimeElements'].each { name ->
+    configurations.named(name) {
+        outgoing.artifacts.clear()
+        outgoing.artifact(engineJar)
+    }
+}
+// Shadow's own variant would be a second, identical choice for consumers to trip over.
+components.java.withVariantsFromConfiguration(configurations.shadowRuntimeElements) { skip() }
 
 publishing {
     publications {

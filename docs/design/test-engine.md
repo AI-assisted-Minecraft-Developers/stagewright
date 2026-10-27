@@ -17,7 +17,7 @@ engine (outer)                          game
       smeltsIron()           ◀──events──      smeltsIron()
 ```
 
-The outer tree is engine → scene → class → method. A class naming two scenes sits under both and runs in both,
+The outer tree is engine → scene → class → method (a script file and its tests in place of a class and its methods). A class naming two scenes sits under both and runs in both,
 which is what makes "this test ran in at least one scene" a question about one tree.
 
 ## Finding tests without loading them
@@ -31,6 +31,25 @@ The game then discovers for real. A test the engine found and the game did not i
 skipped: the usual cause is a class that failed to load in the game, which is exactly the silent loss the old
 expected-scenes manifest existed to catch. A parameterized test's invocations exist only in the game; the game
 registers them as they appear, and the engine adds them to its tree as dynamic tests.
+
+## Script tests
+
+A test written in JavaScript lives under `stagewright/tests/` in the suite's resources and registers itself with
+`test(name, options, body)`; `step(name, body)` registers a named step any test can take with `t.step`. The outer tree
+is engine → scene → file → test, the scenes coming from each test's `options.scene`.
+
+Gradle selects classes only, so the plugin tells the engine where the suite's roots are (`-Dstagewright.testRoots`)
+and the engine walks them for `.js` files. It reads each one by evaluating it in a Rhino of its own, relocated into
+its jar, with a `test()` that records the name and scenes and never runs the body. A file's registrations therefore
+must not depend on the game, and a file whose top level reaches for it fails here, with the line. Both sides use the
+same Rhino, so a file that parses here parses there.
+
+In the game, the `stagewright-script` engine evaluates the file again through WorldDriver's `Scripting` (StageWright
+links no Rhino of its own: the shipped WorldDriver relocates it) and keeps the tests of the scene the game was started
+for. A test's `t` offers `call`, `step`, `wait`, `waitUntil`, `settle`, `expect` (`equals`, `contains`, `isEmpty`,
+`gt`, `lt`, `atLeast`, `atMost`) and `record`; the script also has WorldDriver's own `Driver.*`. A failed `t.expect`
+cannot be caught by the script, so a test cannot swallow its own failure. `requires` takes `client`,
+`dedicatedServer`, `integratedServer` or `mod:<id>`, and counts toward coverage as `@Requires` does.
 
 ## One channel back
 
@@ -76,5 +95,7 @@ command-line runner writes the same file from a game directory. The engine knows
 
 - Scene declarations apply `topology` and `world` ([scene file](../reference/scene-file.md)); `mods`, `files`,
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
-- Scenes run one after another.
+- Scenes run one after another, and a game's script tests one after another.
+- A script test's `t` has no `plot()`, `bot()`, `player()`, `client()` or `override` yet, and `test()` takes no
+  `dependsOn`, `knownIssues` or `plot`; an unknown option is refused.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.

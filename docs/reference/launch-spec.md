@@ -49,6 +49,8 @@ that a `-D` here overrides the run's and the JVM rather than a launcher reads it
 |---|---|
 | `-javaagent:<agent jar>=…` | the supervision agent, which also carries the test events back ([protocol](supervision-protocol.md)) |
 | `-Dstagewright.junit.classes=<classes>` | the scene's test classes, comma-separated: the game runs these and only these. A game with this property set does not start the scene suite, whatever the run's `stagewright.autorun` says — a loader may set its run's properties after the JVM has read the command line, so overriding that one here would not hold |
+| `-Dstagewright.junit.scripts=<resources>` | the scene's script test files, comma-separated class-path resources such as `stagewright/tests/x.js` |
+| `-Dstagewright.junit.scene=<name>` | the scene itself: a script file registers its tests for every scene, and the game keeps this one's |
 | `-Dstagewright.junit.exitWhenDone=true` | the game ends itself once its run is over |
 | `-Dstagewright.scene.world=<json>` | the part of the scene's world set once it has loaded ([scene file](scene-file.md)) |
 | `-Dstagewright.companion.dir=<dir>` | only with a companion: its working directory, where its WorldDriver writes `worlddriver-rpc.port`, so a test's `Client` can reach it |

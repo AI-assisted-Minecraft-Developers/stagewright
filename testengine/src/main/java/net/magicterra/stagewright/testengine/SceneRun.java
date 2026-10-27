@@ -90,7 +90,11 @@ final class SceneRun {
         File gameLog = logs.resolve(scene.name + "-game.log").toFile();
 
         List<String> classes = new ArrayList<>();
-        for (TestDescriptor c : scene.getChildren()) classes.add(((Nodes.TestClass) c).className);
+        List<String> scripts = new ArrayList<>();
+        for (TestDescriptor c : scene.getChildren()) {
+            if (c instanceof Nodes.ScriptFile f) scripts.add(f.resource);
+            else classes.add(((Nodes.TestClass) c).className);
+        }
 
         Process companion = null;
         try (Supervisor supervisor = Supervisor.open()) {
@@ -99,6 +103,9 @@ final class SceneRun {
                     supervisor.agentArgument(agentJar, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS),
                     // Also what keeps the topology's own scene suite from starting: the game runs these only.
                     "-Dstagewright.junit.classes=" + String.join(",", classes),
+                    "-Dstagewright.junit.scripts=" + String.join(",", scripts),
+                    // A script file may register tests for other scenes too; the game runs this one's.
+                    "-Dstagewright.junit.scene=" + scene.name,
                     "-Dstagewright.junit.exitWhenDone=true",
                     "-Dstagewright.scene.world=" + world.runtimeJson()));
             // Where the companion client writes its WorldDriver port, for the tests' Client.

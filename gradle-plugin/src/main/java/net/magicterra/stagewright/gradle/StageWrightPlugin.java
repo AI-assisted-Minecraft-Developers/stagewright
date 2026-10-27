@@ -115,6 +115,7 @@ public class StageWrightPlugin implements Plugin<Project> {
 
     static final String TEST_ENGINE_CONFIGURATION = "stagewrightTestEngine";
     static final String LAUNCHES_PROPERTY = "stagewright.launches";
+    static final String TEST_ROOTS_PROPERTY = "stagewright.testRoots";
 
     /**
      * Per suite: {@code stagewrightLaunchSpecs<Name>}, which writes one launch spec per topology the
@@ -174,6 +175,9 @@ public class StageWrightPlugin implements Plugin<Project> {
                     task.setClasspath(engineConfiguration.plus(suite.getClasses()).plus(suite.getClasspath()));
                     task.dependsOn(specs);
                     task.systemProperty(LAUNCHES_PROPERTY, launchesDir.get().getAsFile().getAbsolutePath());
+                    // Gradle selects classes only; the engine finds the script tests under these itself.
+                    task.getJvmArgumentProviders().add(() -> List.of("-D" + TEST_ROOTS_PROPERTY + "="
+                            + suite.getClasses().getAsPath()));
                     task.getOutputs().upToDateWhen(t -> false);
                     // Set here, not left to the java plugin's conventions: the suite may live on a project without it.
                     var build = project.getLayout().getBuildDirectory();

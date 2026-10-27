@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
+import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClasspathResource;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -36,7 +37,7 @@ class StageWrightTestEngineTest {
         Path specs = Files.createDirectories(temp.resolve("launches"));
         System.setProperty(LaunchSpec.PROPERTY, specs.toString());
         for (String topology : List.of("pass", "assertFail", "crash", "undiscovered", "dynamic", "world",
-                "reqSkip", "otherSkip", "classSkip", "classSkipOther")) {
+                "reqSkip", "otherSkip", "classSkip", "classSkipOther", "script")) {
             writeSpec(specs, topology, true);
         }
         writeSpec(specs, "worldDirty", false);
@@ -267,5 +268,23 @@ class StageWrightTestEngineTest {
         assertEquals(2, r.testEvents().failed().count());
         String message = failureOf(r.testEvents(), "b()").getMessage();
         assertTrue(message.contains("has no declaration"), message);
+    }
+
+    @Test
+    void scriptTestsAreFoundWithoutTheGameAndReportedFromIt() {
+        EngineExecutionResults r = EngineTestKit.engine("stagewright")
+                .selectors(selectClasspathResource("stagewright/tests/arithmetic.js")).execute();
+        assertEquals(1, r.testEvents().succeeded().count());
+        assertEquals("adds", r.testEvents().succeeded().list().get(0).getTestDescriptor().getDisplayName());
+        assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
+    }
+
+    @Test
+    void aScriptWhoseTopLevelUsesTheGameFailsHere() {
+        EngineExecutionResults r = EngineTestKit.engine("stagewright")
+                .selectors(selectClasspathResource("stagewright/tests/usesTheGame.js")).execute();
+        String message = failureOf(r.testEvents(), "stagewright/tests/usesTheGame.js").getMessage();
+        assertTrue(message.startsWith("stagewright/tests/usesTheGame.js:2: "), message);
+        assertTrue(message.contains("cannot use the game"), message);
     }
 }

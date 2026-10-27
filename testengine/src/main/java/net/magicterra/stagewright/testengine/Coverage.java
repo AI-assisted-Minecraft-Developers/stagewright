@@ -19,14 +19,15 @@ final class Coverage {
     private final Set<String> ran = new HashSet<>();
     private final Map<String, List<String>> unmet = new LinkedHashMap<>();
 
-    synchronized void ran(Nodes.TestMethod method) {
-        ran.add(method.key());
+    /** {@code key}: a test method's or script test's own key, the same in every scene. */
+    synchronized void ran(String key) {
+        ran.add(key);
     }
 
     /** A skip the game reported; only an unmet requirement counts against coverage. */
-    synchronized void skipped(Nodes.TestMethod method, String scene, String reason) {
+    synchronized void skipped(String key, String scene, String reason) {
         if (reason == null || !reason.startsWith(REQUIRES_PREFIX)) return;
-        unmet.computeIfAbsent(method.key(), k -> new ArrayList<>())
+        unmet.computeIfAbsent(key, k -> new ArrayList<>())
                 .add(scene + " (" + reason.substring(REQUIRES_PREFIX.length()) + ")");
     }
 
