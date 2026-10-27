@@ -122,9 +122,20 @@ class GeneratedRunsTest {
         assertEquals(dir.resolve("loader/run-stagewright/fabric/joining-client").toString(),
                 companion.getString("workingDirectory", null));
 
+        JsonObject integrated = spec("integratedServer");
+        assertFalse(integrated.getBoolean("server", true), "a client's directory is not prepared as a server's");
+        assertEquals(null, integrated.get("companion"));
+        JsonObject host = integrated.get("primary").asObject();
+        assertEquals("client", host.getString("mainClass", null));
+        String hostArgs = host.get("jvmArgs").toString();
+        assertTrue(hostArgs.contains("-Dstagewright.client.world=StageWright")
+                && hostArgs.contains("-Dstagewright.awaitPlayer=true") && hostArgs.contains("-Da.b=c"), hostArgs);
+        assertEquals(dir.resolve("loader/run-stagewright/fabric/integrated-server").toString(),
+                host.getString("workingDirectory", null));
+
         String runs = runner(":loader:inspectRuns", "-q").build().getOutput();
         for (String name : new String[] {"stagewrightFabricDedicatedServer", "stagewrightFabricDedicatedServerWithClient",
-                "stagewrightFabricJoiningClient"}) {
+                "stagewrightFabricJoiningClient", "stagewrightFabricIntegratedServer"}) {
             assertTrue(runs.contains("RUN " + name + " ide=false source=testmod"), runs);
         }
     }

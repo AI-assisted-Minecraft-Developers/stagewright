@@ -67,8 +67,8 @@ public abstract class StageWrightTestSuite implements Named {
 
     /**
      * The source set of {@link #getLoaderProject()} the generated runs start from, which is what puts the tests in
-     * the game while {@code runClient} goes without them. Convention: {@code testmod} when that project has one,
-     * else {@code main}.
+     * the game while {@code runClient} goes without them. Convention: {@code testmod}, created seeing {@code main}
+     * when the project has none.
      */
     public abstract Property<String> getRunSourceSet();
 

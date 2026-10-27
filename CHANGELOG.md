@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-27
 
+### A test suite gets an integrated-server topology · green on fresh Fabric Loom and ModDevGradle projects
+
+A scene may now name `integratedServer`: a client creates the singleplayer world and opens it, and the
+tests run on the server inside it once the player is in. The client now creates that world from the
+scene's `world:` declaration, preset, seed, structures, game mode, difficulty and datapacks, which it
+used to ignore for its fixed survival default. Datapacks on this topology have not been run yet.
+
 ### A test suite runs under ModDevGradle with one line too · green on a fresh one-mod ModDevGradle project, Java and YAML tests on both topologies
 
 `stagewright { tests { neoforge { } } }` on a ModDevGradle project now declares the suite's runs in

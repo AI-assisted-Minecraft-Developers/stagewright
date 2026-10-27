@@ -16,13 +16,6 @@ import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldOpenFlows;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
-import net.minecraft.world.Difficulty;
-import net.minecraft.world.level.GameRules;
-import net.minecraft.world.level.GameType;
-import net.minecraft.world.level.LevelSettings;
-import net.minecraft.world.level.WorldDataConfiguration;
-import net.minecraft.world.level.levelgen.WorldOptions;
-import net.minecraft.world.level.levelgen.presets.WorldPresets;
 
 /**
  * Drives a real game client from the title screen into a world, with no external process poking at
@@ -70,16 +63,6 @@ public final class ClientDirector {
     /** Ticks between "the suite is over" and killing the client, so the integrated server finishes
      *  saving and the results file is flushed before the JVM goes away. */
     private static final int EXIT_DELAY_TICKS = 60;
-
-    /** Fixed seed so the client topology generates the same world every run. Scene arenas are
-     *  force-loaded at a fixed origin far from spawn, so terrain barely matters — but "barely" is
-     *  not "not at all", and a random seed would make a one-off failure unreproducible.
-     *
-     *  <p>Matched by {@code RunDirectory.FIXED_SEED}, which pins the same value into
-     *  server.properties for the topologies whose world a dedicated server creates instead. A scene
-     *  that declares {@code Terrain.GENERATED} asserts about ground this seed decides, so the two
-     *  numbers disagreeing would hand it a different landscape per topology. */
-    private static final long WORLD_SEED = 5471L;
 
     private enum Phase { WAITING_FOR_TITLE, DRIVING, IN_WORLD, FINISHING }
 
@@ -329,20 +312,10 @@ public final class ClientDirector {
             return;
         }
 
-        StageWrightCommon.LOG.info("[{}] creating world '{}'", StageWrightCommon.MOD_ID, world);
-        // Survival, easy, cheats on — the defaults a dedicated server boots with
-        // (gamemode=survival, difficulty=easy, spawn-monsters=true), and deliberately not the
-        // quieter creative/peaceful pair a sandbox would pick.
-        //
-        // The whole reason to run scenes on an integrated server as well as a dedicated one is that
-        // the two must agree; a world that differs in gamemode or difficulty is not a second
-        // topology, it is a second product. Creative/peaceful silently disabled every scene about
-        // being attacked — hostile mobs never spawn, and a creative player is immune to the damage
-        // half of them assert on, so they did not report "the world is wrong", they reported
-        // timeouts and "mock player refused mobAttack damage" and looked like bot bugs.
-        LevelSettings settings = new LevelSettings(world, GameType.SURVIVAL, false, Difficulty.EASY,
-                true, new GameRules(), WorldDataConfiguration.DEFAULT);
-        flows.createFreshLevel(world, settings, new WorldOptions(WORLD_SEED, true, false),
-                WorldPresets::createNormalWorldDimensions, mc.screen);
+        WorldCreation creation = WorldCreation.of(world, mc.gameDirectory.toPath());
+        StageWrightCommon.LOG.info("[{}] creating world '{}': {}, {}, seed {}", StageWrightCommon.MOD_ID, world,
+                creation.settings().gameType().getName(), creation.settings().difficulty().getKey(),
+                creation.options().seed());
+        flows.createFreshLevel(world, creation.settings(), creation.options(), creation.dimensions(), mc.screen);
     }
 }

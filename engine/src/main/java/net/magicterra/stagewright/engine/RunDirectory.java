@@ -279,7 +279,7 @@ public final class RunDirectory {
      * flaky one the moment a scene asks for generated terrain: the same arena coordinates would be a
      * hilltop one run and a lake the next, and the scene that failed would look like a bot bug.
      *
-     * <p>Must equal {@code ClientDirector.WORLD_SEED}, which pins the same thing for the topologies
+     * <p>Must equal {@code WorldCreation.DEFAULT_SEED}, which pins the same thing for the topologies
      * whose world a client creates rather than this provisioner. The value is arbitrary; that the
      * two agree is not. Reproducible-per-topology is not enough — a scene asserting about the ground
      * it landed on has to see the same ground on all three, or its assertion is a statement about

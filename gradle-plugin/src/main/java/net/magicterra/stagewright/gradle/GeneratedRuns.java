@@ -30,6 +30,9 @@ final class GeneratedRuns {
     static final String MOD_DEV = "neoForge";
     static final String DEDICATED_SERVER = "dedicatedServer";
     static final String DEDICATED_SERVER_WITH_CLIENT = "dedicatedServerWithClient";
+    static final String INTEGRATED_SERVER = "integratedServer";
+    /** The singleplayer world the integrated server's client creates; the test engine deletes it before each scene. */
+    static final String INTEGRATED_WORLD = "StageWright";
     static final int DEFAULT_SERVER_PORT = 25621;
     static final String TESTMOD = "testmod";
 
@@ -62,6 +65,9 @@ final class GeneratedRuns {
         launches.add(new SuiteLaunch(DEDICATED_SERVER_WITH_CLIENT,
                 path + ":" + taskName(suite, "DedicatedServerWithClient"), path + ":" + taskName(suite, "JoiningClient"),
                 loader.file(runDir(suite, "with-client")), true, timeout, StageWrightPlugin.DEFAULT_STALL_MINUTES, true));
+        launches.add(new SuiteLaunch(INTEGRATED_SERVER, path + ":" + taskName(suite, "IntegratedServer"), null,
+                loader.file(runDir(suite, "integrated-server")), true, timeout, StageWrightPlugin.DEFAULT_STALL_MINUTES,
+                false));
         return launches;
     }
 
@@ -101,6 +107,11 @@ final class GeneratedRuns {
         // The tests' own content, blocks and items included, is on it too, or the server refuses it at registry sync.
         declare(loader, runs, runName(suite, "JoiningClient"), "client", runDir(suite, "joining-client"), List.of(),
                 Map.of("stagewright.client.connect", "127.0.0.1:" + port), suite, source);
+        // A client hosting the world: it creates the singleplayer world from the scene's settings and opens it, and the
+        // tests wait until its player is in.
+        declare(loader, runs, runName(suite, "IntegratedServer"), "client", runDir(suite, "integrated-server"),
+                List.of(), Map.of("stagewright.client.world", INTEGRATED_WORLD, "stagewright.awaitPlayer", "true"),
+                suite, source);
     }
 
     private static void declare(Project loader, NamedDomainObjectContainer<Object> runs, String name, String side,

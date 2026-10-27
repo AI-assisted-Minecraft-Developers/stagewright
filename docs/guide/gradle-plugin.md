@@ -242,12 +242,18 @@ build's to add to a mod, with `sourceSet(sourceSets.testmod)` in it.
 
 `loaderProject` names the loom or ModDevGradle project the games run from. The plugin declares the
 suite's runs in that project's `loom.runs` or `neoForge.runs`, so the loader plugin still builds each
-launch, and gives a scene two topologies to name:
+launch, and gives a scene three topologies to name:
 
 | Topology | Runs | Directory under `<loaderProject>/run-stagewright/<name>/` |
 |---|---|---|
 | `dedicatedServer` | `stagewright<Name>DedicatedServer` | `dedicated-server` |
 | `dedicatedServerWithClient` | `stagewright<Name>DedicatedServerWithClient`, holding its tests until `stagewright<Name>JoiningClient` joins | `with-client`, and `joining-client` for the client |
+| `integratedServer` | `stagewright<Name>IntegratedServer`, a client that creates the singleplayer world `StageWright` and opens it, holding its tests until its player is in | `integrated-server` |
+
+On `integratedServer` the client creates the world from the scene's `world:` declaration as a dedicated
+server would from `server.properties`: `preset`, `seed`, `structures`, `gamemode`, `difficulty` and the
+datapacks. Undeclared, it is a dedicated server's default, survival on easy with the fixed seed 5471.
+The engine deletes the client's saves before each scene, as it deletes a server's world.
 
 The runs start from the run source set, so under loom `runClient` goes without the tests; they get no
 IDE run configuration. `jvmArgs` and `systemProperties` go on all of them, the servers listen on

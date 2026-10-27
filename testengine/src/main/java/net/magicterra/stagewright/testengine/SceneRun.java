@@ -72,7 +72,11 @@ final class SceneRun {
         Path artifacts = spec.gameDirectory().resolve("stagewright");
         Path logs = artifacts.resolve("logs");
         Files.createDirectories(logs);
-        if (spec.cleanWorld()) deleteTree(spec.gameDirectory().resolve("world"));
+        // Both layouts: a dedicated server's world, and an integrated server's under the client's saves.
+        if (spec.cleanWorld()) {
+            deleteTree(spec.gameDirectory().resolve("world"));
+            deleteTree(spec.gameDirectory().resolve("saves"));
+        }
         if (spec.companion() != null) Files.createDirectories(spec.companion().workingDirectory());
         // Put back afterwards, so a setting one scene declares is not the next scene's undeclared default.
         Path serverProperties = spec.primary().workingDirectory().resolve("server.properties");
