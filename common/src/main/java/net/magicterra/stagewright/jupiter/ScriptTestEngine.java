@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +45,7 @@ public final class ScriptTestEngine implements TestEngine {
     static final String SCENE = "stagewright.junit.scene";
 
     /** The options {@code test()} understands. The scene is read by the test engine outside the game, not here. */
-    private static final Set<String> OPTIONS = Set.of("scene", "requires");
+    private static final Set<String> OPTIONS = Set.of("scene", "requires", "dependsOn", "knownIssue");
 
     @Override
     public String getId() {
@@ -66,7 +68,9 @@ public final class ScriptTestEngine implements TestEngine {
         EngineExecutionListener listener = request.getEngineExecutionListener();
         TestDescriptor engine = request.getRootTestDescriptor();
         listener.executionStarted(engine);
-        for (TestDescriptor child : engine.getChildren()) ((File) child).execute(listener);
+        // What each test ended as, by file#name, for the dependsOn of the tests after it.
+        Map<String, TestExecutionResult.Status> results = new HashMap<>();
+        for (TestDescriptor child : engine.getChildren()) ((File) child).execute(listener, results);
         listener.executionFinished(engine, TestExecutionResult.successful());
     }
 
@@ -134,7 +138,12 @@ public final class ScriptTestEngine implements TestEngine {
             if (getChildren().stream().anyMatch(c -> c.getUniqueId().equals(id))) {
                 throw new IllegalArgumentException("test '" + name + "' is registered twice in " + resource);
             }
-            addChild(new Test(id, this, name, requires(name, options.get("requires")), body));
+            Object known = options.get("knownIssue");
+            if (known != null && !(known instanceof String)) {
+                throw new IllegalArgumentException("test '" + name + "': knownIssue is the reason, a string");
+            }
+            addChild(new Test(id, this, name, requires(name, options.get("requires")),
+                    dependencies(resource, name, options.get("dependsOn")), (String) known, body));
             return null;
         }
 
@@ -163,14 +172,42 @@ public final class ScriptTestEngine implements TestEngine {
             return Type.CONTAINER;
         }
 
-        void execute(EngineExecutionListener listener) {
+        void execute(EngineExecutionListener listener, Map<String, TestExecutionResult.Status> results) {
             listener.executionStarted(this);
-            if (loadError != null) {
-                listener.executionFinished(this, TestExecutionResult.failed(loadError));
+            List<Test> order;
+            try {
+                if (loadError != null) throw loadError;
+                order = inDependencyOrder();
+            } catch (RuntimeException e) {
+                listener.executionFinished(this, TestExecutionResult.failed(e));
                 return;
             }
-            for (TestDescriptor child : getChildren()) ((Test) child).execute(listener);
+            for (Test test : order) test.execute(listener, results);
             listener.executionFinished(this, TestExecutionResult.successful());
+        }
+
+        /** The tests in registration order, except that one runs after every test of this file it depends on. */
+        private List<Test> inDependencyOrder() {
+            Map<String, Test> byKey = new LinkedHashMap<>();
+            for (TestDescriptor child : getChildren()) byKey.put(((Test) child).key(), (Test) child);
+            List<Test> order = new ArrayList<>();
+            Set<Test> visiting = new HashSet<>();
+            for (Test test : byKey.values()) visit(test, byKey, visiting, order);
+            return order;
+        }
+
+        private void visit(Test test, Map<String, Test> byKey, Set<Test> visiting, List<Test> order) {
+            if (order.contains(test)) return;
+            if (!visiting.add(test)) {
+                throw new IllegalStateException("dependsOn cycle through '" + test.getDisplayName() + "' in " + resource
+                        + ", so none of them can go first");
+            }
+            for (String dependency : test.dependsOn) {
+                Test upstream = byKey.get(dependency);
+                if (upstream != null) visit(upstream, byKey, visiting, order);
+            }
+            visiting.remove(test);
+            order.add(test);
         }
     }
 
@@ -202,17 +239,43 @@ public final class ScriptTestEngine implements TestEngine {
         }
     }
 
+    /** {@code dependsOn}: test names, a bare one in the same file, {@code file.js#name} in another. */
+    private static List<String> dependencies(String resource, String test, Object value) {
+        List<Object> items = value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
+        List<String> keys = new ArrayList<>();
+        for (Object item : items) {
+            if (!(item instanceof String s) || s.isBlank()) {
+                throw new IllegalArgumentException("test '" + test + "': dependsOn names tests, but has "
+                        + Expectations.show(item));
+            }
+            keys.add(s.contains("#") ? s : resource + "#" + s);
+        }
+        return keys;
+    }
+
     /** One test a script registered. */
     static final class Test extends AbstractTestDescriptor {
         private final File file;
+        private final String name;
         private final Requirement requirement;
+        private final List<String> dependsOn;
+        private final String knownIssue;
         private final Scripting.Function body;
 
-        private Test(UniqueId id, File file, String name, Requirement requirement, Scripting.Function body) {
+        private Test(UniqueId id, File file, String name, Requirement requirement, List<String> dependsOn,
+                     String knownIssue, Scripting.Function body) {
             super(id, name, ClasspathResourceSource.from(file.resource));
             this.file = file;
+            this.name = name;
             this.requirement = requirement;
+            this.dependsOn = dependsOn;
+            this.knownIssue = knownIssue;
             this.body = body;
+        }
+
+        /** How {@code dependsOn} names this test from another file. */
+        String key() {
+            return file.resource + "#" + name;
         }
 
         @Override
@@ -220,27 +283,59 @@ public final class ScriptTestEngine implements TestEngine {
             return Type.TEST;
         }
 
-        void execute(EngineExecutionListener listener) {
+        void execute(EngineExecutionListener listener, Map<String, TestExecutionResult.Status> results) {
             if (requirement.any()) {
                 List<String> missing = RequiresCondition.missing(requirement.capabilities(), requirement.mods());
                 if (!missing.isEmpty()) {
                     // The prefix is how the engine outside tells a requirement no scene met from any other skip.
                     listener.executionSkipped(this, RequiresCondition.REASON_PREFIX + "this game has no "
                             + String.join(", ", missing));
+                    results.put(key(), TestExecutionResult.Status.ABORTED);
                     return;
                 }
             }
             listener.executionStarted(this);
-            TestExecutionResult result;
-            try {
-                body.call(new ScriptContext(GameExtension.game(), file.steps, this, listener).asScript());
-                result = TestExecutionResult.successful();
-            } catch (Throwable t) {
-                // Matched by name: in a Fabric development game the class may come from another loader.
-                result = t.getClass().getName().equals("org.opentest4j.TestAbortedException")
-                        ? TestExecutionResult.aborted(t) : TestExecutionResult.failed(t);
-            }
+            TestExecutionResult result = upstream(results);
+            if (result == null) result = run(listener);
+            results.put(key(), result.getStatus());
             listener.executionFinished(this, result);
+        }
+
+        /** Aborted when a test this one depends on did not pass, or has not run; null when every one passed. */
+        private TestExecutionResult upstream(Map<String, TestExecutionResult.Status> results) {
+            for (String dependency : dependsOn) {
+                TestExecutionResult.Status status = results.get(dependency);
+                if (status == TestExecutionResult.Status.SUCCESSFUL) continue;
+                String why = status == null
+                        ? "has not run before it: it is not in this scene, or its file is selected after this one"
+                        : "did not pass (" + status + ")";
+                return TestExecutionResult.aborted(new IllegalStateException("depends on " + dependency
+                        + ", which " + why));
+            }
+            return null;
+        }
+
+        private TestExecutionResult run(EngineExecutionListener listener) {
+            ScriptContext context = new ScriptContext(GameExtension.game(), file.steps, this, listener);
+            TestScope.bind(TestScope.ofScript(getDisplayName()));
+            Throwable failure = null;
+            try {
+                body.call(context.asScript());
+            } catch (Throwable t) {
+                failure = t;
+            }
+            failure = context.end(failure);
+            if (knownIssue != null) {
+                // As @KnownIssue: the failure is expected, and a pass means the option should come off.
+                return failure == null
+                        ? TestExecutionResult.failed(new AssertionError("passed although marked knownIssue '"
+                                + knownIssue + "': if the issue is fixed, remove the option"))
+                        : TestExecutionResult.aborted(new IllegalStateException("known issue: " + knownIssue, failure));
+            }
+            if (failure == null) return TestExecutionResult.successful();
+            // Matched by name: in a Fabric development game the class may come from another loader.
+            return failure.getClass().getName().equals("org.opentest4j.TestAbortedException")
+                    ? TestExecutionResult.aborted(failure) : TestExecutionResult.failed(failure);
         }
     }
 }

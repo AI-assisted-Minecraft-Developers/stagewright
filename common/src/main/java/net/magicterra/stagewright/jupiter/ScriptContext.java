@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,7 +14,9 @@ import com.google.gson.JsonPrimitive;
 
 import net.magicterra.stagewright.test.Await;
 import net.magicterra.stagewright.test.Game;
+import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.api.registry.Scripting;
+import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
 import org.junit.platform.engine.EngineExecutionListener;
 import org.junit.platform.engine.TestDescriptor;
 import org.junit.platform.engine.reporting.ReportEntry;
@@ -32,6 +35,8 @@ final class ScriptContext {
     private final Map<String, Scripting.Function> steps;
     private final TestDescriptor test;
     private final EngineExecutionListener listener;
+    /** What the body leased — plots, bots — in the order it did. */
+    private final List<CloseableResource> leases = new ArrayList<>();
     private Map<String, Object> script;
 
     ScriptContext(Game game, Map<String, Scripting.Function> steps, TestDescriptor test,
@@ -52,15 +57,51 @@ final class ScriptContext {
         script.put("settle", (Scripting.Function) this::settle);
         script.put("expect", (Scripting.Function) this::expect);
         script.put("record", (Scripting.Function) this::record);
+        ScriptHandles.install(script, game, leases);
         return script;
+    }
+
+    /**
+     * After the body, whatever it did: undo its overrides, then give back what it leased, last first. {@code failure}
+     * is the body's; what ending throws is added to it, or becomes the failure when the body passed.
+     */
+    Throwable end(Throwable failure) {
+        TestScope scope = TestScope.bound();
+        List<Runnable> undo = new ArrayList<>();
+        if (scope != null && scope.changedAnything()) undo.add(() -> game.runOnServer(scope::restore));
+        for (int i = leases.size() - 1; i >= 0; i--) {
+            CloseableResource lease = leases.get(i);
+            undo.add(() -> {
+                try {
+                    lease.close();
+                } catch (Throwable e) {
+                    throw new IllegalStateException("could not give back " + lease, e);
+                }
+            });
+        }
+        for (Runnable step : undo) {
+            try {
+                step.run();
+            } catch (Throwable t) {
+                if (failure == null) failure = t;
+                else failure.addSuppressed(t);
+            }
+        }
+        TestScope.unbind();
+        return failure;
     }
 
     /** {@code t.call(method, params)}: any WorldDriver method, answered as plain values. */
     private Object call(Object... args) {
-        String method = string(args, 0, "t.call(method, params)");
+        return route(game.registry(), "t.call", args);
+    }
+
+    /** {@code method} of {@code registry} with {@code args[1]} as its parameters, answered as plain values. */
+    static Object route(ApiRegistry registry, String usage, Object[] args) {
+        String method = string(args, 0, usage + "(method, params)");
         JsonElement params = args.length > 1 && args[1] != null ? tree(args[1]) : new JsonObject();
-        if (!params.isJsonObject()) throw new IllegalArgumentException("t.call(" + method + "): params must be an object");
-        return GSON.fromJson(game.registry().route(method, params.getAsJsonObject()), Object.class);
+        if (!params.isJsonObject()) throw new IllegalArgumentException(usage + "(" + method + "): params must be an object");
+        return GSON.fromJson(registry.route(method, params.getAsJsonObject()), Object.class);
     }
 
     /** {@code t.step(name, args)}: a step a script registered, given this context and the arguments. */
@@ -159,7 +200,7 @@ final class ScriptContext {
         return args.length > 0 ? args[0] : null;
     }
 
-    private static String string(Object[] args, int i, String usage) {
+    static String string(Object[] args, int i, String usage) {
         if (args.length > i && args[i] instanceof String s) return s;
         throw new IllegalArgumentException(usage + ": argument " + (i + 1) + " must be a string");
     }

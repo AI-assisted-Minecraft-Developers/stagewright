@@ -47,9 +47,16 @@ same Rhino, so a file that parses here parses there.
 In the game, the `stagewright-script` engine evaluates the file again through WorldDriver's `Scripting` (StageWright
 links no Rhino of its own: the shipped WorldDriver relocates it) and keeps the tests of the scene the game was started
 for. A test's `t` offers `call`, `step`, `wait`, `waitUntil`, `settle`, `expect` (`equals`, `contains`, `isEmpty`,
-`gt`, `lt`, `atLeast`, `atMost`) and `record`; the script also has WorldDriver's own `Driver.*`. A failed `t.expect`
-cannot be caught by the script, so a test cannot swallow its own failure. `requires` takes `client`,
-`dedicatedServer`, `integratedServer` or `mod:<id>`, and counts toward coverage as `@Requires` does.
+`gt`, `lt`, `atLeast`, `atMost`) and `record`; the handles `plot({size})`, `bot(name)`, `player()` and `client()`,
+as plain objects (a position is `{x, y, z}`, a block or item its id); and `override(rule, value)`, `overrideTime`,
+`overrideWeather` and `overrideTickRate`. What a test leases is given back and what it overrides undone when it
+ends. The script also has WorldDriver's own `Driver.*`. A failed `t.expect` cannot be caught by the script, so a test
+cannot swallow its own failure.
+
+The options are `scene`, `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`, counted toward
+coverage as `@Requires` is), `dependsOn` (a test's name in the same file, or `file.js#name`; a test runs after those
+of its own file, and aborts when one did not pass) and `knownIssue` (the reason, read as `@KnownIssue` is). Script
+tests run one at a time after the game's Java tests, so an override needs no lock.
 
 ## One channel back
 
@@ -96,6 +103,5 @@ command-line runner writes the same file from a game directory. The engine knows
 - Scene declarations apply `topology` and `world` ([scene file](../reference/scene-file.md)); `mods`, `files`,
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
 - Scenes run one after another, and a game's script tests one after another.
-- A script test's `t` has no `plot()`, `bot()`, `player()`, `client()` or `override` yet, and `test()` takes no
-  `dependsOn`, `knownIssues` or `plot`; an unknown option is refused.
+- A script test cannot yet depend on a Java test, nor a Java test on a script test.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.

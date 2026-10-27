@@ -49,6 +49,14 @@ final class TestScope {
         return new TestScope(context.getDisplayName(), locks, isolated);
     }
 
+    /**
+     * A script test's: isolated, since script tests run one at a time after every Java test of the run has ended, so
+     * nothing runs beside one that its overrides could disturb.
+     */
+    static TestScope ofScript(String name) {
+        return new TestScope(name, Set.of(), true);
+    }
+
     static void bind(TestScope scope) {
         CURRENT.set(scope);
     }
