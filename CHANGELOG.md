@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-27
 
+### Under ModDevGradle the tests stay out of `runClient` · green on a fresh ModDevGradle project, all three topologies
+
+The tests used to join the project's mod, so every run loaded them. The plugin now adds a copy of that
+mod, `stagewright_tests`, holding the tests as well, which only the suite's runs load in its place.
+A separate mod for the tests alone would not start: tests share packages with the mod they test, and
+NeoForge refuses a package split across two modules.
+
 ### A test suite gets an integrated-server topology · green on fresh Fabric Loom and ModDevGradle projects
 
 A scene may now name `integratedServer`: a client creates the singleplayer world and opens it, and the

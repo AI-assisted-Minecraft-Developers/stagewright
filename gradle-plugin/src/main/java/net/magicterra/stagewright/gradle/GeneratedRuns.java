@@ -1,17 +1,22 @@
 package net.magicterra.stagewright.gradle;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.codehaus.groovy.runtime.InvokerHelper;
 import org.gradle.api.GradleException;
+import org.gradle.api.Named;
 import org.gradle.api.NamedDomainObjectContainer;
 import org.gradle.api.Project;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
+import org.gradle.api.provider.SetProperty;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 
@@ -31,6 +36,8 @@ final class GeneratedRuns {
     static final String DEDICATED_SERVER = "dedicatedServer";
     static final String DEDICATED_SERVER_WITH_CLIENT = "dedicatedServerWithClient";
     static final String INTEGRATED_SERVER = "integratedServer";
+    /** Under ModDevGradle, the mod the run source set becomes. */
+    static final String TESTS_MOD = "stagewright_tests";
     /** The singleplayer world the integrated server's client creates; the test engine deletes it before each scene. */
     static final String INTEGRATED_WORLD = "StageWright";
     static final int DEFAULT_SERVER_PORT = 25621;
@@ -95,7 +102,7 @@ final class GeneratedRuns {
                 loom != null ? loom : modDev, "getRuns", null);
         SourceSet source = sourceSet(loader, suite);
         SuiteDependencies.attach(loader, suite, source);
-        if (modDev != null) joinMod(loader, modDev, suite, source);
+        if (modDev != null) testsMod(loader, modDev, suite, source, runs);
         int port = suite.getServerPort().getOrElse(DEFAULT_SERVER_PORT);
         List<String> serverArgs = List.of("--port", String.valueOf(port));
 
@@ -145,28 +152,64 @@ final class GeneratedRuns {
     }
 
     /**
-     * Under ModDevGradle, puts the conventional run source set into the project's mod: NeoForge loads classes from the
-     * mods it is given, and a source set in none is not given to it. So the tests are in every run of the project,
-     * {@code runClient} too. A run source set the build names itself is the build's to put in a mod: a mod's source
-     * sets are fixed once read, so the plugin cannot look before it adds.
+     * Under ModDevGradle, puts the run source set into the suite's runs only. NeoForge loads classes only from mods,
+     * each mod a module, and tests usually share packages with the mod they test, which two modules may not. So the
+     * tests join the project's mod, the one holding {@code main}, in a copy of it, {@value #TESTS_MOD}: the suite's
+     * runs load the copy in its place, and every other run loads every mod but the copy unless the build says which
+     * mods it loads. Which mod holds {@code main} is asked when a run is launched: a mod's source sets are fixed once
+     * read, and reading them while the build is still configuring would fix them early.
      */
-    private static void joinMod(Project loader, Object modDev, StageWrightTestSuite suite, SourceSet source) {
-        if (suite.getRunSourceSet().isPresent() || source.getName().equals(SourceSet.MAIN_SOURCE_SET_NAME)) return;
+    private static void testsMod(Project loader, Object modDev, StageWrightTestSuite suite, SourceSet source,
+                                 NamedDomainObjectContainer<Object> runs) {
+        if (source.getName().equals(SourceSet.MAIN_SOURCE_SET_NAME)) return;
         @SuppressWarnings("unchecked")
         NamedDomainObjectContainer<Object> mods =
                 (NamedDomainObjectContainer<Object>) InvokerHelper.invokeMethod(modDev, "getMods", null);
-        if (mods.size() != 1) {
-            throw new GradleException("stagewright test suite '" + suite.getName() + "': " + loader.getPath()
-                    + " declares " + mods.size() + " mods in neoForge.mods, so the plugin cannot tell which the source"
-                    + " set '" + source.getName() + "' belongs in. Set runSourceSet = '" + source.getName()
-                    + "' and add it to one with sourceSet(sourceSets." + source.getName() + ")");
+        if (mods.findByName(TESTS_MOD) != null) return;
+        Object[] copy = new Object[1];
+        copy[0] = mods.create(TESTS_MOD, mod -> listProperty(mod, "getModSourceSets").addAll(loader.provider(() -> {
+            List<Object> sets = new ArrayList<>(listProperty(host(loader, suite, mods, copy[0]), "getModSourceSets")
+                    .get());
+            sets.add(source);
+            return sets;
+        })));
+        Set<String> ours = Set.of(runName(suite, "DedicatedServer"), runName(suite, "DedicatedServerWithClient"),
+                runName(suite, "JoiningClient"), runName(suite, "IntegratedServer"));
+        runs.configureEach(run -> {
+            boolean suites = ours.contains(((Named) run).getName());
+            setProperty(run, "getLoadedMods").convention(loader.provider(() -> {
+                Set<Object> loaded = new LinkedHashSet<>(mods);
+                loaded.remove(suites ? host(loader, suite, mods, copy[0]) : copy[0]);
+                return loaded;
+            }));
+        });
+    }
+
+    /** The project's mod holding {@code main}, which the tests' copy stands in for. */
+    private static Object host(Project loader, StageWrightTestSuite suite, Iterable<Object> mods, Object copy) {
+        for (Object mod : mods) {
+            if (mod == copy) continue;
+            for (Object set : listProperty(mod, "getModSourceSets").get()) {
+                if (((SourceSet) set).getName().equals(SourceSet.MAIN_SOURCE_SET_NAME)) return mod;
+            }
         }
-        InvokerHelper.invokeMethod(mods.iterator().next(), "sourceSet", source);
+        throw new GradleException("stagewright test suite '" + suite.getName() + "': " + loader.getPath()
+                + " declares no mod in neoForge.mods holding sourceSets.main, for the tests to join");
     }
 
     @SuppressWarnings("unchecked")
     private static Property<Object> property(Object owner, String getter) {
         return (Property<Object>) InvokerHelper.invokeMethod(owner, getter, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static SetProperty<Object> setProperty(Object owner, String getter) {
+        return (SetProperty<Object>) InvokerHelper.invokeMethod(owner, getter, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static ListProperty<Object> listProperty(Object owner, String getter) {
+        return (ListProperty<Object>) InvokerHelper.invokeMethod(owner, getter, null);
     }
 
     private static DirectoryProperty directoryProperty(Object owner, String getter) {

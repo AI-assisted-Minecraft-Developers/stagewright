@@ -241,10 +241,11 @@ fails the build asking for `./gradlew --stop`, rather than running old code.
 
 Under ModDevGradle nothing is remapped: the two mods are plain jars in `stagewrightTestRuntime`, which
 the run source set's `runtimeOnly` extends, so Gradle settles them with the project's own dependencies
-on one classpath. NeoForge loads classes only from the mods in `neoForge.mods`, so the plugin adds the
-`testmod` source set to the project's mod, which puts the tests in `runClient` too. With more than one
-mod it cannot tell which, and asks for `runSourceSet`; a `runSourceSet` the build sets itself is the
-build's to add to a mod, with `sourceSet(sourceSets.testmod)` in it.
+on one classpath. NeoForge loads classes only from the mods in `neoForge.mods`, each mod a module, and
+tests usually share packages with the mod they test, which two modules may not. So the plugin adds a mod
+`stagewright_tests`: the project's mod that holds `main`, with the run source set added. The suite's
+runs load it in place of that mod, and every other run, `runClient` included, loads every mod but it,
+unless the build sets that run's `loadedMods`. The run source set belongs in no mod of the build's own.
 
 `loaderProject` names the loom or ModDevGradle project the games run from. The plugin declares the
 suite's runs in that project's `loom.runs` or `neoForge.runs`, so the loader plugin still builds each
