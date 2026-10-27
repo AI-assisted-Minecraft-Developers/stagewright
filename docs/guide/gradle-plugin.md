@@ -233,6 +233,12 @@ goes in `modLocalRuntime`. It is transitive except for the loader's own groups â
 game. When the project declares the Architectury API itself, WorldDriver's is moved to that version, so
 the runs carry one.
 
+Loom keeps a remapped mod under its coordinates, not its contents, so a snapshot republished to
+mavenLocal under the same version would reach the runs as the build before. As it is applied, the plugin
+deletes every remapped StageWright or WorldDriver jar in the build's loom caches that is older than the
+jar last published for that module, and loom remaps it again. A daemon still holding such a jar open
+fails the build asking for `./gradlew --stop`, rather than running old code.
+
 Under ModDevGradle nothing is remapped: the two mods are plain jars in `stagewrightTestRuntime`, which
 the run source set's `runtimeOnly` extends, so Gradle settles them with the project's own dependencies
 on one classpath. NeoForge loads classes only from the mods in `neoForge.mods`, so the plugin adds the

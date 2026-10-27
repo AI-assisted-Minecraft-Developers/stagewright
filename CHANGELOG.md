@@ -19,6 +19,11 @@ tests run on the server inside it once the player is in. The client now creates 
 scene's `world:` declaration, preset, seed, structures, game mode, difficulty and datapacks, which it
 used to ignore for its fixed survival default. Datapacks on this topology have not been run yet.
 
+### A republished snapshot reaches loom runs · green on a fresh Fabric Loom project and WorldDriver's build
+
+Loom served the remap of the StageWright build before, under the unchanged snapshot version, with no
+error. The Gradle plugin now drops remaps older than their published jar, as WorldDriver's own build did.
+
 ### A test suite runs under ModDevGradle with one line too · green on a fresh one-mod ModDevGradle project, Java and YAML tests on both topologies
 
 `stagewright { tests { neoforge { } } }` on a ModDevGradle project now declares the suite's runs in

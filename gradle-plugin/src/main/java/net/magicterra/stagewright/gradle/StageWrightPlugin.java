@@ -135,9 +135,16 @@ public class StageWrightPlugin implements Plugin<Project> {
         }));
         DevJUnitRuntime.install(project, tests, topologies);
         SuiteDependencies.install(project, tests);
+        // Once a build, before any loom project is evaluated, which is when loom remaps.
+        var extra = project.getRootProject().getExtensions().getExtraProperties();
+        if (!extra.has(STALE_REMAPS_SWEPT)) {
+            extra.set(STALE_REMAPS_SWEPT, true);
+            StaleRemaps.evict(project.getRootProject());
+        }
     }
 
     static final String TEST_ENGINE_CONFIGURATION = "stagewrightTestEngine";
+    private static final String STALE_REMAPS_SWEPT = "stagewright.staleRemapsSwept";
     static final String LAUNCHES_PROPERTY = "stagewright.launches";
     static final String TEST_ROOTS_PROPERTY = "stagewright.testRoots";
 
