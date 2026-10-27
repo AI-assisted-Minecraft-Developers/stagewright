@@ -16,7 +16,7 @@ import net.magicterra.stagewright.engine.Json;
  * {@code docs/reference/launch-spec.md}.
  */
 record LaunchSpec(String topology, Path gameDirectory, boolean cleanWorld, int timeoutMinutes, int stallMinutes,
-                  Process primary, Process companion) {
+                  boolean server, Process primary, Process companion) {
 
     static final String PROPERTY = "stagewright.launches";
 
@@ -69,7 +69,8 @@ record LaunchSpec(String topology, Path gameDirectory, boolean cleanWorld, int t
     static LaunchSpec parse(String topology, Map<?, ?> o) {
         Object companion = o.get("companion");
         return new LaunchSpec(topology, Path.of(string(o, "gameDirectory")), !Boolean.FALSE.equals(o.get("cleanWorld")),
-                number(o, "timeoutMinutes", 20), number(o, "stallMinutes", 5), process((Map<?, ?>) o.get("primary")),
+                number(o, "timeoutMinutes", 20), number(o, "stallMinutes", 5), Boolean.TRUE.equals(o.get("server")),
+                process((Map<?, ?>) o.get("primary")),
                 companion instanceof Map<?, ?> c ? process(c) : null);
     }
 

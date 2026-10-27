@@ -17,6 +17,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.supervise.AgentJar;
 import net.magicterra.stagewright.engine.supervise.Supervisor;
 import org.junit.platform.engine.EngineExecutionListener;
@@ -72,10 +73,14 @@ final class SceneRun {
         Path logs = artifacts.resolve("logs");
         Files.createDirectories(logs);
         if (spec.cleanWorld()) deleteTree(spec.gameDirectory().resolve("world"));
+        if (spec.companion() != null) Files.createDirectories(spec.companion().workingDirectory());
         // Put back afterwards, so a setting one scene declares is not the next scene's undeclared default.
         Path serverProperties = spec.primary().workingDirectory().resolve("server.properties");
         byte[] original = Files.isRegularFile(serverProperties) ? Files.readAllBytes(serverProperties) : null;
         try {
+            // A run directory nothing else prepares, such as one the plugin generated: a dedicated server there needs
+            // the EULA accepted and offline mode before it starts at all. Inside the put-back, like the scene's own.
+            RunDirectory.provision(spec.primary().workingDirectory(), List.of(), false, spec.server(), line -> { });
             writeServerProperties(serverProperties, world);
             return supervise(spec, world, relay, artifacts, logs);
         } finally {

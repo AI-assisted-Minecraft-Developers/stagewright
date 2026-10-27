@@ -47,10 +47,11 @@ class StageWrightTestEngineTest {
     private void writeSpec(Path specs, String topology, boolean cleanWorld) throws IOException {
         Path game = Files.createDirectories(temp.resolve("game-" + topology));
         Files.writeString(specs.resolve(topology + ".json"), """
-                {"gameDirectory": %s, "cleanWorld": %s, "timeoutMinutes": 2, "stallMinutes": 0,
+                {"gameDirectory": %s, "cleanWorld": %s, "timeoutMinutes": 2, "stallMinutes": 0, "server": %s,
                  "primary": {"java": %s, "jvmArgs": ["-cp", %s], "mainClass": %s, "args": [%s],
                              "workingDirectory": %s}}
-                """.formatted(q(game.toString()), cleanWorld, q(System.getProperty("java.home") + "/bin/java"),
+                """.formatted(q(game.toString()), cleanWorld, topology.equals("world"),
+                q(System.getProperty("java.home") + "/bin/java"),
                 q(System.getProperty("java.class.path")), q(FakeGame.class.getName()), q(topology),
                 q(game.toString())));
     }

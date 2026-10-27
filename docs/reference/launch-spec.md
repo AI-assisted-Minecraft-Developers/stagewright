@@ -34,6 +34,7 @@ matching file when it starts that scene. Why the engine does not ask Gradle is i
 | `cleanWorld` | delete `<gameDirectory>/world` before each scene starts; default true |
 | `timeoutMinutes` | the longest a scene's game may run; default 20 |
 | `stallMinutes` | how long the game may go without changing phase, ticks or loaded classes before it is ended; 0 turns this off; default 5 |
+| `server` | the primary is a dedicated server: before each scene the engine accepts the EULA in its working directory and puts `online-mode=false` into its `server.properties`, so a directory nothing else prepared starts; default false |
 | `primary` | the game the tests run in |
 | `companion` | optional: a second game started with it and ended after it, such as the client that joins a dedicated server |
 

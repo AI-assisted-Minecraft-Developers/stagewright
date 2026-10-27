@@ -81,6 +81,9 @@ public final class FakeGame {
         String text = java.nio.file.Files.readString(file);
         if (!text.contains("level-seed=5471")) return "server.properties lacks level-seed=5471: " + text;
         if (!text.contains("server-port=1")) return "server.properties lost server-port=1: " + text;
+        // The spec says a dedicated server runs here, so the engine accepted the EULA for it.
+        if (!java.nio.file.Files.isRegularFile(java.nio.file.Path.of("eula.txt"))) return "no eula.txt was written";
+        if (!text.contains("online-mode=false")) return "server.properties lacks online-mode=false: " + text;
         return null;
     }
 
