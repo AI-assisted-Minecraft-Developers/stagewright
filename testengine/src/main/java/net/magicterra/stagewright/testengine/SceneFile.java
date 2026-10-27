@@ -22,13 +22,15 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  * @param from  {@code world.from}: a save to start from instead of a new world, a class path resource under
  *              {@code stagewright/}; null for a new world
  * @param files {@code files}: text written into the game's directory before it starts, by path relative to it
+ * @param excludedMods {@code mods.exclude}: mods the game starts without, each a mod id or a jar file name pattern
  */
-record SceneFile(String name, String topology, World world, String from, Map<String, String> files) {
+record SceneFile(String name, String topology, World world, String from, Map<String, String> files,
+                 List<String> excludedMods) {
 
     static final String DIRECTORY = "stagewright/scenes/";
     /** What {@code world.from} is relative to on the test class path. */
     static final String ROOT = "stagewright/";
-    private static final Set<String> TOP = Set.of("topology", "world", "files");
+    private static final Set<String> TOP = Set.of("topology", "world", "files", "mods");
     private static final Set<String> WORLD = Set.of("preset", "seed", "structures", "gamemode", "difficulty",
             "gamerules", "datapacks", "time", "weather", "tickRate", "mobSpawning", "from");
     private static final Set<String> GAMEMODES = Set.of("survival", "creative", "adventure", "spectator");
@@ -125,7 +127,22 @@ record SceneFile(String name, String topology, World world, String from, Map<Str
             throw new IllegalStateException("scene '" + name + "': " + path + " starts from a save (world.from) and"
                     + " also says how to create its world, which only applies to a new one");
         }
-        return new SceneFile(name, topology, w, from, files(name, path + " files", map.get("files")));
+        return new SceneFile(name, topology, w, from, files(name, path + " files", map.get("files")),
+                excludedMods(name, path + " mods", map.get("mods")));
+    }
+
+    private static List<String> excludedMods(String name, String at, Object value) {
+        if (value == null) return List.of();
+        Map<?, ?> mods = mapping(name, at, value);
+        if (mods.containsKey("only")) {
+            // Every mod not listed would go, its dependencies with it, and a pack's library mods are many.
+            throw new IllegalStateException("scene '" + name + "': " + at + ".only is not applied: name what the scene"
+                    + " runs without in mods.exclude");
+        }
+        only(name, at, mods, Set.of("exclude"));
+        List<String> exclude = strings(name, at + ".exclude", mods.get("exclude"));
+        if (exclude.isEmpty()) throw new IllegalStateException("scene '" + name + "': " + at + ".exclude names no mod");
+        return exclude;
     }
 
     private static String from(String name, String at, Object value) {

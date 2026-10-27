@@ -89,7 +89,9 @@ final class SceneRun {
         Path serverProperties = spec.primary().workingDirectory().resolve("server.properties");
         byte[] original = Files.isRegularFile(serverProperties) ? Files.readAllBytes(serverProperties) : null;
         SceneSetup.Restore files = SceneSetup.writeFiles(spec.primary().workingDirectory(), declaration.files());
+        Path modsScratch = artifacts.resolve("scene-mods");
         try {
+            if (!declaration.excludedMods().isEmpty()) spec = withoutMods(spec, declaration.excludedMods(), modsScratch);
             // A run directory nothing else prepares, such as one the plugin generated: a dedicated server there needs
             // the EULA accepted and offline mode before it starts at all. Inside the put-back, like the scene's own.
             RunDirectory.provision(spec.primary().workingDirectory(), List.of(), false, spec.server(), line -> { });
@@ -98,11 +100,23 @@ final class SceneRun {
         } finally {
             try {
                 files.run();
+                SceneMods.deleteTree(modsScratch);
             } finally {
                 if (original != null) Files.write(serverProperties, original);
                 else Files.deleteIfExists(serverProperties);
             }
         }
+    }
+
+    /** {@code spec} with both its games started without {@code exclude}, and a report entry saying which jars went. */
+    private LaunchSpec withoutMods(LaunchSpec spec, List<String> exclude, Path scratch) throws IOException {
+        SceneMods.Applied primary = SceneMods.apply(spec.primary(), exclude, scratch.resolve("primary"));
+        SceneMods.Applied companion = spec.companion() == null ? null
+                : SceneMods.apply(spec.companion(), exclude, scratch.resolve("companion"));
+        listener.reportingEntryPublished(scene, ReportEntry.from("mods", "excluded " + primary.excluded()));
+        return new LaunchSpec(spec.topology(), spec.gameDirectory(), spec.worldDirectory(), spec.cleanWorld(),
+                spec.timeoutMinutes(), spec.stallMinutes(), spec.server(), primary.process(),
+                companion == null ? null : companion.process());
     }
 
     private TestExecutionResult supervise(LaunchSpec spec, SceneFile.World world, Relay relay, Path artifacts,

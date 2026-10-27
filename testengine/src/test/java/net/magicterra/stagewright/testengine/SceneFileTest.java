@@ -222,6 +222,14 @@ class SceneFileTest {
     }
 
     @Test
+    void modsExcludeNamesModsAndOnlyIsRefused() throws IOException {
+        assertEquals(List.of("farmersdelight", "jei-*.jar"),
+                load("topology: t\nmods: { exclude: [farmersdelight, jei-*.jar] }\n").excludedMods());
+        String message = refusal("topology: t\nmods: { only: [a] }\n");
+        assertTrue(message.contains("only"), message);
+    }
+
+    @Test
     void fromWithCreationSettingsIsRefused() {
         refuses("  from: worlds/old.zip\n  seed: 5\n", "world.from", "new one");
     }
