@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,8 +33,8 @@ import org.junit.platform.engine.support.descriptor.EngineDescriptor;
  * Each test runs later with the context {@link ScriptContext} builds. A file that fails to load is reported as a
  * failed container rather than dropped, so a typo cannot make its tests disappear.
  *
- * <p>Tests run one after another, JavaScript files before YAML ones (a YAML step may be a script's), each kind in the
- * order selected. The test engine outside the game discovers
+ * <p>JavaScript files load before YAML ones, since a YAML step may be a script's. The tests run after every Java test
+ * of the game has ended, concurrently as {@link ScriptScheduler} arranges. The test engine outside the game discovers
  * the same files without the game (docs/design/test-engine.md), so what a file registers must not depend on the game.
  */
 public final class ScriptTestEngine implements TestEngine {
@@ -46,7 +45,7 @@ public final class ScriptTestEngine implements TestEngine {
     static final String SCENE = "stagewright.junit.scene";
 
     /** The options {@code test()} understands. The scene is read by the test engine outside the game, not here. */
-    private static final Set<String> OPTIONS = Set.of("scene", "requires", "dependsOn", "knownIssue");
+    private static final Set<String> OPTIONS = Set.of("scene", "requires", "dependsOn", "knownIssue", "locks", "isolated");
 
     @Override
     public String getId() {
@@ -81,9 +80,20 @@ public final class ScriptTestEngine implements TestEngine {
         EngineExecutionListener listener = request.getEngineExecutionListener();
         TestDescriptor engine = request.getRootTestDescriptor();
         listener.executionStarted(engine);
-        // What each test ended as, by file#name, for the dependsOn of the tests after it.
-        Map<String, TestExecutionResult.Status> results = new HashMap<>();
-        for (TestDescriptor child : engine.getChildren()) ((File) child).execute(listener, results);
+        List<File> loaded = new ArrayList<>();
+        List<Test> tests = new ArrayList<>();
+        for (TestDescriptor child : engine.getChildren()) {
+            File file = (File) child;
+            listener.executionStarted(file);
+            if (file.loadError != null) {
+                listener.executionFinished(file, TestExecutionResult.failed(file.loadError));
+                continue;
+            }
+            loaded.add(file);
+            for (TestDescriptor test : file.getChildren()) tests.add((Test) test);
+        }
+        ScriptScheduler.run(tests, request.getConfigurationParameters(), (test, scheduler) -> test.execute(listener, scheduler));
+        for (File file : loaded) listener.executionFinished(file, TestExecutionResult.successful());
         listener.executionFinished(engine, TestExecutionResult.successful());
     }
 
@@ -184,8 +194,13 @@ public final class ScriptTestEngine implements TestEngine {
             if (known != null && !(known instanceof String)) {
                 throw new IllegalArgumentException("test '" + name + "': knownIssue is the reason, a string");
             }
+            Object isolated = options.get("isolated");
+            if (isolated != null && !(isolated instanceof Boolean)) {
+                throw new IllegalArgumentException("test '" + name + "': isolated is true or false");
+            }
             addChild(new Test(id, this, name, requires(name, options.get("requires")),
-                    dependencies(resource, name, options.get("dependsOn")), (String) known, body));
+                    dependencies(resource, name, options.get("dependsOn")), locks(name, options.get("locks")),
+                    Boolean.TRUE.equals(isolated), (String) known, body));
         }
 
         /** Whether a test naming {@code scenes} runs in this game: every test does when no scene was chosen. */
@@ -217,44 +232,6 @@ public final class ScriptTestEngine implements TestEngine {
         @Override
         public Type getType() {
             return Type.CONTAINER;
-        }
-
-        void execute(EngineExecutionListener listener, Map<String, TestExecutionResult.Status> results) {
-            listener.executionStarted(this);
-            List<Test> order;
-            try {
-                if (loadError != null) throw loadError;
-                order = inDependencyOrder();
-            } catch (RuntimeException e) {
-                listener.executionFinished(this, TestExecutionResult.failed(e));
-                return;
-            }
-            for (Test test : order) test.execute(listener, results);
-            listener.executionFinished(this, TestExecutionResult.successful());
-        }
-
-        /** The tests in registration order, except that one runs after every test of this file it depends on. */
-        private List<Test> inDependencyOrder() {
-            Map<String, Test> byKey = new LinkedHashMap<>();
-            for (TestDescriptor child : getChildren()) byKey.put(((Test) child).key(), (Test) child);
-            List<Test> order = new ArrayList<>();
-            Set<Test> visiting = new HashSet<>();
-            for (Test test : byKey.values()) visit(test, byKey, visiting, order);
-            return order;
-        }
-
-        private void visit(Test test, Map<String, Test> byKey, Set<Test> visiting, List<Test> order) {
-            if (order.contains(test)) return;
-            if (!visiting.add(test)) {
-                throw new IllegalStateException("dependsOn cycle through '" + test.getDisplayName() + "' in " + resource
-                        + ", so none of them can go first");
-            }
-            for (String dependency : test.dependsOn) {
-                Test upstream = byKey.get(dependency);
-                if (upstream != null) visit(upstream, byKey, visiting, order);
-            }
-            visiting.remove(test);
-            order.add(test);
         }
     }
 
@@ -303,6 +280,23 @@ public final class ScriptTestEngine implements TestEngine {
         return keys;
     }
 
+    /**
+     * {@code locks}: what the test shares with others, by a {@link net.magicterra.stagewright.test.Locks} value's name
+     * after {@code stagewright.} ({@code worldRules}, {@code worldClock}, {@code weather}, {@code tickRate},
+     * {@code player:<name>}), or any name the tests agree on. Tests naming one lock never run at once.
+     */
+    private static Set<String> locks(String test, Object value) {
+        List<Object> items = value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
+        Set<String> locks = new HashSet<>();
+        for (Object item : items) {
+            if (!(item instanceof String s) || s.isBlank()) {
+                throw new IllegalArgumentException("test '" + test + "': locks are names, but has " + Expectations.show(item));
+            }
+            locks.add(TestScope.LOCK_PREFIX + s);
+        }
+        return locks;
+    }
+
     /** Whether a {@code dependsOn} key names a Java test rather than a script's: its file is no script. */
     private static boolean isJavaTest(String key) {
         String file = key.substring(0, key.indexOf('#'));
@@ -315,16 +309,20 @@ public final class ScriptTestEngine implements TestEngine {
         private final String name;
         private final Requirement requirement;
         private final List<String> dependsOn;
+        private final Set<String> locks;
+        private final boolean isolated;
         private final String knownIssue;
         private final Body body;
 
         private Test(UniqueId id, File file, String name, Requirement requirement, List<String> dependsOn,
-                     String knownIssue, Body body) {
+                     Set<String> locks, boolean isolated, String knownIssue, Body body) {
             super(id, name, ClasspathResourceSource.from(file.resource));
             this.file = file;
             this.name = name;
             this.requirement = requirement;
             this.dependsOn = dependsOn;
+            this.locks = locks;
+            this.isolated = isolated;
             this.knownIssue = knownIssue;
             this.body = body;
         }
@@ -334,54 +332,61 @@ public final class ScriptTestEngine implements TestEngine {
             return file.resource + "#" + name;
         }
 
+        List<String> dependsOn() {
+            return dependsOn;
+        }
+
         @Override
         public Type getType() {
             return Type.TEST;
         }
 
-        void execute(EngineExecutionListener listener, Map<String, TestExecutionResult.Status> results) {
+        /** Run, or skip, this test and report it; answers how it ended. */
+        TestExecutionResult.Status execute(EngineExecutionListener listener, ScriptScheduler scheduler) {
             if (requirement.any()) {
                 List<String> missing = RequiresCondition.missing(requirement.capabilities(), requirement.mods());
                 if (!missing.isEmpty()) {
                     // The prefix is how the engine outside tells a requirement no scene met from any other skip.
                     listener.executionSkipped(this, RequiresCondition.REASON_PREFIX + "this game has no "
                             + String.join(", ", missing));
-                    results.put(key(), TestExecutionResult.Status.ABORTED);
-                    return;
+                    return TestExecutionResult.Status.ABORTED;
                 }
             }
             listener.executionStarted(this);
-            TestExecutionResult result = upstream(results);
-            if (result == null) result = run(listener);
-            results.put(key(), result.getStatus());
+            TestExecutionResult result = upstream(scheduler);
+            if (result == null) {
+                try (AutoCloseable held = scheduler.hold(locks, isolated)) {
+                    result = run(listener);
+                } catch (Exception e) {
+                    result = TestExecutionResult.failed(e);
+                }
+            }
             listener.executionFinished(this, result);
+            return result.getStatus();
         }
 
-        /** Aborted when a test this one depends on did not pass, or has not run; null when every one passed. */
-        private TestExecutionResult upstream(Map<String, TestExecutionResult.Status> results) {
+        /** Failed in a cycle, aborted when a test this one depends on did not pass or is not in the run; else null. */
+        private TestExecutionResult upstream(ScriptScheduler scheduler) {
             for (String dependency : dependsOn) {
+                String why = null;
                 if (isJavaTest(dependency)) {
                     int hash = dependency.indexOf('#');
-                    String why = Dependencies.blockerFor(dependency.substring(0, hash), dependency.substring(hash + 1));
-                    if (why == null) continue;
-                    return TestExecutionResult.aborted(new IllegalStateException("depends on " + dependency
-                            + ", which " + why));
+                    why = Dependencies.blockerFor(dependency.substring(0, hash), dependency.substring(hash + 1));
+                } else if (!scheduler.has(dependency)) {
+                    why = "is not in this run: not in this scene, or its file did not load";
                 }
-                TestExecutionResult.Status status = results.get(dependency);
-                if (status == TestExecutionResult.Status.SUCCESSFUL) continue;
-                String why = status == null
-                        ? "has not run before it: it is not in this scene, or its file is selected after this one"
-                        : "did not pass (" + status + ")";
-                return TestExecutionResult.aborted(new IllegalStateException("depends on " + dependency
-                        + ", which " + why));
+                if (why != null) {
+                    return TestExecutionResult.aborted(new IllegalStateException("depends on " + dependency + ", which "
+                            + why));
+                }
             }
-            return null;
+            return scheduler.blocker(this);
         }
 
         private TestExecutionResult run(EngineExecutionListener listener) {
             ScriptContext context = new ScriptContext(GameExtension.game(), file.steps.scripts(), file.steps.java(), this,
                     listener);
-            TestScope.bind(TestScope.ofScript(getDisplayName()));
+            TestScope.bind(TestScope.ofScript(getDisplayName(), locks, isolated));
             Throwable failure = null;
             try {
                 body.run(context);
@@ -389,6 +394,7 @@ public final class ScriptTestEngine implements TestEngine {
                 failure = t;
             }
             failure = context.end(failure);
+            TestScope.unbind();
             if (knownIssue != null) {
                 // As @KnownIssue: the failure is expected, and a pass means the option should come off.
                 return failure == null

@@ -22,16 +22,21 @@ final class TestScope {
 
     private static final ThreadLocal<TestScope> CURRENT = new ThreadLocal<>();
 
+    /** How a script names a lock: a {@link net.magicterra.stagewright.test.Locks} value without this prefix. */
+    static final String LOCK_PREFIX = "stagewright.";
+
     private final String name;
     private final Set<String> locks;
     private final boolean isolated;
+    private final boolean script;
     // Pushed and run on the server thread; read in reverse so a value overridden twice ends as it started.
     private final Deque<Consumer<MinecraftServer>> undo = new ArrayDeque<>();
 
-    private TestScope(String name, Set<String> locks, boolean isolated) {
+    private TestScope(String name, Set<String> locks, boolean isolated, boolean script) {
         this.name = name;
         this.locks = locks;
         this.isolated = isolated;
+        this.script = script;
     }
 
     /** The read-write locks the test, its class and every enclosing class declare. */
@@ -46,15 +51,12 @@ final class TestScope {
             }
             isolated |= AnnotationSupport.isAnnotated(element, Isolated.class);
         }
-        return new TestScope(context.getDisplayName(), locks, isolated);
+        return new TestScope(context.getDisplayName(), locks, isolated, false);
     }
 
-    /**
-     * A script test's: isolated, since script tests run one at a time after every Java test of the run has ended, so
-     * nothing runs beside one that its overrides could disturb.
-     */
-    static TestScope ofScript(String name) {
-        return new TestScope(name, Set.of(), true);
+    /** A script test's, with the locks its {@code locks} option names, already prefixed. */
+    static TestScope ofScript(String name, Set<String> locks, boolean isolated) {
+        return new TestScope(name, locks, isolated, true);
     }
 
     static void bind(TestScope scope) {
@@ -83,8 +85,10 @@ final class TestScope {
     /** Refuse {@code what} unless the test holds {@code lock} read-write or is isolated. */
     void require(String lock, String constant, String what) {
         if (isolated || locks.contains(lock)) return;
-        throw new IllegalStateException(what + " in " + name + " changes state every test shares: add"
-                + " @ResourceLock(" + constant + ") to the test, or @Isolated to its class");
+        String fix = script
+                ? "locks: ['" + lock.substring(LOCK_PREFIX.length()) + "'] to the test's options, or isolated: true"
+                : "@ResourceLock(" + constant + ") to the test, or @Isolated to its class";
+        throw new IllegalStateException(what + " in " + name + " changes state every test shares: add " + fix);
     }
 
     /** Server thread: remember how to put back what an override just changed. */
