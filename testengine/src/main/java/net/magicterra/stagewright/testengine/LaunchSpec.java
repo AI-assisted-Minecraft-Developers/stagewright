@@ -15,12 +15,15 @@ import net.magicterra.stagewright.engine.Json;
  * as {@code <topology>.json} in the directory {@value #PROPERTY} names. The format is in
  * {@code docs/reference/launch-spec.md}.
  */
-record LaunchSpec(String topology, Path gameDirectory, boolean cleanWorld, int timeoutMinutes, int stallMinutes,
-                  boolean server, Process primary, Process companion) {
+record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, boolean cleanWorld, int timeoutMinutes,
+                  int stallMinutes, boolean server, Process primary, Process companion) {
 
     static final String PROPERTY = "stagewright.launches";
 
-    /** One JVM: {@code java jvmArgs… mainClass args…}, in {@code workingDirectory}. */
+    /**
+     * One JVM: {@code java jvmArgs… mainClass args…}, in {@code workingDirectory}; {@code mainClass} is null when an
+     * argument file in {@code jvmArgs} names it, as a NeoForge server's does.
+     */
     record Process(String java, List<String> jvmArgs, String mainClass, List<String> args, Path workingDirectory,
                    Map<String, String> environment) {
 
@@ -42,7 +45,7 @@ record LaunchSpec(String topology, Path gameDirectory, boolean cleanWorld, int t
             command.addAll(jvmArgs.subList(0, at));
             command.addAll(extra);
             command.addAll(jvmArgs.subList(at, jvmArgs.size()));
-            command.add(mainClass);
+            if (mainClass != null) command.add(mainClass);
             command.addAll(args);
             return command;
         }
@@ -68,7 +71,10 @@ record LaunchSpec(String topology, Path gameDirectory, boolean cleanWorld, int t
 
     static LaunchSpec parse(String topology, Map<?, ?> o) {
         Object companion = o.get("companion");
-        return new LaunchSpec(topology, Path.of(string(o, "gameDirectory")), !Boolean.FALSE.equals(o.get("cleanWorld")),
+        Path gameDirectory = Path.of(string(o, "gameDirectory"));
+        return new LaunchSpec(topology, gameDirectory,
+                gameDirectory.resolve(o.get("worldDirectory") instanceof String w ? w : "world"),
+                !Boolean.FALSE.equals(o.get("cleanWorld")),
                 number(o, "timeoutMinutes", 20), number(o, "stallMinutes", 5), Boolean.TRUE.equals(o.get("server")),
                 process((Map<?, ?>) o.get("primary")),
                 companion instanceof Map<?, ?> c ? process(c) : null);
@@ -78,7 +84,8 @@ record LaunchSpec(String topology, Path gameDirectory, boolean cleanWorld, int t
         if (p == null) throw new IllegalArgumentException("no primary process");
         Map<String, String> env = new LinkedHashMap<>();
         if (p.get("environment") instanceof Map<?, ?> e) e.forEach((k, v) -> env.put(String.valueOf(k), String.valueOf(v)));
-        return new Process(string(p, "java"), strings(p.get("jvmArgs")), string(p, "mainClass"),
+        return new Process(string(p, "java"), strings(p.get("jvmArgs")),
+                p.get("mainClass") instanceof String main ? main : null,
                 strings(p.get("args")), Path.of(string(p, "workingDirectory")), env);
     }
 

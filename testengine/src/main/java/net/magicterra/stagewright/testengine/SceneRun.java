@@ -74,7 +74,7 @@ final class SceneRun {
         Files.createDirectories(logs);
         // Both layouts: a dedicated server's world, and an integrated server's under the client's saves.
         if (spec.cleanWorld()) {
-            deleteTree(spec.gameDirectory().resolve("world"));
+            deleteTree(spec.worldDirectory());
             deleteTree(spec.gameDirectory().resolve("saves"));
         }
         if (spec.companion() != null) Files.createDirectories(spec.companion().workingDirectory());

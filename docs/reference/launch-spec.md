@@ -31,7 +31,8 @@ matching file when it starts that scene. Why the engine does not ask Gradle is i
 |---|---|
 | `topology` | the name, as the scene declaration spells it |
 | `gameDirectory` | where the primary game writes; the engine keeps its logs and the agent jar under `stagewright/` in it |
-| `cleanWorld` | delete `<gameDirectory>/world` before each scene starts; default true |
+| `worldDirectory` | the world the primary plays in, relative to `gameDirectory`; default `world`. The command-line runner points a pack's server at `stagewright/world`, so the pack's own world is never the one cleaned |
+| `cleanWorld` | delete `worldDirectory` (and a client's `saves`) before each scene starts; default true |
 | `timeoutMinutes` | the longest a scene's game may run; default 20 |
 | `stallMinutes` | how long the game may go without changing phase, ticks or loaded classes before it is ended; 0 turns this off; default 5 |
 | `server` | the primary is a dedicated server: before each scene the engine accepts the EULA in its working directory and puts `online-mode=false` into its `server.properties`, so a directory nothing else prepared starts; default false |
@@ -39,6 +40,7 @@ matching file when it starts that scene. Why the engine does not ask Gradle is i
 | `companion` | optional: a second game started with it and ended after it, such as the client that joins a dedicated server |
 
 A process is `java jvmArgs… mainClass args…` run in `workingDirectory` with `environment` added to the engine's own.
+`mainClass` may be left out when an argument file in `jvmArgs` names it, as a NeoForge server's `unix_args.txt` does.
 `jvmArgs` holds everything before the main class, class path included, in the order the run would have used.
 
 ## What the engine adds
