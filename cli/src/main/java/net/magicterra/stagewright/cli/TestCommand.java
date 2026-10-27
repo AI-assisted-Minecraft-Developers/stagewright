@@ -23,6 +23,7 @@ import java.util.zip.ZipOutputStream;
 
 import com.google.gson.GsonBuilder;
 
+import net.magicterra.stagewright.cli.install.ClientSpec;
 import net.magicterra.stagewright.engine.RunDirectory;
 import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
@@ -41,13 +42,25 @@ import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
  * writes the launch spec the plugin would have written and runs the same JUnit engine in this JVM, which writes
  * JUnit XML. The server plays in {@code stagewright/world}, which each scene starts afresh; the pack's own world is
  * left alone.
+ *
+ * <p>With {@code --client}, a client is installed as the scene runner installs one, and the scenes of the two
+ * topologies with a client run too: {@code integratedServer} in that client, {@code dedicatedServerWithClient} with
+ * it joined to the pack's server. It runs in {@code stagewright/client}, since the engine deletes a client's saves
+ * before each scene, with the server's mods or those {@code --client-mods} names.
  */
 final class TestCommand {
 
     /** The mod the tests and scenes ride in. */
     static final String MOD_ID = "stagewright_pack_tests";
-    private static final String TOPOLOGY = "dedicatedServer";
-    private static final Set<String> VALUED = Set.of("launch", "java", "reports", "timeout", "stall-timeout");
+    private static final String DEDICATED = "dedicatedServer";
+    private static final String INTEGRATED = "integratedServer";
+    private static final String WITH_CLIENT = "dedicatedServerWithClient";
+    /** Where the server plays, relative to its directory: never the pack's own world. */
+    private static final String SERVER_WORLD = RunDirectory.ARTIFACT_DIR + "/world";
+    /** The singleplayer world an integrated server's scene plays in. */
+    static final String CLIENT_WORLD = "StageWright";
+    private static final Set<String> VALUED = Set.of("launch", "java", "reports", "timeout", "stall-timeout",
+            "client", "client-mods", "install-dir", "username", "mirror");
 
     private TestCommand() {}
 
@@ -104,20 +117,126 @@ final class TestCommand {
 
         Path launches = work.resolve("launches");
         Files.createDirectories(launches);
-        Files.writeString(launches.resolve(TOPOLOGY + ".json"),
-                new GsonBuilder().setPrettyPrinting().create().toJson(spec(gameDir, launch, systemProps, injected, opts)));
+        Map<String, Object> server = serverProcess(gameDir, launch, systemProps, injected, List.of());
+        write(launches, topology(DEDICATED, gameDir, SERVER_WORLD, true, server, null, opts));
+        if (opts.containsKey("client")) {
+            ClientSpec client = ClientSpec.parse(opts.get("client"));
+            if (client.modLoader() == null) {
+                throw new IllegalArgumentException("StageWright is a neoforge or fabric mod, so a vanilla client cannot"
+                        + " run tests — name a loader in --client");
+            }
+            if (!client.modLoader().equals(loader)) {
+                throw new IllegalArgumentException("the pack's server runs " + loader + " and --client asks for "
+                        + client.modLoader() + " — both must run the same loader");
+            }
+            ClientPreflight.requireDisplay(System.getProperty("os.name", ""), System.getenv());
+            // Its own directory, never a player's: the engine deletes the saves of a client it starts.
+            Path clientDir = source.resolve("client");
+            Files.createDirectories(clientDir);
+            linkMods(Path.of(opts.getOrDefault("client-mods", gameDir.resolve("mods").toString()))
+                    .toAbsolutePath().normalize(), clientDir.resolve("mods"), log);
+            Path installDir = Main.installDir(opts);
+            String versionId = install(client, installDir, opts, java, log);
+            ModInjection.Arguments clientMods = ModInjection.prepare(clientDir, loader, mods, log);
+            String username = Main.username(opts);
+            Map<String, Object> integrated = clientProcess(java, ClientLaunch.parts(installDir, clientDir, versionId,
+                    clientProps(systemProps, clientMods, "stagewright.client.world=" + CLIENT_WORLD,
+                            "stagewright.awaitPlayer=true"), clientMods.game(), username), clientDir);
+            write(launches, topology(INTEGRATED, clientDir, "saves/" + CLIENT_WORLD, false, integrated, null, opts));
+            Map<String, Object> joining = clientProcess(java, ClientLaunch.parts(installDir, clientDir, versionId,
+                    clientProps(systemProps, clientMods, "stagewright.client.connect=127.0.0.1:"
+                            + Main.serverPort(gameDir)), clientMods.game(), username), clientDir);
+            Map<String, Object> awaiting = serverProcess(gameDir, launch, systemProps, injected,
+                    List.of("-Dstagewright.awaitPlayer=true"));
+            write(launches, topology(WITH_CLIENT, gameDir, SERVER_WORLD, true, awaiting, joining, opts));
+        }
         System.setProperty("stagewright.launches", launches.toString());
 
         Path reports = Path.of(opts.getOrDefault("reports", source.resolve("reports").toString())).toAbsolutePath();
         return execute(root, reports, log);
     }
 
-    /** What {@code launches/dedicatedServer.json} holds; the format is docs/reference/launch-spec.md. */
-    static Map<String, Object> spec(Path gameDir, List<String> launch, List<String> systemProps,
-                                    ModInjection.Arguments injected, Map<String, String> opts) {
+    private static String install(ClientSpec client, Path installDir, Map<String, String> opts, String java,
+                                  Consumer<String> log) throws IOException {
+        try {
+            return Main.install(client, installDir, opts, java, log);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted while installing " + client, e);
+        }
+    }
+
+    /**
+     * The client's {@code mods/}, made anew from the jars in {@code from}: linked where the file system allows, else
+     * copied. A pack's client mods are not always its server's, so {@code --client-mods} may name others.
+     */
+    static void linkMods(Path from, Path to, Consumer<String> log) throws IOException {
+        if (!Files.isDirectory(from)) throw new IllegalArgumentException("--client-mods " + from + " is not a directory");
+        deleteTree(to);
+        Files.createDirectories(to);
+        List<Path> jars;
+        try (Stream<Path> list = Files.list(from)) {
+            jars = list.filter(p -> p.getFileName().toString().endsWith(".jar") && Files.isRegularFile(p)).sorted().toList();
+        }
+        for (Path jar : jars) {
+            Path target = to.resolve(jar.getFileName().toString());
+            try {
+                Files.createLink(target, jar);
+            } catch (IOException | UnsupportedOperationException e) {
+                Files.copy(jar, target);
+            }
+        }
+        log.accept("the client loads the " + jars.size() + " mods in " + from);
+    }
+
+    private static void write(Path launches, Map<String, Object> spec) throws IOException {
+        Files.writeString(launches.resolve(spec.get("topology") + ".json"),
+                new GsonBuilder().setPrettyPrinting().create().toJson(spec));
+    }
+
+    /** A client's own properties: the user's, the topology's, and what the loader needs to find the mods. */
+    static List<String> clientProps(List<String> systemProps, ModInjection.Arguments mods, String... properties) {
+        List<String> props = new ArrayList<>(systemProps);
+        for (String p : properties) props.add("-D" + p);
+        props.addAll(mods.jvm());
+        return props;
+    }
+
+    /** One topology's launch spec; the format is docs/reference/launch-spec.md. */
+    static Map<String, Object> topology(String name, Path gameDir, String worldDir, boolean server,
+                                        Map<String, Object> primary, Map<String, Object> companion,
+                                        Map<String, String> opts) {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("topology", name);
+        spec.put("gameDirectory", gameDir.toString());
+        spec.put("worldDirectory", worldDir);
+        spec.put("cleanWorld", true);
+        spec.put("server", server);
+        if (opts.containsKey("timeout")) spec.put("timeoutMinutes", Integer.parseInt(opts.get("timeout")));
+        if (opts.containsKey("stall-timeout")) spec.put("stallMinutes", Integer.parseInt(opts.get("stall-timeout")));
+        spec.put("primary", primary);
+        if (companion != null) spec.put("companion", companion);
+        return spec;
+    }
+
+    /** An installed client, started in {@code clientDir}. */
+    static Map<String, Object> clientProcess(String java, ClientLaunch.Parts parts, Path clientDir) {
+        Map<String, Object> process = new LinkedHashMap<>();
+        process.put("java", java);
+        process.put("jvmArgs", parts.jvm());
+        process.put("mainClass", parts.mainClass());
+        process.put("args", parts.args());
+        process.put("workingDirectory", clientDir.toString());
+        return process;
+    }
+
+    /** The pack's server, started as {@code launch} would, playing in {@code stagewright/world}. */
+    static Map<String, Object> serverProcess(Path gameDir, List<String> launch, List<String> systemProps,
+                                             ModInjection.Arguments injected, List<String> topologyProps) {
         List<String> command = new ArrayList<>(launch.subList(1, launch.size()));
         command.remove("nogui");
         List<String> jvmArgs = new ArrayList<>(systemProps);
+        jvmArgs.addAll(topologyProps);
         jvmArgs.addAll(injected.jvm());
         String mainClass = null;
         List<String> args = new ArrayList<>();
@@ -143,16 +262,7 @@ final class TestCommand {
         if (mainClass != null) primary.put("mainClass", mainClass);
         primary.put("args", args);
         primary.put("workingDirectory", gameDir.toString());
-        Map<String, Object> spec = new LinkedHashMap<>();
-        spec.put("topology", TOPOLOGY);
-        spec.put("gameDirectory", gameDir.toString());
-        spec.put("worldDirectory", RunDirectory.ARTIFACT_DIR + "/world");
-        spec.put("cleanWorld", true);
-        spec.put("server", true);
-        if (opts.containsKey("timeout")) spec.put("timeoutMinutes", Integer.parseInt(opts.get("timeout")));
-        if (opts.containsKey("stall-timeout")) spec.put("stallMinutes", Integer.parseInt(opts.get("stall-timeout")));
-        spec.put("primary", primary);
-        return spec;
+        return primary;
     }
 
     private static String mainClassOf(Path jar) {

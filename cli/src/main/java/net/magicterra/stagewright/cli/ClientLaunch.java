@@ -43,6 +43,21 @@ final class ClientLaunch {
      */
     static List<String> command(Path installDir, Path gameDir, String versionId, String javaBinary,
                                 List<String> systemProps, List<String> gameArgs, String username) {
+        Parts parts = parts(installDir, gameDir, versionId, systemProps, gameArgs, username);
+        List<String> command = new ArrayList<>();
+        command.add(javaBinary);
+        command.addAll(parts.jvm());
+        command.add(parts.mainClass());
+        command.addAll(parts.args());
+        return command;
+    }
+
+    /** The same command as its parts, as a launch spec holds them. */
+    record Parts(List<String> jvm, String mainClass, List<String> args) {}
+
+    /** {@link #command}'s parts: the JVM's arguments, the main class, and the game's arguments. */
+    static Parts parts(Path installDir, Path gameDir, String versionId, List<String> systemProps,
+                       List<String> gameArgs, String username) {
         List<JsonObject> chain = Versions.chain(installDir, versionId);
         JsonObject root = chain.get(chain.size() - 1);
         Map<String, String> subst = substitutions(installDir, gameDir, versionId, root,
@@ -59,14 +74,13 @@ final class ClientLaunch {
             collect(arguments.getAsJsonArray("game"), game);
         }
 
-        List<String> command = new ArrayList<>();
-        command.add(javaBinary);
-        for (String arg : jvm) command.add(fill(arg, subst));
-        command.addAll(systemProps);
-        command.add(chain.get(0).get("mainClass").getAsString());
-        for (String arg : game) command.add(fill(arg, subst));
-        command.addAll(gameArgs);
-        return command;
+        List<String> jvmArgs = new ArrayList<>();
+        for (String arg : jvm) jvmArgs.add(fill(arg, subst));
+        jvmArgs.addAll(systemProps);
+        List<String> args = new ArrayList<>();
+        for (String arg : game) args.add(fill(arg, subst));
+        args.addAll(gameArgs);
+        return new Parts(jvmArgs, chain.get(0).get("mainClass").getAsString(), args);
     }
 
     /** The UUID an {@code online-mode=false} server gives this name — vanilla's {@code UUIDUtil}. */

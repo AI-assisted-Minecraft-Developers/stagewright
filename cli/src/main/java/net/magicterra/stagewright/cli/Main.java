@@ -433,7 +433,7 @@ public final class Main {
         return worst.code();
     }
 
-    private static Path installDir(Map<String, String> opts) {
+    static Path installDir(Map<String, String> opts) {
         return opts.containsKey("install-dir")
                 ? Path.of(opts.get("install-dir")).toAbsolutePath().normalize()
                 : MinecraftDir.defaultDir();
@@ -441,9 +441,15 @@ public final class Main {
 
     private static String install(ClientSpec client, Path installDir, Run run, String javaBinary)
             throws IOException, InterruptedException {
-        Mirror mirror = Mirror.parse(run.opts().getOrDefault("mirror", "none"));
+        return install(client, installDir, run.opts(), javaBinary, run.log());
+    }
+
+    /** Install {@code client} into {@code installDir} unless it is there; answers the version to launch. */
+    static String install(ClientSpec client, Path installDir, Map<String, String> opts, String javaBinary,
+                          Consumer<String> log) throws IOException, InterruptedException {
+        Mirror mirror = Mirror.parse(opts.getOrDefault("mirror", "none"));
         try (Downloader downloader = new Downloader(mirror, installDir)) {
-            return new Installer(installDir, downloader, javaBinary, run.log()).install(client);
+            return new Installer(installDir, downloader, javaBinary, log).install(client);
         }
     }
 
@@ -473,7 +479,7 @@ public final class Main {
         return ModInjection.prepare(dir, loader, run.extraMods(), run.log());
     }
 
-    private static String username(Map<String, String> opts) {
+    static String username(Map<String, String> opts) {
         return opts.getOrDefault("username", ClientLaunch.DEFAULT_USERNAME);
     }
 
@@ -517,7 +523,7 @@ public final class Main {
      * 25565 would otherwise produce a client dialling a port nothing answers — which looks from the
      * outside exactly like the server failing to start.
      */
-    private static int serverPort(Path gameDir) throws IOException {
+    static int serverPort(Path gameDir) throws IOException {
         Path properties = gameDir.resolve("server.properties");
         if (Files.isRegularFile(properties)) {
             for (String line : Files.readAllLines(properties, java.nio.charset.StandardCharsets.UTF_8)) {
@@ -1276,11 +1282,17 @@ public final class Main {
                   java -jar stagewright.jar test <server-dir> [--mod <jar>]... [--reports <dir>]
                                                         [--launch "<cmd>"] [--java <path>] [--timeout <min>]
                                                         [--stall-timeout <min>] [-D…] [-X…]
+                                                        [--client <spec> [--client-mods <dir>]
+                                                         [--install-dir <dir>] [--username <name>]
+                                                         [--mirror bmclapi]]
 
                 test: run the YAML and JavaScript tests in <server-dir>/stagewright/tests, with the
-                scenes in <server-dir>/stagewright/scenes, in the pack's dedicated server. Each scene
-                gets a fresh world in <server-dir>/stagewright/world; the pack's own is not touched.
-                JUnit XML goes to --reports (default <server-dir>/stagewright/reports).
+                scenes in <server-dir>/stagewright/scenes. A dedicatedServer scene runs in the pack's
+                server, with a fresh world in <server-dir>/stagewright/world; the pack's own is not
+                touched. With --client, the client it names is installed (as below) and the
+                integratedServer and dedicatedServerWithClient scenes run too, in a client under
+                <server-dir>/stagewright/client that loads the jars in --client-mods (default the
+                server's mods/). JUnit XML goes to --reports (default <server-dir>/stagewright/reports).
                 exit: 0 every test passed / 1 one did not / 3 the run could not start
 
                 Three topologies, picked by what you pass:
