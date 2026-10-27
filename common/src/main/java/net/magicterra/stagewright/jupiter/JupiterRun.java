@@ -32,6 +32,7 @@ import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
 import org.junit.platform.launcher.TestPlan;
+import org.junit.platform.launcher.core.LauncherConfig;
 import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
 import org.junit.platform.launcher.core.LauncherFactory;
 import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
@@ -41,15 +42,17 @@ import org.junit.platform.reporting.legacy.xml.LegacyXmlReportGeneratingListener
 /**
  * Runs JUnit tests inside the game, on a thread of their own, once the server's tick cadence has settled.
  *
- * <p>Which classes: {@value #CLASSES} (comma-separated) when set, else every class named in a
- * {@value #INDEX} resource on the game's class path, one per line. Nothing runs unless one of the two properties
- * {@value #CLASSES} or {@value #ENABLED} is set. Reports go to {@code <game dir>/stagewright/junit/}: JUnit XML
+ * <p>Which tests: the classes in {@value #CLASSES} and the script resources in {@value #SCRIPTS} (each
+ * comma-separated) when either is set, else every entry of every {@value #INDEX} resource on the game's class path,
+ * one per line, a name ending {@code .js} being a script ({@link ScriptTestEngine}). Nothing runs unless one of
+ * {@value #CLASSES}, {@value #SCRIPTS} or {@value #ENABLED} is set. Reports go to {@code <game dir>/stagewright/junit/}: JUnit XML
  * and a {@code summary.json}. With {@value #EXIT} the server stops once the run is over.
  */
 public final class JupiterRun {
 
     static final String ENABLED = "stagewright.junit";
     static final String CLASSES = "stagewright.junit.classes";
+    static final String SCRIPTS = "stagewright.junit.scripts";
     static final String EXIT = "stagewright.junit.exitWhenDone";
     static final String INDEX = "META-INF/stagewright/tests";
     static final String AWAIT_PLAYER = "stagewright.awaitPlayer";
@@ -64,21 +67,20 @@ public final class JupiterRun {
      * properties after the JVM has read the command line's.
      */
     public static boolean selected() {
-        return System.getProperty(CLASSES) != null;
+        return System.getProperty(CLASSES) != null || System.getProperty(SCRIPTS) != null;
     }
 
     /** Server thread, every settled tick: answer pending waits, and start the run the first time it may. */
     public static void tick(MinecraftServer server) {
         ServerTicks.tick();
         if (started) return;
-        String listed = System.getProperty(CLASSES);
-        if (listed == null && !Boolean.getBoolean(ENABLED)) return;
+        if (!selected() && !Boolean.getBoolean(ENABLED)) return;
         // A topology with a real client holds the tests until it has joined, as it holds the scene suite.
         if (Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() == 0) return;
         started = true;
         // The server thread's context loader, the one scene discovery's ServiceLoader uses.
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        Thread thread = new Thread(() -> run(server, listed, loader), "stagewright-tests");
+        Thread thread = new Thread(() -> run(server, loader), "stagewright-tests");
         thread.setDaemon(true);
         // Jupiter loads test classes and finds extensions through the context loader.
         thread.setContextClassLoader(loader);
@@ -91,14 +93,18 @@ public final class JupiterRun {
         ClientConnection.close();
     }
 
-    private static void run(MinecraftServer server, String listed, ClassLoader loader) {
+    private static void run(MinecraftServer server, ClassLoader loader) {
         Path reports = server.getServerDirectory().resolve("stagewright/junit");
         AgentEvents relay = new AgentEvents(AgentBridge.system());
         try {
             Files.createDirectories(reports);
-            List<String> classes = listed != null ? split(listed) : indexed(loader);
-            StageWrightCommon.LOG.info("[{}] running {} JUnit test classes in the game", StageWrightCommon.MOD_ID,
-                    classes.size());
+            List<String> entries = selected()
+                    ? concat(split(System.getProperty(CLASSES, "")), split(System.getProperty(SCRIPTS, "")))
+                    : indexed(loader);
+            List<String> classes = entries.stream().filter(e -> !e.endsWith(".js")).toList();
+            List<String> scripts = entries.stream().filter(e -> e.endsWith(".js")).toList();
+            StageWrightCommon.LOG.info("[{}] running {} JUnit test classes and {} test scripts in the game",
+                    StageWrightCommon.MOD_ID, classes.size(), scripts.size());
             GameImpl game = new GameImpl(server);
             String world = System.getProperty(SceneWorld.PROPERTY);
             if (world != null) {
@@ -109,6 +115,7 @@ public final class JupiterRun {
             GameExtension.bind(game);
             LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
                     .selectors(classes.stream().map(DiscoverySelectors::selectClass).toList())
+                    .selectors(scripts.stream().map(DiscoverySelectors::selectClasspathResource).toList())
                     .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")
                     // Below a junit-platform.properties on the game's class path, or a -D, so either may change them.
                     .parentConfigurationParameters(new Defaults(Map.of(
@@ -120,7 +127,10 @@ public final class JupiterRun {
                     .build();
             SummaryGeneratingListener summary = new SummaryGeneratingListener();
             StringWriter xmlLog = new StringWriter();
-            Launcher launcher = LauncherFactory.create();
+            // Handed over, not listed in META-INF/services: under Fabric's Knot a services file in this jar hides
+            // the one in junit-jupiter-engine, and Jupiter goes missing.
+            Launcher launcher = LauncherFactory.create(LauncherConfig.builder()
+                    .addTestEngines(new ScriptTestEngine()).build());
             TestPlan plan = launcher.discover(request);
             List<String> cycles = Dependencies.prepare(plan);
             if (!cycles.isEmpty()) {
@@ -128,7 +138,7 @@ public final class JupiterRun {
             }
             launcher.execute(plan, summary, relay, Dependencies.ENDINGS,
                     new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
-            writeSummary(reports.resolve("summary.json"), classes, summary.getSummary());
+            writeSummary(reports.resolve("summary.json"), entries, summary.getSummary());
             StringWriter text = new StringWriter();
             summary.getSummary().printTo(new PrintWriter(text));
             summary.getSummary().printFailuresTo(new PrintWriter(text), 20);
@@ -151,7 +161,13 @@ public final class JupiterRun {
         return Arrays.stream(listed.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
     }
 
-    /** Every class every {@value #INDEX} resource names, in class-path order, once each. */
+    private static List<String> concat(List<String> a, List<String> b) {
+        List<String> out = new ArrayList<>(a);
+        out.addAll(b);
+        return out;
+    }
+
+    /** Every entry every {@value #INDEX} resource names, in class-path order, once each. */
     private static List<String> indexed(ClassLoader loader) throws IOException {
         Set<String> names = new LinkedHashSet<>();
         Enumeration<URL> resources = loader.getResources(INDEX);
@@ -164,11 +180,11 @@ public final class JupiterRun {
         return new ArrayList<>(names);
     }
 
-    private static void writeSummary(Path file, List<String> classes, TestExecutionSummary s) throws IOException {
+    private static void writeSummary(Path file, List<String> selected, TestExecutionSummary s) throws IOException {
         JsonObject o = new JsonObject();
         JsonArray listed = new JsonArray();
-        classes.forEach(listed::add);
-        o.add("classes", listed);
+        selected.forEach(listed::add);
+        o.add("selected", listed);
         o.addProperty("found", s.getTestsFoundCount());
         o.addProperty("succeeded", s.getTestsSucceededCount());
         o.addProperty("failed", s.getTestsFailedCount());

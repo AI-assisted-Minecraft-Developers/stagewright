@@ -25,16 +25,17 @@ public final class RequiresCondition implements ExecutionCondition {
         Requires requires = element == null ? null
                 : AnnotationSupport.findAnnotation(element, Requires.class).orElse(null);
         if (requires == null) return ConditionEvaluationResult.enabled("no @Requires");
-        List<String> missing = missing(requires);
+        List<String> missing = missing(requires.value(), requires.mods());
         return missing.isEmpty() ? ConditionEvaluationResult.enabled("this game has what @Requires names")
                 : ConditionEvaluationResult.disabled(REASON_PREFIX + "this game has no " + String.join(", ", missing));
     }
 
-    private static List<String> missing(Requires requires) {
+    /** What of {@code capabilities} and {@code mods} this game lacks; also what a script test's {@code requires} asks. */
+    static List<String> missing(Requires.Capability[] capabilities, String[] mods) {
         List<String> missing = new ArrayList<>();
-        if (requires.value().length > 0) {
+        if (capabilities.length > 0) {
             boolean dedicated = GameExtension.game().onServer(s -> s.isDedicatedServer());
-            for (Requires.Capability c : requires.value()) {
+            for (Requires.Capability c : capabilities) {
                 boolean has = switch (c) {
                     // A dedicated server has a real client only when its topology joins one, and the run waits
                     // for that client before any test starts.
@@ -45,13 +46,13 @@ public final class RequiresCondition implements ExecutionCondition {
                 if (!has) missing.add(c.name());
             }
         }
-        if (requires.mods().length > 0) {
+        if (mods.length > 0) {
             if (!Mods.isInstalled()) {
                 throw new IllegalStateException("@Requires(mods) cannot be answered: StageWright's loader entrypoint"
                         + " never installed the mod list");
             }
             Set<String> loaded = Mods.installedIds();
-            for (String mod : requires.mods()) if (!loaded.contains(mod)) missing.add("mod " + mod);
+            for (String mod : mods) if (!loaded.contains(mod)) missing.add("mod " + mod);
         }
         return missing;
     }

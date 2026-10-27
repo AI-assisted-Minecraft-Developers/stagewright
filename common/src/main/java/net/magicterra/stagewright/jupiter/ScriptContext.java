@@ -1,0 +1,182 @@
+package net.magicterra.stagewright.jupiter;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+
+import net.magicterra.stagewright.test.Await;
+import net.magicterra.stagewright.test.Game;
+import net.magicterra.worlddriver.api.registry.Scripting;
+import org.junit.platform.engine.EngineExecutionListener;
+import org.junit.platform.engine.TestDescriptor;
+import org.junit.platform.engine.reporting.ReportEntry;
+
+/**
+ * The {@code t} a script test's body receives: the Java test context's verbs, as plain functions over plain values.
+ * Waits count server ticks and block the test thread, as {@link Game#await} does.
+ */
+final class ScriptContext {
+
+    private static final Gson GSON = new Gson();
+    private static final int DEFAULT_WITHIN = 200;
+    private static final int DEFAULT_SETTLE = 20;
+
+    private final Game game;
+    private final Map<String, Scripting.Function> steps;
+    private final TestDescriptor test;
+    private final EngineExecutionListener listener;
+    private Map<String, Object> script;
+
+    ScriptContext(Game game, Map<String, Scripting.Function> steps, TestDescriptor test,
+                  EngineExecutionListener listener) {
+        this.game = game;
+        this.steps = steps;
+        this.test = test;
+        this.listener = listener;
+    }
+
+    Map<String, Object> asScript() {
+        if (script != null) return script;
+        script = new LinkedHashMap<>();
+        script.put("call", (Scripting.Function) this::call);
+        script.put("step", (Scripting.Function) this::step);
+        script.put("wait", (Scripting.Function) this::await);
+        script.put("waitUntil", (Scripting.Function) this::waitUntil);
+        script.put("settle", (Scripting.Function) this::settle);
+        script.put("expect", (Scripting.Function) this::expect);
+        script.put("record", (Scripting.Function) this::record);
+        return script;
+    }
+
+    /** {@code t.call(method, params)}: any WorldDriver method, answered as plain values. */
+    private Object call(Object... args) {
+        String method = string(args, 0, "t.call(method, params)");
+        JsonElement params = args.length > 1 && args[1] != null ? tree(args[1]) : new JsonObject();
+        if (!params.isJsonObject()) throw new IllegalArgumentException("t.call(" + method + "): params must be an object");
+        return GSON.fromJson(game.registry().route(method, params.getAsJsonObject()), Object.class);
+    }
+
+    /** {@code t.step(name, args)}: a step a script registered, given this context and the arguments. */
+    private Object step(Object... args) {
+        String name = string(args, 0, "t.step(name, args)");
+        Scripting.Function body;
+        synchronized (steps) {
+            body = steps.get(name);
+        }
+        if (body == null) throw new IllegalArgumentException("no step named '" + name + "'; registered: " + steps.keySet());
+        return body.call(asScript(), args.length > 1 ? args[1] : null);
+    }
+
+    /** {@code t.wait(ticks)}. */
+    private Object await(Object... args) {
+        game.ticks(ticks(args.length > 0 ? args[0] : null, "t.wait(ticks)"));
+        return null;
+    }
+
+    /** {@code t.waitUntil(condition, {within, as})}: the first tick {@code condition} answers yes. */
+    private Object waitUntil(Object... args) {
+        Scripting.Function condition = function(args, "t.waitUntil(condition, options)");
+        Map<?, ?> options = options(args);
+        awaiting(options).until(() -> Expectations.truthy(condition.call()));
+        return null;
+    }
+
+    /** {@code t.settle(condition, {ticks, within, as})}: {@code condition} held {@code ticks} ticks in a row. */
+    private Object settle(Object... args) {
+        Scripting.Function condition = function(args, "t.settle(condition, options)");
+        Map<?, ?> options = options(args);
+        int run = options.containsKey("ticks") ? ticks(options.get("ticks"), "settle's ticks") : DEFAULT_SETTLE;
+        int[] streak = {0};
+        awaiting(options).until(() -> {
+            streak[0] = Expectations.truthy(condition.call()) ? streak[0] + 1 : 0;
+            return streak[0] >= run;
+        });
+        return null;
+    }
+
+    private Await awaiting(Map<?, ?> options) {
+        Await await = game.await().within(options.containsKey("within")
+                ? ticks(options.get("within"), "within") : DEFAULT_WITHIN);
+        if (options.get("as") instanceof String as) await.as(as);
+        return await;
+    }
+
+    /** {@code t.expect(actual)}: the operators, each failing the test when it does not hold. */
+    private Object expect(Object... args) {
+        Object actual = args.length > 0 ? args[0] : null;
+        Map<String, Object> ops = new LinkedHashMap<>();
+        ops.put("equals", (Scripting.Function) a -> { Expectations.equals(actual, arg(a)); return null; });
+        ops.put("contains", (Scripting.Function) a -> { Expectations.contains(actual, arg(a)); return null; });
+        ops.put("isEmpty", (Scripting.Function) a -> { Expectations.isEmpty(actual); return null; });
+        ops.put("gt", (Scripting.Function) a -> { Expectations.gt(actual, arg(a)); return null; });
+        ops.put("lt", (Scripting.Function) a -> { Expectations.lt(actual, arg(a)); return null; });
+        ops.put("atLeast", (Scripting.Function) a -> { Expectations.atLeast(actual, arg(a)); return null; });
+        ops.put("atMost", (Scripting.Function) a -> { Expectations.atMost(actual, arg(a)); return null; });
+        return ops;
+    }
+
+    /** {@code t.record(name, value)}: a value kept in the report beside the test's result. */
+    private Object record(Object... args) {
+        String name = string(args, 0, "t.record(name, value)");
+        Object value = args.length > 1 ? args[1] : null;
+        listener.reportingEntryPublished(test, ReportEntry.from(name,
+                value instanceof String s ? s : GSON.toJson(value)));
+        return null;
+    }
+
+    /** A script's value as JSON; its numbers are all doubles, so a whole one is written as an integer. */
+    private static JsonElement tree(Object v) {
+        return switch (v) {
+            case null -> JsonNull.INSTANCE;
+            case Number n when n.doubleValue() == Math.rint(n.doubleValue()) && Math.abs(n.doubleValue()) < 0x1p53 ->
+                    new JsonPrimitive(n.longValue());
+            case Number n -> new JsonPrimitive(n);
+            case Boolean b -> new JsonPrimitive(b);
+            case String s -> new JsonPrimitive(s);
+            case List<?> list -> {
+                JsonArray out = new JsonArray();
+                for (Object item : list) out.add(tree(item));
+                yield out;
+            }
+            case Map<?, ?> map -> {
+                JsonObject out = new JsonObject();
+                map.forEach((k, value) -> out.add(String.valueOf(k), tree(value)));
+                yield out;
+            }
+            default -> throw new IllegalArgumentException("t.call: a " + v.getClass().getSimpleName()
+                    + " cannot be sent as a parameter");
+        };
+    }
+
+    private static Object arg(Object[] args) {
+        return args.length > 0 ? args[0] : null;
+    }
+
+    private static String string(Object[] args, int i, String usage) {
+        if (args.length > i && args[i] instanceof String s) return s;
+        throw new IllegalArgumentException(usage + ": argument " + (i + 1) + " must be a string");
+    }
+
+    private static Scripting.Function function(Object[] args, String usage) {
+        if (args.length > 0 && args[0] instanceof Scripting.Function f) return f;
+        throw new IllegalArgumentException(usage + ": the condition must be a function");
+    }
+
+    private static Map<?, ?> options(Object[] args) {
+        return args.length > 1 && args[1] instanceof Map<?, ?> m ? m : Map.of();
+    }
+
+    private static int ticks(Object v, String what) {
+        if (v instanceof Number n && n.doubleValue() >= 0 && n.doubleValue() == Math.rint(n.doubleValue())) {
+            return n.intValue();
+        }
+        throw new IllegalArgumentException(what + " is a whole number of ticks, but was " + Expectations.show(v));
+    }
+}

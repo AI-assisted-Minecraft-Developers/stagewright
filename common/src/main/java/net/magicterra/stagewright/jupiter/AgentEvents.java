@@ -7,6 +7,7 @@ import com.google.gson.JsonObject;
 import net.magicterra.stagewright.harness.AgentBridge;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.support.descriptor.ClassSource;
+import org.junit.platform.engine.support.descriptor.ClasspathResourceSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.TestExecutionListener;
 import org.junit.platform.launcher.TestIdentifier;
@@ -101,6 +102,9 @@ final class AgentEvents implements TestExecutionListener {
                 n.addProperty("parameters", m.getMethodParameterTypes());
             } else if (source instanceof ClassSource c) {
                 n.addProperty("class", c.getClassName());
+            } else if (source instanceof ClasspathResourceSource r) {
+                // A script file or one of its tests; a test is told apart by its name.
+                n.addProperty("script", r.getClasspathResourceName());
             }
         });
         return n;

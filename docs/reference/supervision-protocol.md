@@ -125,7 +125,9 @@ The in-game JUnit run reports itself through `test`, in the order it happens; th
 
 A node has `id` (JUnit's unique id in the game), `parent` (absent on an engine), `name` (the display name),
 `test` (whether it is a test rather than a container), and from its source `class`, and for a method `method`
-and `parameters` (the parameter types, comma-separated, as JUnit's `MethodSource` spells them).
+and `parameters` (the parameter types, comma-separated, as JUnit's `MethodSource` spells them). A script file
+and the tests it registered have `script` instead (the class-path resource, such as `stagewright/tests/x.js`); a
+test is the one with `test` true, and its `name` is the name it was registered under.
 
 A `failure` has `class` (the throwable's class name), `message` when it has one, `trace` (at most the top 64
 frames, as `StackTraceElement.toString` gives them), and `cause`, a failure of the same shape, when there is one.
