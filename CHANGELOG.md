@@ -12,6 +12,12 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-28
 
+### A scene can start from a save and write files into the game directory · green on a production Fabric pack, dedicated and integrated
+
+`world.from` names a save under `stagewright/`, zip or directory, which each run of the scene starts from; `files`
+writes text into the game's directory and puts it back afterwards. Both used to be refused. A client opening a save no
+longer stops at the backup question it asks of a save made with worldgen mods, which left it waiting for a click.
+
 ### A Java test can depend on a script test, and the two kinds run side by side · green in the self-test suite
 
 Script tests used to start once every Java test had ended, so only a script could depend on a Java test.

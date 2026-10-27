@@ -23,7 +23,31 @@ world:
 ```
 
 A key this version does not apply is refused, and so is a value of the wrong kind: a scene does not run on a world it
-did not ask for. `mods`, `files`, `clients` and `world.from` are not applied yet.
+did not ask for. `mods` and `clients` are not applied yet.
+
+## `files`
+
+Text written into the primary game's working directory before it starts, by path relative to it, and put back when the
+scene is over: the file as it was, or none, and no directory the scene made. A path may not leave the directory.
+
+```yaml
+files:
+  config/mymod/retreat.toml: |
+    sharedQuota = 4
+```
+
+The world is under that directory too, so a file can go into it: `stagewright/world/datapacks/…` for a pack's server
+under the command-line runner, `saves/<world>/…` for a client hosting its own.
+
+## `world.from`
+
+A save to start from instead of a new world: a zip or a directory, as a class path resource under `stagewright/`
+(`from: worlds/v1.2.zip` is `src/test/resources/stagewright/worlds/v1.2.zip`, or a pack's
+`stagewright/worlds/v1.2.zip`). It is put where the topology's world is once that has been deleted, so every scene
+starts from the save as it was given. A zip is unpacked from the folder holding its `level.dat`, so a zip of the world
+folder and a zip of its contents both do. The creation settings below cannot be declared with it, since they apply only
+to a new world; those applied once loaded still are. A client opening a save does not ask whether to back it up first,
+which it otherwise does for a save made with worldgen mods.
 
 ## `topology`
 
