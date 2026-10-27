@@ -104,22 +104,27 @@ final class GameLaunch {
      * a server that loads none of the pack's mods.
      */
     private static List<String> fabricOrVanilla(Path gameDir, String javaBinary, Consumer<String> log) {
-        Path jar = null;
+        // A loader's launcher first: in Fabric's own layout the vanilla server.jar sits beside it, as the jar its
+        // fabric-server-launcher.properties names, and starting that one starts a server with no mods at all.
+        Path jar = newestJar(gameDir, n -> n.contains("fabric") || n.contains("quilt"));
+        if (jar == null) jar = newestJar(gameDir, n -> n.contains("server"));
+        if (jar == null) return null;
+        log.accept("launching " + jar.getFileName() + " (newest jar in " + gameDir + ")");
+        return new ArrayList<>(List.of(javaBinary, "-jar", jar.toString(), "nogui"));
+    }
+
+    /** The most recently modified top-level jar whose lower-case name {@code accepts}, never an installer. */
+    private static Path newestJar(Path gameDir, java.util.function.Predicate<String> accepts) {
         try (Stream<Path> top = Files.list(gameDir)) {
-            jar = top.filter(p -> {
+            return top.filter(p -> {
                         String n = p.getFileName().toString().toLowerCase();
-                        return n.endsWith(".jar")
-                                && (n.contains("fabric") || n.contains("quilt") || n.contains("server"))
-                                && !n.contains("installer");
+                        return n.endsWith(".jar") && accepts.test(n) && !n.contains("installer");
                     })
                     .max(Comparator.comparingLong(p -> p.toFile().lastModified()))
                     .orElse(null);
         } catch (IOException e) {
             throw new UncheckedIOException("cannot list " + gameDir, e);
         }
-        if (jar == null) return null;
-        log.accept("launching " + jar.getFileName() + " (newest jar in " + gameDir + ")");
-        return new ArrayList<>(List.of(javaBinary, "-jar", jar.toString(), "nogui"));
     }
 
     /**

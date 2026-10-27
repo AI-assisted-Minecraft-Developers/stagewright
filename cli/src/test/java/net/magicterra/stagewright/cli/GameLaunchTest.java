@@ -68,6 +68,16 @@ class GameLaunchTest {
     }
 
     @Test
+    void fabricsLauncherIsChosenOverTheVanillaServerJarBesideIt(@TempDir Path gameDir) throws IOException {
+        Path launcher = Files.createFile(gameDir.resolve("fabric-server-mc.1.21.1-loader.0.16.14-launcher.1.0.1.jar"));
+        Path vanilla = Files.createFile(gameDir.resolve("server.jar"));
+        // Newer, as it is once the launcher has downloaded it on its first start.
+        vanilla.toFile().setLastModified(launcher.toFile().lastModified() + 60_000);
+        List<String> command = GameLaunch.detect(gameDir, "java", line -> { });
+        assertEquals(List.of("java", "-jar", launcher.toString(), "nogui"), command);
+    }
+
+    @Test
     void aWindowsScriptIsReadOnAPlatformThatCannotRunIt(@TempDir Path gameDir) throws IOException {
         installLoader(gameDir, "21.1.190");
         installLoader(gameDir, "21.5.34-beta");
