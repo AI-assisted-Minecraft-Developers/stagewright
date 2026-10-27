@@ -12,6 +12,19 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-27
 
+### Script tests run concurrently, and an override in one needs its lock · green in the self-test suite
+
+Script tests used to run one at a time, so their overrides needed no lock. They now run side by side as
+Java tests do, and a test waits for the script tests it depends on wherever their files are. A test that
+overrides shared state names its lock, `locks: ['weather']`, or runs alone with `isolated: true`; an
+override without one is refused, as in Java. `stagewright.script.parallel.enabled=false` restores the
+old order.
+
+### `perf` reports CPU and client frame rate, and Java tests have it · green in the self-test suite and on fresh Fabric Loom and ModDevGradle projects
+
+Each window now carries `cpu`, in cores, and on `integratedServer` the client's `fps`, with `cpuGrowth`
+and `fpsDrop` against the baseline. A Java test measures the same with `game.perf(Perf.phases()…)`.
+
 ### Under ModDevGradle the tests stay out of `runClient` · green on a fresh ModDevGradle project, all three topologies
 
 The tests used to join the project's mod, so every run loaded them. The plugin now adds a copy of that

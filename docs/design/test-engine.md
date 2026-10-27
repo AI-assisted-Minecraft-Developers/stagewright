@@ -55,9 +55,13 @@ cannot swallow its own failure.
 
 The options are `scene`, `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`, counted toward
 coverage as `@Requires` is), `dependsOn` (a test's name in the same file, `file.js#name`, or a Java test as
-`com.example.SomeTest#method`; a test runs after those of its own file, and aborts when one did not pass) and `knownIssue` (the reason, read as `@KnownIssue` is). Script
-tests run one at a time after the game's Java tests, so an override needs no lock. `waitUntil` and `settle` check
-their condition on the test thread once a tick, since a condition usually calls WorldDriver.
+`com.example.SomeTest#method`; a test waits for those, and aborts when one did not pass), `knownIssue` (the reason,
+read as `@KnownIssue` is), `locks` and `isolated`. Script tests run after the game's Java tests, concurrently as
+Jupiter's do (`stagewright.script.parallel.enabled` turns it off, `stagewright.script.parallel.threads` sizes it).
+Tests naming one lock never run at once, and an `isolated` test runs alone; the locks are `Locks`' names without
+`stagewright.` (`worldRules`, `worldClock`, `weather`, `tickRate`, `player:<name>`) or any the tests agree on, and an
+override is refused without its lock, as in Java. `waitUntil` and `settle` check their condition on the test thread
+once a tick, since a condition usually calls WorldDriver.
 
 A test written in YAML sits beside them, in a file with a `tests` list and an optional `scene` for all of them; a
 test takes the same options, plus `plot: {size}`, and `given`/`when`/`then` or `steps`. A step is `call: method`
@@ -73,10 +77,12 @@ issue that took nothing out fails the step, so the list shrinks as things are fi
 
 `perf: {phases: [{name, steps}], warmup, sample, repeat}` (in JavaScript `t.perf`, a phase's `run` a function)
 measures phases one after another in the same run: each runs its steps, waits `warmup` ticks, then samples `repeat`
-windows of `sample` ticks and keeps their median — `ticks`, `wallMs`, `tps`, `msptMean`, `msptP99`, `heapMib`, and
-against the first phase `tpsDrop` and `heapGrowthMib`. A test compares against the baseline it just took, never
-against a constant, which would encode the machine it was written on. The tick times are taken by the wait's own
-condition, so nothing is added to the tick when no test measures.
+windows of `sample` ticks and keeps their median — `ticks`, `wallMs`, `tps`, `msptMean`, `msptP99`, `heapMib`,
+`cpu` (process CPU time over wall time, in cores) and, where the game has a client in its own JVM
+(`integratedServer`), `fps`; and against the first phase `tpsDrop`, `heapGrowthMib`, `cpuGrowth` and `fpsDrop`. A Java
+test has the same as `game.perf(Perf.phases().phase(name, setup)…)`, answering a `Perf.Window` per phase. A test
+compares against the baseline it just took, never against a constant, which would encode the machine it was written
+on. The samples are taken by the wait's own condition, so nothing is added to the tick when no test measures.
 
 Both kinds share the built-in steps `place: {at, block, as}`, `insert: {into, items}`, `container: {of, …}` (what
 the container holds, item id to count, its other keys an expectation of that), `chunk.unload` and `chunk.reload`
@@ -132,8 +138,8 @@ command-line runner writes the same file from a game directory. The engine knows
 
 - Scene declarations apply `topology` and `world` ([scene file](../reference/scene-file.md)); `mods`, `files`,
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
-- Scenes run one after another, and a game's script tests one after another.
+- Scenes run one after another.
 - A Java test cannot depend on a script test: the scripts run after every Java test of the game.
-- `perf` reports no CPU load or client frame rate yet; `insert` and `container` reach only
+- `perf` counts frames only of a client in the game's own JVM, not of a joining one; `insert` and `container` reach only
   containers that are vanilla `Container`s, in the overworld.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.
