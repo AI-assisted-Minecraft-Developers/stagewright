@@ -38,6 +38,11 @@ dependencies {
     // Built from engine/ through the includeBuild in settings.gradle, so this jar always carries
     // the engine in the tree.
     implementation "net.magicterra:stagewright-engine:${stagewrightVersion}"
+    // `stagewright test`: the JUnit engine a test task runs, launched here instead.
+    implementation "net.magicterra:stagewright-testengine:${stagewrightVersion}"
+    implementation platform('org.junit:junit-bom:5.11.3')
+    implementation 'org.junit.platform:junit-platform-launcher'
+    implementation 'org.junit.platform:junit-platform-reporting'
 
     // The two loader jars, as the sibling projects build them (the remapped, shadow-bundled jar a
     // loader loads), so building this builds them and a skew between the mods and this jar cannot
@@ -134,6 +139,8 @@ tasks.named('jar', Jar) {
         // dropped into mods/ by mistake load as a second `rhino` mod on either loader.
         exclude 'fabric.mod.json', 'quilt.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml',
                 'pack.mcmeta', 'rhino_logo.png'
+        // A library's module descriptor describes that library alone, not this merged jar.
+        exclude 'module-info.class', 'META-INF/versions/*/module-info.class'
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     preserveFileTimestamps = false

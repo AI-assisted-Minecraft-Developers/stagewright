@@ -30,3 +30,28 @@ Error Prone annotations (com.google.errorprone:error_prone_annotations), a depen
   Copyright The Error Prone Authors.
   License: Apache License 2.0, full text in META-INF/licenses/Apache-2.0.txt
   Source:  https://github.com/google/error-prone
+
+--------------------------------------------------------------------------------
+JUnit Platform (org.junit.platform:junit-platform-engine, -launcher, -reporting, -commons)
+  Copyright 2015-2024 the original author or authors.
+  License: Eclipse Public License 2.0, full text in META-INF/licenses/EPL-2.0.txt
+  Source:  https://github.com/junit-team/junit5
+  The Source Code Form of these files is available at the address above.
+
+--------------------------------------------------------------------------------
+opentest4j (org.opentest4j:opentest4j), a dependency of JUnit
+  Copyright 2015-2023 the original author or authors.
+  License: Apache License 2.0, full text in META-INF/licenses/Apache-2.0.txt
+  Source:  https://github.com/ota4j-team/opentest4j
+
+--------------------------------------------------------------------------------
+ASM (org.ow2.asm:asm)
+  Copyright (c) 2000-2011 INRIA, France Telecom.
+  License: BSD 3-Clause, full text in META-INF/licenses/ASM-BSD-3-Clause.txt
+  Source:  https://gitlab.ow2.org/asm/asm
+
+--------------------------------------------------------------------------------
+SnakeYAML (org.yaml:snakeyaml)
+  Copyright (c) 2008, SnakeYAML.
+  License: Apache License 2.0, full text in META-INF/licenses/Apache-2.0.txt
+  Source:  https://bitbucket.org/snakeyaml/snakeyaml

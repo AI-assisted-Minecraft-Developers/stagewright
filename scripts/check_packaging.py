@@ -56,6 +56,10 @@ THIRD_PARTY = [
     ('net/magicterra/stagewright/shadow/snakeyaml/', 'META-INF/licenses/Apache-2.0.txt'),
     ('com/google/gson/', 'META-INF/licenses/Apache-2.0.txt'),
     ('com/google/errorprone/', 'META-INF/licenses/Apache-2.0.txt'),
+    ('org/junit/platform/', 'META-INF/licenses/EPL-2.0.txt'),
+    ('org/opentest4j/', 'META-INF/licenses/Apache-2.0.txt'),
+    ('org/objectweb/asm/', 'META-INF/licenses/ASM-BSD-3-Clause.txt'),
+    ('org/yaml/snakeyaml/', 'META-INF/licenses/Apache-2.0.txt'),
 ]
 
 # Loader metadata that makes a jar dropped into mods/ load as a mod. The CLI jar is not one.
@@ -120,7 +124,8 @@ def check_jars(problems):
                         problems.append(f'{rel}: missing META-INF/THIRD-PARTY-NOTICES')
                     else:
                         notices = z.read('META-INF/THIRD-PARTY-NOTICES').decode('utf-8')
-                        for lib in ('minimal-json', 'Rhino', 'Gson', 'Error Prone'):
+                        for lib in ('minimal-json', 'Rhino', 'Gson', 'Error Prone', 'JUnit Platform', 'opentest4j',
+                                    'ASM', 'SnakeYAML'):
                             if lib not in notices:
                                 problems.append(f'{rel}: THIRD-PARTY-NOTICES does not name {lib}')
                     for entry in FOREIGN_MOD_METADATA:

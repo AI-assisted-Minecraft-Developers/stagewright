@@ -117,6 +117,7 @@ public final class Main {
             BuildInfo.describe().forEach(System.out::println);
             return 0;
         }
+        if ("test".equals(args[0])) return TestCommand.run(List.of(args).subList(1, args.length));
 
         Args.Parsed parsed = Args.parse(args);
         Map<String, String> opts = parsed.opts();
@@ -1272,6 +1273,15 @@ public final class Main {
 
                   java -jar stagewright.jar --game-dir <dir> [options]
                   java -jar stagewright.jar --version   what this jar was built from
+                  java -jar stagewright.jar test <server-dir> [--mod <jar>]... [--reports <dir>]
+                                                        [--launch "<cmd>"] [--java <path>] [--timeout <min>]
+                                                        [--stall-timeout <min>] [-D…] [-X…]
+
+                test: run the YAML and JavaScript tests in <server-dir>/stagewright/tests, with the
+                scenes in <server-dir>/stagewright/scenes, in the pack's dedicated server. Each scene
+                gets a fresh world in <server-dir>/stagewright/world; the pack's own is not touched.
+                JUnit XML goes to --reports (default <server-dir>/stagewright/reports).
+                exit: 0 every test passed / 1 one did not / 3 the run could not start
 
                 Three topologies, picked by what you pass:
                   (neither --client nor --with-client)   the pack's dedicated server in --game-dir
