@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-27
 
+### `stagewright test <server-dir>` runs a pack's script tests without a build · green on a production Fabric and a production NeoForge server
+
+A pack author puts YAML and JavaScript tests in `<server-dir>/stagewright/tests` and scenes in
+`stagewright/scenes`; the CLI loads them into the pack's dedicated server as a mod of their own, runs
+them as the Gradle plugin would, and writes JUnit XML to `stagewright/reports`. The scenes play in
+`stagewright/world`; the pack's own world is not touched. Detection now also starts a Fabric pack
+through its launcher when Fabric's vanilla `server.jar` is newer, which used to start a server with no
+mods.
+
 ### Script tests run concurrently, and an override in one needs its lock · green in the self-test suite
 
 Script tests used to run one at a time, so their overrides needed no lock. They now run side by side as

@@ -134,6 +134,16 @@ that knows how to start its game, so the Gradle plugin reads the topology's run 
 writes down what it would have executed — the same reading that already starts the companion client. The
 command-line runner writes the same file from a game directory. The engine knows neither.
 
+## The command-line runner
+
+`stagewright test <server-dir>` is for a pack with no build: its YAML and JavaScript tests sit in
+`<server-dir>/stagewright/tests` and its scenes in `stagewright/scenes`. The CLI packs both into a resource-only mod
+(`fabric.mod.json` and a `lowcodefml` `neoforge.mods.toml`, so either loader takes it), hands it to the pack's server
+with StageWright's loader jar as it hands any mod — `-Dfabric.addMods`, or `--fml.mods` — and writes the
+`dedicatedServer` launch spec from the start command it detects. It then runs this engine in its own JVM and writes
+JUnit XML. The server plays in `stagewright/world` (`--universe`, and the spec's `worldDirectory`), so the world each
+scene starts afresh is never the pack's. Only `dedicatedServer` scenes run there; Java tests need a build.
+
 ## Not yet
 
 - Scene declarations apply `topology` and `world` ([scene file](../reference/scene-file.md)); `mods`, `files`,
