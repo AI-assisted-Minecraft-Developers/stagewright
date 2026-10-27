@@ -21,7 +21,8 @@ base = props.get('mod_base_version')
 if base is None:
     version_script = (Path(sys.argv[1]) / 'gradle/version.gradle').read_text()
     base = re.search(r"def base = '([^']+)'", version_script).group(1)
-print(f"{base}-build.{os.environ.get('BUILD_NUMBER', 'local')}+{props['minecraft_version']}")
+number = os.environ.get('BUILD_NUMBER')
+print(f"{base}-{f'alpha.{number}' if number else 'snapshot'}+{props['minecraft_version']}")
 VERSION
 }
 stagewright_candidate="$(candidate_version "$stagewright_root")"
@@ -46,7 +47,11 @@ run_step() {
 
 run_step "$stagewright_root" engine ./gradlew -p engine check publishToMavenLocal
 run_step "$stagewright_root" plugin ./gradlew -p gradle-plugin check publishToMavenLocal
-run_step "$worlddriver_root" driver-api ./gradlew :api:publishToMavenLocal
+# The Gradle plugin is applied to every build of WorldDriver's, so this one takes the plugin just published too,
+# bootstrapping: StageWright's loader mods, which its test runs would resolve, are not built yet. The processor
+# generates stagewright-api's typed callers.
+run_step "$worlddriver_root" driver-api ./gradlew :api:publishToMavenLocal :api-processor:publishToMavenLocal \
+    -PworlddriverBootstrap "-Pstagewright_version=$stagewright_candidate"
 run_step "$stagewright_root" contracts ./gradlew :stagewright-api:publishToMavenLocal :stagewright-attached:publishToMavenLocal "-Pworlddriver_version=$worlddriver_candidate"
 run_step "$worlddriver_root" driver-bootstrap ./gradlew :api:publishToMavenLocal :common:publishToMavenLocal -PworlddriverBootstrap "-Pstagewright_version=$stagewright_candidate"
 run_step "$stagewright_root" framework ./gradlew build publishToMavenLocal "-Pworlddriver_version=$worlddriver_candidate"

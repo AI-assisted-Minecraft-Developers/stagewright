@@ -92,11 +92,9 @@ final class SuiteDependencies {
                             + suite.getWorldDriverVersion().get(), null);
                 }
             });
-            c.getResolutionStrategy().eachDependency(details -> {
-                checkWorldDriver(details);
-                alignToProject(project, details);
-            });
+            c.getResolutionStrategy().eachDependency(details -> alignToProject(project, details));
         });
+        constrainWorldDriver(project, RUNTIME, "worlddriver-fabric", "worlddriver-neoforge");
     }
 
     private static void compileConfiguration(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
@@ -117,28 +115,20 @@ final class SuiteDependencies {
                 deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-api"));
             });
         });
-        // Not resolvable itself, so the check runs where it is resolved: the classpaths that extend it.
-        project.getConfigurations().configureEach(c -> {
-            if (c.getName().endsWith("ompileClasspath")) {
-                c.getResolutionStrategy().eachDependency(SuiteDependencies::checkWorldDriver);
-            }
-        });
+        constrainWorldDriver(project, COMPILE, "worlddriver-api");
     }
 
     /**
      * Refuses a WorldDriver outside the line StageWright links against, which would otherwise fail only once a game
-     * starts. Compared as SemVer, as the loaders compare it: Gradle orders {@code 0.1.0-build.N} below
-     * {@code 0.1.0-0}, so the range cannot be handed to Gradle as it is.
+     * starts. The range's bounds are versions Gradle orders as the loaders do (gradle/version.gradle).
      */
-    private static void checkWorldDriver(DependencyResolveDetails details) {
-        var requested = details.getRequested();
-        if (!"net.magicterra".equals(requested.getGroup()) || !requested.getName().startsWith("worlddriver-")) return;
-        String version = requested.getVersion();
-        if (version == null || version.isEmpty()) return;
-        String range = PluginVersion.worldDriverRange();
-        if (!SemVer.inRange(version, range)) {
-            throw new GradleException("WorldDriver " + version + " is outside " + range + ", the line StageWright "
-                    + PluginVersion.get() + " links against; set worldDriverVersion to a build in it");
+    private static void constrainWorldDriver(Project project, String configuration, String... modules) {
+        for (String module : modules) {
+            project.getDependencies().getConstraints().add(configuration, "net.magicterra:" + module, c -> {
+                c.version(v -> v.strictly(PluginVersion.worldDriverRange()));
+                c.because("StageWright " + PluginVersion.get() + " links against this WorldDriver line;"
+                        + " set worldDriverVersion to a build in it");
+            });
         }
     }
 

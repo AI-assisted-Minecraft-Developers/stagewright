@@ -28,7 +28,7 @@ pluginManagement {
 // build.gradle
 plugins {
     id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1'
+    id 'net.magicterra.stagewright' version '0.1.0-alpha.0+1.21.1'
 }
 ```
 
@@ -150,7 +150,7 @@ On a single-loader loom project, the whole of it:
 
 ```groovy
 // build.gradle — beside `id 'fabric-loom'` or `id 'dev.architectury.loom'`
-plugins { id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1' }
+plugins { id 'net.magicterra.stagewright' version '0.1.0-alpha.0+1.21.1' }
 
 repositories {
     maven { url 'https://nexus.gardel.top/repository/maven-releases'; content { includeGroup 'net.magicterra' } }
@@ -190,7 +190,7 @@ coordinate there without the plugin's help:
 ```groovy
 dependencies {
     // In place of the defaults: say, a WorldDriver api in other mappings.
-    stagewrightTestCompile 'net.magicterra:mc_stagewright-api:0.1.0-build.0+1.21.1:dev'
+    stagewrightTestCompile 'net.magicterra:mc_stagewright-api:0.1.0-alpha.0+1.21.1:dev'
     stagewrightTestCompile 'com.example:worlddriver-api-yarn:1.0'
 }
 ```

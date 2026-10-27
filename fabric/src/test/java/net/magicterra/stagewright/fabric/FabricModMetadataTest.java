@@ -120,15 +120,15 @@ class FabricModMetadataTest {
         String laterCompatible = major + "." + minor + "." + (Integer.parseInt(v.group(3)) + 1);
         // Every build is published as a pre-release of its line, which SemVer orders below the line.
         String earlierLine = major == 0 ? "0." + (minor - 1) + ".9" : (major - 1) + ".9.9";
-        List<String> covered = new java.util.ArrayList<>(List.of(built, base, laterCompatible, base + "-build.local+1.21.1"));
+        List<String> covered = new java.util.ArrayList<>(List.of(built, base, laterCompatible, base + "-snapshot+1.21.1"));
         List<String> refused = new java.util.ArrayList<>(List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1",
-                nextBreaking + "-build.1+1.21.1"));
+                nextBreaking + "-alpha.1+1.21.1"));
         // A numbered pin is the floor: the next build is in, the one before it is out.
-        Matcher n = Pattern.compile("-build\\.(\\d+)(?:\\+|$)").matcher(built);
+        Matcher n = Pattern.compile("-alpha\\.(\\d+)(?:\\+|$)").matcher(built);
         if (n.find()) {
             int pinned = Integer.parseInt(n.group(1));
-            covered.add(base + "-build." + (pinned + 1) + "+1.21.1");
-            if (pinned > 0) refused.add(base + "-build." + (pinned - 1) + "+1.21.1");
+            covered.add(base + "-alpha." + (pinned + 1) + "+1.21.1");
+            if (pinned > 0) refused.add(base + "-alpha." + (pinned - 1) + "+1.21.1");
         }
         for (String version : covered) {
             assertTrue(matches(required, version), "required range should cover " + version);

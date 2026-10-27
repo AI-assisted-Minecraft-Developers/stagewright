@@ -15,7 +15,7 @@ plugins {
     // present; without this the plugin was reachable exclusively through includeBuild, i.e.
     // only from inside this repo. An external consumer resolves it from the Nexus, as
     // docs/reference/publishing.md shows:
-    //   plugins { id 'net.magicterra.stagewright' version '0.1.0-build.<n>+1.21.1' }
+    //   plugins { id 'net.magicterra.stagewright' version '0.1.0-alpha.<n>+1.21.1' }
     id 'maven-publish'
 }
 

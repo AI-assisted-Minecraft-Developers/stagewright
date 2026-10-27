@@ -26,8 +26,11 @@ def main():
             relative = path.relative_to(ROOT)
             text = code(path)
             if module in pure_modules:
+                # The Gradle plugin names loader plugins, their Maven groups and loom's own classes in strings;
+                # it runs in Gradle, where no game class can load, so only its code outside strings counts.
+                checked = JAVA_TOKENS.sub(' ', path.read_text(encoding='utf-8')) if module == 'gradle-plugin' else text
                 for dependency in ('net.minecraft.', 'net.fabricmc.', 'net.neoforged.'):
-                    if dependency in text:
+                    if dependency in checked:
                         errors.append(f'{relative}: game dependency in a JVM module: {dependency}')
             if module == 'common' and '/stagewright/driver/' in path.as_posix():
                 continue

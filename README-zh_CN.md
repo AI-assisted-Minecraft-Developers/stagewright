@@ -34,7 +34,7 @@ Minecraft 自带游戏内测试设施，两个加载器也都把它暴露了出�
 | Fabric | Loader 0.16 或更新，需要 Fabric API |
 | NeoForge | 21 |
 
-推送到 `master` 的提交会构建、测试，并以 `0.1.0-build.<构建编号>+1.21.1` 发布到
+推送到 `master` 的提交会构建、测试，并以 `0.1.0-alpha.<构建编号>+1.21.1` 发布到
 `https://nexus.gardel.top/repository/maven-releases`，group 为 `net.magicterra`；如果某次推送的构建还在排队时又来了新的推送，这次推送会被跳过。命令行运行器在那里是
 `net.magicterra:stagewright-cli`。Gradle 插件是 `net.magicterra.stagewright`。
 
@@ -70,7 +70,7 @@ pluginManagement {
 // build.gradle
 plugins {
     id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1'
+    id 'net.magicterra.stagewright' version '0.1.0-alpha.0+1.21.1'
 }
 
 repositories {
@@ -82,8 +82,8 @@ repositories {
 
 dependencies {
     // 放在存放你的场景的那个 source set 上 —— 见指南
-    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-build.0+1.21.1:dev'
-    modLocalRuntime       'net.magicterra:mc_stagewright-fabric:0.1.0-build.0+1.21.1'
+    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-alpha.0+1.21.1:dev'
+    modLocalRuntime       'net.magicterra:mc_stagewright-fabric:0.1.0-alpha.0+1.21.1'
 }
 
 stagewright {

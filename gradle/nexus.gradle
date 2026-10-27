@@ -19,7 +19,7 @@ def published = project.version.toString()
 tasks.withType(PublishToMavenRepository)
         .matching { it.name.endsWith('ToGardelNexusRepository') }.configureEach {
     doFirst {
-        if (!(published ==~ /.*-build\.[0-9]+\+.*/)) {
+        if (!(published ==~ /.*-alpha\.[0-9]+\+.*/)) {
             throw new GradleException("${published} is not published to the Nexus: only a build"
                     + " numbered by BUILD_NUMBER goes there."
                     + " Use publishToMavenLocal for a local build.")

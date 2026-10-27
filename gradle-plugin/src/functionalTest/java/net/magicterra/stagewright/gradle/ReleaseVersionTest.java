@@ -85,7 +85,7 @@ class ReleaseVersionTest {
     @Test
     void aLocalBuildIsVersionedLocalAndNeverReachesTheNexus() throws IOException {
         BuildResult version = project(null).withArguments("printVersion").build();
-        assertTrue(version.getOutput().contains("VERSION=0.1.0-build.local+1.21.1"), version.getOutput());
+        assertTrue(version.getOutput().contains("VERSION=0.1.0-snapshot+1.21.1"), version.getOutput());
 
         BuildResult publish = project(null)
                 .withArguments("publishAllPublicationsToGardelNexusRepository").buildAndFail();
@@ -97,12 +97,12 @@ class ReleaseVersionTest {
     void aCiBuildIsNumberedAndPublishes() throws IOException {
         // The first build published by hand is numbered 0.
         BuildResult first = project("0").withArguments("printVersion").build();
-        assertTrue(first.getOutput().contains("VERSION=0.1.0-build.0+1.21.1"), first.getOutput());
+        assertTrue(first.getOutput().contains("VERSION=0.1.0-alpha.0+1.21.1"), first.getOutput());
 
         BuildResult publish = project("42")
                 .withArguments("printVersion", "publishAllPublicationsToGardelNexusRepository").build();
-        assertTrue(publish.getOutput().contains("VERSION=0.1.0-build.42+1.21.1"), publish.getOutput());
-        assertTrue(uploads.stream().anyMatch(u -> u.contains("/0.1.0-build.42+1.21.1/")), uploads.toString());
+        assertTrue(publish.getOutput().contains("VERSION=0.1.0-alpha.42+1.21.1"), publish.getOutput());
+        assertTrue(uploads.stream().anyMatch(u -> u.contains("/0.1.0-alpha.42+1.21.1/")), uploads.toString());
     }
 
     @Test

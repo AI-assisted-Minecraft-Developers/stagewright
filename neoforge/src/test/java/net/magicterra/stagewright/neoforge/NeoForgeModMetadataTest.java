@@ -98,17 +98,18 @@ class NeoForgeModMetadataTest {
         String base = v.group();
         String nextBreaking = major == 0 ? "0." + (minor + 1) + ".0" : (major + 1) + ".0.0";
         String laterCompatible = major + "." + minor + "." + (Integer.parseInt(v.group(3)) + 1);
-        List<String> accepted = new java.util.ArrayList<>(List.of(built, laterCompatible + "+1.21.1"));
-        List<String> refused = new java.util.ArrayList<>(List.of(base + "-alpha", nextBreaking, nextBreaking + "+1.21.1"));
-        // A numbered pin is the floor: the next build is in, the one before it is out. Maven orders a
-        // release below its -build.N versions, so the bare release is in only when the pin is not a build.
-        Matcher n = Pattern.compile("-build\\.(\\d+)(?:\\+|$)").matcher(built);
+        String earlierLine = major == 0 ? "0." + (minor - 1) + ".9" : (major - 1) + ".9.9";
+        // Maven orders alpha.N below the snapshot and the release, as Gradle and SemVer do.
+        List<String> accepted = new java.util.ArrayList<>(List.of(built, base, base + "-snapshot+1.21.1",
+                laterCompatible + "+1.21.1"));
+        List<String> refused = new java.util.ArrayList<>(List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1",
+                nextBreaking + "-alpha.1+1.21.1"));
+        // A numbered pin is the floor: the next build is in, the one before it is out.
+        Matcher n = Pattern.compile("-alpha\\.(\\d+)(?:\\+|$)").matcher(built);
         if (n.find()) {
             int pinned = Integer.parseInt(n.group(1));
-            accepted.add(base + "-build." + (pinned + 1) + "+1.21.1");
-            if (pinned > 0) refused.add(base + "-build." + (pinned - 1) + "+1.21.1");
-        } else {
-            accepted.add(base);
+            accepted.add(base + "-alpha." + (pinned + 1) + "+1.21.1");
+            if (pinned > 0) refused.add(base + "-alpha." + (pinned - 1) + "+1.21.1");
         }
         for (String version : accepted) {
             assertTrue(range.containsVersion(new DefaultArtifactVersion(version)), "range should accept " + version);

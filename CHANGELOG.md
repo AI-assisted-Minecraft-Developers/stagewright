@@ -10,6 +10,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-27
+
+### Builds are `0.1.0-alpha.<n>`, a local one `0.1.0-snapshot` · green in unit tests, and on both loaders against a local WorldDriver pair
+
+Every artifact used to be `0.1.0-build.<n>+1.21.1`, and a local build `0.1.0-build.local+1.21.1`. Gradle,
+Fabric and NeoForge order those three different ways: NeoForge put every `build.<n>` above the release,
+so the WorldDriver range refused WorldDriver `0.1.0` itself, and Gradle put `build.local` below every
+numbered build. `alpha.<n>` and lowercase `snapshot` are ordered alike by all three, and the WorldDriver
+range is now `[<pin>, <next>-alpha.0)`. The Gradle plugin hands that range to Gradle as a strict
+constraint. Nothing published as `build.<n>` matches the new range; pin an `alpha` build.
+
 ## 2026-10-24
 
 ### A start stuck in GLFW's window call is named · green in unit tests on recorded frames only

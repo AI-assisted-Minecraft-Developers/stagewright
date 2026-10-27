@@ -40,7 +40,7 @@ that leaves out:
 | NeoForge | 21 |
 
 Pushes to `master` are built, tested and published to
-`https://nexus.gardel.top/repository/maven-releases` as `0.1.0-build.<build number>+1.21.1`, under the group
+`https://nexus.gardel.top/repository/maven-releases` as `0.1.0-alpha.<build number>+1.21.1`, under the group
 `net.magicterra`, except a push whose build is still queued when a newer one arrives; the command-line runner is `net.magicterra:stagewright-cli` there. The Gradle
 plugin is `net.magicterra.stagewright`.
 
@@ -78,7 +78,7 @@ pluginManagement {
 // build.gradle
 plugins {
     id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1'
+    id 'net.magicterra.stagewright' version '0.1.0-alpha.0+1.21.1'
 }
 
 repositories {
@@ -90,8 +90,8 @@ repositories {
 
 dependencies {
     // on whichever source set holds your scenes — see the guide
-    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-build.0+1.21.1:dev'
-    modLocalRuntime       'net.magicterra:mc_stagewright-fabric:0.1.0-build.0+1.21.1'
+    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-alpha.0+1.21.1:dev'
+    modLocalRuntime       'net.magicterra:mc_stagewright-fabric:0.1.0-alpha.0+1.21.1'
 }
 
 stagewright {

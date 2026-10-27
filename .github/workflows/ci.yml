@@ -1,7 +1,7 @@
 name: CI
 
 # Pull requests and pushes to master are built and tested; a master push that passes is published to
-# the Nexus as 0.1.0-build.<run number>+<minecraft>. See docs/reference/publishing.md.
+# the Nexus as 0.1.0-alpha.<run number>+<minecraft>. See docs/reference/publishing.md.
 on:
   push:
     branches: [master]
@@ -93,7 +93,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: stagewright-cli-0.1.0-build.${{ github.run_number }}
+          name: stagewright-cli-0.1.0-alpha.${{ github.run_number }}
           path: cli/build/libs/stagewright.jar
 
       - name: Publish to Nexus

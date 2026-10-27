@@ -14,17 +14,17 @@ final class TestModJar {
 
     /** A WorldDriver every floor the framework under test may carry admits: local outranks every numbered build. */
     static Path driver(Path jar, String marker) throws IOException {
-        return create(jar, "worlddriver", "0.1.0-build.local+1.21.1", marker);
+        return create(jar, "worlddriver", "0.1.0-snapshot+1.21.1", marker);
     }
 
     static Path create(Path jar, String id, String version, String marker) throws IOException {
         Files.createDirectories(jar.getParent());
         try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jar))) {
             entry(out, "fabric.mod.json", "{\"schemaVersion\":1,\"id\":\"" + id
-                    + "\",\"version\":\"" + version + "\",\"depends\":{\"worlddriver\":\">=0.1.0-0 <0.2.0-0\"}}");
+                    + "\",\"version\":\"" + version + "\",\"depends\":{\"worlddriver\":\">=0.1.0-alpha.0 <0.2.0-alpha.0\"}}");
             entry(out, "META-INF/neoforge.mods.toml", "[[mods]]\nmodId=\"" + id
                     + "\"\nversion=\"" + version + "\"\n[[dependencies." + id
-                    + "]]\nmodId=\"worlddriver\"\ntype=\"required\"\nversionRange=\"[0.1.0-0,0.2.0-0)\"\n");
+                    + "]]\nmodId=\"worlddriver\"\ntype=\"required\"\nversionRange=\"[0.1.0-alpha.0,0.2.0-alpha.0)\"\n");
             entry(out, "marker.txt", marker);
         }
         return jar;

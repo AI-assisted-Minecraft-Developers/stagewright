@@ -53,8 +53,8 @@ plugin under. Every build also publishes to `mavenLocal()` for local development
 
 ## Versions
 
-One version, for every artifact of all three builds: `<base>-build.<n>+<minecraft>`, such as
-`0.1.0-build.42+1.21.1`.
+One version, for every artifact of all three builds: `<base>-alpha.<n>+<minecraft>`, such as
+`0.1.0-alpha.42+1.21.1`.
 
 - `<base>` is in `gradle/version.gradle`.
 - `<n>` is the CI run number, taken from `BUILD_NUMBER`. Run numbers start at 1, which leaves `0`
@@ -62,19 +62,23 @@ One version, for every artifact of all three builds: `<base>-build.<n>+<minecraf
   zeros stops the build.
 - `<minecraft>` is `minecraft_version` from `gradle.properties`.
 
-A build without `BUILD_NUMBER` is `0.1.0-build.local+1.21.1`, which the Nexus publishing tasks
+A build without `BUILD_NUMBER` is `0.1.0-snapshot+1.21.1`, which the Nexus publishing tasks
 refuse. The engine, the Gradle plugin and the command-line runner carry the Minecraft version too,
 although nothing in them depends on it: builds of the three are only ever used together.
 
-Every build is a pre-release of `<base>`, so SemVer, and with it Fabric Loader, orders all of them
-below `0.1.0` itself. That is why a version range over StageWright or WorldDriver builds ends its
-bounds in `-0`; the Minecraft and loader ranges, over releases, do not.
+A version is compared three ways: by Gradle when it resolves dependencies, by Fabric Loader as SemVer,
+and by NeoForge as Maven does. `alpha.<n>` and lowercase `snapshot` are the pre-release forms all
+three order alike: numbered builds by their numbers, then the snapshot, then `<base>` itself. Others
+are not: Maven puts an unknown qualifier such as `build` after the release, Fabric puts an uppercase
+`SNAPSHOT` before every numbered build, and Gradle and Maven order `<base>-0` at or above the release.
+A version range over StageWright or WorldDriver builds therefore ends its bounds in `-alpha.0`; the
+Minecraft and loader ranges, over releases, do not.
 
 The WorldDriver range both loaders declare starts at the build `worlddriver_version` names, not at
-`<base>-0`: StageWright is compiled against what that build added (the typed method registry its
-`mc.test.*` methods publish into, for one), so an older WorldDriver of the same line is refused by
+`<base>-alpha.0`: StageWright is compiled against what that build added (the typed method registry
+its `mc.test.*` methods publish into, for one), so an older WorldDriver of the same line is refused by
 the loader rather than failing to link at server start. Pinning a newer build raises the floor with
-it. Only a `build.local` pin keeps the `<base>-0` floor, since `local` is not a build number.
+it. Only a `snapshot` pin keeps the `<base>-alpha.0` floor, since it carries no build number.
 
 ## The artifacts
 
@@ -173,7 +177,7 @@ points. Each depends on one exact version of the other that is on the Nexus: `wo
 here, `stagewright_version` in WorldDriver's `gradle.properties`. Moving to a newer version is a
 commit that changes that line. To build against your own local build of the other side instead,
 publish it to `mavenLocal` and pass its version on the command line, as in
-`-Pworlddriver_version=0.1.0-build.local+1.21.1`. `mavenLocal` is searched before the Nexus.
+`-Pworlddriver_version=0.1.0-snapshot+1.21.1`. `mavenLocal` is searched before the Nexus.
 
 ## Publishing when neither side has published yet
 
@@ -209,15 +213,15 @@ Minecraft classpath beyond Minecraft itself.
    development-mappings artifact, and its development runs put the loader jars on the classpath.
 
 To try the sequence first, run it with `publishToMavenLocal` in place of the Nexus task and
-`BUILD_NUMBER` unset, so every version is `…-build.local+1.21.1`. Each side pins the version of the other it builds against, so point each at the
-other's local build on every build of the rehearsal: `-Pworlddriver_version=0.1.0-build.local+1.21.1`
-on StageWright's root build, and `-Pstagewright_version=0.1.0-build.local+1.21.1` on WorldDriver's,
+`BUILD_NUMBER` unset, so every version is `…-snapshot+1.21.1`. Each side pins the version of the other it builds against, so point each at the
+other's local build on every build of the rehearsal: `-Pworlddriver_version=0.1.0-snapshot+1.21.1`
+on StageWright's root build, and `-Pstagewright_version=0.1.0-snapshot+1.21.1` on WorldDriver's,
 which also selects the Gradle plugin version. Not with `BUILD_NUMBER=0`: `mavenLocal` is searched
 before the Nexus on both sides, so a rehearsed `build.0` would stand in for the published one on
 that machine from then on.
 
 A problem comes from publishing one version to `mavenLocal` more than once, which every build
-without `BUILD_NUMBER` does, as `…-build.local`. Republishing does not invalidate loom's remapping
+without `BUILD_NUMBER` does, as `…-snapshot`. Republishing does not invalidate loom's remapping
 cache, which is keyed on coordinates rather than on bytes — so a build can succeed against a
 previously remapped jar with no error and no warning, running code that no longer exists in the
 source tree. WorldDriver carries an explicit eviction pass and fails the build rather than letting
@@ -233,7 +237,7 @@ StageWright jar through loom.
 | Fabric Loader | the version pinned in `gradle.properties`, range `[0.16,)` |
 | NeoForge | the version pinned in `gradle.properties`, range `[21,)` |
 | Java | 21 |
-| WorldDriver | required; `[0.1.0-0,0.2.0-0)` — every `0.1.0` build |
+| WorldDriver | required; `[0.1.0-alpha.0,0.2.0-alpha.0)` — every `0.1.0` build |
 
 Both loaders' jar metadata takes the mod id, name, authors, licence, description and every range
 above from `gradle.properties` when the jar is built; `fabric.mod.json` gets the Maven ranges

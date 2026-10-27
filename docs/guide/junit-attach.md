@@ -180,7 +180,7 @@ repositories {
     }
 }
 dependencies {
-    testImplementation 'net.magicterra:mc_stagewright-junit:0.1.0-build.0+1.21.1'
+    testImplementation 'net.magicterra:mc_stagewright-junit:0.1.0-alpha.0+1.21.1'
 }
 ```
 

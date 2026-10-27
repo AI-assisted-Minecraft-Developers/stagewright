@@ -214,7 +214,7 @@ the [attached protocol](../reference/attached-protocol.md).
 ### 1. Resolve the plugin
 
 StageWright's builds are on a public Nexus; see [Publishing](../reference/publishing.md) for the
-version scheme. Use the newest `0.1.0-build.<build number>+1.21.1` there:
+version scheme. Use the newest `0.1.0-alpha.<build number>+1.21.1` there:
 
 ```groovy
 // settings.gradle
@@ -233,7 +233,7 @@ pluginManagement {
 // build.gradle
 plugins {
     id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1'
+    id 'net.magicterra.stagewright' version '0.1.0-alpha.0+1.21.1'
 }
 ```
 
@@ -251,7 +251,7 @@ repositories {
 }
 
 dependencies {
-    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-build.0+1.21.1:dev'
+    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-alpha.0+1.21.1:dev'
 }
 ```
 
@@ -277,11 +277,11 @@ architectury-loom:
 
 ```groovy
 dependencies {
-    modLocalRuntime 'net.magicterra:mc_stagewright-fabric:0.1.0-build.0+1.21.1'      // or -neoforge
+    modLocalRuntime 'net.magicterra:mc_stagewright-fabric:0.1.0-alpha.0+1.21.1'      // or -neoforge
 }
 ```
 
-Under ModDevGradle, `localRuntime 'net.magicterra:mc_stagewright-neoforge:0.1.0-build.0+1.21.1'`, with
+Under ModDevGradle, `localRuntime 'net.magicterra:mc_stagewright-neoforge:0.1.0-alpha.0+1.21.1'`, with
 `runtimeClasspath.extendsFrom localRuntime` as the NeoForge MDK declares it — not `runtimeOnly`,
 which is published with your mod. Either way
 the jar reaches the run the way any runtime-only mod does, and nothing is copied into `mods/`; see
