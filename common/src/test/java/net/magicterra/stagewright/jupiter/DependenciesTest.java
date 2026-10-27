@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -22,6 +23,7 @@ import java.util.function.Function;
 
 import net.magicterra.stagewright.test.DependsOn;
 import net.magicterra.stagewright.test.Game;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -323,6 +325,55 @@ class DependenciesTest {
         }
     }
 
+    // ---- samples depending on script tests -----------------------------------------------------------------
+
+    private static final String SETUP = "t/setup.js#setup";
+    private static final String MID = "t/setup.js#mid";
+    private static final String LOOP = "t/setup.js#loop";
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class OnScript {
+        @Test
+        @DependsOn(scripts = SETUP)
+        void downstream() {
+            MARKS.put("onScript.start", System.nanoTime());
+            ran("OnScript#downstream");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class ThroughScript {
+        // "c" depends on MID, which depends on "a": "a" has to run first although nothing in Java says so.
+        @Test
+        @DependsOn(scripts = MID)
+        void c() {
+            ran("ThroughScript#c");
+        }
+
+        @Test
+        void a() {
+            ran("ThroughScript#a");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class CyclicThroughScript {
+        @Test
+        @DependsOn(scripts = LOOP)
+        void x() {
+            ran("CyclicThroughScript#x");
+        }
+    }
+
+    @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
+    static class LockedWithScripts {
+        @Test
+        @ResourceLock("stagewright.weather")
+        void overrides() {
+            MARKS.put("locked.start", System.nanoTime());
+        }
+    }
+
     // ---- inner launcher ------------------------------------------------------------------------------------
 
     private record Finished(TestExecutionResult.Status status, String message) {}
@@ -579,5 +630,121 @@ class DependenciesTest {
             assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get(name).status(), name);
         }
         assertTrue(THREADS.size() > 1, "all tests ran on one thread: " + THREADS);
+    }
+
+    // ---- script tests --------------------------------------------------------------------------------------
+
+    @AfterEach
+    void forgetScripts() {
+        Dependencies.scripts(Map.of());
+    }
+
+    /** Ends script test {@code key} as {@code status} after {@code ms}, as the script engine's thread would. */
+    private static Thread endScriptLater(String key, TestExecutionResult.Status status, long ms) {
+        Thread t = new Thread(() -> {
+            sleep(ms);
+            MARKS.put("script.end", System.nanoTime());
+            Dependencies.scriptEnded(key, status);
+        });
+        t.start();
+        return t;
+    }
+
+    @Test
+    @Timeout(60)
+    void aJavaTestWaitsForTheScriptTestItDependsOn() throws InterruptedException {
+        Dependencies.scripts(Map.of(SETUP, List.of()));
+        Thread script = endScriptLater(SETUP, TestExecutionResult.Status.SUCCESSFUL, 300);
+        Recorder r = run(OnScript.class);
+        script.join();
+        Finished d = r.finished.get("OnScript#downstream");
+        assertEquals(TestExecutionResult.Status.SUCCESSFUL, d.status(), d.message());
+        assertTrue(MARKS.get("onScript.start") >= MARKS.get("script.end"), "began before the script test ended");
+    }
+
+    @Test
+    @Timeout(60)
+    void aScriptTestThatDidNotPassAbortsItsJavaDependent() {
+        Dependencies.scripts(Map.of(SETUP, List.of()));
+        Dependencies.scriptEnded(SETUP, TestExecutionResult.Status.FAILED);
+        Finished d = run(OnScript.class).finished.get("OnScript#downstream");
+        assertEquals(TestExecutionResult.Status.ABORTED, d.status(), d.message());
+        assertTrue(d.message().contains("did not pass (FAILED)"), d.message());
+        assertFalse(didRun("OnScript#downstream"));
+    }
+
+    @Test
+    void aScriptTestNotInTheRunAbortsItsJavaDependent() {
+        Finished d = run(OnScript.class).finished.get("OnScript#downstream");
+        assertEquals(TestExecutionResult.Status.ABORTED, d.status(), d.message());
+        assertTrue(d.message().contains("not in this run"), d.message());
+    }
+
+    @Test
+    @Timeout(60)
+    void scriptsThatNeverRanReleaseTheirDependents() throws InterruptedException {
+        Dependencies.scripts(Map.of(SETUP, List.of()));
+        Thread over = new Thread(() -> {
+            sleep(200);
+            Dependencies.scriptsOver();
+        });
+        over.start();
+        Finished d = run(OnScript.class).finished.get("OnScript#downstream");
+        over.join();
+        assertEquals(TestExecutionResult.Status.ABORTED, d.status(), d.message());
+    }
+
+    @Test
+    void javaTestsAreOrderedThroughTheScriptTestsBetweenThem() {
+        Dependencies.scripts(Map.of(MID, List.of(ThroughScript.class.getName() + "#a")));
+        Dependencies.scriptEnded(MID, TestExecutionResult.Status.SUCCESSFUL);
+        Recorder r = run(ThroughScript.class);
+        assertEquals(List.of("ThroughScript#a", "ThroughScript#c"), r.started);
+    }
+
+    @Test
+    void aCycleThroughAScriptTestIsReportedByPrepare() {
+        Dependencies.scripts(Map.of(LOOP, List.of(CyclicThroughScript.class.getName() + "#x")));
+        inLauncher = true;
+        try {
+            List<String> cycles = Dependencies.prepare(LauncherFactory.create().discover(
+                    request(CyclicThroughScript.class)));
+            assertEquals(1, cycles.size(), cycles.toString());
+            assertTrue(cycles.get(0).contains(LOOP) && cycles.get(0).contains("#x"), cycles.get(0));
+        } finally {
+            inLauncher = false;
+        }
+    }
+
+    @Test
+    void aCycleOfScriptTestsAloneIsLeftToTheScripts() {
+        Dependencies.scripts(Map.of(SETUP, List.of(MID), MID, List.of(SETUP)));
+        inLauncher = true;
+        try {
+            assertTrue(Dependencies.prepare(LauncherFactory.create().discover(request(Plain.class))).isEmpty());
+        } finally {
+            inLauncher = false;
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    void aJavaTestWaitsForTheLockAScriptTestHolds() throws Exception {
+        CountDownLatch holding = new CountDownLatch(1);
+        Thread script = new Thread(() -> {
+            try (AutoCloseable held = RunLocks.hold(RunLocks.exclusive(Set.of("stagewright.weather")), false)) {
+                holding.countDown();
+                sleep(300);
+                MARKS.put("script.end", System.nanoTime());
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        script.start();
+        holding.await();
+        Recorder r = runParallel(LockedWithScripts.class);
+        script.join();
+        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("LockedWithScripts#overrides").status());
+        assertTrue(MARKS.get("locked.start") >= MARKS.get("script.end"), "ran while a script test held its lock");
     }
 }

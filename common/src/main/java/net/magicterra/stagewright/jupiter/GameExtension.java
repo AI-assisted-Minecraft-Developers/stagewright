@@ -22,6 +22,8 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
 
     private static final ExtensionContext.Namespace NAMESPACE = ExtensionContext.Namespace.create(GameExtension.class);
 
+    private static final String PARALLEL = "junit.jupiter.execution.parallel.enabled";
+
     private static volatile Game game;
 
     /** The game the next run's tests receive. */
@@ -65,20 +67,25 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
         return plot;
     }
 
+    /** Waits for the test's dependencies first, so it holds none of its locks while it waits. */
     @Override
-    public void beforeEach(ExtensionContext context) {
-        TestScope.bind(TestScope.of(context));
+    public void beforeEach(ExtensionContext context) throws InterruptedException {
+        Dependencies.awaitUpstream(context);
+        TestScope scope = TestScope.of(context);
+        scope.hold(!context.getConfigurationParameter(PARALLEL).map(Boolean::parseBoolean).orElse(false));
+        TestScope.bind(scope);
     }
 
     @Override
-    public void afterEach(ExtensionContext context) {
+    public void afterEach(ExtensionContext context) throws Exception {
+        // Unbound when the test was aborted before beforeEach got here; nothing to undo then, and throwing would
+        // replace that abort with a failure.
+        TestScope scope = TestScope.bound();
         try {
-            // Unbound when an earlier extension aborted the test before beforeEach got here; nothing to undo then,
-            // and throwing would replace that abort with a failure.
-            TestScope scope = TestScope.bound();
             if (scope != null && scope.changedAnything()) game().runOnServer(scope::restore);
         } finally {
             TestScope.unbind();
+            if (scope != null) scope.release();
         }
     }
 

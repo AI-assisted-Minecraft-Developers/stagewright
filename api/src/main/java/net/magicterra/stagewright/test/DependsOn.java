@@ -13,6 +13,10 @@ import java.lang.annotation.Target;
  *
  * <p>In a parallel run a class whose tests depend on one another runs them one at a time; a test depending on one in
  * another class waits for it, holding its own {@code @ResourceLock}s meanwhile, so the two must not share a lock.
+ *
+ * <p>Script tests run beside the Java tests, so a test may depend on one of those too, named in {@link #scripts}. It
+ * waits for it in any run, and holds Jupiter's {@code @ResourceLock}s while it waits; a script test takes no Jupiter
+ * lock, so only a Java test that script test depends on in turn must not share one with this test.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
@@ -20,8 +24,14 @@ import java.lang.annotation.Target;
 public @interface DependsOn {
 
     /** Test method names. */
-    String[] value();
+    String[] value() default {};
 
     /** The class those methods are in; without it, this test's own class. */
     Class<?> in() default Void.class;
+
+    /**
+     * Script tests, each as {@code file#name}, the file being its class path resource:
+     * {@code "stagewright/tests/setup.js#builds the base"}.
+     */
+    String[] scripts() default {};
 }

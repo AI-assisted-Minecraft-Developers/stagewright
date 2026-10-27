@@ -17,7 +17,8 @@ import org.junit.jupiter.api.parallel.ExecutionMode;
 
 /**
  * The default method and class order of an in-game run: Jupiter's own order, except that a test runs after the
- * tests its {@code @DependsOn} names, and a class after the classes it names with {@code in}. Stable, so tests
+ * tests its {@code @DependsOn} names, and a class after the classes it names with {@code in}; a test named through
+ * script tests ({@link Dependencies#javaUpstream}) counts as named. Stable, so tests
  * with no dependencies keep their places. A cycle leaves its members where they were; the run refuses it before
  * this is asked.
  */
@@ -34,7 +35,7 @@ public final class DependencyOrder implements MethodOrderer, ClassOrderer {
         boolean[] within = {false};
         sort(context.getMethodDescriptors(), m -> m.getMethod().getName(), m -> {
             List<String> before = new ArrayList<>();
-            for (Dependencies.Ref ref : Dependencies.upstream(context.getTestClass(), m.getMethod())) {
+            for (Dependencies.Ref ref : Dependencies.javaUpstream(context.getTestClass(), m.getMethod())) {
                 if (ref.className().equals(context.getTestClass().getName())) before.add(ref.method());
             }
             within[0] |= !before.isEmpty();
@@ -58,7 +59,7 @@ public final class DependencyOrder implements MethodOrderer, ClassOrderer {
         sort(context.getClassDescriptors(), c -> c.getTestClass().getName(), c -> {
             Set<String> before = new HashSet<>();
             for (var method : c.getTestClass().getDeclaredMethods()) {
-                for (Dependencies.Ref ref : Dependencies.upstream(c.getTestClass(), method)) {
+                for (Dependencies.Ref ref : Dependencies.javaUpstream(c.getTestClass(), method)) {
                     if (!ref.className().equals(c.getTestClass().getName())) before.add(ref.className());
                 }
             }

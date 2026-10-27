@@ -28,7 +28,9 @@ import net.magicterra.stagewright.harness.AgentBridge;
 import net.magicterra.stagewright.harness.StageWrightHarness;
 import net.minecraft.server.MinecraftServer;
 import org.junit.platform.engine.ConfigurationParameters;
+import org.junit.platform.engine.DiscoverySelector;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
+import org.junit.platform.launcher.EngineFilter;
 import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
 import org.junit.platform.launcher.TestPlan;
@@ -113,36 +115,50 @@ public final class JupiterRun {
                         game.onServer(s -> SceneWorld.apply(s, declared)));
             }
             GameExtension.bind(game);
-            LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
-                    .selectors(classes.stream().map(DiscoverySelectors::selectClass).toList())
-                    .selectors(scripts.stream().map(DiscoverySelectors::selectClasspathResource).toList())
-                    .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")
-                    // Below a junit-platform.properties on the game's class path, or a -D, so either may change them.
-                    .parentConfigurationParameters(new Defaults(Map.of(
-                            "junit.jupiter.testmethod.order.default", DependencyOrder.class.getName(),
-                            "junit.jupiter.testclass.order.default", DependencyOrder.class.getName(),
-                            "junit.jupiter.execution.parallel.enabled", "true",
-                            "junit.jupiter.execution.parallel.mode.default", "concurrent",
-                            "junit.jupiter.execution.parallel.mode.classes.default", "concurrent")))
-                    .build();
-            SummaryGeneratingListener summary = new SummaryGeneratingListener();
-            StringWriter xmlLog = new StringWriter();
             // Handed over, not listed in META-INF/services: under Fabric's Knot a services file in this jar hides
-            // the one in junit-jupiter-engine, and Jupiter goes missing. An added engine runs after the service-loaded
-            // ones, which is what lets a script test depend on a Java test.
-            Launcher launcher = LauncherFactory.create(LauncherConfig.builder()
-                    .addTestEngines(new ScriptTestEngine()).build());
-            TestPlan plan = launcher.discover(request);
-            List<String> cycles = Dependencies.prepare(plan);
+            // the one in junit-jupiter-engine, and Jupiter goes missing.
+            ScriptTestEngine scriptEngine = new ScriptTestEngine();
+            Launcher launcher = LauncherFactory.create(LauncherConfig.builder().addTestEngines(scriptEngine).build());
+            // Two plans, run side by side so a test of either kind may wait for one of the other. The scripts are
+            // discovered first: the Java tests' order, decided as they are discovered, follows dependencies through them.
+            TestPlan scriptPlan = launcher.discover(request(
+                    scripts.stream().map(DiscoverySelectors::selectClasspathResource).toList(), ScriptTestEngine.ID));
+            Dependencies.scripts(scriptEngine.discoveredTests());
+            TestPlan javaPlan = launcher.discover(request(
+                    classes.stream().map(DiscoverySelectors::selectClass).toList(), "junit-jupiter"));
+            List<String> cycles = Dependencies.prepare(javaPlan);
             if (!cycles.isEmpty()) {
                 throw new IllegalStateException("@DependsOn cycles, so no test can go first: " + cycles);
             }
-            launcher.execute(plan, summary, relay, Dependencies.ENDINGS,
-                    new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
-            writeSummary(reports.resolve("summary.json"), entries, summary.getSummary());
+            SummaryGeneratingListener javaSummary = new SummaryGeneratingListener();
+            SummaryGeneratingListener scriptSummary = new SummaryGeneratingListener();
+            StringWriter xmlLog = new StringWriter();
+            Thread scriptThread = new Thread(() -> {
+                try {
+                    launcher.execute(scriptPlan, scriptSummary, relay,
+                            new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
+                } finally {
+                    Dependencies.scriptsOver();
+                }
+            }, "stagewright-scripts");
+            scriptThread.setDaemon(true);
+            scriptThread.setContextClassLoader(loader);
+            scriptThread.start();
+            try {
+                launcher.execute(javaPlan, javaSummary, relay, Dependencies.ENDINGS,
+                        new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
+            } finally {
+                Dependencies.javaOver();
+                scriptThread.join();
+            }
+            relay.ended();
+            List<TestExecutionSummary> summaries = List.of(javaSummary.getSummary(), scriptSummary.getSummary());
+            writeSummary(reports.resolve("summary.json"), entries, summaries);
             StringWriter text = new StringWriter();
-            summary.getSummary().printTo(new PrintWriter(text));
-            summary.getSummary().printFailuresTo(new PrintWriter(text), 20);
+            for (TestExecutionSummary s : summaries) {
+                s.printTo(new PrintWriter(text));
+                s.printFailuresTo(new PrintWriter(text), 20);
+            }
             StageWrightCommon.LOG.info("[{}] JUnit run finished:\n{}", StageWrightCommon.MOD_ID, text);
         } catch (Throwable t) {
             StageWrightCommon.LOG.error("[{}] the JUnit run could not complete", StageWrightCommon.MOD_ID, t);
@@ -156,6 +172,22 @@ public final class JupiterRun {
         } finally {
             if (Boolean.getBoolean(EXIT)) server.execute(() -> StageWrightHarness.haltAfterResults(server));
         }
+    }
+
+    /** What one engine discovers from {@code selectors}, configured as every in-game run is. */
+    private static LauncherDiscoveryRequest request(List<? extends DiscoverySelector> selectors, String engine) {
+        return LauncherDiscoveryRequestBuilder.request()
+                .selectors(selectors)
+                .filters(EngineFilter.includeEngines(engine))
+                .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")
+                // Below a junit-platform.properties on the game's class path, or a -D, so either may change them.
+                .parentConfigurationParameters(new Defaults(Map.of(
+                        "junit.jupiter.testmethod.order.default", DependencyOrder.class.getName(),
+                        "junit.jupiter.testclass.order.default", DependencyOrder.class.getName(),
+                        "junit.jupiter.execution.parallel.enabled", "true",
+                        "junit.jupiter.execution.parallel.mode.default", "concurrent",
+                        "junit.jupiter.execution.parallel.mode.classes.default", "concurrent")))
+                .build();
     }
 
     private static List<String> split(String listed) {
@@ -185,23 +217,27 @@ public final class JupiterRun {
         return new ArrayList<>(names);
     }
 
-    private static void writeSummary(Path file, List<String> selected, TestExecutionSummary s) throws IOException {
+    private static void writeSummary(Path file, List<String> selected, List<TestExecutionSummary> summaries)
+            throws IOException {
         JsonObject o = new JsonObject();
         JsonArray listed = new JsonArray();
         selected.forEach(listed::add);
         o.add("selected", listed);
-        o.addProperty("found", s.getTestsFoundCount());
-        o.addProperty("succeeded", s.getTestsSucceededCount());
-        o.addProperty("failed", s.getTestsFailedCount());
-        o.addProperty("aborted", s.getTestsAbortedCount());
-        o.addProperty("skipped", s.getTestsSkippedCount());
-        o.addProperty("containersFailed", s.getContainersFailedCount());
+        o.addProperty("found", summaries.stream().mapToLong(TestExecutionSummary::getTestsFoundCount).sum());
+        o.addProperty("succeeded", summaries.stream().mapToLong(TestExecutionSummary::getTestsSucceededCount).sum());
+        o.addProperty("failed", summaries.stream().mapToLong(TestExecutionSummary::getTestsFailedCount).sum());
+        o.addProperty("aborted", summaries.stream().mapToLong(TestExecutionSummary::getTestsAbortedCount).sum());
+        o.addProperty("skipped", summaries.stream().mapToLong(TestExecutionSummary::getTestsSkippedCount).sum());
+        o.addProperty("containersFailed",
+                summaries.stream().mapToLong(TestExecutionSummary::getContainersFailedCount).sum());
         JsonArray failures = new JsonArray();
-        for (TestExecutionSummary.Failure f : s.getFailures()) {
-            JsonObject row = new JsonObject();
-            row.addProperty("test", f.getTestIdentifier().getUniqueId());
-            row.addProperty("message", String.valueOf(f.getException()));
-            failures.add(row);
+        for (TestExecutionSummary s : summaries) {
+            for (TestExecutionSummary.Failure f : s.getFailures()) {
+                JsonObject row = new JsonObject();
+                row.addProperty("test", f.getTestIdentifier().getUniqueId());
+                row.addProperty("message", String.valueOf(f.getException()));
+                failures.add(row);
+            }
         }
         o.add("failures", failures);
         Files.writeString(file, new GsonBuilder().setPrettyPrinting().create().toJson(o));

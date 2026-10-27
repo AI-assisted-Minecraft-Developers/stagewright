@@ -16,7 +16,6 @@ import java.util.concurrent.ForkJoinPool;
 
 import net.magicterra.stagewright.test.DependsOn;
 import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestWatcher;
 import org.junit.platform.engine.TestExecutionResult;
@@ -26,17 +25,31 @@ import org.junit.platform.launcher.TestIdentifier;
 import org.junit.platform.launcher.TestPlan;
 
 /**
- * {@link DependsOn}: which tests the run holds, how each one ended, and the check before a dependent test that its
- * dependencies all succeeded. The ordering half is {@link DependencyOrder}. Registered for every test through
- * extension auto-detection, like {@link GameExtension}.
+ * {@link DependsOn} and a script test's {@code dependsOn}: which tests the run holds, how each one ended, and the wait
+ * before a dependent test until its dependencies have ended, all of them having passed. Java and script tests run
+ * side by side, so either kind may wait for the other. The ordering half is {@link DependencyOrder}, and for script
+ * tests {@link ScriptScheduler}. Registered for every test through extension auto-detection, like
+ * {@link GameExtension}, which calls {@link #awaitUpstream} before the test takes its locks.
+ *
+ * <p>A test is named by a key: {@code com.example.SomeTest#method} for a Java test, {@code file.js#name} for a
+ * script's, the file being its class path resource.
  */
-public final class Dependencies implements BeforeEachCallback, TestWatcher {
+public final class Dependencies implements TestWatcher {
 
     /** A test method by class and name. */
     record Ref(String className, String method) {
         @Override
         public String toString() {
             return className.substring(className.lastIndexOf('.') + 1) + "#" + method;
+        }
+
+        String key() {
+            return className + "#" + method;
+        }
+
+        static Ref of(String key) {
+            int hash = key.indexOf('#');
+            return new Ref(key.substring(0, hash), key.substring(hash + 1));
         }
     }
 
@@ -49,8 +62,12 @@ public final class Dependencies implements BeforeEachCallback, TestWatcher {
     private static final Map<Ref, Outcome> OUTCOMES = new ConcurrentHashMap<>();
     /** Completed once a planned test has ended for good: every invocation of it, or the container it was in. */
     private static final Map<Ref, CompletableFuture<Void>> ENDED = new ConcurrentHashMap<>();
+    /** What every test of the run depends on, by key: Java tests' from {@link #prepare}, scripts' from {@link #scripts}. */
+    private static final Map<String, List<String>> EDGES = new ConcurrentHashMap<>();
+    /** How each script test of the run ended, completed as it ends. */
+    private static final Map<String, CompletableFuture<TestExecutionResult.Status>> SCRIPTS = new ConcurrentHashMap<>();
 
-    /** The dependencies {@code method}, a test of {@code testClass}, declares. */
+    /** The Java tests {@code method}, a test of {@code testClass}, depends on. */
     static List<Ref> upstream(Class<?> testClass, Method method) {
         DependsOn d = method.getAnnotation(DependsOn.class);
         if (d == null) return List.of();
@@ -60,56 +77,127 @@ public final class Dependencies implements BeforeEachCallback, TestWatcher {
         return refs;
     }
 
+    /** The script tests {@code method} depends on, by key. */
+    static List<String> scriptUpstream(Method method) {
+        DependsOn d = method.getAnnotation(DependsOn.class);
+        return d == null ? List.of() : List.of(d.scripts());
+    }
+
     /**
-     * Before the run: remember which tests it holds and answer every dependency cycle among them, each as the
-     * tests around it. A run with a cycle must not start.
+     * The Java tests {@code method} must come after: those it names, and those the script tests it names depend on,
+     * through any chain of script tests. What orders Java tests one after another has to see both, or a test could be
+     * put first that waits for a script test waiting for a test after it.
+     */
+    static List<Ref> javaUpstream(Class<?> testClass, Method method) {
+        List<Ref> refs = new ArrayList<>(upstream(testClass, method));
+        Set<String> seen = new HashSet<>();
+        List<String> pending = new ArrayList<>(scriptUpstream(method));
+        while (!pending.isEmpty()) {
+            String key = pending.remove(pending.size() - 1);
+            if (!seen.add(key)) continue;
+            if (isScript(key)) pending.addAll(EDGES.getOrDefault(key, List.of()));
+            else refs.add(Ref.of(key));
+        }
+        return refs;
+    }
+
+    /** Whether {@code key} names a script test rather than a Java one: its file is a script. */
+    static boolean isScript(String key) {
+        int hash = key.indexOf('#');
+        String file = hash < 0 ? key : key.substring(0, hash);
+        return file.endsWith(".js") || ScriptTestEngine.isYaml(file);
+    }
+
+    /**
+     * Before the run's Java tests are discovered: the script tests it holds and what each depends on, by key. The
+     * Java tests' order is decided at their discovery and depends on these.
+     */
+    static void scripts(Map<String, List<String>> edges) {
+        EDGES.keySet().removeIf(Dependencies::isScript);
+        SCRIPTS.clear();
+        edges.forEach((key, upstream) -> {
+            EDGES.put(key, List.copyOf(upstream));
+            SCRIPTS.put(key, new CompletableFuture<>());
+        });
+    }
+
+    /** What {@code key} depends on, of either kind; nothing for a test not in the run. */
+    static List<String> edges(String key) {
+        return EDGES.getOrDefault(key, List.of());
+    }
+
+    /**
+     * Before the run: remember which Java tests it holds and answer every dependency cycle among its tests with a Java
+     * test in it, each as the tests around it. A run with one must not start. A cycle of script tests alone fails
+     * only those tests, as {@link ScriptScheduler} finds.
      */
     static List<String> prepare(TestPlan plan) {
-        Map<Ref, List<Ref>> edges = new HashMap<>();
+        Map<Ref, List<String>> java = new HashMap<>();
         for (TestIdentifier root : plan.getRoots()) {
             for (TestIdentifier id : plan.getDescendants(root)) {
                 // A parameterized test is a container here, its invocations not yet discovered.
                 Ref ref = methodNode(plan, id);
                 if (ref == null) continue;
                 MethodSource source = (MethodSource) id.getSource().orElseThrow();
-                edges.put(ref, upstream(source.getJavaClass(), source.getJavaMethod()));
+                List<String> keys = new ArrayList<>();
+                for (Ref up : upstream(source.getJavaClass(), source.getJavaMethod())) keys.add(up.key());
+                keys.addAll(scriptUpstream(source.getJavaMethod()));
+                java.put(ref, keys);
             }
         }
-        planned = Set.copyOf(edges.keySet());
+        planned = Set.copyOf(java.keySet());
         currentPlan = plan;
         OUTCOMES.clear();
         ENDED.clear();
+        EDGES.keySet().removeIf(key -> !isScript(key));
+        java.forEach((ref, keys) -> EDGES.put(ref.key(), keys));
         for (Ref ref : planned) ENDED.put(ref, new CompletableFuture<>());
         List<String> cycles = new ArrayList<>();
-        Set<Ref> done = new HashSet<>();
-        for (Ref start : edges.keySet()) findCycle(start, edges, new LinkedHashSet<>(), done, cycles);
+        Set<String> done = new HashSet<>();
+        for (Ref start : java.keySet()) findCycle(start.key(), new LinkedHashSet<>(), done, cycles);
         return cycles;
     }
 
-    private static void findCycle(Ref at, Map<Ref, List<Ref>> edges, LinkedHashSet<Ref> path, Set<Ref> done,
-            List<String> cycles) {
+    private static void findCycle(String at, LinkedHashSet<String> path, Set<String> done, List<String> cycles) {
         if (done.contains(at)) return;
         if (path.contains(at)) {
-            List<Ref> loop = new ArrayList<>(path);
+            List<String> loop = new ArrayList<>(path);
             loop = loop.subList(loop.indexOf(at), loop.size());
-            cycles.add(String.join(" -> ", loop.stream().map(Ref::toString).toList()) + " -> " + at);
+            if (!loop.stream().allMatch(Dependencies::isScript)) {
+                cycles.add(String.join(" -> ", loop.stream().map(Dependencies::show).toList()) + " -> " + show(at));
+            }
             return;
         }
         path.add(at);
-        for (Ref next : edges.getOrDefault(at, List.of())) {
-            if (edges.containsKey(next)) findCycle(next, edges, path, done, cycles);
+        for (String next : edges(at)) {
+            if (EDGES.containsKey(next)) findCycle(next, path, done, cycles);
         }
         path.remove(at);
         done.add(at);
     }
 
+    private static String show(String key) {
+        return isScript(key) ? key : Ref.of(key).toString();
+    }
+
     /**
-     * How the Java test {@code className#method} ended, for a script test depending on it: null when it succeeded,
-     * else why the dependent cannot run. Java tests have all ended by then, since the script engine runs after Jupiter.
+     * How the Java test {@code className#method} ended, for a script test depending on it, once it has: null when it
+     * succeeded, else why the dependent cannot run.
      */
     static String blockerFor(String className, String method) {
         Ref ref = new Ref(className, method);
         if (!planned.contains(ref)) return "is not in this run";
+        CompletableFuture<Void> ended = ENDED.get(ref);
+        if (ended != null) {
+            try {
+                ended.get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return "had not ended when this test was interrupted";
+            } catch (ExecutionException e) {
+                // never completed exceptionally
+            }
+        }
         Outcome outcome = OUTCOMES.get(ref);
         if (outcome == null) return "ended without running: its class failed or was skipped first";
         return switch (outcome) {
@@ -120,16 +208,38 @@ public final class Dependencies implements BeforeEachCallback, TestWatcher {
         };
     }
 
-    @Override
-    public void beforeEach(ExtensionContext context) throws InterruptedException {
+    /** A script test has ended, {@code status} saying how. */
+    static void scriptEnded(String key, TestExecutionResult.Status status) {
+        CompletableFuture<TestExecutionResult.Status> ended = SCRIPTS.get(key);
+        if (ended != null) ended.complete(status);
+    }
+
+    /**
+     * The script tests are over: any that never ran ended so, which a Java test waiting for one is told. Without it a
+     * script engine that broke off would leave that test waiting for good.
+     */
+    static void scriptsOver() {
+        SCRIPTS.values().forEach(f -> f.complete(TestExecutionResult.Status.ABORTED));
+    }
+
+    /** The Java tests are over, as {@link #scriptsOver} is for scripts. */
+    static void javaOver() {
+        ENDED.values().forEach(f -> f.complete(null));
+    }
+
+    /**
+     * Before a Java test takes its locks: wait for the tests it depends on, and abort it unless each of them passed.
+     * A Java test it depends on that has not run yet is waited for only in a parallel run; one at a time, it can only
+     * be ordered after this one. A script test is always waited for, since the scripts run beside the Java tests.
+     */
+    static void awaitUpstream(ExtensionContext context) throws InterruptedException {
         boolean parallel = context.getConfigurationParameter(PARALLEL).map(Boolean::parseBoolean).orElse(false);
         for (Ref ref : upstream(context.getRequiredTestClass(), context.getRequiredTestMethod())) {
             if (!planned.contains(ref)) Assumptions.abort("depends on " + ref + ", which is not in this run");
-            if (parallel) awaitEnd(ref);
+            if (parallel) await(ENDED.get(ref));
             Outcome outcome = OUTCOMES.get(ref);
             if (outcome == null) {
                 if (!parallel) {
-                    // Tests run one at a time, so an unfinished dependency can only be ordered after this one.
                     Assumptions.abort("depends on " + ref + ", which has not run yet: a @TestMethodOrder or"
                             + " @TestClassOrder puts this test first");
                 }
@@ -141,6 +251,18 @@ public final class Dependencies implements BeforeEachCallback, TestWatcher {
                 case FAILED -> Assumptions.abort("depends on " + ref + ", which failed");
                 case ABORTED -> Assumptions.abort("depends on " + ref + ", which was aborted");
                 case DISABLED -> Assumptions.abort("depends on " + ref + ", which is disabled");
+            }
+        }
+        for (String key : scriptUpstream(context.getRequiredTestMethod())) {
+            CompletableFuture<TestExecutionResult.Status> ended = SCRIPTS.get(key);
+            if (ended == null) {
+                Assumptions.abort("depends on " + key + ", which is not in this run: not in this scene, or its file"
+                        + " did not load");
+            }
+            await(ended);
+            TestExecutionResult.Status status = ended.getNow(TestExecutionResult.Status.ABORTED);
+            if (status != TestExecutionResult.Status.SUCCESSFUL) {
+                Assumptions.abort("depends on " + key + ", which did not pass (" + status + ")");
             }
         }
     }
@@ -166,12 +288,12 @@ public final class Dependencies implements BeforeEachCallback, TestWatcher {
     }
 
     /**
-     * Block until {@code ref} has ended. The test worker is a fork-join thread, and a plain wait there would hold one
-     * of the pool's threads while the dependency may still be queued for one; a managed block lets the pool add a
-     * thread for as long as this one waits. No cycle can make this wait forever: a run with one never starts.
+     * Block until {@code ended} is done. On a test worker, a fork-join thread, a plain wait would hold one of the
+     * pool's threads while what it waits for may still be queued for one; a managed block lets the pool add a thread
+     * for as long as this one waits. Elsewhere it is a plain wait. No cycle can make this wait forever: a run with
+     * one never starts.
      */
-    private static void awaitEnd(Ref ref) throws InterruptedException {
-        CompletableFuture<Void> ended = ENDED.get(ref);
+    private static void await(CompletableFuture<?> ended) throws InterruptedException {
         if (ended == null || ended.isDone()) return;
         ForkJoinPool.managedBlock(new ForkJoinPool.ManagedBlocker() {
             @Override

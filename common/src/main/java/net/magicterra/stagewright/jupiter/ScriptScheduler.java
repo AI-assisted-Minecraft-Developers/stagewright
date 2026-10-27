@@ -7,28 +7,26 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.TestExecutionResult;
 
 /**
- * Runs a game's script tests: concurrently unless configured otherwise, as Jupiter runs its own. A test waits for
- * the script tests it depends on, then takes its {@code locks} (all of them shut out {@code isolated} tests, which
- * run alone), then runs.
+ * Runs a game's script tests: concurrently unless configured otherwise, as Jupiter runs its own, and beside the Java
+ * tests. A test waits for the tests it depends on, of either kind, then takes its {@code locks} in {@link RunLocks}
+ * (all of them shut out {@code isolated} tests, which run alone), then runs. Run one at a time, each test runs alone,
+ * Java tests included.
  *
- * <p>Tests are submitted in dependency order, upstream first, to a pool that takes them in that order. So a test
- * waiting for its upstream never waits for one still queued behind it, and the waits cannot use up the pool. A test
- * in a {@code dependsOn} cycle has its verdict before anything runs, so nothing waits for it either.
+ * <p>Tests are submitted in dependency order, upstream first, to a pool that takes them in that order; the order
+ * follows a dependency through Java tests too, since a Java test may wait for a script test in turn. So a test waiting
+ * for its upstream never waits for one still queued behind it, and the waits cannot use up the pool. A test in a
+ * {@code dependsOn} cycle of script tests has its verdict before anything runs, so nothing waits for it either; a
+ * cycle through a Java test refuses the whole run before this is asked.
  */
 final class ScriptScheduler {
 
@@ -40,15 +38,18 @@ final class ScriptScheduler {
 
     private final Map<String, CompletableFuture<TestExecutionResult.Status>> results = new HashMap<>();
     private final Map<ScriptTestEngine.Test, String> cycles = new HashMap<>();
-    private final ReentrantReadWriteLock isolation = new ReentrantReadWriteLock();
-    private final Map<String, ReentrantLock> named = new ConcurrentHashMap<>();
+    private final boolean parallel;
+
+    private ScriptScheduler(boolean parallel) {
+        this.parallel = parallel;
+    }
 
     /** Run {@code tests}, each reporting itself through {@code run}, and return when every one has ended. */
     static void run(List<ScriptTestEngine.Test> tests, ConfigurationParameters config, Runner run) {
-        ScriptScheduler scheduler = new ScriptScheduler();
-        List<ScriptTestEngine.Test> order = scheduler.plan(tests);
         boolean parallel = config.getBoolean(PARALLEL)
                 .orElseGet(() -> config.getBoolean("junit.jupiter.execution.parallel.enabled").orElse(false));
+        ScriptScheduler scheduler = new ScriptScheduler(parallel);
+        List<ScriptTestEngine.Test> order = scheduler.plan(tests);
         if (!parallel) {
             for (ScriptTestEngine.Test test : order) scheduler.runOne(test, run);
             return;
@@ -83,16 +84,18 @@ final class ScriptScheduler {
             status = run.run(test, this);
         } finally {
             results.get(test.key()).complete(status);
+            Dependencies.scriptEnded(test.key(), status);
         }
     }
 
-    /** Every test after the script tests it depends on; the tests of a cycle are failed here, before any runs. */
+    /** Every test after the tests it depends on; the tests of a cycle are failed here, before any runs. */
     private List<ScriptTestEngine.Test> plan(List<ScriptTestEngine.Test> tests) {
         Map<String, ScriptTestEngine.Test> byKey = new LinkedHashMap<>();
         for (ScriptTestEngine.Test test : tests) byKey.put(test.key(), test);
         List<ScriptTestEngine.Test> order = new ArrayList<>();
         Set<ScriptTestEngine.Test> visiting = new HashSet<>();
-        for (ScriptTestEngine.Test test : byKey.values()) visit(test, byKey, visiting, order);
+        Set<String> javaSeen = new HashSet<>();
+        for (ScriptTestEngine.Test test : byKey.values()) visit(test, byKey, visiting, javaSeen, order);
         for (ScriptTestEngine.Test test : order) {
             CompletableFuture<TestExecutionResult.Status> result = new CompletableFuture<>();
             if (cycles.containsKey(test)) result.complete(TestExecutionResult.Status.FAILED);
@@ -102,18 +105,26 @@ final class ScriptScheduler {
     }
 
     private void visit(ScriptTestEngine.Test test, Map<String, ScriptTestEngine.Test> byKey,
-                       Set<ScriptTestEngine.Test> visiting, List<ScriptTestEngine.Test> order) {
+                       Set<ScriptTestEngine.Test> visiting, Set<String> javaSeen, List<ScriptTestEngine.Test> order) {
         if (order.contains(test)) return;
         if (!visiting.add(test)) {
             cycles.put(test, "dependsOn cycle through '" + test.key() + "', so none of them can go first");
             return;
         }
-        for (String dependency : test.dependsOn()) {
-            ScriptTestEngine.Test upstream = byKey.get(dependency);
-            if (upstream != null) visit(upstream, byKey, visiting, order);
-        }
+        for (String dependency : test.dependsOn()) visitKey(dependency, byKey, visiting, javaSeen, order);
         visiting.remove(test);
         if (!order.contains(test)) order.add(test);
+    }
+
+    /** A script test is visited; a Java test is passed through to the script tests it depends on. */
+    private void visitKey(String key, Map<String, ScriptTestEngine.Test> byKey, Set<ScriptTestEngine.Test> visiting,
+                          Set<String> javaSeen, List<ScriptTestEngine.Test> order) {
+        ScriptTestEngine.Test upstream = byKey.get(key);
+        if (upstream != null) {
+            visit(upstream, byKey, visiting, javaSeen, order);
+        } else if (!Dependencies.isScript(key) && javaSeen.add(key)) {
+            for (String next : Dependencies.edges(key)) visitKey(next, byKey, visiting, javaSeen, order);
+        }
     }
 
     /**
@@ -151,14 +162,8 @@ final class ScriptScheduler {
         }
     }
 
-    /** Take {@code test}'s locks, in name order so two tests cannot each hold what the other waits for. */
+    /** Take {@code test}'s locks; all of them, alone, when it is isolated or the script tests run one at a time. */
     AutoCloseable hold(Set<String> locks, boolean isolated) {
-        List<Lock> held = new ArrayList<>();
-        held.add(isolated ? isolation.writeLock() : isolation.readLock());
-        for (String lock : new TreeSet<>(locks)) held.add(named.computeIfAbsent(lock, k -> new ReentrantLock()));
-        for (Lock lock : held) lock.lock();
-        return () -> {
-            for (int i = held.size() - 1; i >= 0; i--) held.get(i).unlock();
-        };
+        return RunLocks.hold(RunLocks.exclusive(locks), isolated || !parallel);
     }
 }

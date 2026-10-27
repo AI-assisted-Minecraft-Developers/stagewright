@@ -33,8 +33,8 @@ import org.junit.platform.engine.support.descriptor.EngineDescriptor;
  * Each test runs later with the context {@link ScriptContext} builds. A file that fails to load is reported as a
  * failed container rather than dropped, so a typo cannot make its tests disappear.
  *
- * <p>JavaScript files load before YAML ones, since a YAML step may be a script's. The tests run after every Java test
- * of the game has ended, concurrently as {@link ScriptScheduler} arranges. The test engine outside the game discovers
+ * <p>JavaScript files load before YAML ones, since a YAML step may be a script's. The tests run beside the game's Java
+ * tests, concurrently as {@link ScriptScheduler} arranges. The test engine outside the game discovers
  * the same files without the game (docs/design/test-engine.md), so what a file registers must not depend on the game.
  */
 public final class ScriptTestEngine implements TestEngine {
@@ -46,6 +46,8 @@ public final class ScriptTestEngine implements TestEngine {
 
     /** The options {@code test()} understands. The scene is read by the test engine outside the game, not here. */
     private static final Set<String> OPTIONS = Set.of("scene", "requires", "dependsOn", "knownIssue", "locks", "isolated");
+
+    private volatile TestDescriptor discovered;
 
     @Override
     public String getId() {
@@ -72,7 +74,23 @@ public final class ScriptTestEngine implements TestEngine {
             String resource = selector.getClasspathResourceName();
             if (isYaml(resource)) engine.addChild(File.load(engine, resource, steps, javaStepsError));
         }
+        discovered = engine;
         return engine;
+    }
+
+    /**
+     * The tests the last discovery found that will run, each with the keys of the tests it depends on: those of a file
+     * that failed to load do not.
+     */
+    Map<String, List<String>> discoveredTests() {
+        Map<String, List<String>> tests = new LinkedHashMap<>();
+        if (discovered == null) return tests;
+        for (TestDescriptor child : discovered.getChildren()) {
+            File file = (File) child;
+            if (file.loadError != null) continue;
+            for (TestDescriptor t : file.getChildren()) tests.put(((Test) t).key(), ((Test) t).dependsOn());
+        }
+        return tests;
     }
 
     @Override
@@ -265,7 +283,7 @@ public final class ScriptTestEngine implements TestEngine {
 
     /**
      * {@code dependsOn}: test names, a bare one in the same file, {@code file.js#name} in another, and
-     * {@code com.example.SomeTest#method} a Java test, which has ended by then since Jupiter runs first.
+     * {@code com.example.SomeTest#method} a Java test, waited for as a script test is.
      */
     private static List<String> dependencies(String resource, String test, Object value) {
         List<Object> items = value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
@@ -295,12 +313,6 @@ public final class ScriptTestEngine implements TestEngine {
             locks.add(TestScope.LOCK_PREFIX + s);
         }
         return locks;
-    }
-
-    /** Whether a {@code dependsOn} key names a Java test rather than a script's: its file is no script. */
-    private static boolean isJavaTest(String key) {
-        String file = key.substring(0, key.indexOf('#'));
-        return !file.endsWith(".js") && !isYaml(file);
     }
 
     /** One test a script registered. */
@@ -369,7 +381,7 @@ public final class ScriptTestEngine implements TestEngine {
         private TestExecutionResult upstream(ScriptScheduler scheduler) {
             for (String dependency : dependsOn) {
                 String why = null;
-                if (isJavaTest(dependency)) {
+                if (!Dependencies.isScript(dependency)) {
                     int hash = dependency.indexOf('#');
                     why = Dependencies.blockerFor(dependency.substring(0, hash), dependency.substring(hash + 1));
                 } else if (!scheduler.has(dependency)) {

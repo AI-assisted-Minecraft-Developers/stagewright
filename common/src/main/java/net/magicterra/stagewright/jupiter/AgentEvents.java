@@ -95,8 +95,8 @@ final class AgentEvents implements TestExecutionListener {
         send(o);
     }
 
-    @Override
-    public void testPlanExecutionFinished(TestPlan testPlan) {
+    /** Every plan of the run has finished: the Java tests' and the script tests', each announced as it started. */
+    void ended() {
         send(event("ended"));
     }
 
