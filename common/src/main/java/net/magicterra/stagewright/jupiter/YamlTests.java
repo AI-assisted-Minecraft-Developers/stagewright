@@ -26,7 +26,8 @@ final class YamlTests {
     private static final Set<String> TEST_KEYS =
             Set.of("name", "scene", "requires", "dependsOn", "knownIssue", "plot", "given", "when", "then", "steps");
     /** The keys a step may carry beside the one that says what it does. */
-    private static final Set<String> MODIFIERS = Set.of("params", "expect", "save", "within", "ticks", "as");
+    private static final Set<String> MODIFIERS =
+            Set.of("params", "expect", "knownIssues", "save", "within", "ticks", "as");
     private static final Pattern REFERENCE = Pattern.compile("\\$\\{([A-Za-z_][\\w.]*)}");
 
     private YamlTests() {}
@@ -110,7 +111,13 @@ final class YamlTests {
             String verb = verb(step, "");
             try {
                 Object result = step(context, verb, step, saved);
+                KnownIssues known = step.containsKey("knownIssues") ? new KnownIssues(step.get("knownIssues")) : null;
+                if (known != null) result = known.subtract(result);
                 if (step.containsKey("expect")) Expectations.expect(result, substitute(step.get("expect"), saved));
+                if (known != null) {
+                    known.checkAllSeen();
+                    context.record("step " + (i + 1) + " known issues", known.count());
+                }
                 if (step.get("save") instanceof String name) saved.put(name, result);
                 // A handle a built-in step named is readable as ${name} too.
                 saved.putAll(context.handles());
