@@ -1,6 +1,10 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -9,13 +13,16 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.gson.Gson;
+import net.magicterra.stagewright.test.Game;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 /**
  * Tests written in YAML: a file of {@code tests}, each a list of steps run in order. A step is a WorldDriver call
- * ({@code call: method} with {@code params}), a wait ({@code wait}, {@code waitUntil}, {@code settle}), or a named
+ * ({@code call: method} with {@code params}), a wait ({@code wait}, {@code waitUntil}, {@code settle}), a Java method
+ * ({@code java: {class, method}}), a measurement ({@code perf}), or a named
  * step a script registered ({@code name: args}); any of them may carry {@code expect}, checked by
  * {@link Expectations#expect}, and {@code save: name}, which a later step reads as {@code ${name}} or
  * {@code ${name.field}}. There is no expression language: a step that needs one is a named step written in JavaScript.
@@ -28,7 +35,8 @@ final class YamlTests {
     /** The keys a step may carry beside the one that says what it does. */
     private static final Set<String> MODIFIERS =
             Set.of("params", "expect", "knownIssues", "save", "within", "ticks", "as");
-    private static final Pattern REFERENCE = Pattern.compile("\\$\\{([A-Za-z_][\\w.]*)}");
+    private static final Gson GSON = new Gson();
+    private static final Pattern REFERENCE =Pattern.compile("\\$\\{([A-Za-z_][\\w.]*)}");
 
     private YamlTests() {}
 
@@ -177,6 +185,7 @@ final class YamlTests {
             }
             // Its phases' steps are read raw: a ${name} in them means the value when the phase runs.
             case "perf" -> perf(context, step.get(verb), saved);
+            case "java" -> java(context, value, substitute(step.get("params"), saved));
             case "waitUntil", "settle" -> {
                 int run = verb.equals("settle")
                         ? (options.containsKey("ticks") ? ScriptContext.ticks(options.get("ticks"), "ticks") : 20) : 1;
@@ -187,12 +196,65 @@ final class YamlTests {
             }
             default -> {
                 if (!context.hasStep(verb)) {
-                    throw new IllegalArgumentException("'" + verb + "' is neither call, wait, waitUntil, settle, perf, a"
+                    throw new IllegalArgumentException("'" + verb + "' is neither call, wait, waitUntil, settle, perf, java, a"
                             + " built-in step " + BuiltinSteps.NAMES + " nor one a script registered");
                 }
                 yield context.step(verb, value);
             }
         };
+    }
+
+    /**
+     * {@code java: {class, method}} with {@code params}: a public static method of the game's class path, given what
+     * its parameters ask for by type ({@link Game}, the params as a {@code Map}), on the test thread. What it returns
+     * is the step's result; anything but plain values (map, list, string, number, boolean) is read as JSON would be.
+     */
+    private static Object java(ScriptContext context, Object value, Object params) {
+        if (!(value instanceof Map<?, ?> target) || !(target.get("class") instanceof String className)
+                || !(target.get("method") instanceof String methodName) || target.size() != 2) {
+            throw new IllegalArgumentException("java: {class, method}");
+        }
+        Class<?> type;
+        try {
+            type = Class.forName(className, true, Thread.currentThread().getContextClassLoader());
+        } catch (ClassNotFoundException e) {
+            throw new IllegalArgumentException("java: no class " + className + " on the game's class path", e);
+        }
+        List<Method> named = Arrays.stream(type.getMethods())
+                .filter(m -> m.getName().equals(methodName) && Modifier.isStatic(m.getModifiers())).toList();
+        if (named.size() != 1) {
+            throw new IllegalArgumentException("java: " + className + " has " + named.size() + " public static methods"
+                    + " named " + methodName + "; it needs exactly one");
+        }
+        Method method = named.get(0);
+        Object[] args = new Object[method.getParameterCount()];
+        for (int i = 0; i < args.length; i++) {
+            Class<?> p = method.getParameterTypes()[i];
+            if (p == Game.class) args[i] = context.game();
+            else if (p == Map.class) args[i] = params == null ? Map.of() : params;
+            else throw new IllegalArgumentException("java: " + method + " takes a " + p.getName()
+                    + "; a step's method takes only Game and Map (its params)");
+        }
+        Object result;
+        try {
+            result = method.invoke(null, args);
+        } catch (InvocationTargetException e) {
+            if (e.getCause() instanceof RuntimeException r) throw r;
+            if (e.getCause() instanceof Error r) throw r;
+            throw new IllegalStateException(e.getCause());
+        } catch (IllegalAccessException e) {
+            throw new IllegalArgumentException("java: " + method + " is not accessible", e);
+        }
+        return plain(result) ? result : GSON.fromJson(GSON.toJsonTree(result), Object.class);
+    }
+
+    private static boolean plain(Object value) {
+        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean) return true;
+        if (value instanceof List<?> list) return list.stream().allMatch(YamlTests::plain);
+        if (value instanceof Map<?, ?> map) {
+            return map.keySet().stream().allMatch(String.class::isInstance) && map.values().stream().allMatch(YamlTests::plain);
+        }
+        return false;
     }
 
     /** A {@code waitUntil}/{@code settle} condition: {@code {call, params, expect}}, its call made once per check. */

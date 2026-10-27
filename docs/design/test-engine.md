@@ -62,7 +62,9 @@ their condition on the test thread once a tick, since a condition usually calls 
 A test written in YAML sits beside them, in a file with a `tests` list and an optional `scene` for all of them; a
 test takes the same options, plus `plot: {size}`, and `given`/`when`/`then` or `steps`. A step is `call: method`
 with `params`, `wait`, `waitUntil`/`settle` (a `{call, params, expect}` condition, with `within` and `ticks`), or a
-step a script registered, `name: args`; JavaScript files load first so their steps are there. Any step may carry
+step a script registered, `name: args`; JavaScript files load first so their steps are there. `java: {class, method}`
+with `params` calls a public static method on the game's class path, given `Game` and the params as a `Map` by its
+parameter types; what it returns is the step's result, read as JSON when it is not plain values. Any step may carry
 `expect`, whose keys are operators (`equals`, `contains`, `empty`, `gt`, `lt`, `atLeast`, `atMost`, `anyOf`,
 `allOf`) or field paths (`audit.count: {gt: 0}`), and `save: name`, read later as `${name}` or `${name.field}`;
 the leased plot is `${plot}`. There is no expression language. A step's `knownIssues`, a list of
@@ -129,6 +131,6 @@ command-line runner writes the same file from a game directory. The engine knows
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
 - Scenes run one after another, and a game's script tests one after another.
 - A script test cannot yet depend on a Java test, nor a Java test on a script test.
-- YAML has no `java:` step; `perf` reports no CPU load or client frame rate yet; `insert` and `container` reach only
+- `perf` reports no CPU load or client frame rate yet; `insert` and `container` reach only
   containers that are vanilla `Container`s, in the overworld.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.
