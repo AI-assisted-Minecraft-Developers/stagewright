@@ -88,6 +88,7 @@ public final class JupiterRun {
     /** Server thread, as the server stops. */
     public static void stop() {
         ServerTicks.stop();
+        ClientConnection.close();
     }
 
     private static void run(MinecraftServer server, String listed, ClassLoader loader) {

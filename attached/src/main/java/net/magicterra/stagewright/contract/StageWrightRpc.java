@@ -98,6 +98,14 @@ public final class StageWrightRpc implements AutoCloseable {
      * unanswered as {@link StageWrightTimeoutException}.
      */
     public JsonObject call(String method, JsonObject params, long timeoutMs) {
+        return resultOf(method, envelope(method, params, timeoutMs));
+    }
+
+    /**
+     * {@link #call}, answering the reply envelope as it came, {@code error} or {@code result}, for a caller that
+     * rebuilds the error itself. Throws as {@link #call} does for everything but a refusal.
+     */
+    public JsonObject envelope(String method, JsonObject params, long timeoutMs) {
         long id = ids.incrementAndGet();
         CompletableFuture<JsonObject> fut = new CompletableFuture<>();
         pending.put(id, fut);
@@ -114,8 +122,7 @@ public final class StageWrightRpc implements AutoCloseable {
             // otherwise leave it waiting for an answer from a socket that has gone.
             Throwable gone = reader.closedBy();
             if (gone != null) fut.completeExceptionally(gone);
-            JsonObject envelope = fut.get(timeoutMs, TimeUnit.MILLISECONDS);
-            return resultOf(method, envelope);
+            return fut.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             // Not sent in all that time: the server has stopped reading the socket, and every call after
             // this one would queue behind it and wait out its own timeout without reaching the server.

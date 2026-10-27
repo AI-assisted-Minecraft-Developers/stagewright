@@ -51,6 +51,7 @@ that a `-D` here overrides the run's and the JVM rather than a launcher reads it
 | `-Dstagewright.junit.classes=<classes>` | the scene's test classes, comma-separated: the game runs these and only these. A game with this property set does not start the scene suite, whatever the run's `stagewright.autorun` says — a loader may set its run's properties after the JVM has read the command line, so overriding that one here would not hold |
 | `-Dstagewright.junit.exitWhenDone=true` | the game ends itself once its run is over |
 | `-Dstagewright.scene.world=<json>` | the part of the scene's world set once it has loaded ([scene file](scene-file.md)) |
+| `-Dstagewright.companion.dir=<dir>` | only with a companion: its working directory, where its WorldDriver writes `worlddriver-rpc.port`, so a test's `Client` can reach it |
 
 Before starting the primary, the engine also writes the scene's creation settings into `server.properties` in its
 working directory, and puts the file back afterwards.

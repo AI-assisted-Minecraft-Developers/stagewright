@@ -95,12 +95,16 @@ final class SceneRun {
         Process companion = null;
         try (Supervisor supervisor = Supervisor.open()) {
             supervisor.onTest(relay);
-            List<String> extra = List.of(
+            List<String> extra = new ArrayList<>(List.of(
                     supervisor.agentArgument(agentJar, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS),
                     // Also what keeps the topology's own scene suite from starting: the game runs these only.
                     "-Dstagewright.junit.classes=" + String.join(",", classes),
                     "-Dstagewright.junit.exitWhenDone=true",
-                    "-Dstagewright.scene.world=" + world.runtimeJson());
+                    "-Dstagewright.scene.world=" + world.runtimeJson()));
+            // Where the companion client writes its WorldDriver port, for the tests' Client.
+            if (spec.companion() != null) {
+                extra.add("-Dstagewright.companion.dir=" + spec.companion().workingDirectory().toAbsolutePath());
+            }
             Process game = start(spec.primary(), extra, gameLog);
             if (spec.companion() != null) {
                 companion = start(spec.companion(), List.of(), logs.resolve(scene.name + "-companion.log").toFile());
