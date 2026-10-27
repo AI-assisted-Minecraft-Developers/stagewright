@@ -2,6 +2,7 @@ package net.magicterra.stagewright.gradle;
 
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.codehaus.groovy.runtime.InvokerHelper;
 import org.gradle.api.Action;
@@ -28,13 +29,17 @@ import org.gradle.api.tasks.SourceSet;
  * <p>Loom remaps mod dependencies when its project is evaluated, before this plugin's own hooks there, so
  * {@value #RUNTIME} is added to every loom project as loom is applied, empty unless that project is a suite's loader,
  * and its defaults are filled in as loom resolves it, by which time the suites are configured. Its source set is the
- * run source set, so {@code runClient}, which starts from {@code main}, goes without both mods.
+ * run source set, so {@code runClient}, which starts from {@code main}, goes without both mods. Under ModDevGradle the
+ * mods are plain jars in {@value #MOD_DEV_RUNTIME}, under the run source set's runtime classpath.
  */
 final class SuiteDependencies {
 
     static final String RUNTIME = "modStagewrightTestRuntime";
+    /** {@value #RUNTIME}'s counterpart under ModDevGradle, which needs no remapping: NeoForge runs in Mojang names. */
+    static final String MOD_DEV_RUNTIME = "stagewrightTestRuntime";
     static final String COMPILE = "stagewrightTestCompile";
     private static final String[] LOOM_PLUGINS = {"dev.architectury.loom", "fabric-loom", "net.fabricmc.fabric-loom"};
+    private static final String MOD_DEV_PLUGIN = "net.neoforged.moddev";
     // The loader and its api, which the project brings itself: a second Fabric Loader stops the game at once.
     private static final String[] PROJECT_GROUPS = {"net.fabricmc", "net.fabricmc.fabric-api", "net.neoforged"};
 
@@ -48,11 +53,22 @@ final class SuiteDependencies {
                     compileConfiguration(p, tests);
                 });
             }
+            p.getPluginManager().withPlugin(MOD_DEV_PLUGIN, applied -> {
+                modDevRuntime(p, tests);
+                compileConfiguration(p, tests);
+            });
         });
     }
 
-    /** Puts {@value #COMPILE} under the run source set, compile-only: at run time both apis are inside the mods. */
-    static void compileAgainst(Project loader, StageWrightTestSuite suite, SourceSet source) {
+    /**
+     * Puts the plugin's configurations under the run source set: {@value #COMPILE} compile-only, since at run time
+     * both apis are inside the mods, and under ModDevGradle {@value #MOD_DEV_RUNTIME} runtime-only.
+     */
+    static void attach(Project loader, StageWrightTestSuite suite, SourceSet source) {
+        Configuration runtime = loader.getConfigurations().findByName(MOD_DEV_RUNTIME);
+        if (runtime != null) {
+            loader.getConfigurations().getByName(source.getRuntimeOnlyConfigurationName()).extendsFrom(runtime);
+        }
         if (!suite.getTestDependencies().getOrElse(true)) return;
         Configuration compile = loader.getConfigurations().findByName(COMPILE);
         if (compile == null) return;
@@ -81,20 +97,48 @@ final class SuiteDependencies {
             c.setDescription("The mods StageWright's generated runs get: StageWright's and WorldDriver's by default.");
             // Transitive, unlike loom's own, so WorldDriver brings the Architectury it is built against.
             c.setTransitive(true);
+            // On the configuration too, for what a build declares there: loom resolves it alone, so nothing inherits it.
             for (String group : PROJECT_GROUPS) c.exclude(Map.of("group", group));
-            c.defaultDependencies(deps -> {
-                StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
-                if (suite == null) return;
-                String loader = loaderName(loom, project, suite);
-                add(project, deps, "net.magicterra:mc_stagewright-" + loader + ":" + PluginVersion.get(), null);
-                if (suite.getIncludeWorldDriver().getOrElse(true)) {
-                    add(project, deps, "net.magicterra:worlddriver-" + loader + ":"
-                            + suite.getWorldDriverVersion().get(), null);
-                }
-            });
+            runtimeDefaults(project, c, tests, suite -> loaderName(loom, project, suite));
             c.getResolutionStrategy().eachDependency(details -> alignToProject(project, details));
         });
         constrainWorldDriver(project, RUNTIME, "worlddriver-fabric", "worlddriver-neoforge");
+    }
+
+    /**
+     * Under ModDevGradle, a plain configuration the run source set's runtime classpath extends: the mods are on the
+     * same classpath as the project's own, so Gradle settles a shared Architectury there without help.
+     */
+    private static void modDevRuntime(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
+        if (project.getConfigurations().findByName(MOD_DEV_RUNTIME) != null) return;
+        project.getConfigurations().create(MOD_DEV_RUNTIME, c -> {
+            c.setDescription("The mods StageWright's generated runs get: StageWright's and WorldDriver's by default.");
+            c.setCanBeConsumed(false);
+            c.setCanBeResolved(false);
+            runtimeDefaults(project, c, tests, suite -> "neoforge");
+        });
+        constrainWorldDriver(project, MOD_DEV_RUNTIME, "worlddriver-neoforge");
+    }
+
+    /**
+     * StageWright's loader mod and WorldDriver's, and what WorldDriver brings except the loader's own groups. Excluded
+     * on each dependency, not on the configuration: a configuration's exclusions pass to every configuration extending
+     * it, and under ModDevGradle that is the run's classpath, which then loses NeoForge's DevLaunch.
+     */
+    private static void runtimeDefaults(Project project, Configuration c,
+                                        NamedDomainObjectContainer<StageWrightTestSuite> tests,
+                                        Function<StageWrightTestSuite, String> loaderOf) {
+        c.defaultDependencies(deps -> {
+            StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
+            if (suite == null) return;
+            String loader = loaderOf.apply(suite);
+            add(project, deps, "net.magicterra:mc_stagewright-" + loader + ":" + PluginVersion.get(), null);
+            if (suite.getIncludeWorldDriver().getOrElse(true)) {
+                ExternalModuleDependency worldDriver = add(project, deps, "net.magicterra:worlddriver-" + loader + ":"
+                        + suite.getWorldDriverVersion().get(), null);
+                for (String group : PROJECT_GROUPS) worldDriver.exclude(Map.of("group", group));
+            }
+        });
     }
 
     private static void compileConfiguration(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
@@ -152,13 +196,15 @@ final class SuiteDependencies {
         }
     }
 
-    private static void add(Project project, DependencySet deps, String coordinates, String classifier) {
+    private static ExternalModuleDependency add(Project project, DependencySet deps, String coordinates,
+                                                String classifier) {
         ExternalModuleDependency dependency = (ExternalModuleDependency) project.getDependencies()
                 .create(classifier == null ? coordinates : coordinates + ":" + classifier);
         // A build published to mavenLocal keeps its version while its contents move, and loom keys its remapped
         // copy on the coordinates: without this a republished StageWright never reaches the run.
         dependency.setChanging(true);
         deps.add(dependency);
+        return dependency;
     }
 
     /** {@code fabric} or {@code neoforge}: the loader jar to take. */

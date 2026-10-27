@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-27
 
+### A test suite runs under ModDevGradle with one line too · green on a fresh one-mod ModDevGradle project, Java and YAML tests on both topologies
+
+`stagewright { tests { neoforge { } } }` on a ModDevGradle project now declares the suite's runs in
+`neoForge.runs` and brings StageWright and WorldDriver as plain jars, as it already did under loom. The
+`testmod` source set joins the project's mod, since NeoForge loads classes only from mods, so unlike under
+loom the tests are in `runClient` as well.
+
 ### Builds are `0.1.0-alpha.<n>`, a local one `0.1.0-snapshot` · green in unit tests, and on both loaders against a local WorldDriver pair
 
 Every artifact used to be `0.1.0-build.<n>+1.21.1`, and a local build `0.1.0-build.local+1.21.1`. Gradle,

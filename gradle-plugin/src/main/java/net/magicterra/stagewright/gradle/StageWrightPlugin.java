@@ -114,7 +114,9 @@ public class StageWrightPlugin implements Plugin<Project> {
             suite.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
             // A single-loader project is its own loader; null leaves it unset elsewhere.
             suite.getLoaderProject().convention(project.provider(() ->
-                    project.getExtensions().findByName("loom") != null ? project.getPath() : null));
+                    project.getExtensions().findByName("loom") != null
+                            || project.getExtensions().findByName(GeneratedRuns.MOD_DEV) != null
+                            ? project.getPath() : null));
             suite.getIncludeWorldDriver().convention(true);
             suite.getWorldDriverVersion().convention(PluginVersion.worldDriver());
             suite.getTestDependencies().convention(true);

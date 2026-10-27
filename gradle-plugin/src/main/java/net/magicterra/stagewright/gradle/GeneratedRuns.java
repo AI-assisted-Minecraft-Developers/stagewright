@@ -9,20 +9,25 @@ import org.codehaus.groovy.runtime.InvokerHelper;
 import org.gradle.api.GradleException;
 import org.gradle.api.NamedDomainObjectContainer;
 import org.gradle.api.Project;
+import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 
 /**
  * The runs a test suite with a {@link StageWrightTestSuite#getLoaderProject() loader project} gets: declared in that
- * project's loom, so loom builds each launch as it builds {@code runServer}'s, and read back as {@link SuiteLaunch}es.
+ * project's loom or ModDevGradle, so the loader plugin builds each launch as it builds {@code runServer}'s, and read
+ * back as {@link SuiteLaunch}es.
  *
- * <p>Loom is reached by name, as a build script reaches it, so this plugin links against no loom version. A run is
- * declared once its project is evaluated, when the source set it starts from exists; loom registers the run task as
- * the run is added.
+ * <p>Both are reached by name, as a build script reaches them, so this plugin links against no version of either. A
+ * run is declared once its project is evaluated, when the source set it starts from exists; both register the run
+ * task as the run is added, and both name it {@code run} and the run's name.
  */
 final class GeneratedRuns {
 
+    /** ModDevGradle's extension, absent under loom. */
+    static final String MOD_DEV = "neoForge";
     static final String DEDICATED_SERVER = "dedicatedServer";
     static final String DEDICATED_SERVER_WITH_CLIENT = "dedicatedServerWithClient";
     static final int DEFAULT_SERVER_PORT = 25621;
@@ -38,7 +43,10 @@ final class GeneratedRuns {
     /** Declare the suite's runs in its loader project, once that project is evaluated. */
     static void declare(Project plugin, StageWrightTestSuite suite) {
         Project loader = loader(plugin, suite);
-        if (loader.getState().getExecuted()) declareNow(loader, suite);
+        // The plugin's own project is in its afterEvaluate already, and another one nested there would be one level
+        // too deep: ModDevGradle wires DevLaunch onto a run's classpath from an afterEvaluate of its own, which
+        // Gradle then drops without a word, and the game dies on ClassNotFoundException: net.neoforged.devlaunch.Main.
+        if (loader == plugin || loader.getState().getExecuted()) declareNow(loader, suite);
         else loader.afterEvaluate(p -> declareNow(p, suite));
     }
 
@@ -69,47 +77,89 @@ final class GeneratedRuns {
 
     private static void declareNow(Project loader, StageWrightTestSuite suite) {
         Object loom = loader.getExtensions().findByName("loom");
-        if (loom == null) {
+        Object modDev = loom == null ? loader.getExtensions().findByName(MOD_DEV) : null;
+        if (loom == null && modDev == null) {
             throw new GradleException("stagewright test suite '" + suite.getName() + "' names loaderProject '"
-                    + loader.getPath() + "', which does not apply loom (Fabric Loom or Architectury Loom). Under"
-                    + " another loader plugin, declare the runs there and map them with topologies instead");
+                    + loader.getPath() + "', which applies neither loom (Fabric Loom or Architectury Loom) nor"
+                    + " ModDevGradle. Under another loader plugin, declare the runs there and map them with"
+                    + " topologies instead");
         }
         @SuppressWarnings("unchecked")
-        NamedDomainObjectContainer<Object> runs =
-                (NamedDomainObjectContainer<Object>) InvokerHelper.invokeMethod(loom, "getRuns", null);
+        NamedDomainObjectContainer<Object> runs = (NamedDomainObjectContainer<Object>) InvokerHelper.invokeMethod(
+                loom != null ? loom : modDev, "getRuns", null);
         SourceSet source = sourceSet(loader, suite);
-        SuiteDependencies.compileAgainst(loader, suite, source);
+        SuiteDependencies.attach(loader, suite, source);
+        if (modDev != null) joinMod(loader, modDev, suite, source);
         int port = suite.getServerPort().getOrElse(DEFAULT_SERVER_PORT);
         List<String> serverArgs = List.of("--port", String.valueOf(port));
 
-        declare(runs, runName(suite, "DedicatedServer"), "server", runDir(suite, "dedicated-server"), serverArgs,
-                Map.of(), suite, source);
+        declare(loader, runs, runName(suite, "DedicatedServer"), "server", runDir(suite, "dedicated-server"),
+                serverArgs, Map.of(), suite, source);
         // Holds its tests back until the client below has joined.
-        declare(runs, runName(suite, "DedicatedServerWithClient"), "server", runDir(suite, "with-client"), serverArgs,
-                Map.of("stagewright.awaitPlayer", "true"), suite, source);
+        declare(loader, runs, runName(suite, "DedicatedServerWithClient"), "server", runDir(suite, "with-client"),
+                serverArgs, Map.of("stagewright.awaitPlayer", "true"), suite, source);
         // The tests' own content, blocks and items included, is on it too, or the server refuses it at registry sync.
-        declare(runs, runName(suite, "JoiningClient"), "client", runDir(suite, "joining-client"), List.of(),
+        declare(loader, runs, runName(suite, "JoiningClient"), "client", runDir(suite, "joining-client"), List.of(),
                 Map.of("stagewright.client.connect", "127.0.0.1:" + port), suite, source);
     }
 
-    private static void declare(NamedDomainObjectContainer<Object> runs, String name, String side, String runDir,
-                                List<String> programArgs, Map<String, String> properties, StageWrightTestSuite suite,
-                                SourceSet source) {
+    private static void declare(Project loader, NamedDomainObjectContainer<Object> runs, String name, String side,
+                                String runDir, List<String> programArgs, Map<String, String> properties,
+                                StageWrightTestSuite suite, SourceSet source) {
         if (runs.findByName(name) != null) {
             throw new GradleException("stagewright test suite '" + suite.getName() + "' would declare the run '" + name
                     + "', which the build already declares");
         }
+        boolean loom = loader.getExtensions().findByName("loom") != null;
         runs.create(name, run -> {
             InvokerHelper.invokeMethod(run, side, null);
-            InvokerHelper.invokeMethod(run, "runDir", runDir);
-            InvokerHelper.invokeMethod(run, "ideConfigGenerated", false);
-            InvokerHelper.invokeMethod(run, "source", source);
-            for (String arg : programArgs) InvokerHelper.invokeMethod(run, "programArg", arg);
-            for (String arg : suite.getJvmArgs().get()) InvokerHelper.invokeMethod(run, "vmArg", arg);
-            suite.getSystemProperties().get().forEach((k, v) -> InvokerHelper.invokeMethod(run, "property",
+            if (loom) {
+                InvokerHelper.invokeMethod(run, "runDir", runDir);
+                InvokerHelper.invokeMethod(run, "ideConfigGenerated", false);
+                InvokerHelper.invokeMethod(run, "source", source);
+            } else {
+                directoryProperty(run, "getGameDirectory").set(loader.file(runDir));
+                InvokerHelper.invokeMethod(run, "disableIdeRun", null);
+                property(run, "getSourceSet").set(source);
+            }
+            String programArg = loom ? "programArg" : "programArgument";
+            String jvmArg = loom ? "vmArg" : "jvmArgument";
+            String systemProperty = loom ? "property" : "systemProperty";
+            for (String arg : programArgs) InvokerHelper.invokeMethod(run, programArg, arg);
+            for (String arg : suite.getJvmArgs().get()) InvokerHelper.invokeMethod(run, jvmArg, arg);
+            suite.getSystemProperties().get().forEach((k, v) -> InvokerHelper.invokeMethod(run, systemProperty,
                     new Object[] {k, v}));
-            properties.forEach((k, v) -> InvokerHelper.invokeMethod(run, "property", new Object[] {k, v}));
+            properties.forEach((k, v) -> InvokerHelper.invokeMethod(run, systemProperty, new Object[] {k, v}));
         });
+    }
+
+    /**
+     * Under ModDevGradle, puts the conventional run source set into the project's mod: NeoForge loads classes from the
+     * mods it is given, and a source set in none is not given to it. So the tests are in every run of the project,
+     * {@code runClient} too. A run source set the build names itself is the build's to put in a mod: a mod's source
+     * sets are fixed once read, so the plugin cannot look before it adds.
+     */
+    private static void joinMod(Project loader, Object modDev, StageWrightTestSuite suite, SourceSet source) {
+        if (suite.getRunSourceSet().isPresent() || source.getName().equals(SourceSet.MAIN_SOURCE_SET_NAME)) return;
+        @SuppressWarnings("unchecked")
+        NamedDomainObjectContainer<Object> mods =
+                (NamedDomainObjectContainer<Object>) InvokerHelper.invokeMethod(modDev, "getMods", null);
+        if (mods.size() != 1) {
+            throw new GradleException("stagewright test suite '" + suite.getName() + "': " + loader.getPath()
+                    + " declares " + mods.size() + " mods in neoForge.mods, so the plugin cannot tell which the source"
+                    + " set '" + source.getName() + "' belongs in. Set runSourceSet = '" + source.getName()
+                    + "' and add it to one with sourceSet(sourceSets." + source.getName() + ")");
+        }
+        InvokerHelper.invokeMethod(mods.iterator().next(), "sourceSet", source);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Property<Object> property(Object owner, String getter) {
+        return (Property<Object>) InvokerHelper.invokeMethod(owner, getter, null);
+    }
+
+    private static DirectoryProperty directoryProperty(Object owner, String getter) {
+        return (DirectoryProperty) InvokerHelper.invokeMethod(owner, getter, null);
     }
 
     /**

@@ -146,10 +146,10 @@ A suite runs JUnit tests through StageWright's [test engine](../design/test-engi
 a game per scene. It is separate from the gates above: a suite starts the games itself, from launch
 specs, rather than depending on a topology's run task.
 
-On a single-loader loom project, the whole of it:
+On a single-loader project, under loom or ModDevGradle, the whole of it:
 
 ```groovy
-// build.gradle — beside `id 'fabric-loom'` or `id 'dev.architectury.loom'`
+// build.gradle — beside `id 'fabric-loom'`, `id 'dev.architectury.loom'` or `id 'net.neoforged.moddev'`
 plugins { id 'net.magicterra.stagewright' version '0.1.0-alpha.0+1.21.1' }
 
 repositories {
@@ -157,11 +157,12 @@ repositories {
     maven { url 'https://maven.architectury.dev/'; content { includeGroup 'dev.architectury' } }
 }
 
-stagewright { tests { fabric { } } }
+stagewright { tests { fabric { } } }   // the suite's name is yours: `neoforge { }` reads better there
 ```
 
 Tests go in `src/testmod/java` and `src/testmod/resources`, and `./gradlew stagewrightTestFabric` runs
-them. A Fabric Loom project in Mojang names with Fabric API and no other change has passed this way.
+them. A Fabric Loom project in Mojang names with Fabric API, and a ModDevGradle project with one mod,
+have each passed this way with no other change.
 The two repositories are where StageWright and WorldDriver, and the Architectury API WorldDriver needs,
 come from; the plugin adds none. A build that keeps repositories in `dependencyResolutionManagement`
 lists the same two there.
@@ -170,7 +171,7 @@ The rest is conventions, each of which a suite may set:
 
 | Property | Convention |
 |---|---|
-| `loaderProject` | the project the plugin is applied to, when it applies loom |
+| `loaderProject` | the project the plugin is applied to, when it applies loom or ModDevGradle |
 | `runSourceSet` | `testmod`, created seeing `main` when the project has none |
 | `classes`, `classpath` | that source set's output and compile classpath |
 | `testDependencies` | true: the `stagewrightTestCompile` configuration goes on that source set's `compileOnly` |
@@ -184,7 +185,7 @@ coordinate there without the plugin's help:
 
 | Configuration | Defaults |
 |---|---|
-| `modStagewrightTestRuntime` | StageWright's loader mod and WorldDriver's, with what WorldDriver's POM brings: the Architectury API |
+| `modStagewrightTestRuntime` under loom, `stagewrightTestRuntime` under ModDevGradle | StageWright's loader mod and WorldDriver's, with what WorldDriver's POM brings: the Architectury API |
 | `stagewrightTestCompile` | StageWright's api and WorldDriver's (`:dev`, Mojang names), and JUnit Jupiter's api |
 
 ```groovy
@@ -232,20 +233,27 @@ goes in `modLocalRuntime`. It is transitive except for the loader's own groups �
 game. When the project declares the Architectury API itself, WorldDriver's is moved to that version, so
 the runs carry one.
 
-`loaderProject` names the loom project the games run from. The plugin declares the suite's runs in
-that project's `loom.runs`, so loom still builds each launch, and gives a scene two topologies to
-name:
+Under ModDevGradle nothing is remapped: the two mods are plain jars in `stagewrightTestRuntime`, which
+the run source set's `runtimeOnly` extends, so Gradle settles them with the project's own dependencies
+on one classpath. NeoForge loads classes only from the mods in `neoForge.mods`, so the plugin adds the
+`testmod` source set to the project's mod, which puts the tests in `runClient` too. With more than one
+mod it cannot tell which, and asks for `runSourceSet`; a `runSourceSet` the build sets itself is the
+build's to add to a mod, with `sourceSet(sourceSets.testmod)` in it.
+
+`loaderProject` names the loom or ModDevGradle project the games run from. The plugin declares the
+suite's runs in that project's `loom.runs` or `neoForge.runs`, so the loader plugin still builds each
+launch, and gives a scene two topologies to name:
 
 | Topology | Runs | Directory under `<loaderProject>/run-stagewright/<name>/` |
 |---|---|---|
 | `dedicatedServer` | `stagewright<Name>DedicatedServer` | `dedicated-server` |
 | `dedicatedServerWithClient` | `stagewright<Name>DedicatedServerWithClient`, holding its tests until `stagewright<Name>JoiningClient` joins | `with-client`, and `joining-client` for the client |
 
-The runs start from the run source set, so `runClient` goes without the tests; they get no IDE run
-configuration. `jvmArgs` and `systemProperties` go on all of them, the servers listen on `serverPort`
-(default 25621), and `timeoutMinutes` (default 20) bounds one scene. The engine accepts the EULA in a
-server's directory itself, so nothing has to be prepared beforehand. Under a loader plugin other than
-loom, declare the runs there and map them instead: `topologies.put('dedicatedServerWithClient',
+The runs start from the run source set, so under loom `runClient` goes without the tests; they get no
+IDE run configuration. `jvmArgs` and `systemProperties` go on all of them, the servers listen on
+`serverPort` (default 25621), and `timeoutMinutes` (default 20) bounds one scene. The engine accepts the
+EULA in a server's directory itself, so nothing has to be prepared beforehand. Under another loader
+plugin, declare the runs there and map them instead: `topologies.put('dedicatedServerWithClient',
 'myTopology')` maps the name a scene declares to a topology declared in `topologies { }`; an unknown
 target fails the build naming the suite and the topology.
 
@@ -263,8 +271,8 @@ The tests run on a JUnit Platform inside the game. The loader jars nest it, but 
 when it remaps a mod dependency, so the plugin adds it to every project whose `runTask` a suite starts
 from: JUnit's launcher, reporting and Jupiter engine, at the version StageWright is built with, into
 `forgeRuntimeLibrary` on a NeoForge or Forge project and `localRuntime` on a Fabric one. Projects not
-under loom get nothing; under ModDevGradle, if a run reports that JUnit is missing, add those three
-modules to its `additionalRuntimeClasspath` yourself.
+under loom get nothing, and need nothing under ModDevGradle: NeoForge loads the jars a mod nests
+itself.
 
 ## The `testmod` source-set convention
 

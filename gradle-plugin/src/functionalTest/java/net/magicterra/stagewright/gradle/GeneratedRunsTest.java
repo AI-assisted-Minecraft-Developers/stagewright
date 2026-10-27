@@ -164,10 +164,10 @@ class GeneratedRunsTest {
     }
 
     @Test
-    void aLoaderProjectWithoutLoomIsRefused() throws Exception {
+    void aLoaderProjectWithoutLoomOrModDevGradleIsRefused() throws Exception {
         consumer("classes.from(files('classes'))\nloaderProject = ':'");
 
         BuildResult result = runner("help").buildAndFail();
-        assertTrue(result.getOutput().contains("does not apply loom"), result.getOutput());
+        assertTrue(result.getOutput().contains("applies neither loom"), result.getOutput());
     }
 }

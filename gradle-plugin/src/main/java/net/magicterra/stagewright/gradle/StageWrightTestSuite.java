@@ -20,7 +20,8 @@ import org.gradle.api.provider.Property;
  * }
  * }</pre>
  *
- * With {@link #getLoaderProject()} the plugin declares the suite's runs in that project's loom, one per topology
+ * With {@link #getLoaderProject()} the plugin declares the suite's runs in that project's loom or ModDevGradle, one
+ * per topology
  * a scene may name, and the loader plugin still builds each launch. With {@link #getTopologies()} instead the suite
  * borrows topologies the build declares. Each suite gets a {@code stagewrightTest<Name>} task running the outer test
  * engine; see docs/design/test-engine.md.
@@ -56,11 +57,11 @@ public abstract class StageWrightTestSuite implements Named {
     public abstract MapProperty<String, String> getTopologies();
 
     /**
-     * The loom project whose runs this suite's games are, such as {@code ':fabric'}. The plugin declares them there:
-     * {@code stagewright<Name>DedicatedServer}, {@code stagewright<Name>DedicatedServerWithClient} and the
-     * {@code stagewright<Name>JoiningClient} that joins it, each in its own directory under
+     * The loom or ModDevGradle project whose runs this suite's games are, such as {@code ':fabric'}. The plugin
+     * declares them there: {@code stagewright<Name>DedicatedServer}, {@code stagewright<Name>DedicatedServerWithClient}
+     * and the {@code stagewright<Name>JoiningClient} that joins it, each in its own directory under
      * {@code run-stagewright/<name>/}, with no IDE run configuration. Convention: the project the plugin is applied
-     * to, when it applies loom.
+     * to, when it applies either.
      */
     public abstract Property<String> getLoaderProject();
 
