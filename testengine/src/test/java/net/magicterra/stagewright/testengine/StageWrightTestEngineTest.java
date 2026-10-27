@@ -280,6 +280,14 @@ class StageWrightTestEngineTest {
     }
 
     @Test
+    void yamlTestsTakeTheFilesSceneAndAreReportedTheSameWay() {
+        EngineExecutionResults r = EngineTestKit.engine("stagewright")
+                .selectors(selectClasspathResource("stagewright/tests/declared.yaml")).execute();
+        assertEquals(1, r.testEvents().succeeded().count());
+        assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
+    }
+
+    @Test
     void aScriptWhoseTopLevelUsesTheGameFailsHere() {
         EngineExecutionResults r = EngineTestKit.engine("stagewright")
                 .selectors(selectClasspathResource("stagewright/tests/usesTheGame.js")).execute();

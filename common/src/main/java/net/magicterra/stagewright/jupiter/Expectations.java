@@ -1,9 +1,11 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -62,6 +64,98 @@ final class Expectations {
 
     static void atMost(Object actual, Object bound) {
         if (!(number(actual, "atMost") <= number(bound, "atMost"))) fail("expected at most " + show(bound) + " but was " + show(actual));
+    }
+
+    static final Set<String> OPERATORS = Set.of("equals", "contains", "empty", "gt", "lt", "atLeast", "atMost", "anyOf", "allOf");
+
+    /**
+     * A YAML test's {@code expect}: an operator's name alone ({@code empty}), or a map whose keys are operators, applied
+     * to {@code actual}, or field paths ({@code result.count}), each holding an expectation of that field. A failure
+     * names the field it was about.
+     */
+    static void expect(Object actual, Object spec) {
+        expect(actual, spec, "");
+    }
+
+    private static void expect(Object actual, Object spec, String where) {
+        if (spec instanceof String op) {
+            apply(op, actual, true, where);
+            return;
+        }
+        if (!(spec instanceof Map<?, ?> map) || map.isEmpty()) {
+            throw new IllegalArgumentException(at(where) + "an expectation is an operator's name or a map of them, not "
+                    + show(spec));
+        }
+        for (Map.Entry<?, ?> e : map.entrySet()) {
+            String key = String.valueOf(e.getKey());
+            if (OPERATORS.contains(key)) apply(key, actual, e.getValue(), where);
+            else expect(field(actual, key, where), e.getValue(), where.isEmpty() ? key : where + "." + key);
+        }
+    }
+
+    private static void apply(String op, Object actual, Object arg, String where) {
+        try {
+            switch (op) {
+                case "equals" -> equals(actual, arg);
+                case "contains" -> contains(actual, arg);
+                case "empty" -> {
+                    if (Boolean.FALSE.equals(arg)) {
+                        if (actual == null || (actual instanceof Collection<?> c && c.isEmpty())
+                                || (actual instanceof Map<?, ?> m && m.isEmpty()) || "".equals(actual)) {
+                            fail("expected something but was " + show(actual));
+                        }
+                    } else {
+                        isEmpty(actual);
+                    }
+                }
+                case "gt" -> gt(actual, arg);
+                case "lt" -> lt(actual, arg);
+                case "atLeast" -> atLeast(actual, arg);
+                case "atMost" -> atMost(actual, arg);
+                case "anyOf" -> {
+                    List<String> misses = new ArrayList<>();
+                    for (Object each : alternatives(arg, op)) {
+                        try {
+                            expect(actual, each, "");
+                            return;
+                        } catch (AssertionError miss) {
+                            misses.add(miss.getMessage());
+                        }
+                    }
+                    fail("none of anyOf held: " + String.join("; ", misses));
+                }
+                case "allOf" -> {
+                    for (Object each : alternatives(arg, op)) expect(actual, each, "");
+                }
+                default -> throw new IllegalArgumentException("no operator '" + op + "'; there are " + OPERATORS);
+            }
+        } catch (AssertionError e) {
+            if (where.isEmpty()) throw e;
+            throw new AssertionError(at(where) + e.getMessage(), e.getCause());
+        }
+    }
+
+    private static List<?> alternatives(Object arg, String op) {
+        if (arg instanceof List<?> list && !list.isEmpty()) return list;
+        throw new IllegalArgumentException(op + " takes a list of expectations, not " + show(arg));
+    }
+
+    /** The field {@code path} (dot-separated) of a map; a missing one fails, naming what was there. */
+    private static Object field(Object actual, String path, String where) {
+        Object at = actual;
+        String walked = where;
+        for (String key : path.split("\\.")) {
+            walked = walked.isEmpty() ? key : walked + "." + key;
+            if (!(at instanceof Map<?, ?> map) || !map.containsKey(key)) {
+                fail(walked + ": absent from " + show(at));
+            }
+            at = ((Map<?, ?>) at).get(key);
+        }
+        return at;
+    }
+
+    private static String at(String where) {
+        return where.isEmpty() ? "" : where + ": ";
     }
 
     /** Equal as plain values: numbers by value, lists in order, maps by their entries. */

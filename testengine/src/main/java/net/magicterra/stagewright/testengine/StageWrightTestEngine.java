@@ -86,7 +86,7 @@ public final class StageWrightTestEngine implements TestEngine {
             for (String script : ScriptScan.scriptsUnder(Path.of(s.getClasspathRoot()))) wantedScripts.put(script, t -> true);
         }
         for (ClasspathResourceSelector s : request.getSelectorsByType(ClasspathResourceSelector.class)) {
-            if (s.getClasspathResourceName().endsWith(".js")) wantedScripts.put(s.getClasspathResourceName(), t -> true);
+            if (ScriptScan.isScript(s.getClasspathResourceName())) wantedScripts.put(s.getClasspathResourceName(), t -> true);
         }
         for (UniqueIdSelector s : request.getSelectorsByType(UniqueIdSelector.class)) {
             selectById(s.getUniqueId(), uniqueId, wanted, scenesOf, wantedScripts);

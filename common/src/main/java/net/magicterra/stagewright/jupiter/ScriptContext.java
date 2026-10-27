@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -12,7 +13,6 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 
-import net.magicterra.stagewright.test.Await;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.api.registry.Scripting;
@@ -22,8 +22,8 @@ import org.junit.platform.engine.TestDescriptor;
 import org.junit.platform.engine.reporting.ReportEntry;
 
 /**
- * The {@code t} a script test's body receives: the Java test context's verbs, as plain functions over plain values.
- * Waits count server ticks and block the test thread, as {@link Game#await} does.
+ * The {@code t} a script test's body receives: the Java test context's verbs, as plain functions over plain values,
+ * and the same verbs in Java for a YAML test's steps. Waits count server ticks and block the test thread.
  */
 final class ScriptContext {
 
@@ -106,13 +106,24 @@ final class ScriptContext {
 
     /** {@code t.step(name, args)}: a step a script registered, given this context and the arguments. */
     private Object step(Object... args) {
-        String name = string(args, 0, "t.step(name, args)");
+        return step(string(args, 0, "t.step(name, args)"), args.length > 1 ? args[1] : null);
+    }
+
+    /** The step registered as {@code name}, given this context and {@code args}; null when there is none. */
+    Object step(String name, Object args) {
         Scripting.Function body;
         synchronized (steps) {
             body = steps.get(name);
         }
         if (body == null) throw new IllegalArgumentException("no step named '" + name + "'; registered: " + steps.keySet());
-        return body.call(asScript(), args.length > 1 ? args[1] : null);
+        return body.call(asScript(), args);
+    }
+
+    /** Whether a step is registered as {@code name}. */
+    boolean hasStep(String name) {
+        synchronized (steps) {
+            return steps.containsKey(name);
+        }
     }
 
     /** {@code t.wait(ticks)}. */
@@ -125,7 +136,7 @@ final class ScriptContext {
     private Object waitUntil(Object... args) {
         Scripting.Function condition = function(args, "t.waitUntil(condition, options)");
         Map<?, ?> options = options(args);
-        awaiting(options).until(() -> Expectations.truthy(condition.call()));
+        poll(() -> Expectations.truthy(condition.call()), within(options), 1, as(options));
         return null;
     }
 
@@ -134,19 +145,55 @@ final class ScriptContext {
         Scripting.Function condition = function(args, "t.settle(condition, options)");
         Map<?, ?> options = options(args);
         int run = options.containsKey("ticks") ? ticks(options.get("ticks"), "settle's ticks") : DEFAULT_SETTLE;
-        int[] streak = {0};
-        awaiting(options).until(() -> {
-            streak[0] = Expectations.truthy(condition.call()) ? streak[0] + 1 : 0;
-            return streak[0] >= run;
-        });
+        poll(() -> Expectations.truthy(condition.call()), within(options), run, as(options));
         return null;
     }
 
-    private Await awaiting(Map<?, ?> options) {
-        Await await = game.await().within(options.containsKey("within")
-                ? ticks(options.get("within"), "within") : DEFAULT_WITHIN);
-        if (options.get("as") instanceof String as) await.as(as);
-        return await;
+    static int within(Map<?, ?> options) {
+        return options.containsKey("within") ? ticks(options.get("within"), "within") : DEFAULT_WITHIN;
+    }
+
+    static String as(Map<?, ?> options) {
+        return options.get("as") instanceof String as ? as : "the condition";
+    }
+
+    /**
+     * Check {@code condition} now and once a tick after, until it has held {@code run} checks in a row; fail after
+     * {@code within} ticks. Checked on the test thread rather than the server's, as {@link Game#await} does: a
+     * script's condition usually calls WorldDriver, and a call that waits for the server must not be made on it.
+     */
+    void poll(BooleanSupplier condition, int within, int run, String as) {
+        int streak = 0;
+        for (int tick = 0; ; tick++) {
+            streak = condition.getAsBoolean() ? streak + 1 : 0;
+            if (streak >= run) return;
+            if (tick >= within) {
+                throw new AssertionError(as + " did not hold" + (run > 1 ? " for " + run + " ticks in a row" : "")
+                        + " within " + within + " ticks");
+            }
+            game.ticks(1);
+        }
+    }
+
+    /** {@code method} with {@code params}, as {@code t.call} makes it. */
+    Object call(String method, Object params) {
+        return route(game.registry(), "call", new Object[] {method, params});
+    }
+
+    void ticks(int n) {
+        game.ticks(n);
+    }
+
+    /** A plot leased for the test, as {@code t.plot({size})} answers it. */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> plot(int size) {
+        Map<String, Object> options = new LinkedHashMap<>();
+        options.put("size", size);
+        return (Map<String, Object>) ((Scripting.Function) asScript().get("plot")).call(options);
+    }
+
+    void record(String name, Object value) {
+        record(new Object[] {name, value});
     }
 
     /** {@code t.expect(actual)}: the operators, each failing the test when it does not hold. */
@@ -214,7 +261,7 @@ final class ScriptContext {
         return args.length > 1 && args[1] instanceof Map<?, ?> m ? m : Map.of();
     }
 
-    private static int ticks(Object v, String what) {
+    static int ticks(Object v, String what) {
         if (v instanceof Number n && n.doubleValue() >= 0 && n.doubleValue() == Math.rint(n.doubleValue())) {
             return n.intValue();
         }

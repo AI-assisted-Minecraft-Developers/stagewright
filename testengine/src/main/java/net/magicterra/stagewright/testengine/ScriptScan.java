@@ -19,12 +19,17 @@ import dev.latvian.mods.rhino.RhinoException;
 import dev.latvian.mods.rhino.Scriptable;
 import dev.latvian.mods.rhino.ScriptableObject;
 import dev.latvian.mods.rhino.WrappedException;
+import org.yaml.snakeyaml.LoaderOptions;
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
+import org.yaml.snakeyaml.error.YAMLException;
 
 /**
  * Reads a script test file without the game: evaluates it once with a {@code test()} that only records what it is
  * given and a {@code step()} that does nothing, never running a test's body. What a file registers therefore cannot
  * depend on the game, which is the rule script tests are written under; a file whose top level reaches for the game
- * fails here, saying so. The game evaluates the same file again and runs the bodies.
+ * fails here, saying so. The game evaluates the same file again and runs the bodies. A YAML test file is read for
+ * its test names and scenes only.
  */
 final class ScriptScan {
 
@@ -44,7 +49,7 @@ final class ScriptScan {
         Path dir = root.resolve(DIRECTORY);
         if (!Files.isDirectory(dir)) return List.of();
         try (Stream<Path> walk = Files.walk(dir)) {
-            return walk.filter(p -> p.toString().endsWith(".js") && Files.isRegularFile(p))
+            return walk.filter(p -> isScript(p.toString()) && Files.isRegularFile(p))
                     .map(p -> root.relativize(p).toString().replace(root.getFileSystem().getSeparator(), "/"))
                     .sorted().toList();
         } catch (IOException e) {
@@ -61,6 +66,7 @@ final class ScriptScan {
             return new Scanned(resource, List.of(), "could not read " + resource + ": " + e.getMessage());
         }
         Map<String, Test> tests = new LinkedHashMap<>();
+        if (isYaml(resource)) return scanYaml(resource, source, tests);
         try {
             Context cx = new ContextFactory().enter();
             ScriptableObject scope = cx.initStandardObjects();
@@ -85,6 +91,50 @@ final class ScriptScan {
         return new Scanned(resource, List.copyOf(tests.values()), null);
     }
 
+    static boolean isScript(String name) {
+        return name.endsWith(".js") || isYaml(name);
+    }
+
+    static boolean isYaml(String name) {
+        return name.endsWith(".yaml") || name.endsWith(".yml");
+    }
+
+    /**
+     * A YAML file's test names and scenes, a test's own {@code scene} or else the file's. Only what the outer tree
+     * needs is read here; the game reads the steps, and refuses what is wrong with them.
+     */
+    private static Scanned scanYaml(String resource, String source, Map<String, Test> tests) {
+        try {
+            Object document = new Yaml(new SafeConstructor(new LoaderOptions())).load(source);
+            if (!(document instanceof Map<?, ?> file) || !(file.get("tests") instanceof List<?> list)) {
+                return new Scanned(resource, List.of(), resource + ": a YAML test file is a map with a list of tests");
+            }
+            for (Object t : list) {
+                if (!(t instanceof Map<?, ?> test) || !(test.get("name") instanceof String name)) {
+                    return new Scanned(resource, List.of(), resource + ": each test is a map with a name");
+                }
+                List<String> scenes = scenes(test.containsKey("scene") ? test.get("scene") : file.get("scene"));
+                if (scenes.isEmpty()) {
+                    return new Scanned(resource, List.of(), resource + ": test '" + name + "' names no scene: give it"
+                            + " or the file a scene");
+                }
+                if (tests.putIfAbsent(name, new Test(name, scenes)) != null) {
+                    return new Scanned(resource, List.of(), resource + ": test '" + name + "' is there twice");
+                }
+            }
+        } catch (YAMLException e) {
+            return new Scanned(resource, List.of(), resource + ": " + e.getMessage());
+        }
+        return new Scanned(resource, List.copyOf(tests.values()), null);
+    }
+
+    private static List<String> scenes(Object scene) {
+        List<String> scenes = new ArrayList<>();
+        if (scene instanceof CharSequence s) scenes.add(s.toString());
+        else if (scene instanceof List<?> list) for (Object s : list) scenes.add(String.valueOf(s));
+        return scenes;
+    }
+
     /** {@code test(name, options, body)}: the name and {@code options.scene}, one name or a list of them. */
     private static final class Recorder extends BaseFunction {
         private final String resource;
@@ -101,10 +151,7 @@ final class ScriptScan {
                 throw new IllegalArgumentException("test(name, options, body) takes a name, options and a function");
             }
             String name = n.toString();
-            Object scene = args.length > 2 && args[1] instanceof Map<?, ?> options ? options.get("scene") : null;
-            List<String> scenes = new ArrayList<>();
-            if (scene instanceof CharSequence s) scenes.add(s.toString());
-            else if (scene instanceof List<?> list) for (Object s : list) scenes.add(String.valueOf(s));
+            List<String> scenes = scenes(args.length > 2 && args[1] instanceof Map<?, ?> options ? options.get("scene") : null);
             if (scenes.isEmpty()) {
                 throw new IllegalArgumentException("test '" + name + "' names no scene: give it options with scene,"
                         + " a scene's name or a list of them");

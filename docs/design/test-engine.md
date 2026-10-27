@@ -56,7 +56,17 @@ cannot swallow its own failure.
 The options are `scene`, `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`, counted toward
 coverage as `@Requires` is), `dependsOn` (a test's name in the same file, or `file.js#name`; a test runs after those
 of its own file, and aborts when one did not pass) and `knownIssue` (the reason, read as `@KnownIssue` is). Script
-tests run one at a time after the game's Java tests, so an override needs no lock.
+tests run one at a time after the game's Java tests, so an override needs no lock. `waitUntil` and `settle` check
+their condition on the test thread once a tick, since a condition usually calls WorldDriver.
+
+A test written in YAML sits beside them, in a file with a `tests` list and an optional `scene` for all of them; a
+test takes the same options, plus `plot: {size}`, and `given`/`when`/`then` or `steps`. A step is `call: method`
+with `params`, `wait`, `waitUntil`/`settle` (a `{call, params, expect}` condition, with `within` and `ticks`), or a
+step a script registered, `name: args`; JavaScript files load first so their steps are there. Any step may carry
+`expect`, whose keys are operators (`equals`, `contains`, `empty`, `gt`, `lt`, `atLeast`, `atMost`, `anyOf`,
+`allOf`) or field paths (`audit.count: {gt: 0}`), and `save: name`, read later as `${name}` or `${name.field}`;
+the leased plot is `${plot}`. There is no expression language. The game reads YAML with a snakeyaml relocated into
+StageWright's loader jars; the engine outside reads only the names and scenes.
 
 ## One channel back
 
@@ -104,4 +114,6 @@ command-line runner writes the same file from a game directory. The engine knows
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
 - Scenes run one after another, and a game's script tests one after another.
 - A script test cannot yet depend on a Java test, nor a Java test on a script test.
+- YAML has no built-in steps yet (`place`, `insert`, `chunk.unload`, `container`), no `knownIssues` subtraction,
+  no `java:` step and no `perf`.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.

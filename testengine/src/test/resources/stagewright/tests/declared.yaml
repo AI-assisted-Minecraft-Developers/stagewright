@@ -1,0 +1,8 @@
+scene: script
+tests:
+  - name: adds
+    steps:
+      - wait: 1
+  - name: fails
+    steps:
+      - wait: 1

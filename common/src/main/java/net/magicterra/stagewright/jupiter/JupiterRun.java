@@ -44,7 +44,7 @@ import org.junit.platform.reporting.legacy.xml.LegacyXmlReportGeneratingListener
  *
  * <p>Which tests: the classes in {@value #CLASSES} and the script resources in {@value #SCRIPTS} (each
  * comma-separated) when either is set, else every entry of every {@value #INDEX} resource on the game's class path,
- * one per line, a name ending {@code .js} being a script ({@link ScriptTestEngine}). Nothing runs unless one of
+ * one per line, a name ending {@code .js} or {@code .yaml} being a script ({@link ScriptTestEngine}). Nothing runs unless one of
  * {@value #CLASSES}, {@value #SCRIPTS} or {@value #ENABLED} is set. Reports go to {@code <game dir>/stagewright/junit/}: JUnit XML
  * and a {@code summary.json}. With {@value #EXIT} the server stops once the run is over.
  */
@@ -101,8 +101,8 @@ public final class JupiterRun {
             List<String> entries = selected()
                     ? concat(split(System.getProperty(CLASSES, "")), split(System.getProperty(SCRIPTS, "")))
                     : indexed(loader);
-            List<String> classes = entries.stream().filter(e -> !e.endsWith(".js")).toList();
-            List<String> scripts = entries.stream().filter(e -> e.endsWith(".js")).toList();
+            List<String> classes = entries.stream().filter(e -> !isScript(e)).toList();
+            List<String> scripts = entries.stream().filter(JupiterRun::isScript).toList();
             StageWrightCommon.LOG.info("[{}] running {} JUnit test classes and {} test scripts in the game",
                     StageWrightCommon.MOD_ID, classes.size(), scripts.size());
             GameImpl game = new GameImpl(server);
@@ -159,6 +159,10 @@ public final class JupiterRun {
 
     private static List<String> split(String listed) {
         return Arrays.stream(listed.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+    }
+
+    private static boolean isScript(String entry) {
+        return entry.endsWith(".js") || ScriptTestEngine.isYaml(entry);
     }
 
     private static List<String> concat(List<String> a, List<String> b) {

@@ -42,6 +42,31 @@ class ExpectationsTest {
     }
 
     @Test
+    void aYamlExpectationReadsFieldsAndNamesTheOneThatFailed() {
+        Map<String, Object> result = Map.of("uncraftable", List.of(), "audit", Map.of("count", 12, "ids", List.of("a")));
+        Expectations.expect(result, Map.of("uncraftable", "empty", "audit.count", Map.of("gt", 10, "atMost", 12)));
+        Expectations.expect(result, Map.of("audit", Map.of("ids", Map.of("contains", "a", "empty", false))));
+        AssertionError e = assertThrows(AssertionError.class,
+                () -> Expectations.expect(result, Map.of("audit.count", Map.of("lt", 5))));
+        assertEquals("audit.count: expected less than 5 but was 12", e.getMessage());
+        AssertionError absent = assertThrows(AssertionError.class,
+                () -> Expectations.expect(result, Map.of("audit.missing", "empty")));
+        assertTrue(absent.getMessage().startsWith("audit.missing: absent from {"), absent.getMessage());
+    }
+
+    @Test
+    void anyOfNeedsOneAndAllOfNeedsEvery() {
+        Expectations.expect(3, Map.of("anyOf", List.of(Map.of("equals", 1), Map.of("gt", 2))));
+        AssertionError none = assertThrows(AssertionError.class,
+                () -> Expectations.expect(3, Map.of("anyOf", List.of(Map.of("equals", 1), Map.of("lt", 2)))));
+        assertTrue(none.getMessage().startsWith("none of anyOf held: "), none.getMessage());
+        assertThrows(AssertionError.class,
+                () -> Expectations.expect(3, Map.of("allOf", List.of(Map.of("gt", 1), Map.of("lt", 2)))));
+        // A key that is no operator is a field; a bare name must be an operator.
+        assertThrows(IllegalArgumentException.class, () -> Expectations.expect(List.of(), "emtpy"));
+    }
+
+    @Test
     void truthIsJudgedAsJavaScriptWould() {
         assertFalse(Expectations.truthy(0.0));
         assertFalse(Expectations.truthy(""));

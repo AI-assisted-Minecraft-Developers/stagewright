@@ -28,13 +28,14 @@ import org.junit.platform.engine.support.descriptor.ClasspathResourceSource;
 import org.junit.platform.engine.support.descriptor.EngineDescriptor;
 
 /**
- * The JUnit engine for tests written in JavaScript, inside the game. A selected {@code .js} resource is evaluated once
- * at discovery through WorldDriver's {@link Scripting}, which collects what it registers with {@code test(name,
- * options, body)} and {@code step(name, body)}; each test's body runs later with the context {@link ScriptContext}
- * builds. A file that fails to evaluate is reported as a failed container rather than dropped, so a typo cannot make
- * its tests disappear.
+ * The JUnit engine for tests written in JavaScript or YAML, inside the game. A selected {@code .js} resource is
+ * evaluated once at discovery through WorldDriver's {@link Scripting}, which collects what it registers with
+ * {@code test(name, options, body)} and {@code step(name, body)}; a {@code .yaml} one is read by {@link YamlTests}.
+ * Each test runs later with the context {@link ScriptContext} builds. A file that fails to load is reported as a
+ * failed container rather than dropped, so a typo cannot make its tests disappear.
  *
- * <p>Tests run one after another, files in the order they were selected. The test engine outside the game discovers
+ * <p>Tests run one after another, JavaScript files before YAML ones (a YAML step may be a script's), each kind in the
+ * order selected. The test engine outside the game discovers
  * the same files without the game (docs/design/test-engine.md), so what a file registers must not depend on the game.
  */
 public final class ScriptTestEngine implements TestEngine {
@@ -60,6 +61,11 @@ public final class ScriptTestEngine implements TestEngine {
             String resource = selector.getClasspathResourceName();
             if (resource.endsWith(".js")) engine.addChild(File.load(engine, resource, steps));
         }
+        // YAML after JavaScript: a YAML step may be one a script registers.
+        for (ClasspathResourceSelector selector : request.getSelectorsByType(ClasspathResourceSelector.class)) {
+            String resource = selector.getClasspathResourceName();
+            if (isYaml(resource)) engine.addChild(File.load(engine, resource, steps));
+        }
         return engine;
     }
 
@@ -84,6 +90,16 @@ public final class ScriptTestEngine implements TestEngine {
         return Optional.of("stagewright-common");
     }
 
+    /** What a test does when it runs: a script's function, or a YAML test's steps. */
+    @FunctionalInterface
+    interface Body {
+        void run(ScriptContext context);
+    }
+
+    static boolean isYaml(String resource) {
+        return resource.endsWith(".yaml") || resource.endsWith(".yml");
+    }
+
     /** One script file: what it registered, or why it registered nothing. */
     static final class File extends AbstractTestDescriptor {
         final String resource;
@@ -99,6 +115,12 @@ public final class ScriptTestEngine implements TestEngine {
         static File load(TestDescriptor engine, String resource, Map<String, Scripting.Function> steps) {
             File file = new File(engine.getUniqueId().append("script", resource), resource, steps);
             try {
+                if (isYaml(resource)) {
+                    for (YamlTests.Test test : YamlTests.read(resource, source(resource))) {
+                        file.add(test.name(), test.options(), test.body());
+                    }
+                    return file;
+                }
                 Scripting scripting = WorldDriver.scripting();
                 if (scripting == null) throw new IllegalStateException("WorldDriver is not up, so no script can run");
                 Map<String, Object> globals = Map.of(
@@ -127,13 +149,19 @@ public final class ScriptTestEngine implements TestEngine {
                 throw new IllegalArgumentException("test(name, options, body) takes a name, optional options, and a function");
             }
             Map<?, ?> options = args.length > 2 && args[1] instanceof Map<?, ?> m ? m : Map.of();
+            add(name, options, context -> body.call(context.asScript()));
+            return null;
+        }
+
+        /** A test, from a script's {@code test()} or a YAML file, unless it is for another scene. */
+        private void add(String name, Map<?, ?> options, Body body) {
             for (Object key : options.keySet()) {
                 if (!OPTIONS.contains(String.valueOf(key))) {
                     throw new IllegalArgumentException("test '" + name + "': unknown option '" + key + "'; known: "
                             + OPTIONS);
                 }
             }
-            if (!inThisScene(options.get("scene"))) return null;
+            if (!inThisScene(options.get("scene"))) return;
             UniqueId id = getUniqueId().append("test", name);
             if (getChildren().stream().anyMatch(c -> c.getUniqueId().equals(id))) {
                 throw new IllegalArgumentException("test '" + name + "' is registered twice in " + resource);
@@ -144,7 +172,6 @@ public final class ScriptTestEngine implements TestEngine {
             }
             addChild(new Test(id, this, name, requires(name, options.get("requires")),
                     dependencies(resource, name, options.get("dependsOn")), (String) known, body));
-            return null;
         }
 
         /** Whether a test naming {@code scenes} runs in this game: every test does when no scene was chosen. */
@@ -260,10 +287,10 @@ public final class ScriptTestEngine implements TestEngine {
         private final Requirement requirement;
         private final List<String> dependsOn;
         private final String knownIssue;
-        private final Scripting.Function body;
+        private final Body body;
 
         private Test(UniqueId id, File file, String name, Requirement requirement, List<String> dependsOn,
-                     String knownIssue, Scripting.Function body) {
+                     String knownIssue, Body body) {
             super(id, name, ClasspathResourceSource.from(file.resource));
             this.file = file;
             this.name = name;
@@ -320,7 +347,7 @@ public final class ScriptTestEngine implements TestEngine {
             TestScope.bind(TestScope.ofScript(getDisplayName()));
             Throwable failure = null;
             try {
-                body.call(context.asScript());
+                body.run(context);
             } catch (Throwable t) {
                 failure = t;
             }
