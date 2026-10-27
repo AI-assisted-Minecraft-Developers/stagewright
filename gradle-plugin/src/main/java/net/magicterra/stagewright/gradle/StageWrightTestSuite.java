@@ -90,9 +90,15 @@ public abstract class StageWrightTestSuite implements Named {
     public abstract Property<Boolean> getIncludeWorldDriver();
 
     /**
-     * Whether the plugin adds what tests compile against to the run source set: StageWright's api and WorldDriver's,
-     * both in Mojang names, and JUnit Jupiter's. Convention: true; a build in other mappings turns it off and adds
-     * its own.
+     * The WorldDriver build the generated runs get and the tests compile against. It has to be in the line this
+     * StageWright links against, which the plugin checks. Convention: the build StageWright was built against.
+     */
+    public abstract Property<String> getWorldDriverVersion();
+
+    /**
+     * Whether the run source set compiles against the plugin's {@code stagewrightTestCompile} configuration:
+     * StageWright's api and WorldDriver's, both in Mojang names, and JUnit Jupiter's unless the build declares its
+     * own there. Convention: true.
      */
     public abstract Property<Boolean> getTestDependencies();
 }

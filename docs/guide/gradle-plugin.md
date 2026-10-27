@@ -151,11 +151,21 @@ On a single-loader loom project, the whole of it:
 ```groovy
 // build.gradle — beside `id 'fabric-loom'` or `id 'dev.architectury.loom'`
 plugins { id 'net.magicterra.stagewright' version '0.1.0-build.0+1.21.1' }
+
+repositories {
+    maven { url 'https://nexus.gardel.top/repository/maven-releases'; content { includeGroup 'net.magicterra' } }
+    maven { url 'https://maven.architectury.dev/'; content { includeGroup 'dev.architectury' } }
+}
+
 stagewright { tests { fabric { } } }
 ```
 
 Tests go in `src/testmod/java` and `src/testmod/resources`, and `./gradlew stagewrightTestFabric` runs
 them. A Fabric Loom project in Mojang names with Fabric API and no other change has passed this way.
+The two repositories are where StageWright and WorldDriver, and the Architectury API WorldDriver needs,
+come from; the plugin adds none. A build that keeps repositories in `dependencyResolutionManagement`
+lists the same two there.
+
 The rest is conventions, each of which a suite may set:
 
 | Property | Convention |
@@ -163,14 +173,33 @@ The rest is conventions, each of which a suite may set:
 | `loaderProject` | the project the plugin is applied to, when it applies loom |
 | `runSourceSet` | `testmod`, created seeing `main` when the project has none |
 | `classes`, `classpath` | that source set's output and compile classpath |
-| `testDependencies` | true: StageWright's api and WorldDriver's (`:dev`, Mojang names) and JUnit Jupiter's api go on its `compileOnly` |
-| `includeWorldDriver` | true: WorldDriver's loader mod goes into the runs with StageWright's, and the Architectury API it needs unless the project already declares one |
+| `testDependencies` | true: the `stagewrightTestCompile` configuration goes on that source set's `compileOnly` |
+| `includeWorldDriver` | true: WorldDriver is among the defaults of both configurations below |
+| `worldDriverVersion` | the WorldDriver build this StageWright was built against |
 | `serverPort`, `timeoutMinutes` | 25621, 20 |
 
-The plugin also appends the repositories these come from to every loom project and its own, each asked
-for its group only: the StageWright Nexus for `net.magicterra`, Architectury's for `dev.architectury`,
-and mavenLocal for a local build of StageWright. When `dependencyResolutionManagement` keeps
-repositories in the settings, it adds none, and the settings have to list them.
+What a suite needs comes as the defaults of two configurations of the plugin's own, in its loader
+project. Declaring anything in one replaces that configuration's defaults, so a build can change any
+coordinate there without the plugin's help:
+
+| Configuration | Defaults |
+|---|---|
+| `modStagewrightTestRuntime` | StageWright's loader mod and WorldDriver's, with what WorldDriver's POM brings: the Architectury API |
+| `stagewrightTestCompile` | StageWright's api and WorldDriver's (`:dev`, Mojang names), and JUnit Jupiter's api |
+
+```groovy
+dependencies {
+    // In place of the defaults: say, a WorldDriver api in other mappings.
+    stagewrightTestCompile 'net.magicterra:mc_stagewright-api:0.1.0-build.0+1.21.1:dev'
+    stagewrightTestCompile 'com.example:worlddriver-api-yarn:1.0'
+}
+```
+
+StageWright links against one line of WorldDriver, the one its loader metadata declares, from the
+build it was built against up to the next breaking release. A WorldDriver outside it, from
+`worldDriverVersion` or declared in either configuration, fails dependency resolution with the range
+in the message, rather than the game failing to start. Raising `worldDriverVersion` within the line
+needs no new plugin.
 
 A multi-loader build applies the plugin at the root and names each loader, pointing at the tests where
 they live:
@@ -198,8 +227,10 @@ the test JVM, without running it, and a class whose supertypes are missing there
 StageWright's loader mod, and WorldDriver's, reach the runs through a loom remap configuration of the
 plugin's own, `modStagewrightTestRuntime`, on the run source set: remapped like any `mod*` dependency,
 present in the generated runs and in any other run of that source set, absent from `runClient`. Nothing
-goes in `modLocalRuntime`. It is not transitive: the mods carry what they need, and what Architectury
-asks for — Fabric Loader, Fabric API — is the project's own.
+goes in `modLocalRuntime`. It is transitive except for the loader's own groups — `net.fabricmc`,
+`net.fabricmc.fabric-api`, `net.neoforged` — which are the project's: a second Fabric Loader stops the
+game. When the project declares the Architectury API itself, WorldDriver's is moved to that version, so
+the runs carry one.
 
 `loaderProject` names the loom project the games run from. The plugin declares the suite's runs in
 that project's `loom.runs`, so loom still builds each launch, and gives a scene two topologies to

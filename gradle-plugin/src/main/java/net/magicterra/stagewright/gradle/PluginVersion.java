@@ -26,9 +26,9 @@ final class PluginVersion {
         return property("worlddriver");
     }
 
-    /** The Architectury API WorldDriver is built against, which it needs beside it at run time. */
-    static String architectury() {
-        return property("architectury");
+    /** The WorldDriver line StageWright links against, as a Maven range, which its loader metadata declares too. */
+    static String worldDriverRange() {
+        return property("worlddriverRange");
     }
 
     private static String property(String key) {

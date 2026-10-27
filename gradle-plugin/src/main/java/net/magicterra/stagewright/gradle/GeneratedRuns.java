@@ -78,6 +78,7 @@ final class GeneratedRuns {
         NamedDomainObjectContainer<Object> runs =
                 (NamedDomainObjectContainer<Object>) InvokerHelper.invokeMethod(loom, "getRuns", null);
         SourceSet source = sourceSet(loader, suite);
+        SuiteDependencies.compileAgainst(loader, suite, source);
         int port = suite.getServerPort().getOrElse(DEFAULT_SERVER_PORT);
         List<String> serverArgs = List.of("--port", String.valueOf(port));
 

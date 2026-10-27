@@ -18,7 +18,24 @@ new File(buildscript.sourceFile.parentFile.parentFile, 'gradle.properties').with
 ext.stagewrightVersion = "${base}-build.${build}+${rootProperties.minecraft_version}".toString()
 ext.junitVersion = rootProperties.junit_version
 // -Pworlddriver_version as the root build takes it, so the plugin pairs with the loader jars built beside it.
-ext.architecturyVersion = rootProperties.architectury_api_version
-ext.worlddriverVersion =(findProperty('worlddriver_version') ?: rootProperties.worlddriver_version).toString()
+ext.worlddriverVersion = (findProperty('worlddriver_version') ?: rootProperties.worlddriver_version).toString()
+
+// WorldDriver is required and must be a release StageWright links against:
+// the line of worlddriver_version up to its next breaking release (the next minor while it is 0.x).
+// Both loaders' metadata declare it, so the loader refuses the pair instead of the mc.test.* verbs
+// failing to link at server start, and the Gradle plugin refuses a worldDriverVersion outside it.
+// Both bounds end in `-0`, the lowest pre-release of that version: every build is published as a
+// pre-release (0.1.0-build.N), which SemVer — and so Fabric — orders below 0.1.0 itself. A numbered
+// build raises the floor to itself: StageWright links against what that build added, so an older one
+// is refused too (docs/reference/publishing.md, Versions).
+ext.worlddriverVersionRange = {
+    def m = worlddriverVersion =~ /^(\d+)\.(\d+)\.(\d+)/
+    if (!m.find()) throw new GradleException("worlddriver_version is not major.minor.patch: '$worlddriverVersion'")
+    int major = m.group(1) as int
+    int minor = m.group(2) as int
+    def numbered = worlddriverVersion =~ /^\d+\.\d+\.\d+-build\.\d+(?=\+|$)/
+    def floor = numbered.find() ? numbered.group() : "${m.group()}-0"
+    "[${floor},${major == 0 ? "0.${minor + 1}.0" : "${major + 1}.0.0"}-0)".toString()
+}()
 ext.rhinoVersion = rootProperties.rhino_version
 ext.snakeyamlVersion = rootProperties.snakeyaml_version

@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.gradle;
 
 import java.util.Locale;
+import java.util.Map;
 
 import org.codehaus.groovy.runtime.InvokerHelper;
 import org.gradle.api.Action;
@@ -10,8 +11,8 @@ import org.gradle.api.NamedDomainObjectContainer;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.Dependency;
+import org.gradle.api.artifacts.DependencyResolveDetails;
 import org.gradle.api.artifacts.DependencySet;
-import org.gradle.api.artifacts.dsl.RepositoryHandler;
 import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.provider.Property;
@@ -19,74 +20,43 @@ import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.SourceSet;
 
 /**
- * What a suite with a loader project needs on its classpaths, so a build declares none of it: StageWright's loader
- * mod and WorldDriver's on the generated runs only, remapped by loom like any {@code mod*} dependency, and what the
- * tests compile against on the run source set.
+ * What a suite with a loader project needs on its classpaths, as defaults of two configurations of the plugin's own:
+ * StageWright's loader mod and WorldDriver's in {@value #RUNTIME}, on the generated runs only and remapped by loom
+ * like any {@code mod*} dependency, and what the tests compile against in {@value #COMPILE}. A build that declares
+ * anything in either replaces that configuration's defaults; repositories are the build's own (gradle-plugin.md).
  *
- * <p>The runs get the mods through a remap configuration of their own, {@value #RUNTIME}, added to every loom project
- * as loom is applied and empty unless that project is a suite's loader. Loom remaps mod dependencies when its project
- * is evaluated, before this plugin's own hooks there, so the configuration exists from the start and its dependencies
- * are added as loom resolves it, by which time the suites are configured. Its source set is the run source set, so
- * {@code runClient}, which starts from {@code main}, goes without both mods.
+ * <p>Loom remaps mod dependencies when its project is evaluated, before this plugin's own hooks there, so
+ * {@value #RUNTIME} is added to every loom project as loom is applied, empty unless that project is a suite's loader,
+ * and its defaults are filled in as loom resolves it, by which time the suites are configured. Its source set is the
+ * run source set, so {@code runClient}, which starts from {@code main}, goes without both mods.
  */
 final class SuiteDependencies {
 
     static final String RUNTIME = "modStagewrightTestRuntime";
+    static final String COMPILE = "stagewrightTestCompile";
     private static final String[] LOOM_PLUGINS = {"dev.architectury.loom", "fabric-loom", "net.fabricmc.fabric-loom"};
+    // The loader and its api, which the project brings itself: a second Fabric Loader stops the game at once.
+    private static final String[] PROJECT_GROUPS = {"net.fabricmc", "net.fabricmc.fabric-api", "net.neoforged"};
 
     private SuiteDependencies() {}
 
     static void install(Project plugin, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
-        repositories(plugin);
         plugin.getRootProject().allprojects(p -> {
             for (String id : LOOM_PLUGINS) {
                 p.getPluginManager().withPlugin(id, applied -> {
-                    repositories(p);
                     runtimeMods(p, tests);
+                    compileConfiguration(p, tests);
                 });
             }
-            p.getConfigurations().configureEach(c -> c.withDependencies(deps -> compileDependencies(p, c, deps, tests)));
         });
     }
 
-    /**
-     * Where what this plugin adds comes from, appended after the project's own repositories and asked for nothing but
-     * these groups: StageWright's and WorldDriver's, Architectury's, and for a local build of StageWright, mavenLocal.
-     * Left out when the settings keep repositories to themselves, which then have to list these.
-     */
-    private static void repositories(Project project) {
-        if (!projectRepositoriesAllowed(project)) return;
-        RepositoryHandler repos = project.getRepositories();
-        if (repos.findByName("stagewrightNexus") != null) return;
-        if (PluginVersion.get().contains("build.local")) {
-            repos.mavenLocal(r -> {
-                r.setName("stagewrightLocal");
-                r.content(c -> c.includeGroup("net.magicterra"));
-            });
-        }
-        repos.maven(r -> {
-            r.setName("stagewrightNexus");
-            r.setUrl("https://nexus.gardel.top/repository/maven-releases");
-            r.content(c -> c.includeGroup("net.magicterra"));
-        });
-        repos.maven(r -> {
-            r.setName("stagewrightArchitectury");
-            r.setUrl("https://maven.architectury.dev/");
-            r.content(c -> c.includeGroup("dev.architectury"));
-        });
-    }
-
-    /** False when {@code dependencyResolutionManagement} prefers or demands the settings' repositories. */
-    private static boolean projectRepositoriesAllowed(Project project) {
-        try {
-            Object settings = InvokerHelper.invokeMethod(project.getGradle(), "getSettings", null);
-            Object management = InvokerHelper.invokeMethod(settings, "getDependencyResolutionManagement", null);
-            Object mode = ((Provider<?>) InvokerHelper.invokeMethod(management, "getRepositoriesMode", null)).getOrNull();
-            return mode == null || String.valueOf(mode).equals("PREFER_PROJECT");
-        } catch (RuntimeException e) {
-            // A Gradle without the mode lets projects declare repositories.
-            return true;
-        }
+    /** Puts {@value #COMPILE} under the run source set, compile-only: at run time both apis are inside the mods. */
+    static void compileAgainst(Project loader, StageWrightTestSuite suite, SourceSet source) {
+        if (!suite.getTestDependencies().getOrElse(true)) return;
+        Configuration compile = loader.getConfigurations().findByName(COMPILE);
+        if (compile == null) return;
+        loader.getConfigurations().getByName(source.getCompileOnlyConfigurationName()).extendsFrom(compile);
     }
 
     private static void runtimeMods(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
@@ -107,53 +77,89 @@ final class SuiteDependencies {
             property(settings, "getOnRuntimeClasspath").set(true);
             property(settings, "getPublishingMode").set(publishingMode(settings, "NONE"));
         }});
-        // Not transitive, as loom made it: StageWright and WorldDriver carry what they need, and what Architectury
-        // asks for — Fabric Loader, Fabric API — is the project's own; a second Fabric Loader stops the game at once.
-        project.getConfigurations().named(RUNTIME).configure(c -> c.setTransitive(false));
-        project.getConfigurations().named(RUNTIME).configure(c -> c.withDependencies(deps -> {
-            StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
-            if (suite == null) return;
-            String loader = loaderName(loom, project, suite);
-            add(project, deps, "net.magicterra:mc_stagewright-" + loader + ":" + PluginVersion.get(), null);
-            if (suite.getIncludeWorldDriver().getOrElse(true)) {
-                add(project, deps, "net.magicterra:worlddriver-" + loader + ":" + PluginVersion.worldDriver(), null);
-                // WorldDriver needs it beside it; a project that has its own keeps that one, a second would clash.
-                if (!declaresArchitectury(project)) {
-                    deps.add(project.getDependencies().create(
-                            "dev.architectury:architectury-" + loader + ":" + PluginVersion.architectury()));
+        project.getConfigurations().named(RUNTIME).configure(c -> {
+            c.setDescription("The mods StageWright's generated runs get: StageWright's and WorldDriver's by default.");
+            // Transitive, unlike loom's own, so WorldDriver brings the Architectury it is built against.
+            c.setTransitive(true);
+            for (String group : PROJECT_GROUPS) c.exclude(Map.of("group", group));
+            c.defaultDependencies(deps -> {
+                StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
+                if (suite == null) return;
+                String loader = loaderName(loom, project, suite);
+                add(project, deps, "net.magicterra:mc_stagewright-" + loader + ":" + PluginVersion.get(), null);
+                if (suite.getIncludeWorldDriver().getOrElse(true)) {
+                    add(project, deps, "net.magicterra:worlddriver-" + loader + ":"
+                            + suite.getWorldDriverVersion().get(), null);
                 }
-            }
-        }));
+            });
+            c.getResolutionStrategy().eachDependency(details -> {
+                checkWorldDriver(details);
+                alignToProject(project, details);
+            });
+        });
     }
 
-    private static boolean declaresArchitectury(Project project) {
-        for (Configuration c : project.getConfigurations()) {
-            if (c.getName().equals(RUNTIME)) continue;
-            for (Dependency d : c.getDependencies()) {
-                if ("dev.architectury".equals(d.getGroup()) && d.getName().startsWith("architectury")) return true;
+    private static void compileConfiguration(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
+        if (project.getConfigurations().findByName(COMPILE) != null) return;
+        project.getConfigurations().create(COMPILE, c -> {
+            c.setDescription("What StageWright tests compile against: StageWright's api, WorldDriver's and JUnit"
+                    + " Jupiter's by default, the first two in Mojang names.");
+            c.setCanBeConsumed(false);
+            c.setCanBeResolved(false);
+            c.defaultDependencies(deps -> {
+                StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
+                if (suite == null) return;
+                add(project, deps, "net.magicterra:mc_stagewright-api:" + PluginVersion.get(), "dev");
+                if (suite.getIncludeWorldDriver().getOrElse(true)) {
+                    add(project, deps, "net.magicterra:worlddriver-api:" + suite.getWorldDriverVersion().get(), "dev");
+                }
+                deps.add(project.getDependencies().platform("org.junit:junit-bom:" + PluginVersion.junit()));
+                deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-api"));
+            });
+        });
+        // Not resolvable itself, so the check runs where it is resolved: the classpaths that extend it.
+        project.getConfigurations().configureEach(c -> {
+            if (c.getName().endsWith("ompileClasspath")) {
+                c.getResolutionStrategy().eachDependency(SuiteDependencies::checkWorldDriver);
             }
-        }
-        return false;
+        });
     }
 
     /**
-     * What the tests compile against, compile-only on the run source set of a suite's loader project: at run time
-     * both apis are inside the mods, and a second copy beside them would be loaded twice.
+     * Refuses a WorldDriver outside the line StageWright links against, which would otherwise fail only once a game
+     * starts. Compared as SemVer, as the loaders compare it: Gradle orders {@code 0.1.0-build.N} below
+     * {@code 0.1.0-0}, so the range cannot be handed to Gradle as it is.
      */
-    private static void compileDependencies(Project project, Configuration configuration, DependencySet deps,
-                                            NamedDomainObjectContainer<StageWrightTestSuite> tests) {
-        if (!configuration.getName().endsWith("ompileOnly")) return;
-        StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
-        if (suite == null || !suite.getTestDependencies().getOrElse(true)) return;
-        String sourceSet = suite.getRunSourceSet().getOrElse(GeneratedRuns.TESTMOD);
-        String name = sourceSet.equals(SourceSet.MAIN_SOURCE_SET_NAME) ? "compileOnly" : sourceSet + "CompileOnly";
-        if (!configuration.getName().equals(name)) return;
-        add(project, deps, "net.magicterra:mc_stagewright-api:" + PluginVersion.get(), "dev");
-        if (suite.getIncludeWorldDriver().getOrElse(true)) {
-            add(project, deps, "net.magicterra:worlddriver-api:" + PluginVersion.worldDriver(), "dev");
+    private static void checkWorldDriver(DependencyResolveDetails details) {
+        var requested = details.getRequested();
+        if (!"net.magicterra".equals(requested.getGroup()) || !requested.getName().startsWith("worlddriver-")) return;
+        String version = requested.getVersion();
+        if (version == null || version.isEmpty()) return;
+        String range = PluginVersion.worldDriverRange();
+        if (!SemVer.inRange(version, range)) {
+            throw new GradleException("WorldDriver " + version + " is outside " + range + ", the line StageWright "
+                    + PluginVersion.get() + " links against; set worldDriverVersion to a build in it");
         }
-        deps.add(project.getDependencies().platform("org.junit:junit-bom:" + PluginVersion.junit()));
-        deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-api"));
+    }
+
+    /**
+     * WorldDriver's Architectury, moved to the version the project declares elsewhere if it does: the project's own
+     * is on the runs' classpath too, and two versions of one mod stop the game.
+     */
+    private static void alignToProject(Project project, DependencyResolveDetails details) {
+        var requested = details.getRequested();
+        if (!"dev.architectury".equals(requested.getGroup())) return;
+        for (Configuration c : project.getConfigurations()) {
+            if (c.getName().equals(RUNTIME)) continue;
+            for (Dependency d : c.getDependencies()) {
+                if (requested.getGroup().equals(d.getGroup()) && requested.getName().equals(d.getName())
+                        && d.getVersion() != null) {
+                    details.useVersion(d.getVersion());
+                    details.because("the project declares this version");
+                    return;
+                }
+            }
+        }
     }
 
     private static void add(Project project, DependencySet deps, String coordinates, String classifier) {

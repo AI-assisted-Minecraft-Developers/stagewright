@@ -86,16 +86,16 @@ def versionResource = tasks.register('generateVersionResource') {
     def v = stagewrightVersion
     def junit = junitVersion
     def worlddriver = worlddriverVersion
-    def architectury = architecturyVersion
+    def worlddriverRange = worlddriverVersionRange
     outputs.file(out)
     inputs.property('version', v)
     inputs.property('junit', junit)
     inputs.property('worlddriver', worlddriver)
-    inputs.property('architectury', architectury)
+    inputs.property('worlddriverRange', worlddriverRange)
     doLast {
         out.get().asFile.with {
             parentFile.mkdirs()
-            text = "version=${v}\njunit=${junit}\nworlddriver=${worlddriver}\narchitectury=${architectury}\n"
+            text = "version=${v}\njunit=${junit}\nworlddriver=${worlddriver}\nworlddriverRange=${worlddriverRange}\n"
         }
     }
 }

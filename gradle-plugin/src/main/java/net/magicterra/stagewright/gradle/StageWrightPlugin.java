@@ -116,6 +116,7 @@ public class StageWrightPlugin implements Plugin<Project> {
             suite.getLoaderProject().convention(project.provider(() ->
                     project.getExtensions().findByName("loom") != null ? project.getPath() : null));
             suite.getIncludeWorldDriver().convention(true);
+            suite.getWorldDriverVersion().convention(PluginVersion.worldDriver());
             suite.getTestDependencies().convention(true);
             // The tests are the run source set's, unless the build points elsewhere, as a multi-loader one does.
             suite.getClasses().convention(project.provider(() -> GeneratedRuns.generates(suite)
