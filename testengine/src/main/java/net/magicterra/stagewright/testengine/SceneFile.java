@@ -2,6 +2,7 @@ package net.magicterra.stagewright.testengine;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,13 +18,19 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  * A scene's declaration, {@code stagewright/scenes/<name>.yaml} on the test class path: the topology it runs in and
  * the world it runs on. The format is in {@code docs/reference/scene-file.md}. A key this version does not apply is
  * refused rather than run without.
+ *
+ * @param from  {@code world.from}: a save to start from instead of a new world, a class path resource under
+ *              {@code stagewright/}; null for a new world
+ * @param files {@code files}: text written into the game's directory before it starts, by path relative to it
  */
-record SceneFile(String name, String topology, World world) {
+record SceneFile(String name, String topology, World world, String from, Map<String, String> files) {
 
     static final String DIRECTORY = "stagewright/scenes/";
-    private static final Set<String> TOP = Set.of("topology", "world");
+    /** What {@code world.from} is relative to on the test class path. */
+    static final String ROOT = "stagewright/";
+    private static final Set<String> TOP = Set.of("topology", "world", "files");
     private static final Set<String> WORLD = Set.of("preset", "seed", "structures", "gamemode", "difficulty",
-            "gamerules", "datapacks", "time", "weather", "tickRate", "mobSpawning");
+            "gamerules", "datapacks", "time", "weather", "tickRate", "mobSpawning", "from");
     private static final Set<String> GAMEMODES = Set.of("survival", "creative", "adventure", "spectator");
     private static final Set<String> DIFFICULTIES = Set.of("peaceful", "easy", "normal", "hard");
     private static final Map<String, Long> NAMED_TIMES = Map.of("day", 1000L, "noon", 6000L, "night", 13000L,
@@ -112,12 +119,51 @@ record SceneFile(String name, String topology, World world) {
             throw new IllegalStateException("scene '" + name + "': " + path + " names no topology");
         }
         Object world = map.get("world");
-        return new SceneFile(name, topology, world == null ? World.QUIET : world(name, path + " world", world));
+        World w = world == null ? World.QUIET : world(name, path + " world", world);
+        String from = world == null ? null : from(name, path + " world.from", ((Map<?, ?>) world).get("from"));
+        if (from != null && w.createsWorld()) {
+            throw new IllegalStateException("scene '" + name + "': " + path + " starts from a save (world.from) and"
+                    + " also says how to create its world, which only applies to a new one");
+        }
+        return new SceneFile(name, topology, w, from, files(name, path + " files", map.get("files")));
+    }
+
+    private static String from(String name, String at, Object value) {
+        if (value == null) return null;
+        if (!(value instanceof String s) || s.isBlank()) {
+            throw new IllegalStateException("scene '" + name + "': " + at + " is a save's path under " + ROOT);
+        }
+        relative(name, at, s);
+        return s;
+    }
+
+    private static Map<String, String> files(String name, String at, Object value) {
+        if (value == null) return Map.of();
+        Map<String, String> files = new LinkedHashMap<>();
+        mapping(name, at, value).forEach((k, v) -> {
+            String file = String.valueOf(k);
+            relative(name, at + "." + file, file);
+            if (!(v instanceof String text)) {
+                throw new IllegalStateException("scene '" + name + "': " + at + "." + file + " is the file's text");
+            }
+            files.put(file, text);
+        });
+        return files;
+    }
+
+    /** Refuses a path that is absolute or climbs out of where it is resolved. */
+    private static void relative(String name, String at, String path) {
+        Path p = Path.of(path).normalize();
+        if (p.isAbsolute() || path.startsWith("/") || p.startsWith("..")) {
+            throw new IllegalStateException("scene '" + name + "': " + at + " is " + path
+                    + "; it is a relative path that stays inside");
+        }
     }
 
     private static World world(String name, String at, Object raw) {
         Map<?, ?> w = mapping(name, at, raw);
         only(name, at, w, WORLD);
+        // from belongs to the scene rather than to the world's settings; load() reads it.
         World q = World.QUIET;
         String gamemode = choice(name, at, w, "gamemode", GAMEMODES);
         String difficulty = choice(name, at, w, "difficulty", DIFFICULTIES);

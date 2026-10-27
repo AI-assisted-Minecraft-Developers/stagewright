@@ -109,7 +109,10 @@ final class TestCommand {
         Path work = source.resolve("build");
         deleteTree(work);
         Path root = work.resolve("root");
-        for (String dir : List.of("scenes", "tests")) copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir));
+        // worlds: the saves a scene's world.from names.
+        for (String dir : List.of("scenes", "tests", "worlds")) {
+            copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir));
+        }
         Path jar = modJar(root, work.resolve(MOD_ID + ".jar"));
         List<Path> mods = new ArrayList<>(extraMods);
         mods.add(jar);

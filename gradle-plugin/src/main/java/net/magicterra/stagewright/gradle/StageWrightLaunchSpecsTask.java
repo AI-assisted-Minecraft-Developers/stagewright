@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.Map;
 
 import org.gradle.api.DefaultTask;
@@ -70,14 +71,17 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
         File dir = getLaunchesDirectory().get().getAsFile();
         File argFiles = new File(dir, "classpath");
         for (Entry entry : getEntries().get()) {
+            JsonObject primary = process(entry.primary, new File(argFiles, entry.topology + ".primary.args"));
             JsonObject json = new JsonObject()
                     .add("topology", entry.topology)
-                    .add("gameDirectory", entry.gameDirectory.getAbsolutePath())
-                    .add("cleanWorld", entry.cleanWorld)
+                    .add("gameDirectory", entry.gameDirectory.getAbsolutePath());
+            String world = worldDirectory(entry.primary.jvmArgs());
+            if (world != null) json.add("worldDirectory", world);
+            json.add("cleanWorld", entry.cleanWorld)
                     .add("timeoutMinutes", entry.timeoutMinutes)
                     .add("stallMinutes", entry.stallMinutes)
                     .add("server", entry.server)
-                    .add("primary", process(entry.primary, new File(argFiles, entry.topology + ".primary.args")));
+                    .add("primary", primary);
             if (entry.companion != null) {
                 json.add("companion", process(entry.companion,
                         new File(argFiles, entry.topology + ".companion.args")));
@@ -91,6 +95,18 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
                 throw new UncheckedIOException("cannot write the launch spec " + out, e);
             }
         }
+    }
+
+    /**
+     * Where a client hosting its own server keeps the world the run names with {@code stagewright.client.world}, or
+     * null for a dedicated server's default. A scene starting from a save puts it there.
+     */
+    static String worldDirectory(List<String> jvmArgs) {
+        String prefix = "-Dstagewright.client.world=";
+        for (String arg : jvmArgs) {
+            if (arg.startsWith(prefix)) return "saves/" + arg.substring(prefix.length());
+        }
+        return null;
     }
 
     private static JsonObject process(CompanionLaunch launch, File classpathArgFile) {

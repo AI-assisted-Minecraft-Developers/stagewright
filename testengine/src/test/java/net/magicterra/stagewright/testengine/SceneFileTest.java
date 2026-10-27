@@ -142,7 +142,7 @@ class SceneFileTest {
 
     @Test
     void anUnknownKeyUnderWorldIsRefused() {
-        refuses("  from: somewhere\n", "from");
+        refuses("  biome: somewhere\n", "biome");
     }
 
     @Test
@@ -199,5 +199,30 @@ class SceneFileTest {
     @Test
     void aWorldThatIsNotAMappingIsRefused() {
         refuses("  - a\n", "world");
+    }
+
+    @Test
+    void filesAreTextByRelativePath() throws IOException {
+        SceneFile file = load("topology: t\nfiles:\n  config/a.toml: |\n    x = 1\n");
+        assertEquals(Map.of("config/a.toml", "x = 1\n"), file.files());
+    }
+
+    @Test
+    void aFileOutsideTheGameDirectoryIsRefused() {
+        String message = refusal("topology: t\nfiles:\n  ../escape.txt: x\n");
+        assertTrue(message.contains("../escape.txt"), message);
+    }
+
+    @Test
+    void fromNamesASaveAndKeepsTheRuntimeSettings() throws IOException {
+        SceneFile file = load("topology: t\nworld:\n  from: worlds/old.zip\n  time: {at: noon}\n");
+        assertEquals("worlds/old.zip", file.from());
+        assertEquals(6000L, file.world().time());
+        assertFalse(file.world().createsWorld());
+    }
+
+    @Test
+    void fromWithCreationSettingsIsRefused() {
+        refuses("  from: worlds/old.zip\n  seed: 5\n", "world.from", "new one");
     }
 }

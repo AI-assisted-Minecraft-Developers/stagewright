@@ -16,6 +16,10 @@ import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.gui.screens.worldselection.WorldOpenFlows;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.resolver.ServerAddress;
+import net.minecraft.server.WorldStem;
+import net.minecraft.server.packs.repository.PackRepository;
+import net.minecraft.server.packs.repository.ServerPacksSource;
+import net.minecraft.world.level.storage.LevelStorageSource;
 
 /**
  * Drives a real game client from the title screen into a world, with no external process poking at
@@ -307,8 +311,7 @@ public final class ClientDirector {
         WorldOpenFlows flows = mc.createWorldOpenFlows();
         if (mc.getLevelSource().levelExists(world)) {
             StageWrightCommon.LOG.info("[{}] opening existing world '{}'", StageWrightCommon.MOD_ID, world);
-            flows.openWorld(world, () -> StageWrightCommon.LOG.error(
-                    "[{}] opening world '{}' failed", StageWrightCommon.MOD_ID, world));
+            openExisting(mc, flows, world);
             return;
         }
 
@@ -317,5 +320,24 @@ public final class ClientDirector {
                 creation.settings().gameType().getName(), creation.settings().difficulty().getKey(),
                 creation.options().seed());
         flows.createFreshLevel(world, creation.settings(), creation.options(), creation.dimensions(), mc.screen);
+    }
+
+    /**
+     * Load a save without the questions {@code WorldOpenFlows.openWorld} asks first: back it up before loading one
+     * from another version, one with experimental settings (which any save made with worldgen mods loaded has), or on
+     * low disk space. Nobody is there to answer them, and the save is the run's own copy, put there afresh for the
+     * scene. A save that fails to load is logged; the run then ends as stalled.
+     */
+    private static void openExisting(Minecraft mc, WorldOpenFlows flows, String world) {
+        LevelStorageSource.LevelStorageAccess access = null;
+        try {
+            access = mc.getLevelSource().validateAndCreateAccess(world);
+            PackRepository packs = ServerPacksSource.createPackRepository(access);
+            WorldStem stem = flows.loadWorldStem(access.getDataTag(), false, packs);
+            mc.doWorldLoad(access, packs, stem, false);
+        } catch (Exception e) {
+            StageWrightCommon.LOG.error("[{}] opening world '{}' failed", StageWrightCommon.MOD_ID, world, e);
+            if (access != null) access.safeClose();
+        }
     }
 }

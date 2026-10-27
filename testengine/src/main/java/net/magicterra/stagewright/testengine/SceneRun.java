@@ -58,8 +58,13 @@ final class SceneRun {
                         + " topology '" + spec.topology() + "' keeps the world of the run before (cleanWorld is false),"
                         + " so none of it would apply");
             }
-            listener.reportingEntryPublished(scene, ReportEntry.from("world", declaration.world().describe()));
-            result = launch(spec, declaration.world(), relay);
+            if (declaration.from() != null && !spec.cleanWorld()) {
+                throw new IllegalStateException("scene '" + scene.name + "' starts from a save, but topology '"
+                        + spec.topology() + "' keeps the world of the run before (cleanWorld is false)");
+            }
+            listener.reportingEntryPublished(scene, ReportEntry.from("world", (declaration.from() == null ? ""
+                    : "from=" + declaration.from() + ", ") + declaration.world().describe()));
+            result = launch(spec, declaration, relay, loader);
         } catch (Exception e) {
             relay.closeOut(scene, "the scene could not start: " + e.getMessage());
             result = TestExecutionResult.failed(e);
@@ -67,8 +72,9 @@ final class SceneRun {
         listener.executionFinished(scene, result);
     }
 
-    private TestExecutionResult launch(LaunchSpec spec, SceneFile.World world, Relay relay)
+    private TestExecutionResult launch(LaunchSpec spec, SceneFile declaration, Relay relay, ClassLoader loader)
             throws IOException, InterruptedException {
+        SceneFile.World world = declaration.world();
         Path artifacts = spec.gameDirectory().resolve("stagewright");
         Path logs = artifacts.resolve("logs");
         Files.createDirectories(logs);
@@ -77,10 +83,12 @@ final class SceneRun {
             deleteTree(spec.worldDirectory());
             deleteTree(spec.gameDirectory().resolve("saves"));
         }
+        if (declaration.from() != null) SceneSetup.installSave(declaration.from(), loader, spec.worldDirectory());
         if (spec.companion() != null) Files.createDirectories(spec.companion().workingDirectory());
         // Put back afterwards, so a setting one scene declares is not the next scene's undeclared default.
         Path serverProperties = spec.primary().workingDirectory().resolve("server.properties");
         byte[] original = Files.isRegularFile(serverProperties) ? Files.readAllBytes(serverProperties) : null;
+        SceneSetup.Restore files = SceneSetup.writeFiles(spec.primary().workingDirectory(), declaration.files());
         try {
             // A run directory nothing else prepares, such as one the plugin generated: a dedicated server there needs
             // the EULA accepted and offline mode before it starts at all. Inside the put-back, like the scene's own.
@@ -88,8 +96,12 @@ final class SceneRun {
             writeServerProperties(serverProperties, world);
             return supervise(spec, world, relay, artifacts, logs);
         } finally {
-            if (original != null) Files.write(serverProperties, original);
-            else Files.deleteIfExists(serverProperties);
+            try {
+                files.run();
+            } finally {
+                if (original != null) Files.write(serverProperties, original);
+                else Files.deleteIfExists(serverProperties);
+            }
         }
     }
 
