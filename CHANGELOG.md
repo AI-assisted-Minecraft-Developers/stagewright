@@ -12,6 +12,11 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-28
 
+### A scene can run without some of the game's mods · green on production Fabric and NeoForge packs
+
+`mods.exclude` names mods by id or jar name, in `mods/` or on the class path, and the scene's games start without them;
+the pack's `mods/` and the build's files stay as they are. A topology no longer has to be made for a mod set.
+
 ### A scene can start from a save and write files into the game directory · green on a production Fabric pack, dedicated and integrated
 
 `world.from` names a save under `stagewright/`, zip or directory, which each run of the scene starts from; `files`

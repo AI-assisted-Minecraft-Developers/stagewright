@@ -23,7 +23,22 @@ world:
 ```
 
 A key this version does not apply is refused, and so is a value of the wrong kind: a scene does not run on a world it
-did not ask for. `mods` and `clients` are not applied yet.
+did not ask for. `clients` is not applied yet.
+
+## `mods`
+
+```yaml
+mods:
+  exclude: [farmersdelight, jei-*.jar]
+```
+
+Mods the scene's games start without, each a mod id or a pattern on its jar's file name, found in the game's `mods/`
+or on its class path (where a build's dependency mods are). A name that matches no mod of the game fails the scene,
+naming the mods it has. Neither the pack's `mods/` nor the build's files are changed: Fabric is told the ids to disable
+(`fabric.debug.disableModIds`); NeoForge gets copies of its argument files with the jars taken out of every path list,
+and, for a jar in `mods/`, a game directory under `stagewright/scene-mods/` whose entries all link to the real one's but
+`mods/`, which links the jars kept. The engine reports what it left out as an entry named `mods`. `only`, every mod but
+those listed, is refused: it would take their dependencies too.
 
 ## `files`
 

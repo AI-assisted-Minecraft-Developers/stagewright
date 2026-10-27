@@ -164,8 +164,8 @@ build.
 
 ## Not yet
 
-- Scene declarations apply `topology`, `world` and `files` ([scene file](../reference/scene-file.md)); `mods` and
-  `clients` are refused rather than ignored, and the creation settings reach a dedicated server only.
+- Scene declarations apply `topology`, `world`, `files` and `mods.exclude` ([scene file](../reference/scene-file.md));
+  `clients` and `mods.only` are refused rather than ignored, and the creation settings reach a dedicated server only.
 - Scenes run one after another.
 - `perf` counts frames only of a client in the game's own JVM, not of a joining one; `insert` and `container` reach only
   containers that are vanilla `Container`s, in the overworld.
