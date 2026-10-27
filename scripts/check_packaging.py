@@ -31,7 +31,8 @@ LICENSE_NAME = 'LGPL-3.0-only'
 LICENSE_URL = 'https://www.gnu.org/licenses/lgpl-3.0.txt'
 
 # Every directory holding a module whose jars are published or handed to a user.
-MODULES = ['api', 'common', 'fabric', 'neoforge', 'attached', 'junit', 'engine', 'agent', 'cli', 'gradle-plugin']
+MODULES = ['api', 'common', 'fabric', 'neoforge', 'attached', 'junit', 'engine', 'agent', 'testengine', 'cli',
+           'gradle-plugin']
 
 POMS = [
     'api/build/publications/mavenJava/pom-default.xml',
@@ -42,6 +43,7 @@ POMS = [
     'junit/build/publications/mavenJava/pom-default.xml',
     'engine/build/publications/mavenJava/pom-default.xml',
     'agent/build/publications/mavenJava/pom-default.xml',
+    'testengine/build/publications/mavenJava/pom-default.xml',
     'gradle-plugin/build/publications/pluginMaven/pom-default.xml',
     'gradle-plugin/build/publications/mcStageWrightPluginMarkerMaven/pom-default.xml',
 ]
@@ -50,6 +52,8 @@ POMS = [
 THIRD_PARTY = [
     ('net/magicterra/stagewright/engine/json/JsonParser.class', 'META-INF/licenses/minimal-json-MIT.txt'),
     ('dev/latvian/mods/rhino/', 'META-INF/licenses/MPL-2.0.txt'),
+    ('net/magicterra/stagewright/testengine/shadow/rhino/', 'META-INF/licenses/MPL-2.0.txt'),
+    ('net/magicterra/stagewright/shadow/snakeyaml/', 'META-INF/licenses/Apache-2.0.txt'),
     ('com/google/gson/', 'META-INF/licenses/Apache-2.0.txt'),
     ('com/google/errorprone/', 'META-INF/licenses/Apache-2.0.txt'),
 ]
@@ -64,7 +68,7 @@ FOREIGN_MOD_METADATA = [
 BUILD_COMMANDS = [
     ['./gradlew', '--console=plain', 'jar', 'sourcesJar', 'remapJar', 'remapSourcesJar', 'shadowJar',
      'generatePomFileForMavenJavaPublication'],
-    ['./gradlew', '--console=plain', '-p', 'engine', 'jar', 'sourcesJar',
+    ['./gradlew', '--console=plain', '-p', 'engine', 'jar', 'sourcesJar', 'engineJar',
      'generatePomFileForMavenJavaPublication'],
     ['./gradlew', '--console=plain', '-p', 'gradle-plugin', 'jar', 'generatePomFileForPluginMavenPublication',
      'generatePomFileForMcStageWrightPluginMarkerMavenPublication'],

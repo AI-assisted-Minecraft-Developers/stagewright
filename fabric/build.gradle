@@ -45,6 +45,7 @@ dependencies {
 
     common(project(path: ':stagewright-common', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':stagewright-common', configuration: 'transformProductionFabric')
+    shadowBundle "org.yaml:snakeyaml:$rootProject.snakeyaml_version"
 
     // The JUnit Platform the in-game test runner uses, nested (Jar-in-Jar) as libraries.
     rootProject.junitPlatformJars.each { include it }
@@ -102,6 +103,9 @@ shadowJar {
     // provider in the other reports itself absent — which is indistinguishable from an uninstalled
     // mod, and would be found by a scene skipping for a reason that is not true.
     mergeServiceFiles()
+    // Another mod may ship its own snakeyaml.
+    relocate 'org.yaml.snakeyaml', 'net.magicterra.stagewright.shadow.snakeyaml'
+    into('META-INF/licenses') { from rootProject.file('cli/src/main/resources/META-INF/licenses/Apache-2.0.txt') }
 }
 
 remapJar {

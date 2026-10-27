@@ -20,7 +20,10 @@ java {
 
 repositories {
     mavenCentral()
-    maven { url = 'https://maven.latvian.dev/releases' }
+    maven {
+        url = 'https://maven.latvian.dev/releases'
+        content { includeGroup 'dev.latvian.mods' }
+    }
 }
 
 configurations {
@@ -41,7 +44,7 @@ dependencies {
     implementation 'org.junit.platform:junit-platform-engine'
     // Reads test classes without loading them: their signatures name Minecraft, which is not here.
     implementation 'org.ow2.asm:asm:9.7.1'
-    implementation 'org.yaml:snakeyaml:2.3'
+    implementation "org.yaml:snakeyaml:${rootProject.snakeyamlVersion}"
     bundledRhino "dev.latvian.mods:rhino:${rootProject.rhinoVersion}"
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
@@ -72,6 +75,8 @@ tasks.named('test', Test) {
 // Shadow unpacks any jar it meets, so the agent is added after it, by a plain Jar task.
 def relocated = tasks.named('shadowJar') {
     archiveClassifier = 'relocated'
+    // An input to engineJar, never handed out, so kept out of build/libs.
+    destinationDirectory = layout.buildDirectory.dir('relocated')
     configurations = [project.configurations.bundledRhino]
     relocate 'dev.latvian.mods.rhino', 'net.magicterra.stagewright.testengine.shadow.rhino'
     exclude 'agent/**'
@@ -79,6 +84,7 @@ def relocated = tasks.named('shadowJar') {
 def engineJar = tasks.register('engineJar', Jar) {
     from(zipTree(relocated.flatMap { it.archiveFile }))
     into('agent') { from stageBundledAgent }
+    into('META-INF/licenses') { from '../cli/src/main/resources/META-INF/licenses/MPL-2.0.txt' }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 tasks.named('jar') { archiveClassifier = 'plain' }

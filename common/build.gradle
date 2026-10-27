@@ -28,6 +28,10 @@ dependencies {
     implementation 'org.junit.platform:junit-platform-reporting'
     implementation 'org.junit.jupiter:junit-jupiter-engine'
 
+    // YAML tests; the loader jars carry it relocated.
+    compileOnly "org.yaml:snakeyaml:${rootProject.snakeyaml_version}"
+    testImplementation "org.yaml:snakeyaml:${rootProject.snakeyaml_version}"
+
     // WorldDriver provides the required runtime copy; do not embed Rhino a second time.
     compileOnly "dev.latvian.mods:rhino:${rootProject.rhino_version}"
 

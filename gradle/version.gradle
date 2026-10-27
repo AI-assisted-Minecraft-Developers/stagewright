@@ -18,3 +18,4 @@ new File(buildscript.sourceFile.parentFile.parentFile, 'gradle.properties').with
 ext.stagewrightVersion = "${base}-build.${build}+${rootProperties.minecraft_version}".toString()
 ext.junitVersion = rootProperties.junit_version
 ext.rhinoVersion = rootProperties.rhino_version
+ext.snakeyamlVersion = rootProperties.snakeyaml_version
