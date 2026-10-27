@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.test;
 
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -45,6 +46,9 @@ public interface Game {
 
     /** Wait for a condition on the server; see {@link Await}. */
     Await await();
+
+    /** Run {@code measurement}'s phases in order; each phase's median window by name, in phase order. */
+    Map<String, Perf.Window> perf(Perf measurement);
 
     /**
      * Set a game rule for the rest of this test; it is put back when the test ends. Needs

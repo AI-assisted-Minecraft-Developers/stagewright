@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
@@ -11,6 +12,7 @@ import java.util.function.Function;
 import net.magicterra.stagewright.test.Await;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Locks;
+import net.magicterra.stagewright.test.Perf;
 import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.minecraft.server.MinecraftServer;
@@ -54,6 +56,11 @@ final class GameImpl implements Game {
     @Override
     public Await await() {
         return new AwaitImpl();
+    }
+
+    @Override
+    public Map<String, Perf.Window> perf(Perf measurement) {
+        return PerfSampler.measure(this, measurement);
     }
 
     @Override

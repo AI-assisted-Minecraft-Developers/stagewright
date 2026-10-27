@@ -8,6 +8,7 @@ import java.util.Map;
 import net.magicterra.stagewright.test.Body;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Game;
+import net.magicterra.stagewright.test.Perf;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
@@ -73,18 +74,19 @@ final class ScriptHandles {
             if (!(args.length > 0 && args[0] instanceof Map<?, ?> perf) || !(perf.get("phases") instanceof List<?> list)) {
                 throw new IllegalArgumentException("t.perf({phases: [{name, run}], warmup, sample, repeat})");
             }
-            List<PerfSampler.Phase> phases = new ArrayList<>();
+            Perf measurement = Perf.phases();
             for (Object p : list) {
                 if (!(p instanceof Map<?, ?> phase) || !(phase.get("name") instanceof String name)) {
                     throw new IllegalArgumentException("t.perf: a phase is {name, run}");
                 }
                 Scripting.Function run = phase.get("run") instanceof Scripting.Function f ? f : null;
-                phases.add(new PerfSampler.Phase(name, () -> {
+                measurement.phase(name, () -> {
                     if (run != null) run.call();
-                }));
+                });
             }
-            return PerfSampler.measure(game, phases, count(perf, "warmup", 200), count(perf, "sample", 600),
-                    count(perf, "repeat", 3));
+            measurement.warmup(count(perf, "warmup", 200)).sample(count(perf, "sample", 600))
+                    .repeat(count(perf, "repeat", 3));
+            return PerfSampler.report(game.perf(measurement));
         });
         t.put("overrideTickRate", (Scripting.Function) args -> {
             if (!(args.length > 0 && args[0] instanceof Number n)) {

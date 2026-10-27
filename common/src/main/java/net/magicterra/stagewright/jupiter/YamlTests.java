@@ -9,6 +9,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import net.magicterra.stagewright.test.Perf;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
@@ -145,16 +146,16 @@ final class YamlTests {
         if (!(value instanceof Map<?, ?> perf) || !(perf.get("phases") instanceof List<?> list) || list.isEmpty()) {
             throw new IllegalArgumentException("perf: {phases: [{name, steps}], warmup, sample, repeat}");
         }
-        List<PerfSampler.Phase> phases = new ArrayList<>();
+        Perf measurement = Perf.phases();
         for (Object p : list) {
             if (!(p instanceof Map<?, ?> phase) || !(phase.get("name") instanceof String name)) {
                 throw new IllegalArgumentException("perf: a phase is {name, steps}");
             }
             List<?> steps = phase.get("steps") instanceof List<?> s ? s : List.of();
-            phases.add(new PerfSampler.Phase(name, () -> run(context, steps, saved, "phase " + name + ", step ")));
+            measurement.phase(name, () -> run(context, steps, saved, "phase " + name + ", step "));
         }
-        Map<String, Object> result = PerfSampler.measure(context.game(), phases, count(perf, "warmup", 200),
-                count(perf, "sample", 600), count(perf, "repeat", 3));
+        measurement.warmup(count(perf, "warmup", 200)).sample(count(perf, "sample", 600)).repeat(count(perf, "repeat", 3));
+        Map<String, Object> result = PerfSampler.report(PerfSampler.measure(context.game(), measurement));
         context.record("perf", result);
         return result;
     }
