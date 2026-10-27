@@ -54,8 +54,8 @@ ends. The script also has WorldDriver's own `Driver.*`. A failed `t.expect` cann
 cannot swallow its own failure.
 
 The options are `scene`, `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`, counted toward
-coverage as `@Requires` is), `dependsOn` (a test's name in the same file, or `file.js#name`; a test runs after those
-of its own file, and aborts when one did not pass) and `knownIssue` (the reason, read as `@KnownIssue` is). Script
+coverage as `@Requires` is), `dependsOn` (a test's name in the same file, `file.js#name`, or a Java test as
+`com.example.SomeTest#method`; a test runs after those of its own file, and aborts when one did not pass) and `knownIssue` (the reason, read as `@KnownIssue` is). Script
 tests run one at a time after the game's Java tests, so an override needs no lock. `waitUntil` and `settle` check
 their condition on the test thread once a tick, since a condition usually calls WorldDriver.
 
@@ -133,7 +133,7 @@ command-line runner writes the same file from a game directory. The engine knows
 - Scene declarations apply `topology` and `world` ([scene file](../reference/scene-file.md)); `mods`, `files`,
   `clients` and `world.from` are refused rather than ignored, and the creation settings reach a dedicated server only.
 - Scenes run one after another, and a game's script tests one after another.
-- A script test cannot yet depend on a Java test, nor a Java test on a script test.
+- A Java test cannot depend on a script test: the scripts run after every Java test of the game.
 - `perf` reports no CPU load or client frame rate yet; `insert` and `container` reach only
   containers that are vanilla `Container`s, in the overworld.
 - A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.

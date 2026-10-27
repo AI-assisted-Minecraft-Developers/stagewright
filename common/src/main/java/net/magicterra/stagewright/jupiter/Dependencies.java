@@ -103,6 +103,23 @@ public final class Dependencies implements BeforeEachCallback, TestWatcher {
         done.add(at);
     }
 
+    /**
+     * How the Java test {@code className#method} ended, for a script test depending on it: null when it succeeded,
+     * else why the dependent cannot run. Java tests have all ended by then, since the script engine runs after Jupiter.
+     */
+    static String blockerFor(String className, String method) {
+        Ref ref = new Ref(className, method);
+        if (!planned.contains(ref)) return "is not in this run";
+        Outcome outcome = OUTCOMES.get(ref);
+        if (outcome == null) return "ended without running: its class failed or was skipped first";
+        return switch (outcome) {
+            case SUCCEEDED -> null;
+            case FAILED -> "failed";
+            case ABORTED -> "was aborted";
+            case DISABLED -> "is disabled";
+        };
+    }
+
     @Override
     public void beforeEach(ExtensionContext context) throws InterruptedException {
         boolean parallel = context.getConfigurationParameter(PARALLEL).map(Boolean::parseBoolean).orElse(false);

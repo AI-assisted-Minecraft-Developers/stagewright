@@ -128,7 +128,8 @@ public final class JupiterRun {
             SummaryGeneratingListener summary = new SummaryGeneratingListener();
             StringWriter xmlLog = new StringWriter();
             // Handed over, not listed in META-INF/services: under Fabric's Knot a services file in this jar hides
-            // the one in junit-jupiter-engine, and Jupiter goes missing.
+            // the one in junit-jupiter-engine, and Jupiter goes missing. An added engine runs after the service-loaded
+            // ones, which is what lets a script test depend on a Java test.
             Launcher launcher = LauncherFactory.create(LauncherConfig.builder()
                     .addTestEngines(new ScriptTestEngine()).build());
             TestPlan plan = launcher.discover(request);

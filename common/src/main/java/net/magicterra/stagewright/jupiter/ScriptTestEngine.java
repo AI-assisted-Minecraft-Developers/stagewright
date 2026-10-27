@@ -286,7 +286,10 @@ public final class ScriptTestEngine implements TestEngine {
         }
     }
 
-    /** {@code dependsOn}: test names, a bare one in the same file, {@code file.js#name} in another. */
+    /**
+     * {@code dependsOn}: test names, a bare one in the same file, {@code file.js#name} in another, and
+     * {@code com.example.SomeTest#method} a Java test, which has ended by then since Jupiter runs first.
+     */
     private static List<String> dependencies(String resource, String test, Object value) {
         List<Object> items = value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
         List<String> keys = new ArrayList<>();
@@ -298,6 +301,12 @@ public final class ScriptTestEngine implements TestEngine {
             keys.add(s.contains("#") ? s : resource + "#" + s);
         }
         return keys;
+    }
+
+    /** Whether a {@code dependsOn} key names a Java test rather than a script's: its file is no script. */
+    private static boolean isJavaTest(String key) {
+        String file = key.substring(0, key.indexOf('#'));
+        return !file.endsWith(".js") && !isYaml(file);
     }
 
     /** One test a script registered. */
@@ -351,6 +360,13 @@ public final class ScriptTestEngine implements TestEngine {
         /** Aborted when a test this one depends on did not pass, or has not run; null when every one passed. */
         private TestExecutionResult upstream(Map<String, TestExecutionResult.Status> results) {
             for (String dependency : dependsOn) {
+                if (isJavaTest(dependency)) {
+                    int hash = dependency.indexOf('#');
+                    String why = Dependencies.blockerFor(dependency.substring(0, hash), dependency.substring(hash + 1));
+                    if (why == null) continue;
+                    return TestExecutionResult.aborted(new IllegalStateException("depends on " + dependency
+                            + ", which " + why));
+                }
                 TestExecutionResult.Status status = results.get(dependency);
                 if (status == TestExecutionResult.Status.SUCCESSFUL) continue;
                 String why = status == null
