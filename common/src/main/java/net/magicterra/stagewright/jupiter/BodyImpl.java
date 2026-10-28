@@ -3,15 +3,19 @@ package net.magicterra.stagewright.jupiter;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import net.magicterra.stagewright.test.Body;
 import net.magicterra.stagewright.test.Bot;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Player;
-import net.magicterra.worlddriver.api.methods.control.ControlBlockingApi;
-import net.magicterra.worlddriver.api.methods.control.ControlContracts;
+import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
+import net.magicterra.worlddriver.api.methods.test.TestInputContracts.HeldKeys;
 import net.magicterra.worlddriver.bot.BotRegistry;
+import net.magicterra.worlddriver.bot.BotTicker;
+import net.magicterra.worlddriver.bot.Roster;
 import net.magicterra.worlddriver.game.body.JoinedPlayers;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -46,11 +50,6 @@ class BodyImpl implements Body {
             if (player == null) throw new IllegalStateException(name + " is not on the server");
             return work.apply(player);
         });
-    }
-
-    /** Whether the player is still on the server. */
-    boolean present() {
-        return game.onServer(server -> BotRegistry.serverPlayer(server, ref()) != null);
     }
 
     @Override
@@ -111,13 +110,20 @@ class BodyImpl implements Body {
             super(game, name);
         }
 
-        static BotImpl join(Game game, String name) {
+        /** Join a bot, parked before the server ticks it once when {@code parked}. */
+        static BotImpl join(Game game, String name, boolean parked) {
             String chosen = name != null ? name : "sw_bot_" + NEXT.getAndIncrement();
-            game.api(ControlBlockingApi::of).roster(
-                    new ControlContracts.Spawn(chosen, Optional.empty(), Optional.empty()));
             BotImpl bot = new BotImpl(game, chosen);
-            // A name used before in this world comes back with what it was saved with.
-            bot.runOnServer(player -> {
+            // One server task, so no tick falls between joining and parking.
+            game.runOnServer(server -> {
+                ServerLevel level = server.overworld();
+                if (Roster.spawn(level, Vec3.atBottomCenterOf(level.getSharedSpawnPos()), chosen)
+                        instanceof Roster.Refusal refused) {
+                    throw new IllegalStateException("could not join " + chosen + ": " + refused.message());
+                }
+                if (parked) BotTicker.unregister(BotRegistry.get(bot.ref()));
+                // A name used before in this world comes back with what it was saved with.
+                ServerPlayer player = BotRegistry.serverPlayer(server, bot.ref());
                 player.getInventory().clearContent();
                 player.setGameMode(GameType.SURVIVAL);
                 player.setHealth(player.getMaxHealth());
@@ -129,8 +135,47 @@ class BodyImpl implements Body {
         }
 
         @Override
+        public Bot park() {
+            Drive.park(game, ref());
+            return this;
+        }
+
+        @Override
+        public Bot unpark() {
+            Drive.unpark(game, ref());
+            return this;
+        }
+
+        @Override
+        public void tick(int ticks) {
+            Drive.tick(game, ref(), ticks);
+        }
+
+        @Override
+        public int tickUntilIdle(int maxTicks) {
+            return Drive.tickUntilIdle(game, ref(), maxTicks);
+        }
+
+        @Override
+        public void step(int ticks) {
+            Drive.step(game, ref(), ticks);
+        }
+
+        @Override
+        public void think() {
+            Drive.think(game, ref());
+        }
+
+        @Override
+        public HeldKeys press(UnaryOperator<Press> keys) {
+            return Drive.press(game, ref(), keys);
+        }
+
+        @Override
         public void close() {
-            if (present()) game.api(ControlBlockingApi::of).roster(new ControlContracts.Remove(ref()));
+            game.runOnServer(server -> {
+                if (BotRegistry.get(ref()) != null) Roster.remove(ref());
+            });
         }
     }
 }

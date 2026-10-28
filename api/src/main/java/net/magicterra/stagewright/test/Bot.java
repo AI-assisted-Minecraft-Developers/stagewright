@@ -11,7 +11,18 @@ import java.lang.annotation.Target;
  * as any player is, so mobs, advancements and chunk loading see it. It joins at the world spawn in survival with an
  * empty inventory and full health and hunger, and leaves when the test ends.
  */
-public interface Bot extends Body {
+public interface Bot extends Body, Driven {
+
+    @Override
+    default String ref() {
+        return Body.super.ref();
+    }
+
+    @Override
+    Bot park();
+
+    @Override
+    Bot unpark();
 
     /** The name a parameter's bot joins under; without it, one StageWright makes up. */
     @Documented
@@ -22,4 +33,13 @@ public interface Bot extends Body {
         /** A player name: letters, digits and underscores, at most 16. */
         String value();
     }
+
+    /**
+     * The parameter's bot joins {@linkplain #park parked}, before the server has ticked it once, so it stays where
+     * the test puts it until the test ticks it.
+     */
+    @Documented
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.PARAMETER)
+    @interface Parked {}
 }

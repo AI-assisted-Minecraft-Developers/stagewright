@@ -51,7 +51,8 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
         }
         if (type == Bot.class) {
             BodyImpl.BotImpl bot = BodyImpl.BotImpl.join(g,
-                    parameter.findAnnotation(Bot.Name.class).map(Bot.Name::value).orElse(null));
+                    parameter.findAnnotation(Bot.Name.class).map(Bot.Name::value).orElse(null),
+                    parameter.isAnnotated(Bot.Parked.class));
             // Leaves once the test method's context ends, after every @AfterEach.
             context.getStore(NAMESPACE).put("bot." + parameter.getIndex(), bot);
             return bot;

@@ -4,11 +4,16 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import net.magicterra.stagewright.test.Body;
 import net.magicterra.stagewright.test.Client;
+import net.magicterra.stagewright.test.Driven;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Perf;
+import net.magicterra.worlddriver.api.methods.shared.CommonTypes.BlockPosition;
+import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
+import net.magicterra.worlddriver.api.methods.test.TestInputContracts.HeldKeys;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
@@ -39,10 +44,16 @@ final class ScriptHandles {
             leases.add(plot);
             return plot(plot);
         });
+        // t.bot(), t.bot(name) or t.bot({name, parked}).
         t.put("bot", (Scripting.Function) args -> {
-            BodyImpl.BotImpl bot = BodyImpl.BotImpl.join(game, args.length > 0 && args[0] instanceof String n ? n : null);
+            Object a = arg(args, 0);
+            String name = a instanceof String n ? n : a instanceof Map<?, ?> m && m.get("name") instanceof String n ? n : null;
+            boolean parked = a instanceof Map<?, ?> m && Expectations.truthy(m.get("parked"));
+            BodyImpl.BotImpl bot = BodyImpl.BotImpl.join(game, name, parked);
             leases.add(bot);
-            return body(bot);
+            Map<String, Object> out = body(bot);
+            driven(out, bot);
+            return out;
         });
         t.put("player", (Scripting.Function) args -> body(BodyImpl.player(game)));
         t.put("client", (Scripting.Function) args -> {
@@ -136,6 +147,86 @@ final class ScriptHandles {
         });
         out.put("count", (Scripting.Function) a -> body.count(lookup(BuiltInRegistries.ITEM, arg(a, 0), "item")));
         return out;
+    }
+
+    /** The {@link Driven} verbs; {@code press} takes {@code {forward, left, jump, sneak, sprint, attack, use, aimAt, toolFor, hit, release}}. */
+    private static void driven(Map<String, Object> out, Driven body) {
+        out.put("park", (Scripting.Function) a -> {
+            body.park();
+            return null;
+        });
+        out.put("unpark", (Scripting.Function) a -> {
+            body.unpark();
+            return null;
+        });
+        out.put("tick", (Scripting.Function) a -> {
+            body.tick(a.length > 0 ? whole(a[0], "ticks") : 1);
+            return null;
+        });
+        out.put("tickUntilIdle", (Scripting.Function) a -> body.tickUntilIdle(whole(arg(a, 0), "maxTicks")));
+        out.put("step", (Scripting.Function) a -> {
+            body.step(a.length > 0 ? whole(a[0], "ticks") : 1);
+            return null;
+        });
+        out.put("think", (Scripting.Function) a -> {
+            body.think();
+            return null;
+        });
+        out.put("press", (Scripting.Function) a -> {
+            if (!(arg(a, 0) instanceof Map<?, ?> keys)) {
+                throw new IllegalArgumentException("press takes {forward, left, jump, sneak, sprint, attack, use, aimAt,"
+                        + " toolFor, hit, release}");
+            }
+            HeldKeys held = body.press(p -> press(p, keys));
+            Map<String, Object> answer = new LinkedHashMap<>();
+            answer.put("up", held.up());
+            answer.put("down", held.down());
+            answer.put("left", held.left());
+            answer.put("right", held.right());
+            answer.put("jump", held.jump());
+            answer.put("sprint", held.sprint());
+            answer.put("attack", held.attack());
+            answer.put("shift", held.shift());
+            return answer;
+        });
+    }
+
+    static Press press(Press p, Map<?, ?> keys) {
+        for (Object k : keys.keySet()) {
+            if (!PRESS_KEYS.contains(k)) {
+                throw new IllegalArgumentException("press has no key '" + k + "'; it takes " + PRESS_KEYS);
+            }
+        }
+        if (Expectations.truthy(keys.get("release"))) p = p.release();
+        // Each axis alone, so a press naming only forward leaves left as it was held.
+        if (keys.containsKey("forward") || keys.containsKey("left")) {
+            p = new Press(p.bot(),
+                    keys.containsKey("forward") ? Optional.of(number(keys.get("forward"), "forward")) : p.forward(),
+                    keys.containsKey("left") ? Optional.of(number(keys.get("left"), "left")) : p.left(),
+                    p.jump(), p.sneak(), p.sprint(), p.attack(), p.use(), p.aimAt(), p.toolFor(), p.hit());
+        }
+        if (keys.containsKey("jump")) p = p.jump(Expectations.truthy(keys.get("jump")));
+        if (keys.containsKey("sneak")) p = p.sneak(Expectations.truthy(keys.get("sneak")));
+        if (keys.containsKey("sprint")) p = p.sprint(Expectations.truthy(keys.get("sprint")));
+        if (keys.containsKey("attack")) p = p.attack(Expectations.truthy(keys.get("attack")));
+        if (keys.containsKey("use")) p = p.use(Expectations.truthy(keys.get("use")));
+        if (keys.containsKey("aimAt")) p = p.aimAt(cell(keys.get("aimAt")));
+        if (keys.containsKey("toolFor")) p = p.toolFor(cell(keys.get("toolFor")));
+        if (keys.containsKey("hit")) p = p.hit(whole(keys.get("hit"), "hit"));
+        return p;
+    }
+
+    private static final List<String> PRESS_KEYS = List.of("forward", "left", "jump", "sneak", "sprint", "attack",
+            "use", "aimAt", "toolFor", "hit", "release");
+
+    private static double number(Object v, String what) {
+        if (v instanceof Number n) return n.doubleValue();
+        throw new IllegalArgumentException(what + " is a number from -1 to 1, but was " + Expectations.show(v));
+    }
+
+    private static BlockPosition cell(Object v) {
+        BlockPos pos = blockPos(v);
+        return new BlockPosition(pos.getX(), pos.getY(), pos.getZ());
     }
 
     static Map<String, Object> position(BlockPos pos) {
