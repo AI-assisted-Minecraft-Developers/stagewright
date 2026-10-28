@@ -10,6 +10,19 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-29
+
+### A test can hand its bot to the test that depends on it · compiled
+
+`@Bot.Keep` on a named `Bot` parameter leaves the bot in the world when the test ends, parked with what it has and
+where it stands, and `@Bot.Kept` under the same name on a test that `@DependsOn` it takes the same player over. A
+failed test removes its bot after all, a kept bot standing in the test's plot fails the test, and a kept bot no test
+takes is removed when the run's tests are over. Scripts say `t.bot({name, keep: true})` and `t.bot({name, kept: true})`.
+A survival run that plays one body through many steps can now be a chain of tests; before, every test got a fresh
+bot and nothing could carry one across.
+
+---
+
 ## 2026-10-28
 
 ### Leasing a plot no longer stalls the server · compiled

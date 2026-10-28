@@ -40,7 +40,7 @@ final class ScriptHandles {
 
     private ScriptHandles() {}
 
-    static void install(Map<String, Object> t, Game game, List<CloseableResource> leases) {
+    static void install(Map<String, Object> t, Game game, List<CloseableResource> leases, String test) {
         // t.plot({size, x, y, z, centered, dimension}), every option optional; x, y and z override size on their axis.
         t.put("plot", (Scripting.Function) args -> {
             Map<?, ?> options = args.length > 0 && args[0] instanceof Map<?, ?> m ? m : Map.of();
@@ -53,12 +53,20 @@ final class ScriptHandles {
             leases.add(plot);
             return plot(plot);
         });
-        // t.bot(), t.bot(name) or t.bot({name, parked}).
+        // t.bot(), t.bot(name) or t.bot({name, parked, keep, kept}).
         t.put("bot", (Scripting.Function) args -> {
             Object a = arg(args, 0);
             String name = a instanceof String n ? n : a instanceof Map<?, ?> m && m.get("name") instanceof String n ? n : null;
             boolean parked = a instanceof Map<?, ?> m && Expectations.truthy(m.get("parked"));
-            BodyImpl.BotImpl bot = BodyImpl.BotImpl.join(game, name, parked);
+            boolean keep = a instanceof Map<?, ?> m && Expectations.truthy(m.get("keep"));
+            boolean kept = a instanceof Map<?, ?> m && Expectations.truthy(m.get("kept"));
+            if ((keep || kept) && name == null) {
+                throw new IllegalArgumentException("a bot kept for a later test, or taken from one, is named: give"
+                        + " t.bot a name");
+            }
+            BodyImpl.BotImpl bot = kept ? BodyImpl.BotImpl.take(game, name, parked, test)
+                    : BodyImpl.BotImpl.join(game, name, parked);
+            if (keep) bot.keep(test);
             leases.add(bot);
             Map<String, Object> out = body(bot);
             driven(out, bot);

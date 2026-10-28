@@ -155,6 +155,7 @@ public final class JupiterRun {
                 Dependencies.javaOver();
                 scriptThread.join();
             }
+            Handovers.sweep(game);
             Rounds.save(artifacts, Dependencies.outcomes());
             if (Rounds.latest() > Rounds.current()) {
                 StageWrightCommon.LOG.info("[{}] round {} is over; tests remain for round {}, after a restart",

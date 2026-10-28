@@ -104,13 +104,58 @@ class BodyImpl implements Body {
         }
     }
 
-    /** Joined when leased, and taken out of the world when the test's context closes it. */
+    /**
+     * Joined when leased, and taken out of the world when the test's context closes it, unless the test kept it for a
+     * later one: then it is parked and put on the {@link Handovers} shelf instead.
+     */
     static final class BotImpl extends BodyImpl implements Bot, ExtensionContext.Store.CloseableResource {
 
         private static final AtomicInteger NEXT = new AtomicInteger(1);
 
+        /** The test keeping this bot for a later one; null when the bot leaves with its test. */
+        private volatile String keeper;
+
         private BotImpl(Game game, String name) {
             super(game, name);
+        }
+
+        /**
+         * Take over the bot a passed test kept under {@code name}, for {@code taker}: the same player, back on the
+         * tick list unless {@code parked}.
+         */
+        static BotImpl take(Game game, String name, boolean parked, String taker) {
+            Handovers.Kept kept = Handovers.take(name);
+            if (kept == null) {
+                throw new IllegalStateException("no passed test kept a bot named " + name + " for " + taker
+                        + ": the test it depends on keeps one as @Bot.Keep under @Bot.Name(\"" + name + "\")");
+            }
+            BotImpl bot = new BotImpl(game, name);
+            if (BotRegistry.get(bot.ref()) == null) {
+                throw new IllegalStateException(name + ", kept by " + kept.keeper() + ", is no longer on the server");
+            }
+            if (!parked) bot.unpark();
+            return bot;
+        }
+
+        /** Keep this bot for a later test instead of removing it when its test ends. */
+        void keep(String keeper) {
+            this.keeper = keeper;
+        }
+
+        boolean kept() {
+            return keeper != null;
+        }
+
+        /** Let the bot leave with its test after all: it failed, or the bot stands where it cannot be kept. */
+        void release() {
+            keeper = null;
+        }
+
+        /** Takes the bot out of the world if it is still there. */
+        void remove() {
+            game.runOnServer(server -> {
+                if (BotRegistry.get(ref()) != null) Roster.remove(ref());
+            });
         }
 
         /** Join a bot, parked before the server ticks it once when {@code parked}. */
@@ -176,9 +221,14 @@ class BodyImpl implements Body {
 
         @Override
         public void close() {
-            game.runOnServer(server -> {
-                if (BotRegistry.get(ref()) != null) Roster.remove(ref());
-            });
+            String keeper = this.keeper;
+            if (keeper == null) {
+                remove();
+                return;
+            }
+            // Parked so nothing ticks it between the two tests; the taker unparks it.
+            if (BotRegistry.get(ref()) != null) park();
+            Handovers.keep(this, keeper);
         }
     }
 }

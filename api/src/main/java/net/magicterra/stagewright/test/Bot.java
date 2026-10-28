@@ -9,7 +9,8 @@ import java.lang.annotation.Target;
 /**
  * A server-side player WorldDriver joins for one test, injected as a test method parameter: it is on the player list
  * as any player is, so mobs, advancements and chunk loading see it. It joins at the world spawn in survival with an
- * empty inventory and full health and hunger, and leaves when the test ends.
+ * empty inventory and full health and hunger, and leaves when the test ends unless the test {@linkplain Keep keeps}
+ * it for a later one.
  */
 public interface Bot extends Body, Driven {
 
@@ -42,4 +43,26 @@ public interface Bot extends Body, Driven {
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.PARAMETER)
     @interface Parked {}
+
+    /**
+     * The parameter's bot stays in the world when the test ends, parked, with what it has and where it stands, for a
+     * test that {@code @DependsOn} this one to take as {@link Kept} under the same {@link Name}. A test that fails or
+     * is aborted removes it instead, and a kept bot no test takes leaves when the run's tests are over. It must stand
+     * outside the test's plots, which are put back when the test ends. A restart ends it: a test after one joins its
+     * own bot.
+     */
+    @Documented
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.PARAMETER)
+    @interface Keep {}
+
+    /**
+     * The parameter's bot is the one a test this one {@code @DependsOn} kept under the same {@link Name}: the same
+     * player, where it stood and with what it had, back on the tick list unless the parameter is also
+     * {@link Parked}. The test fails when no passed test kept a bot of that name, or another test took it first.
+     */
+    @Documented
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.PARAMETER)
+    @interface Kept {}
 }

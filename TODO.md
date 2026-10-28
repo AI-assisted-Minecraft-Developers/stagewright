@@ -5,12 +5,12 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
-## A body and a save cannot outlive one test
+## A kept bot does not survive a restart
 
-A test's `Bot` leaves and its `Npc`s are removed when it ends, and no API lets a later test take a
-body over, so a survival run that plays one body through many steps cannot be a chain of tests. The
-rest is in place: `@DependsOn` runs on the world a test leaves behind (`afterRestart` keeps it across
-a restart) and `Game.store()` keeps observations between tests. What is missing is the body handover.
+`@Bot.Keep` hands a bot to the next test within one game; a test after a restart joins its own, because a
+bot's profile is `agent-body-N` from a per-process counter and WorldDriver's join wipes what the save had.
+Keeping one across needs a stable profile per name on WorldDriver's side and a join that keeps the saved
+player data. `Npc`s are still removed when their test ends.
 
 ## `--tests` does not narrow script tests
 

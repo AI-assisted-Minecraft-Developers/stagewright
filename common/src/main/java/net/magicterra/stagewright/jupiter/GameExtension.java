@@ -1,7 +1,10 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.util.ArrayList;
+import java.util.List;
 import net.magicterra.stagewright.test.Bot;
 import net.magicterra.stagewright.test.Client;
+import net.magicterra.stagewright.test.DependsOn;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Player;
 import net.magicterra.stagewright.test.Plot;
@@ -18,7 +21,8 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 /**
  * Injects the {@link Game}, leased {@link Plot}s and {@link Bot}s, the client's {@link Player} and the {@link Client}
  * itself, and binds each test method's {@link TestScope} so its
- * overrides are checked against its locks and undone when it ends. Registered for every test through Jupiter's
+ * overrides are checked against its locks and undone when it ends. A bot the test keeps goes to {@link Handovers}
+ * when the test's context closes, for the dependent that takes it. Registered for every test through Jupiter's
  * extension auto-detection (META-INF/services), which the in-game launcher turns on.
  */
 public final class GameExtension implements ParameterResolver, BeforeEachCallback, AfterEachCallback {
@@ -53,10 +57,9 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
                     + " test method parameter");
         }
         if (type == Bot.class) {
-            BodyImpl.BotImpl bot = BodyImpl.BotImpl.join(g,
-                    parameter.findAnnotation(Bot.Name.class).map(Bot.Name::value).orElse(null),
-                    parameter.isAnnotated(Bot.Parked.class));
-            // Leaves once the test method's context ends, after every @AfterEach.
+            BodyImpl.BotImpl bot = bot(parameter, context, g);
+            bots(context).add(bot);
+            // Leaves, or is kept for a later test, once the test method's context ends, after every @AfterEach.
             context.getStore(NAMESPACE).put("bot." + parameter.getIndex(), bot);
             return bot;
         }
@@ -72,9 +75,49 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
         } catch (IllegalArgumentException e) {
             throw new ParameterResolutionException(e.getMessage(), e);
         }
+        plots(context).add(plot);
         // Closed — the plot put back — once the test method's context ends, after every @AfterEach.
         context.getStore(NAMESPACE).put("plot." + parameter.getIndex(), plot);
         return plot;
+    }
+
+    /** A joined bot, or with {@code @Bot.Kept} the one a test this one depends on kept under the same name. */
+    private static BodyImpl.BotImpl bot(ParameterContext parameter, ExtensionContext context, Game g) {
+        String name = parameter.findAnnotation(Bot.Name.class).map(Bot.Name::value).orElse(null);
+        boolean parked = parameter.isAnnotated(Bot.Parked.class);
+        boolean keep = parameter.isAnnotated(Bot.Keep.class);
+        boolean kept = parameter.isAnnotated(Bot.Kept.class);
+        if ((keep || kept) && name == null) {
+            throw new ParameterResolutionException("a bot kept for a later test, or taken from one, is named: give it"
+                    + " @Bot.Name");
+        }
+        String test = context.getRequiredTestClass().getSimpleName() + "#" + context.getRequiredTestMethod().getName();
+        BodyImpl.BotImpl bot;
+        if (kept) {
+            if (!context.getRequiredTestMethod().isAnnotationPresent(DependsOn.class)) {
+                throw new ParameterResolutionException("a @Bot.Kept bot comes from a test this one @DependsOn");
+            }
+            try {
+                bot = BodyImpl.BotImpl.take(g, name, parked, test);
+            } catch (IllegalStateException e) {
+                throw new ParameterResolutionException(e.getMessage(), e);
+            }
+        } else {
+            bot = BodyImpl.BotImpl.join(g, name, parked);
+        }
+        if (keep) bot.keep(test);
+        return bot;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<BodyImpl.BotImpl> bots(ExtensionContext context) {
+        return context.getStore(NAMESPACE).getOrComputeIfAbsent("bots", k -> new ArrayList<BodyImpl.BotImpl>(),
+                List.class);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<PlotImpl> plots(ExtensionContext context) {
+        return context.getStore(NAMESPACE).getOrComputeIfAbsent("plots", k -> new ArrayList<PlotImpl>(), List.class);
     }
 
     /** Waits for the test's dependencies first, so it holds none of its locks while it waits. */
@@ -98,7 +141,14 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
             if (scope != null) scope.release();
         }
         AssertionError checks = scope == null ? null : scope.takeChecks();
-        if (checks != null) throw checks;
+        // Decided here, before the store closes the bots: the outcome is only recorded after that.
+        IllegalStateException misplaced = Handovers.endOfTest(bots(context), plots(context),
+                checks != null || context.getExecutionException().isPresent());
+        if (checks != null) {
+            if (misplaced != null) checks.addSuppressed(misplaced);
+            throw checks;
+        }
+        if (misplaced != null) throw misplaced;
     }
 
     static Game game() {

@@ -13,7 +13,7 @@ methods. StageWright resolves these parameters:
 |---|---|
 | `Game` | The game: WorldDriver's methods, the server thread, waits, soft checks, overrides. Also a constructor parameter. |
 | `Plot` | A box of a dimension leased to this test, handed over empty (air, chunks loaded) and put back exactly as it was when the test ends, entities included. Plots never overlap. |
-| `Bot` | A server-side player joined for this test: survival, empty inventory, full health, at the world spawn. It is on the player list like any player, and leaves when the test ends. |
+| `Bot` | A server-side player joined for this test: survival, empty inventory, full health, at the world spawn. It is on the player list like any player, and leaves when the test ends unless the test keeps it for a later one. |
 | `Player` | The real client's player. Shared by every test of the run, and keeps what a test leaves on it. |
 | `Client` | The real client itself, for WorldDriver's client methods. |
 
@@ -25,7 +25,11 @@ own, `@Plot.Size(x = 120, y = 16, z = 8)` (up to 256 across and the dimension's 
 plot are relative, and `plot.at(x, y, z)` gives the world position. `plot.structure(id, x, y, z)` places a structure
 template by id, or from a structure file.
 
-A bot joins under a made-up name unless its parameter says `@Bot.Name("steve")`.
+A bot joins under a made-up name unless its parameter says `@Bot.Name("steve")`. A test can hand its bot on: with
+`@Bot.Name("steve") @Bot.Keep` the bot stays when the test ends, parked where it stood with what it had, and a test
+that `@DependsOn` this one takes it as `@Bot.Name("steve") @Bot.Kept` — the same player, back on the tick list. A test
+that fails or is aborted removes its bot after all; a kept bot must stand outside the test's plots, which are put back
+when the test ends; and a restart ends every kept bot, so a test after one joins its own.
 
 ## Calling the game
 
@@ -140,7 +144,7 @@ and `isolated`.
 `t` offers `call(method, params)` for any WorldDriver method, `wait(ticks)`, `waitUntil(fn, {within, as})`,
 `settle(fn, {ticks, within})`, `expect(value)` (`equals`, `contains`, `isEmpty`, `gt`, `lt`, `atLeast`, `atMost`),
 `check`, `record(name, value)`, `step(name, args)`, `perf`, `store`, the handles `plot({size, x, y, z, centered,
-dimension})`, `bot()` or `bot({name, parked})`, `player()`, `npc(type, pos)`, `client()`, `capability(name)`,
+dimension})`, `bot()` or `bot({name, parked, keep, kept})`, `player()`, `npc(type, pos)`, `client()`, `capability(name)`,
 `translate(pos, from, to)`, and the overrides `override`, `overrideTime`, `overrideWeather`, `overrideTickRate`.
 Positions are `{x, y, z}`; blocks and items are ids. The script also has WorldDriver's own `Driver.*`. A failed
 `t.expect` cannot be caught by the script.

@@ -71,7 +71,7 @@ final class ScriptContext {
         });
         store.put("get", (Scripting.Function) a -> BuiltinSteps.run(this, "store.get", String.valueOf(a[0])));
         script.put("store", store);
-        ScriptHandles.install(script, game, leases);
+        ScriptHandles.install(script, game, leases, test.getDisplayName());
         return script;
     }
 
@@ -83,6 +83,16 @@ final class ScriptContext {
         TestScope scope = TestScope.bound();
         List<Runnable> undo = new ArrayList<>();
         if (scope != null && scope.changedAnything()) undo.add(() -> game.runOnServer(scope::restore));
+        AssertionError checks = scope == null ? null : scope.takeChecks();
+        // A kept bot goes to a later test only when this one passed and it stands outside the test's plots.
+        IllegalStateException misplaced = Handovers.endOfTest(
+                leases.stream().filter(BodyImpl.BotImpl.class::isInstance).map(BodyImpl.BotImpl.class::cast).toList(),
+                leases.stream().filter(PlotImpl.class::isInstance).map(PlotImpl.class::cast).toList(),
+                failure != null || checks != null);
+        if (misplaced != null) {
+            if (failure == null) failure = misplaced;
+            else failure.addSuppressed(misplaced);
+        }
         for (int i = leases.size() - 1; i >= 0; i--) {
             CloseableResource lease = leases.get(i);
             undo.add(() -> {
@@ -101,7 +111,6 @@ final class ScriptContext {
                 else failure.addSuppressed(t);
             }
         }
-        AssertionError checks = scope == null ? null : scope.takeChecks();
         if (checks != null) {
             if (failure == null) failure = checks;
             else failure.addSuppressed(checks);

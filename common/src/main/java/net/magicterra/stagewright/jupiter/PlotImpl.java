@@ -152,6 +152,11 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         return dimension;
     }
 
+    /** Whether {@code pos} in {@code dimension} lies in the plot's box. */
+    boolean contains(ResourceKey<Level> dimension, BlockPos pos) {
+        return this.dimension.equals(dimension) && box.isInside(pos);
+    }
+
     @Override
     public Vec3i min() {
         return Vec3i.ZERO.subtract(anchor);

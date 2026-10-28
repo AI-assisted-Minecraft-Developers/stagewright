@@ -131,6 +131,18 @@ at a time runs each of its tests alone, since a test written for a sequential ru
 beside it. A lock a script names is `stagewright.` and the name, so a Java test sharing a name of its own with
 scripts spells it that way.
 
+## A bot handed from one test to the next
+
+A test's bot leaves when the test ends. A test that keeps its bot (`@Bot.Keep` on a named parameter, `t.bot({name,
+keep: true})` in a script) leaves it in the world instead, parked, on a shelf keyed by its name, once the test's
+leases close — and only when the test passed: a failed or aborted test releases the bot, as does a kept bot found
+standing in one of the test's plots, since the plot is put back under it, and that fails the test. The test that takes
+it (`@Bot.Kept` under the same name, `t.bot({name, kept: true})`) must `@DependsOn` the keeper, so the usual ordering
+and abort reasons apply; it gets a fresh handle on the same player, unparked, and the bot then leaves with that test or
+is kept again. Taking a name nobody kept, or that another test took, fails the taker. Whatever is still on the shelf
+when the round's tests are over is removed with a warning naming the keeper. The shelf is per game: a restart ends
+every kept bot, because a bot's profile and ids are per process.
+
 ## Tests after a restart
 
 A test that must see what survives a restart — saved data, a chunk written to disk, a mod's load-time handling —
