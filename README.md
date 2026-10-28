@@ -2,33 +2,30 @@
 
 *[English](README.md) · [简体中文](README-zh_CN.md)*
 
-An in-game integration-test framework for Minecraft mods and modpacks. A **scene** is a piece of code
-that builds a situation in a live world, drives it, and asserts an outcome. StageWright launches the
-game in a chosen process topology, runs the scenes against a running server, and writes a
-machine-readable result that a Gradle task or a command-line runner judges.
+An in-game test framework for Minecraft mods and modpacks. Tests are JUnit 5 classes, or YAML and JavaScript files,
+that run inside a live game: a test receives the game, a box of the world to build in and players to drive, does what
+it needs, and asserts the outcome. StageWright starts the game each test asks for, runs the tests in it, and reports
+them as ordinary JUnit results to Gradle, an IDE or its command-line runner.
 
-It runs on Minecraft 1.21.1 under both Fabric and NeoForge, from one set of scenes.
+It runs on Minecraft 1.21.1 under both Fabric and NeoForge, from one set of tests.
 
 ## Why it exists
 
-Minecraft has its own in-game test facility and both loaders expose it. StageWright exists for what
-that leaves out:
+Minecraft has its own in-game test facility and both loaders expose it. StageWright exists for what that leaves out:
 
-- **A scene builds its world in code**, relative to an origin the framework assigns, so there is no
-  separate world file to keep in step with the assertions and no absolute coordinate in a scene.
-- **One registration serves both loaders.** Scenes live in shared code and arrive through a service
-  loader, so the same suite runs on Fabric and NeoForge without a per-loader copy.
-- **A run proves it could still have failed.** Every run carries canaries the framework must catch —
-  one that must be reported as a failure, one as a timeout, one that must never execute. A run whose
-  canaries land wrong is reported as a broken measurement, which is not the same thing as a broken
-  mod and must never be read as one.
-- **The same scenes run in several process shapes**, because each one can establish facts the others
-  cannot.
-- **A skip is not coverage.** A scene that cannot run where it is records a skip, and a separate
-  check fails the build when a scene skipped in every topology the project runs.
-- **A modpack can use it without a build tool.** Scenes can be plain JavaScript files in a pack's
-  config folder, and a capability seam lets a mod or a pack teach the framework things the base game
-  has no concept of.
+- **A test asks for the game it needs.** A scene file says which kind of game — a dedicated server, a client hosting
+  its own server, or a dedicated server with a real client joined to it — and which world, files and mods it starts
+  with. Each kind can establish facts the others cannot.
+- **A test builds its world in code.** It leases a plot, an empty box of the world that is put back exactly as it was
+  when the test ends, so there is no world file to keep in step with the assertions and tests do not disturb each
+  other.
+- **Tests read top to bottom.** They run on a test thread, not the server thread, so calling the game, waiting a
+  number of ticks or waiting for a condition is a plain blocking call.
+- **One set of tests serves both loaders.** Tests live in shared code; the same suite runs on Fabric and NeoForge.
+- **A test that can never run is a failure.** A test whose `@Requires` no scene meets fails the run instead of being
+  silently skipped everywhere, and a test the game failed to load is reported as failed, never as missing.
+- **A modpack can use it without a build tool.** YAML and JavaScript tests sit in the pack's server directory, and a
+  capability system lets a mod or a pack teach the framework things the base game has no concept of.
 
 ## Requirements
 
@@ -38,168 +35,139 @@ that leaves out:
 | Java | 21 |
 | Fabric | Loader 0.16 or newer, with Fabric API |
 | NeoForge | 21 |
+| WorldDriver | required in every game process, see [below](#stagewright-and-worlddriver) |
 
-Pushes to `master` are built, tested and published to
-`https://nexus.gardel.top/repository/maven-releases` as `0.1.0-alpha.<build number>+1.21.1`, under the group
-`net.magicterra`, except a push whose build is still queued when a newer one arrives; the command-line runner is `net.magicterra:stagewright-cli` there. The Gradle
-plugin is `net.magicterra.stagewright`.
+Pushes to `master` are built, tested and published to `https://nexus.gardel.top/repository/maven-releases` as
+`0.1.0-alpha.<build number>+1.21.1`, under the group `net.magicterra`. Until a build of the version you want is there,
+publish StageWright to your local Maven repository and use `0.1.0-snapshot+1.21.1`;
+[Publishing](docs/reference/publishing.md) gives the order. The Gradle plugin is `net.magicterra.stagewright`; the
+command-line runner is `net.magicterra:stagewright-cli`.
 
 ## The shortest path to a passing run
 
-### Testing a modpack, with no build tool
-
-```
-java -jar stagewright.jar --game-dir <the pack's server directory> --scenes <a folder of .js files>
-```
-
-That hands the right framework build to the pack's loader, points the game at your scene files,
-works out how the pack starts, runs it, and judges the results — without copying anything into
-`mods/` or `config/`. The exit code is the verdict: `0` sound and passing, `1` a scene failed, `2`
-the framework itself is broken and the results are void, `3` the environment never let the suite run.
-
-Both loader builds ride inside the jar, so there is no loader-and-version pairing for you to get
-right. `--client neoforge:1.21.1:<version>` installs and launches a real client instead, offline and
-into the official launcher's `.minecraft`; `--help` lists the rest.
-
-### Adding it to a Gradle project
+### In a Gradle project
 
 ```groovy
-// settings.gradle
-pluginManagement {
-    repositories {
-        maven {
-            url 'https://nexus.gardel.top/repository/maven-releases'
-            content { includeGroupByRegex 'net\\.magicterra(\\..*)?' }
-        }
-        gradlePluginPortal()
-    }
-}
-
-// build.gradle
+// build.gradle, beside fabric-loom, architectury-loom or ModDevGradle
 plugins {
-    id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0-alpha.0+1.21.1'
+    id 'net.magicterra.stagewright' version '0.1.0-snapshot+1.21.1'
 }
 
 repositories {
-    maven {
-        url 'https://nexus.gardel.top/repository/maven-releases'
-        content { includeGroup 'net.magicterra' }
-    }
+    mavenLocal()
+    maven { url 'https://nexus.gardel.top/repository/maven-releases'; content { includeGroup 'net.magicterra' } }
+    maven { url 'https://maven.architectury.dev/'; content { includeGroup 'dev.architectury' } }
 }
 
-dependencies {
-    // on whichever source set holds your scenes — see the guide
-    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-alpha.0+1.21.1:dev'
-    modLocalRuntime       'net.magicterra:mc_stagewright-fabric:0.1.0-alpha.0+1.21.1'
-}
-
-stagewright {
-    topologies {
-        dedicatedServer {
-            runTask    = 'runStagewrightDedicatedServer'          // your own dev-run task
-            expectFile = file('src/testmod/expected-scenes.txt')
-        }
-    }
-}
+stagewright { tests { fabric { } } }
 ```
 
-That registers `./gradlew stagewrightDedicatedServer`, which provisions a clean run directory, runs
-your dev-run task, and judges the results. [Getting started](docs/guide/getting-started.md) walks both
-routes in full, including the first scene to write and how to run only that one while writing it.
+Put a scene file in `src/testmod/resources/stagewright/scenes/`, tests in `src/testmod/java/` (or YAML and JavaScript
+tests in `src/testmod/resources/stagewright/tests/`), and run `./gradlew stagewrightTestFabric`.
 
-## What a scene looks like
+### For a modpack
 
-This is one of StageWright's own built-in scenes, verbatim from
-`common/src/main/java/net/magicterra/stagewright/harness/Scenes.java`:
+```
+java -jar stagewright.jar test <the pack's server directory>
+```
+
+That runs the YAML and JavaScript tests in `<server-dir>/stagewright/tests`, with the scenes in
+`<server-dir>/stagewright/scenes`, in the pack's own server, on a world of its own; the pack's world and `mods/` are not
+touched. JUnit XML goes to `<server-dir>/stagewright/reports`. `--client neoforge:1.21.1:<version>` also installs a
+client and runs the scenes that need one.
+
+[Getting started](docs/guide/getting-started.md) walks both routes in full.
+
+## What a test looks like
+
+A scene file, `stagewright/scenes/mymod.yaml`:
+
+```yaml
+topology: dedicatedServer
+```
+
+and a test that names it:
 
 ```java
-Scene.of("awaitTicks", 200, ctx -> {
-    ctx.setBlock(0, 0, 0, Blocks.STONE);
-    ctx.await(() -> ctx.ticks() >= 40).within(100).then(() -> {
-        if (ctx.ticks() < 40) ctx.fail("await fired before its condition held");
-        ctx.assertBlock(0, 0, 0, Blocks.STONE);
-    });
-}),
-```
+@Scene("mymod")
+class FirstTest {
 
-The body runs once, synchronously, on the scene's first tick, inline on the server tick loop. It
-never blocks and never sleeps: anything that takes time goes through `await`, which is also the only
-way a scene spans ticks. Every coordinate is relative to an origin the framework assigns, and
-exceeding the declared tick budget is a timeout, which a run reports separately from a failure.
+    @Test
+    void aPlacedBlockReadsBack(Game game, @Plot.Size(8) Plot plot) {
+        plot.place(1, 0, 1, Blocks.STONE);
+        boolean stone = game.onServer(server ->
+                server.overworld().getBlockState(plot.at(1, 0, 1)).is(Blocks.STONE));
+        assertTrue(stone, "stone where the test placed it");
+    }
 
-Day to day you annotate a method instead, so the scene's name comes from the method name and is
-never written twice:
-
-```java
-@SceneSet("mymod")
-public final class MagnetScenes implements SceneProvider {
-
-    @SceneDef(budget = 200)
-    static void pullsItemsWithinRadius(SceneContext s) { … }
+    @Test
+    void aBotKeepsWhatItIsGiven(Bot bot) {
+        bot.give(Items.BREAD, 3);
+        assertEquals(3, bot.count(Items.BREAD));
+    }
 }
 ```
 
-[Writing a scene](docs/guide/writing-a-scene.md) is the full reference.
+The same as a JavaScript test:
 
-## Process topologies
+```javascript
+test('a placed block reads back', { scene: 'mymod' }, (t) => {
+    const plot = t.plot({ size: 8 });
+    plot.place(1, 0, 1, 'minecraft:stone');
+    t.expect(t.call('mc.world.block', { pos: plot.at(1, 0, 1) }).type).equals('minecraft:stone');
+});
+```
 
-All three run scenes on a **server**; what differs is which server, and whether a real client is
-attached to it.
+[Writing tests](docs/guide/writing-tests.md) covers the rest: bots and mobs driven tick by tick, waits, soft checks,
+dependencies between tests, restarts on the same world, performance measurements.
+
+## Topologies
 
 | Topology | What it starts | Good for |
 |---|---|---|
-| dedicated server | one headless dedicated server | The bulk of a suite, and the only place where "a client-only call is refused" and "the player list is empty" are observable. |
-| integrated server | one game client hosting its own server | Anything needing client-side state in the same process, and anything measured in frames. |
-| dedicated server with client | a dedicated server plus a real client joined to it | Anything whose subject is the wire between the two halves — the difference between "works in singleplayer" and "works on a server". |
+| `dedicatedServer` | one headless dedicated server | Most tests, and the only place where "a client-only call is refused" and "the player list is empty" can be observed. |
+| `integratedServer` | one game client hosting its own server | Anything needing client-side state in the same process, and anything measured in frames. |
+| `dedicatedServerWithClient` | a dedicated server plus a real client joined to it | Anything whose subject is the connection between the two halves — the difference between "works in singleplayer" and "works on a server". |
 
-A consuming project names its own topologies; those three names are the convention because they say
-what starts. [Topologies](docs/guide/topologies.md) explains which facts need which shape, and why a
-scene that skips proves nothing.
+[Topologies](docs/guide/topologies.md) explains which facts need which kind of game.
 
 ## Documentation
 
 - [Getting started](docs/guide/getting-started.md) — both entry points, end to end.
-- [Writing a scene](docs/guide/writing-a-scene.md) — lifecycle, assertions, registration, naming.
-- [Capabilities](docs/guide/capabilities.md) — reaching a mod's own machinery, and extending the seam.
-- [Topologies](docs/guide/topologies.md) — the process shapes and what each one can establish.
-- [The Gradle plugin](docs/guide/gradle-plugin.md) — tasks, properties, source-set convention.
-- [JUnit attach](docs/guide/junit-attach.md) — asserting from outside a running game.
+- [Writing tests](docs/guide/writing-tests.md) — the test API, in Java, YAML and JavaScript.
+- [Capabilities](docs/guide/capabilities.md) — reaching a mod's own machinery, and extending that.
+- [Topologies](docs/guide/topologies.md) — the kinds of game and what each one can establish.
+- [The Gradle plugin](docs/guide/gradle-plugin.md) — tasks, properties, conventions.
 
-The wire formats and the publishing layout are under [`docs/reference/`](docs/reference/), the
-reasoning behind the larger decisions under [`docs/design/`](docs/design/), and
-[`docs/README.md`](docs/README.md) indexes all of it.
+The file formats and the published artifacts are under [`docs/reference/`](docs/reference/), the reasoning behind the
+larger decisions under [`docs/design/`](docs/design/), and [`docs/README.md`](docs/README.md) indexes all of it.
 
 ## StageWright and WorldDriver
 
-[WorldDriver](https://github.com/AI-assisted-Minecraft-Developers/worlddriver) is a Minecraft mod
-that exposes the running game as one programmable API surface. StageWright began inside it and became
-its own repository. StageWright requires WorldDriver on both Fabric and NeoForge.
-Install both loader mods, or pass the matching WorldDriver jar with the CLI's `--mod`.
+[WorldDriver](https://github.com/AI-assisted-Minecraft-Developers/worlddriver) is a Minecraft mod that exposes the
+running game as one programmable API. StageWright began inside it and became its own repository. StageWright's tests
+reach the game through WorldDriver's methods, so StageWright requires WorldDriver on both Fabric and NeoForge: the
+Gradle plugin brings it into the test runs, and a modpack has it in `mods/` or passes it to the runner with `--mod`.
 
-The two depend on each other, in opposite directions and at different points: StageWright's runtime
-modules compile against WorldDriver's common module, while WorldDriver consumes StageWright as
-published Maven artifacts and applies its Gradle plugin. That is not a cycle — it is broken by module
-and by source set, since StageWright's scene API depends only on Minecraft and its shared attached vocabulary and WorldDriver's
-production code never depends on StageWright. Each side depends on one exact published version of
-the other, set in `gradle.properties` — `worlddriver_version` here, `stagewright_version` there — so
-neither needs the other's source to build. [Publishing](docs/reference/publishing.md) explains how to
-move to a newer version, how to build against your own local build of the other side, and the order
-to publish in when neither side has published anything yet.
+The two depend on each other, in opposite directions and at different points: StageWright's API and runtime compile
+against WorldDriver's published API and common module, while WorldDriver compiles its own tests against StageWright's
+API and runs them with StageWright's Gradle plugin. That is not a cycle — WorldDriver's production code never depends
+on StageWright. Each side depends on one exact published version of the other, set in `gradle.properties` —
+`worlddriver_version` here, `stagewright_version` there — so neither needs the other's source to build.
+[Publishing](docs/reference/publishing.md) explains how to move to a newer version, how to build against your own
+local build of the other side, and the order to publish in when neither side has published anything yet.
 
 ## Licence
 
-[LGPL-3.0-only](COPYING.LESSER) — the additional permissions, on top of the GPL-3.0 text in
-[`COPYING`](COPYING) that they modify.
+[LGPL-3.0-only](COPYING.LESSER) — the additional permissions, on top of the GPL-3.0 text in [`COPYING`](COPYING) that
+they modify.
 
-A mod that merely *uses* this framework — declaring the artifacts as dependencies, writing scenes
-against the service interfaces, running the checks — is not a derived work of it and carries whatever
-licence it likes. The copyleft attaches to StageWright's own sources and to modified copies of them.
+A mod that merely *uses* this framework — declaring the artifacts as dependencies, writing tests against its API,
+running them — is not a derived work of it and carries whatever licence it likes. The copyleft attaches to
+StageWright's own sources and to modified copies of them.
 
-One directory is a documented exception: `engine/src/main/java/.../engine/json/` is minimal-json
-vendored verbatim under the MIT licence. Its headers are upstream's terms and stay as they are; see
-`VENDORED.md` beside them.
+One directory is a documented exception: `engine/src/main/java/.../engine/json/` is minimal-json vendored verbatim
+under the MIT licence. Its headers are upstream's terms and stay as they are; see `VENDORED.md` beside them.
 
-The CLI's `stagewright.jar` also carries Rhino (MPL-2.0), Gson and its Error Prone annotations
-(Apache-2.0). `META-INF/THIRD-PARTY-NOTICES` in that jar names each one with its source, and
-`META-INF/licenses/` holds their licence texts.
+The CLI's `stagewright.jar` also carries third-party libraries. `META-INF/THIRD-PARTY-NOTICES` in that jar names each
+one with its source, and `META-INF/licenses/` holds their licence texts.
