@@ -47,14 +47,4 @@ public final class Control {
         Agent agent = Agent.running();
         if (agent != null) agent.test(json);
     }
-
-    /**
-     * The results are complete and the JVM stays up, because it is held for something to attach to.
-     * Unlike {@link #done()} this starts no grace period and ends nothing: whoever is supervising the
-     * hold decides when it is over.
-     */
-    public static void resultsComplete() {
-        Agent agent = Agent.running();
-        if (agent != null) agent.resultsComplete();
-    }
 }

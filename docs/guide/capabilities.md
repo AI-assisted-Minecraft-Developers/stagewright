@@ -128,8 +128,7 @@ census; `Mods` already answers "is X here".
 ### 2. Declare one in a JSON file
 
 For a mod nobody wrote an adapter for, when you have a `config/` folder and no build tool. Drop a
-file in `config/stagewright/capabilities/` in the game directory (or in the directory the game's JVM names with
-`-Dstagewright.scenesDir=<dir>`):
+file in `config/stagewright/capabilities/` in the game directory:
 
 ```json
 // config/stagewright/capabilities/rituals.json

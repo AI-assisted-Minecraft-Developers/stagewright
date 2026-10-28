@@ -31,13 +31,6 @@ public final class FakeGame {
             Thread.sleep(60_000);
             return;
         }
-        if (mode.equals("held")) {
-            // A hold: the results are complete and the JVM is meant to outlive them.
-            Thread.sleep(1_500);
-            call("resultsComplete", null, null);
-            Thread.sleep(60_000);
-            return;
-        }
         if (mode.equals("leak")) {
             // A mod's threads start seconds into a run, long after the agent has begun recording who
             // starts threads; a thread started in the JVM's first instant would be missed.

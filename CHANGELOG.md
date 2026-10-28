@@ -21,6 +21,13 @@ takes is removed when the run's tests are over. Scripts say `t.bot({name, keep: 
 A survival run that plays one body through many steps can now be a chain of tests; before, every test got a fresh
 bot and nothing could carry one across.
 
+### The agent's hold event and the capability-directory property are gone · compiled
+
+`Control.resultsComplete()`, the `results` event it sent and the supervisor's `RESULTS` ending were for a game held
+open after its run, which nothing has started since the results file went; the supervisor now ignores a `results`
+line as it does any event it does not know. `-Dstagewright.scenesDir` is no longer read: a pack's capability
+descriptors come from `config/stagewright/capabilities/` only. Nothing in StageWright set either.
+
 ---
 
 ## 2026-10-28

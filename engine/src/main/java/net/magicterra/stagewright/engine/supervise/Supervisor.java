@@ -39,11 +39,6 @@ public final class Supervisor implements AutoCloseable {
     public enum Ended {
         /** The game said its results are complete. */
         DONE,
-        /**
-         * The game said its results are complete and that it stays up: a hold. Nothing will end it
-         * but the caller, which has what it was waiting for.
-         */
-        RESULTS,
         /** The process is gone and never said it was done. */
         PROCESS_DIED,
         /** Connected, then silent for longer than the limit: the whole JVM has stopped. */
@@ -92,7 +87,6 @@ public final class Supervisor implements AutoCloseable {
     private boolean connected;
     private boolean connectionClosed;
     private boolean done;
-    private boolean resultsComplete;
     private boolean exiting;
     private String crashReport;
     private long agentPid = -1;
@@ -167,7 +161,6 @@ public final class Supervisor implements AutoCloseable {
         synchronized (lock) {
             while (true) {
                 if (done) return Ended.DONE;
-                if (resultsComplete) return Ended.RESULTS;
                 Ended external = probe.get();
                 if (external != null) return external;
                 Ended ended = evaluate(game, limits);
@@ -191,7 +184,6 @@ public final class Supervisor implements AutoCloseable {
     /** The endings the supervisor can see for itself. The lock is held. */
     private Ended evaluate(ProcessHandle game, Limits limits) {
         if (done) return Ended.DONE;
-        if (resultsComplete) return Ended.RESULTS;
         // Before the process is asked about: a crashed game often stays up, and one that has gone since
         // still crashed rather than merely died.
         if (crashReport != null) return Ended.CRASHED;
@@ -439,7 +431,6 @@ public final class Supervisor implements AutoCloseable {
                     if (crashReport == null) crashReport = String.valueOf(event.get("report"));
                 }
                 case "done" -> done = true;
-                case "results" -> resultsComplete = true;
                 case "exiting" -> exiting = true;
                 case "leaked" -> {
                     if (event.get("threads") instanceof List<?> threads) {

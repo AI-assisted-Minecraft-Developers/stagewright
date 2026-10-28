@@ -302,35 +302,6 @@ class SupervisorTest {
     }
 
     @Test
-    void aHeldGameThatHasItsResultsEndsTheWaitAndIsNotEndedItself() throws Exception {
-        try (Supervisor supervisor = Supervisor.open()) {
-            Process game = start(supervisor, 1, "held");
-            try {
-                assertEquals(Ended.RESULTS, supervisor.await(game.toHandle(), FAST));
-                // Longer than the one-second grace a done would have started: a hold is not ended.
-                assertFalse(supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(4)), "the hold should stay up");
-                assertEquals(List.of(), supervisor.leaks());
-            } finally {
-                Supervisor.kill(game.toHandle());
-            }
-        }
-    }
-
-    @Test
-    void doneOutranksResultsComplete() throws Exception {
-        Process game = bare();
-        try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
-            send(client, hello(supervisor.token()));
-            send(client, "{\"event\":\"results\"}");
-            send(client, "{\"event\":\"done\"}");
-            Thread.sleep(300);
-            assertEquals(Ended.DONE, supervisor.peek(game.toHandle(), FAST));
-        } finally {
-            Supervisor.kill(game.toHandle());
-        }
-    }
-
-    @Test
     void aTimeoutTooLargeForNanosecondsHasNotRunOut() throws Exception {
         Process game = bare();
         try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {

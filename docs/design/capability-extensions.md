@@ -147,8 +147,7 @@ disabled registers no items, and no amount of mod-list checking notices.
 runtime, so tests gated on it would run against a pack that does not have the thing and then fail
 for a reason unrelated to the pack. Refusing the file is better than that.
 
-**Descriptors live in one folder**, `config/stagewright/capabilities/`, or the directory the game's
-JVM names with `-Dstagewright.scenesDir`. A pack author has a folder; two flags and two
+**Descriptors live in one folder**, `config/stagewright/capabilities/`. A pack author has a folder; two flags and two
 directories would impose a build tool's filing system on somebody who does not have a build tool.
 
 ## The bundled adapters

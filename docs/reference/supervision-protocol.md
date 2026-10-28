@@ -44,7 +44,6 @@ Every line has `event`. The agent's events:
 | `heartbeat` | `atMs`, `phase`, `ticks`, `classes` when the JVM can say, and `stacks` once `idle` seconds have passed with none of the three changing | every second |
 | `phase` | `phase` | when the game reports a phase different from the last |
 | `done` | none | when the game reports the run over |
-| `results` | none | when a game held open after its run has its results complete; the agent ends nothing. Nothing in the current mod sends it |
 | `crash` | `report` (the path) | once for each file that appears in `<working directory>/crash-reports` after the agent started; the listing is taken in `premain`, so a previous run's reports are not this run's. Looked for once a second |
 | `leaked` | `graceMs`, `threads` | once, when the JVM is still up `grace` seconds after `done` |
 | `exiting` | none | from a shutdown hook, when the JVM ends in an orderly way |
@@ -84,12 +83,11 @@ right after sending it: the test events, not the exit code, carry the results.
 | Ended | When |
 |---|---|
 | `DONE` | the agent sent `done`. Checked before whether the process is alive: a game that says so and exits in the same second is done, not dead |
-| `RESULTS` | the agent sent `results`: a game held open on purpose has its results complete. Ranks with `DONE` above a crash probe; the caller ends the game, since nothing else will. Unused while nothing sends `results` |
 | `PROCESS_DIED` | the process is gone and never said `done`, once its connection has closed so that its last lines are read |
 | `HEARTBEAT_LOST` | connected, and no line for longer than the limit: the whole JVM has stopped |
 | `NEVER_CONNECTED` | alive and silent for longer than the connect limit: it did not reach the agent |
 | `STALLED` | heartbeating, and none of `phase`, `ticks` and `classes` has changed for longer than the stall limit. Loading a pack moves `classes`, running a suite moves `ticks`, so a game that moves neither is stuck |
-| `CRASHED` | the agent sent `crash`, or a probe the caller passed said so. Ranks below `DONE` and `RESULTS` and above whether the process is alive |
+| `CRASHED` | the agent sent `crash`, or a probe the caller passed said so. Ranks below `DONE` and above whether the process is alive |
 | `TIMED_OUT` | alive and talking, and not done within the ceiling |
 
 `DONE` says the game's run is over, and nothing about how its tests went: that is in the `test` events.
@@ -106,7 +104,6 @@ JVM was not started with the agent, and none throws.
 | `phase(String)` | where the game is, as listed above |
 | `ticks(long)` | server ticks delivered so far, sent with the next heartbeat |
 | `done()` | the run is over and every test event has been sent |
-| `resultsComplete()` | the run's results are complete and the JVM stays up. Starts no grace period. The current mod does not call it |
 | `test(String)` | one event of the in-game test run, a JSON object, sent on as a `test` line's `data`. The agent does not read it. Absent from an older agent, and the game's tests then reach no one outside |
 
 ## Test events

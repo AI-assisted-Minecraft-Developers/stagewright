@@ -31,11 +31,6 @@ failure names only the phase and the tick.
 
 Nothing notices it crashing or hanging.
 
-## Leftovers of the old results path
-
-`results`, `RESULTS` and `resultsComplete()` in the agent and supervisor, and the `-Dstagewright.scenesDir` read,
-are reached by nothing now.
-
 ## `mc_stagewright-api`'s POM declares no dependencies
 
 Its public types reference WorldDriver's api, so a project without the plugin has to add `worlddriver-api:dev`

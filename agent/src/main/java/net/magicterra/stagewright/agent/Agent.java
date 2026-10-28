@@ -118,11 +118,6 @@ public final class Agent {
         send(Lines.event("test").raw("data", json));
     }
 
-    /** The results are complete and the JVM is being held open on purpose: reported, and nothing is ended. */
-    void resultsComplete() {
-        send(Lines.event("results"));
-    }
-
     private void run() {
         if (!connect()) return;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> send(Lines.event("exiting")),

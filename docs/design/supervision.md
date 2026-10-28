@@ -118,5 +118,3 @@ started by hand. With an agent attached it does nothing.
   after its run passes silently, and a stalled game's failure gives its phase and tick but not where its threads were.
 - The companion client of a `dedicatedServerWithClient` scene is started without the agent. It is ended when its
   server's game ends, but nothing watches it for crashing or standing still.
-- `results` and the `RESULTS` ending, for a game held open after its run, are still in the agent and the supervisor;
-  nothing sends them any more.
