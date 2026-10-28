@@ -26,7 +26,8 @@ import org.gradle.api.tasks.SourceSet;
  * }
  * }</pre>
  *
- * Each topology gets a {@code stagewright<Name>} task: provision, run, judge.
+ * A topology runs nothing by itself: a test suite in {@code tests} maps the topology names its scenes
+ * declare to these, and its {@code stagewrightTest<Suite>} task launches them.
  *
  * <p><b>On the names.</b> All three run scenes on a SERVER; what differs is which server, and
  * whether a real client is attached to it — {@code integratedServer} is the one inside a game

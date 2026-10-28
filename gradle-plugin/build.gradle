@@ -1,14 +1,10 @@
 // stagewright gradle plugin — standalone included build.
 //
-// Publishes plugin id `net.magicterra.stagewright`. Applied to a mod project, it turns each declared
-// topology into a `stagewright<Name>` task that provisions a clean run directory, runs that
-// topology's own dev-run task, and judges the results file against the orchestration contract.
-//
-// No Python, and no process boundary: the run is an ordinary task dependency, so Gradle supervises a
-// process it already knew how to supervise. The JSONL parser and the verdict rules live in the
-// engine, shared with the CLI, and neither module has an external dependency, because a build plugin
-// that drags a JSON library onto a consumer's buildscript classpath is a version conflict waiting to
-// happen. See src/main/java/.../StageWrightPlugin.java.
+// Publishes plugin id `net.magicterra.stagewright`. Applied to a mod project, it gives each declared
+// test suite a `stagewrightTest<Name>` Test task on the StageWright test engine, with launch specs
+// read off the host's dev runs. No external dependency besides our own engine: a JSON library on a
+// consumer's buildscript classpath is a version conflict waiting to happen.
+// See src/main/java/.../StageWrightPlugin.java.
 plugins {
     id 'java-gradle-plugin'
     // java-gradle-plugin only CREATES the plugin-marker publication once maven-publish is
@@ -48,18 +44,8 @@ configurations.named('functionalTestRuntimeOnly') {
     extendsFrom(configurations.named('testRuntimeOnly').get())
 }
 
-configurations {
-    // The supervision agent, carried as a resource: a game loads it from a file, with -javaagent.
-    bundledAgent { transitive = false }
-}
-
 dependencies {
-    bundledAgent "net.magicterra:stagewright-agent:${stagewrightVersion}"
-
-    // The one dependency, and it is ours. The no-external-dependencies rule above is about
-    // third-party libraries colliding on a consumer's buildscript classpath; this artifact exists
-    // so the CLI and this plugin judge a results file by the same code, and it pulls in nothing
-    // itself for exactly that reason.
+    // The one dependency, and it is ours: it pulls in nothing itself (the launch-spec JSON writer).
     api "net.magicterra:stagewright-engine:${stagewrightVersion}"
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
@@ -71,14 +57,6 @@ dependencies {
     // Gradle TestKit — spins up a synthetic consumer project in-process.
     functionalTestImplementation gradleTestKit()
 }
-
-// Staged as /agent/stagewright-agent.jar, version stripped so the lookup does not depend on it.
-def stageBundledAgent = tasks.register('stageBundledAgent', Copy) {
-    from configurations.bundledAgent
-    into layout.buildDirectory.dir('bundled-agent')
-    rename(/^stagewright-agent-.*\.jar$/, 'stagewright-agent.jar')
-}
-tasks.named('processResources') { into('agent') { from stageBundledAgent } }
 
 // The plugin's own version, for the test-engine dependency it adds to a consumer, and the JUnit its dev runs get.
 def versionResource = tasks.register('generateVersionResource') {

@@ -13,8 +13,7 @@ pluginManagement {
     }
 }
 
-// The engine holds the verdict rules and the run-directory rules, shared with the CLI so that
-// neither can drift from the other. includeBuild for local development; consumers resolve the same
+// The engine, shared with the CLI and the test engine. includeBuild for local development; consumers resolve the same
 // coordinate from a repository.
 includeBuild('../engine')
 

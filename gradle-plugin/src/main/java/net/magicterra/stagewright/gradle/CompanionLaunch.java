@@ -14,7 +14,6 @@ import java.util.Map;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.logging.Logger;
 import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.JavaExec;
@@ -22,21 +21,20 @@ import org.gradle.jvm.toolchain.JavaLauncher;
 import org.gradle.process.CommandLineArgumentProvider;
 
 /**
- * Everything a companion game needs to start, taken from its run task when the build is configured
- * and holding no reference to that task.
+ * Everything a game needs to start — a topology's primary or its companion — taken from its run task
+ * when the build is configured and holding no reference to that task. {@link StageWrightLaunchSpecsTask}
+ * writes it into a launch spec. (Named for the companion, which was its first use.)
  *
- * <p>A {@code Task} cannot be written into the configuration cache, so a launch that reads the run
- * task while the primary game is starting makes the whole build incompatible with it. What the
- * launch needs is a set of values, and most of them are lazy: properties the loader binds, a
- * classpath it assembles, a launcher it resolves. Those are kept as the property objects and read
- * when the game starts, which is when the loader has finished — a value read earlier produces a
- * launch that differs from the one Gradle would have performed. The rest is plain data, read once.
+ * <p>A {@code Task} cannot be written into the configuration cache. What the launch needs is a set of
+ * values, and most of them are lazy: properties the loader binds, a classpath it assembles, a launcher
+ * it resolves. Those are kept as the property objects and read when the spec is written, which is when
+ * the loader has finished — a value read earlier produces a launch that differs from the one Gradle
+ * would have performed. The rest is plain data, read once.
  *
  * <p>Where the loader keeps what it stages late is {@link Toolchain}'s to know; this class asks it.
  */
 final class CompanionLaunch {
 
-    private final String name;
     private final Provider<JavaLauncher> launcher;
     private final String executable;
     private final Provider<String> mainClass;
@@ -52,7 +50,6 @@ final class CompanionLaunch {
     private final File fallbackDirectory;
 
     private CompanionLaunch(JavaExec spec, List<Toolchain> toolchains) {
-        this.name = spec.getName();
         this.launcher = spec.getJavaLauncher();
         this.executable = spec.getExecutable();
         this.mainClass = spec.getMainClass();
@@ -84,10 +81,9 @@ final class CompanionLaunch {
     /**
      * {@code getAllJvmArgs()} without what the argument providers add.
      *
-     * <p>Gradle expands the providers into that list, and one of them is the build id, which asks git
-     * for the state of the work tree. Asked while the build is configured, that is a process the
-     * configuration cache refuses, and an id taken before anything has been compiled. The providers
-     * are kept as providers and asked when the game starts, so the list is read with them set aside.
+     * <p>Gradle expands the providers into that list, and a provider may ask for something that only
+     * exists once the build has run its prerequisites. The providers are kept as providers and asked
+     * when the launch spec is written, so the list is read with them set aside.
      */
     private static List<String> eagerJvmArgs(JavaExec spec, List<CommandLineArgumentProvider> providers) {
         spec.getJvmArgumentProviders().clear();
@@ -119,25 +115,6 @@ final class CompanionLaunch {
         return new CompanionLaunch(spec, toolchains);
     }
 
-    /**
-     * Attach the supervision agent to this launch only, not to the run task it was taken from: that
-     * task also serves a developer's own {@code runClient}, which has no supervisor to report to.
-     */
-    CompanionLaunch supervisedBy(SupervisionArgument supervision) {
-        jvmArgumentProviders.add(supervision);
-        return this;
-    }
-
-    /** The directory a run executes in: its loader's, else the task's own. */
-    static File runDirectory(JavaExec spec) {
-        for (Toolchain toolchain : Toolchain.of(spec)) {
-            Toolchain.WorkingDirectory dir = toolchain.workingDirectory(spec);
-            File resolved = dir == null ? null : dir.resolve();
-            if (resolved != null) return resolved;
-        }
-        return spec.getWorkingDir();
-    }
-
     File workingDirectory() {
         for (Toolchain.WorkingDirectory dir : workingDirectories) {
             File resolved = dir.resolve();
@@ -149,7 +126,9 @@ final class CompanionLaunch {
     /** The environment the game gets: the task's own, plus what its loader binds late. */
     Map<String, String> environment() {
         Map<String, String> env = new LinkedHashMap<>(environment);
-        env.putAll(SideProcesses.merged(lateEnvironment));
+        for (MapProperty<?, ?> p : lateEnvironment) {
+            p.get().forEach((k, v) -> env.put(String.valueOf(k), String.valueOf(v)));
+        }
         return env;
     }
 
@@ -219,7 +198,7 @@ final class CompanionLaunch {
         return out;
     }
 
-    /** The java binary, as {@link #start} would run it. */
+    /** The java binary the run task would use. */
     String javaExecutable() {
         return javaBinary();
     }
@@ -228,75 +207,6 @@ final class CompanionLaunch {
     private static void appendUnlessPresent(List<String> target, List<String> extra) {
         if (extra.isEmpty() || target.containsAll(extra)) return;
         target.addAll(extra);
-    }
-
-    /**
-     * Start the companion as a detached process.
-     *
-     * <p>The caller must already have run the companion's own task dependencies, or the argfiles
-     * those tasks generate will not exist yet. {@code StageWrightPlugin} wires that.
-     */
-    Process start(File logFile, Logger logger) {
-        List<String> command = new ArrayList<>();
-        command.add(javaBinary());
-        command.addAll(launchJvmArgs(new File(logFile.getParentFile(), logFile.getName() + ".classpath.args")));
-        command.add(mainClass.get());
-        command.addAll(programArgs());
-        // ProcessBuilder answers a null element with a bare NullPointerException carrying no message
-        // and no index — which is a terrible way to learn that a loader plugin left one of these
-        // unset. Name it instead.
-        for (int i = 0; i < command.size(); i++) {
-            if (command.get(i) == null) {
-                throw new GradleException("the companion run '" + name
-                        + "' produced a null argument at position " + i
-                        + " — its loader plugin builds the command line differently than expected");
-            }
-        }
-
-        // Created here, because the run task that would normally create it is not going to run. Its
-        // absence surfaces as a bare "cannot start the companion" from ProcessBuilder, which says
-        // nothing about a missing directory.
-        File workingDir = workingDirectory();
-        if (!workingDir.isDirectory() && !workingDir.mkdirs()) {
-            throw new GradleException("cannot create the companion's game directory " + workingDir);
-        }
-        ProcessBuilder builder = new ProcessBuilder(command)
-                .directory(workingDir)
-                // Merged and redirected to a file rather than inherited: the companion is a whole
-                // second game, and interleaving its log with the one being judged makes the run
-                // that matters unreadable at exactly the moment someone is reading it.
-                .redirectErrorStream(true)
-                // Appended, not truncated: writeHeader put the command line in first.
-                .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile));
-        // The task's environment and its loader's, and nothing else: a variable the task left out
-        // stays out, as it would from the task's own launch.
-        builder.environment().clear();
-        builder.environment().putAll(environment());
-        SideProcesses.requireDisplay("companion '" + name + "'", builder.environment());
-
-        try {
-            // The command that produced a log is the first thing anyone debugging one wants, and it
-            // is otherwise unrecoverable — the process is detached and Gradle never printed it.
-            writeHeader(logFile, command);
-            Process process = builder.start();
-            logger.lifecycle("[stagewright] companion '{}' started (pid {}), log: {}",
-                    name, process.pid(), logFile.getAbsolutePath());
-            return process;
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot start the companion run " + name, e);
-        }
-    }
-
-    /** Start the log with the command that produced it, one argument per line. */
-    private static void writeHeader(File logFile, List<String> command) {
-        StringBuilder header = new StringBuilder("# stagewright companion command\n");
-        command.forEach(a -> header.append("#   ").append(a).append('\n'));
-        try {
-            logFile.getParentFile().mkdirs();
-            Files.writeString(logFile.toPath(), header, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException("cannot write the companion log " + logFile, e);
-        }
     }
 
     /**
@@ -329,7 +239,6 @@ final class CompanionLaunch {
      */
     private static boolean alreadyHasClasspath(List<String> args) {
         for (String arg : args) {
-            // Left for start to name, which it cannot do after a bare NullPointerException.
             if (arg == null) continue;
             if (arg.equals("-cp") || arg.equals("-classpath") || arg.equals("--class-path")) {
                 return true;

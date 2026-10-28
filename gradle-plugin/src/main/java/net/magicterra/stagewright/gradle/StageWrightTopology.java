@@ -2,12 +2,11 @@ package net.magicterra.stagewright.gradle;
 
 import org.gradle.api.Named;
 import org.gradle.api.file.DirectoryProperty;
-import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.provider.Property;
 
 /**
- * One scene topology: a run configuration the host build already declares, plus where its results
- * land and how to judge them.
+ * One scene topology: a run configuration the host build already declares, which a test suite maps a
+ * scene's topology name to with {@link StageWrightTestSuite#getTopologies()}.
  *
  * <p><b>The plugin does not build the launch.</b> It points at a run task the consumer's own loader
  * plugin produced, because that plugin is the only thing that knows how to start the game it
@@ -41,117 +40,39 @@ public abstract class StageWrightTopology implements Named {
         return name;
     }
 
-    /** The host build's run task to execute, e.g. {@code runStagewrightServer}. A task in another
-     *  project needs its full path: {@code ':neoforge:runDogfoodServer'}. */
+    /** The host build's run task the primary game is launched from, e.g. {@code runStagewrightServer}. A task
+     *  in another project needs its full path: {@code ':neoforge:runDogfoodServer'}. */
     public abstract Property<String> getRunTask();
 
     /**
-     * A second run task to stand up alongside {@link #getRunTask()} and tear down after it, e.g. the
-     * game client that joins the dedicated server the scenes run on.
-     *
-     * <p>Launched as a detached process rather than as a Gradle task, because Gradle runs the tasks
-     * in one project's graph sequentially and this pair has to overlap. The command line is read off
-     * the companion's own {@code JavaExec} spec, so the loader plugin still owns what a dev run
-     * looks like.
-     *
-     * <p>No start-order handshake, deliberately. The client director re-dials until the server
-     * answers, which is cheaper and more robust than either side waiting for a readiness signal the
-     * other has no reason to emit.
+     * A second run task whose game runs alongside {@link #getRunTask()}'s, e.g. the game client that joins the
+     * dedicated server the scenes run on. Its launch is read off its own {@code JavaExec} spec, so the loader
+     * plugin still owns what a dev run looks like.
      */
     public abstract Property<String> getCompanionRunTask();
 
-    /** The run's game directory — the process working directory, which is where the harness writes. */
+    /** The run's game directory. Convention: {@code run-stagewright-<name>}. */
     public abstract DirectoryProperty getGameDirectory();
 
-    /** Results file path relative to {@link #getGameDirectory()}. Convention:
-     *  {@code stagewright/stagewright-results.jsonl}. Anything else is passed into the game as
-     *  {@code -Dstagewright.results}, so the harness writes the file this topology is judged on;
-     *  a StageWright older than that property ignores it and writes the convention. */
-    public abstract Property<String> getResultsFile();
-
-    /** Optional expected-scenes manifest. Present: reconciliation runs in both directions and a
-     *  scene registered but not declared REDs. Absent: outcomes are judged, coverage is not. */
-    public abstract RegularFileProperty getExpectFile();
-
-    /**
-     * Optional results file written by the companion CLIENT, judged alongside the server's.
-     *
-     * <p>Set it on a topology whose client half asserts something in its own JVM — anything about
-     * the BOUNDARY between the two processes, which no scene can reach because every scene body
-     * runs on the server thread. Absent (the convention) the client is a passive player and only
-     * the server's results decide the run.
-     *
-     * <p>Once set, an ABSENT file is an ENV verdict rather than a pass. A client that was launched
-     * to assert something and said nothing is indistinguishable from one that never started, and
-     * the run must not be green either way.
-     */
-    public abstract RegularFileProperty getCompanionResultsFile();
-
-    /**
-     * Delete the world and any stale results before the run. Convention: true.
-     *
-     * <p>Reusing a world across runs is the single most expensive false signal this framework can
-     * produce. Blocks a previous run placed are still standing, so a scene asserting "crossing this
-     * gap must consume a block" reports that nothing was consumed; shafts a previous run dug change
-     * the terrain under the next one. Which scenes fail varies per run, so it reads exactly like
-     * flakiness — and the hours go into the scenes rather than into the world they inherited.
-     */
+    /** Delete the world before each scene. Convention: true. */
     public abstract Property<Boolean> getCleanWorld();
 
-    /**
-     * Wall-clock ceiling for the run task, in minutes. Convention: 20.
-     *
-     * <p>The suite normally ends itself — the harness halts the server once its registry drains — so
-     * this only fires when the game never got far enough to run scenes at all. That case is common
-     * enough to design for: a client whose mod loading fails sits on an error screen forever, holding
-     * its game directory open, and without a ceiling the gate waits with it. Gradle destroys the
-     * process on expiry, so the verdict task then reports a results file that is missing or
-     * truncated, which is the honest description of what happened.
-     */
+    /** Wall-clock ceiling for one scene's games, in minutes. Convention: 20. */
     public abstract Property<Integer> getTimeoutMinutes();
 
     /**
-     * How long the game may go without moving before the run is ended, in minutes. Convention: 5;
-     * zero turns the check off.
+     * How long a game may go without moving before the scene is ended, in minutes. Convention: 5.
      *
      * <p>The game's supervision agent reports its phase, the server ticks it has delivered and the
-     * classes it has loaded. A game that changes none of them for this long is stuck, and waiting for
-     * {@link #getTimeoutMinutes()} on top of that is the cost this exists to cut. Loading a large pack
-     * moves the class count and running a suite moves the ticks, so only a game that is doing neither
-     * is ended.
+     * classes it has loaded; a game that changes none of them for this long is stuck.
      */
     public abstract Property<Integer> getStallMinutes();
 
     /**
-     * A game whose JVM outlives a finished suite fails the topology. Convention: {@code false}.
+     * The run task starts a game client rather than a dedicated server. Convention: {@code false}.
      *
-     * <p>The agent ends such a JVM and the run still judges as it would have, with a warning naming
-     * the threads that held it up. A pack author usually cannot change the mod that left them, so
-     * failing every run for it is not the default; a mod author can ask for it here.
-     */
-    public abstract Property<Boolean> getFailOnLeak();
-
-    /**
-     * The run task starts a game client. Convention: {@code false}.
-     *
-     * <p>A client needs a display, and on Linux the run is refused before it starts when neither
-     * {@code DISPLAY} nor {@code WAYLAND_DISPLAY} is in its environment. The plugin does not start
-     * one: a desktop, a CI image with Xvfb, or {@code xvfb-run ./gradlew …} provides it. A companion
-     * is always a client and is checked whether or not this is set.
+     * <p>A client needs a display; the plugin does not start one: a desktop, a CI image with Xvfb, or
+     * {@code xvfb-run ./gradlew …} provides it.
      */
     public abstract Property<Boolean> getClient();
-
-    /**
-     * A checked-in directory of {@code .js} scene files, installed into the run directory's
-     * {@code config/stagewright/scenes} before the game starts. Optional.
-     *
-     * <p>The surface a modpack uses: scenes as files beside the pack's configs, no source set and no
-     * build. Pointing a topology at a directory of them is what lets those files live in a repo and
-     * still arrive where a pack would put them. They register into the same registry as compiled
-     * scenes and are reconciled against the same {@link #getExpectFile() manifest}.
-     *
-     * <p>Requires Rhino on the run's classpath, which arrives with worlddriver. Without it the
-     * harness fails the run rather than skipping the files.
-     */
-    public abstract DirectoryProperty getSceneScripts();
 }
