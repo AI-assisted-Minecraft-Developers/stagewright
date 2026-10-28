@@ -9,8 +9,7 @@ import java.nio.file.Path;
  */
 public final class PackFiles {
 
-    /** Repeated in the engine's {@code RunDirectory}, which the CLI reads it from: the two modules share no
-     *  classpath, so they agree on the literal. */
+    /** Nothing in this repository sets it any more; the read stays until the old results path is removed. */
     public static final String SCENES_DIR_PROPERTY = "stagewright.scenesDir";
 
     private static final String DEFAULT_CAPABILITIES = "config/stagewright/capabilities";
