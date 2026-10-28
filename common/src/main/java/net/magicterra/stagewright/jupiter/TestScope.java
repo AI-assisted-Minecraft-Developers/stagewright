@@ -118,19 +118,22 @@ final class TestScope {
         throw new IllegalStateException(what + " in " + name + " changes state every test shares: add " + fix);
     }
 
-    /** Keep a failed soft check; {@link #checks} reports it when the test ends. */
+    /** Keep a failed soft check; {@link #takeChecks} reports it when the test ends. */
     synchronized void failed(AssertionError check) {
         failedChecks.add(check);
     }
 
     /**
      * What the test's failed soft checks add up to, or null when none failed: the one failure itself, or every one
-     * of them under a heading that counts them.
+     * of them under a heading that counts them. Taken once: whoever reports them first, {@link KnownIssueExtension}
+     * as the method returns or {@link GameExtension} after it, leaves nothing for the other.
      */
-    synchronized AssertionError checks() {
+    synchronized AssertionError takeChecks() {
         if (failedChecks.isEmpty()) return null;
-        if (failedChecks.size() == 1) return failedChecks.getFirst();
-        return new MultipleFailuresError(failedChecks.size() + " checks failed", List.copyOf(failedChecks));
+        List<AssertionError> failed = List.copyOf(failedChecks);
+        failedChecks.clear();
+        if (failed.size() == 1) return failed.getFirst();
+        return new MultipleFailuresError(failed.size() + " checks failed", failed);
     }
 
     /** Remember how to put back what an override or a facet just changed; run on the server thread at the end. */

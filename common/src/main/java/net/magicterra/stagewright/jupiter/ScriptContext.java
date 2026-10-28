@@ -101,7 +101,7 @@ final class ScriptContext {
                 else failure.addSuppressed(t);
             }
         }
-        AssertionError checks = scope == null ? null : scope.checks();
+        AssertionError checks = scope == null ? null : scope.takeChecks();
         if (checks != null) {
             if (failure == null) failure = checks;
             else failure.addSuppressed(checks);

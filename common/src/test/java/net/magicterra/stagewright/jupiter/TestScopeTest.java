@@ -25,12 +25,13 @@ class TestScopeTest {
     }
 
     @Test
-    void noFailedCheckReportsNothingAndOneReportsItself() {
+    void noFailedCheckReportsNothingAndOneReportsItselfOnce() {
         TestScope scope = TestScope.ofScript("checks", Set.of(), false);
-        assertNull(scope.checks());
+        assertNull(scope.takeChecks());
         AssertionError miss = new AssertionError("the door is open");
         scope.failed(miss);
-        assertSame(miss, scope.checks());
+        assertSame(miss, scope.takeChecks());
+        assertNull(scope.takeChecks());
     }
 
     @Test
@@ -38,7 +39,7 @@ class TestScopeTest {
         TestScope scope = TestScope.ofScript("checks", Set.of(), false);
         scope.failed(new AssertionError("the door is open"));
         scope.failed(new AssertionError("the chest is empty"));
-        MultipleFailuresError e = assertInstanceOf(MultipleFailuresError.class, scope.checks());
+        MultipleFailuresError e = assertInstanceOf(MultipleFailuresError.class, scope.takeChecks());
         assertEquals(2, e.getFailures().size());
         assertTrue(e.getMessage().startsWith("2 checks failed"), e.getMessage());
         assertTrue(e.getMessage().contains("the chest is empty"), e.getMessage());

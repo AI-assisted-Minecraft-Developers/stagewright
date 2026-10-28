@@ -21,12 +21,18 @@ public final class KnownIssueExtension implements InvocationInterceptor {
             invocation.proceed();
             return;
         }
+        // The test's failed soft checks count as its failure; taken here, GameExtension does not report them again.
+        TestScope scope = TestScope.bound();
         try {
             invocation.proceed();
         } catch (Throwable t) {
+            AssertionError checks = scope == null ? null : scope.takeChecks();
+            if (checks != null) t.addSuppressed(checks);
             if (isAbort(t)) throw t;
             throw abort("known issue: " + known.value(), t);
         }
+        AssertionError checks = scope == null ? null : scope.takeChecks();
+        if (checks != null) throw abort("known issue: " + known.value(), checks);
         throw new AssertionFailedError("passed although marked @KnownIssue(\"" + known.value()
                 + "\"): if the issue is fixed, remove the annotation");
     }
