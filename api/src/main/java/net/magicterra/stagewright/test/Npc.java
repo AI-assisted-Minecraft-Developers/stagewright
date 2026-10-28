@@ -50,6 +50,11 @@ public interface Npc extends Driven {
      */
     Npc moveTo(BlockPos feet);
 
+    /**
+     * Stop WorldDriver driving the mob between the test's own ticks. Unlike a bot's, a mob's movement is the world's:
+     * the game moves every mob each tick, so a parked one still falls, is pushed and keeps its momentum; it only stops
+     * acting on what WorldDriver decides.
+     */
     @Override
     Npc park();
 
