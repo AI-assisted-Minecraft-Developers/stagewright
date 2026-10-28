@@ -28,8 +28,8 @@ too), their parameter types spelled as JUnit's `MethodSource` spells them, and `
 a game node is matched on: class, method name and parameter types.
 
 The game then discovers for real. A test the engine found and the game did not is reported as failed, never as
-skipped: the usual cause is a class that failed to load in the game, which is exactly the silent loss the old
-expected-scenes manifest existed to catch. A parameterized test's invocations exist only in the game; the game
+skipped: the usual cause is a class that failed to load in the game, and a test lost that way must not look like one
+that chose not to run. A parameterized test's invocations exist only in the game; the game
 registers them as they appear, and the engine adds them to its tree as dynamic tests.
 
 ## Script tests
@@ -47,9 +47,11 @@ same Rhino, so a file that parses here parses there.
 In the game, the `stagewright-script` engine evaluates the file again through WorldDriver's `Scripting` (StageWright
 links no Rhino of its own: the shipped WorldDriver relocates it) and keeps the tests of the scene the game was started
 for. A test's `t` offers `call`, `step`, `wait`, `waitUntil`, `settle`, `expect` (`equals`, `contains`, `isEmpty`,
-`gt`, `lt`, `atLeast`, `atMost`) and `record`; the handles `plot({size})`, `bot(name)`, `player()` and `client()`,
-as plain objects (a position is `{x, y, z}`, a block or item its id); and `override(rule, value)`, `overrideTime`,
-`overrideWeather` and `overrideTickRate`. What a test leases is given back and what it overrides undone when it
+`gt`, `lt`, `atLeast`, `atMost`), `check` (a soft assertion, as `Game.check`), `record`, `perf` and `store`; the
+handles `plot({size, x, y, z, centered, dimension})`, `bot(name)` or `bot({name, parked})`, `player()`,
+`npc(type, pos, dimension)`, `client()` and `capability(name)`, as plain objects (a position is `{x, y, z}`, a block or
+item its id), and `translate(pos, from, to)`; and `override(rule, value)`, `overrideTime`, `overrideWeather` and
+`overrideTickRate`. What a test leases is given back and what it overrides undone when it
 ends. The script also has WorldDriver's own `Driver.*`. A failed `t.expect` cannot be caught by the script, so a test
 cannot swallow its own failure.
 
@@ -171,7 +173,7 @@ command-line runner writes the same file from a game directory. The engine knows
 with StageWright's loader jar as it hands any mod — `-Dfabric.addMods`, or `--fml.mods` — and writes the
 `dedicatedServer` launch spec from the start command it detects. It then runs this engine in its own JVM and writes
 JUnit XML. The server plays in `stagewright/world` (`--universe`, and the spec's `worldDirectory`), so the world each
-scene starts afresh is never the pack's. With `--client <spec>` it also installs that client as the scene runner does
+scene starts afresh is never the pack's. With `--client <spec>` it also installs that client
 and writes the other two specs: `integratedServer`, the client alone in `saves/StageWright`, and
 `dedicatedServerWithClient`, the pack's server waiting for that client to join. The client runs in
 `stagewright/client`, never a player's directory, since the engine deletes a client's saves before each scene, and
@@ -181,8 +183,8 @@ build.
 ## Not yet
 
 - Scene declarations apply `topology`, `world`, `files` and `mods.exclude` ([scene file](../reference/scene-file.md));
-  `clients` and `mods.only` are refused rather than ignored, and the creation settings reach a dedicated server only.
+  any other key, `clients` and `mods.only` among them, is refused rather than ignored.
 - Scenes run one after another.
+- Gradle's `--tests` filter selects Java test classes and methods only; every script test still runs.
 - `perf` counts frames only of a client in the game's own JVM, not of a joining one; `insert` and `container` reach only
   containers that are vanilla `Container`s, in the overworld.
-- A game is started once per scene and never restarted, so `afterRestart` and `store` wait for a channel into the game.
