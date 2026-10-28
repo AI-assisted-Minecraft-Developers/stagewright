@@ -18,6 +18,7 @@ import net.magicterra.stagewright.capability.CapabilityProvider;
 import net.magicterra.stagewright.test.Await;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Locks;
+import net.magicterra.stagewright.test.Npc;
 import net.magicterra.stagewright.test.Perf;
 import net.magicterra.stagewright.test.Store;
 import net.magicterra.worlddriver.api.game.WorldDriver;
@@ -26,6 +27,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.DimensionType;
@@ -80,6 +83,11 @@ final class GameImpl implements Game {
     @Override
     public Await await() {
         return new AwaitImpl();
+    }
+
+    @Override
+    public Npc npc(EntityType<? extends Mob> type, ResourceKey<Level> dimension, BlockPos feet) {
+        return NpcImpl.spawn(this, TestScope.current("game.npc"), type, dimension, feet);
     }
 
     @Override

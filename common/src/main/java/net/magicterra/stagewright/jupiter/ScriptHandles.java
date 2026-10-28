@@ -11,6 +11,7 @@ import net.magicterra.stagewright.test.Body;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Driven;
 import net.magicterra.stagewright.test.Game;
+import net.magicterra.stagewright.test.Npc;
 import net.magicterra.stagewright.test.Perf;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.BlockPosition;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
@@ -23,6 +24,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
@@ -62,6 +65,25 @@ final class ScriptHandles {
             return out;
         });
         t.put("player", (Scripting.Function) args -> body(BodyImpl.player(game)));
+        // t.npc(type, pos) in the overworld, or t.npc(type, pos, dimension).
+        t.put("npc", (Scripting.Function) args -> {
+            // Whether it is a mob is only known once one is spawned, which refuses anything else.
+            @SuppressWarnings("unchecked")
+            EntityType<? extends Mob> type = (EntityType<? extends Mob>) lookup(BuiltInRegistries.ENTITY_TYPE,
+                    arg(args, 0), "entity type");
+            Npc npc = game.npc(type, args.length > 2 ? dimension(args[2]) : Level.OVERWORLD, blockPos(arg(args, 1)));
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("name", npc.name());
+            out.put("ref", npc.ref());
+            out.put("pos", (Scripting.Function) a -> position(npc.blockPos()));
+            out.put("dimension", (Scripting.Function) a -> npc.dimension().location().toString());
+            out.put("moveTo", (Scripting.Function) a -> {
+                npc.moveTo(blockPos(arg(a, 0)));
+                return null;
+            });
+            driven(out, npc);
+            return out;
+        });
         t.put("translate", (Scripting.Function) args -> position(game.translate(blockPos(arg(args, 0)),
                 dimension(arg(args, 1)), dimension(arg(args, 2)))));
         t.put("client", (Scripting.Function) args -> {

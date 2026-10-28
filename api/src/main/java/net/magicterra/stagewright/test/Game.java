@@ -10,6 +10,8 @@ import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 
@@ -58,6 +60,18 @@ public interface Game {
 
     /** Wait for a condition on the server; see {@link Await}. */
     Await await();
+
+    /**
+     * Spawn a {@code type} mob standing in {@code feet} in {@code dimension}, as a spawn command would, and hand it to
+     * WorldDriver to drive; it is removed when the calling test ends. Refuses a mob WorldDriver cannot drive. Only from
+     * the test's own thread.
+     */
+    Npc npc(EntityType<? extends Mob> type, ResourceKey<Level> dimension, BlockPos feet);
+
+    /** {@link #npc(EntityType, ResourceKey, BlockPos)} in the overworld. */
+    default Npc npc(EntityType<? extends Mob> type, BlockPos feet) {
+        return npc(type, Level.OVERWORLD, feet);
+    }
 
     /**
      * A soft assertion: when {@code holds} is false, {@code what} is kept and the test goes on. Every check that failed
