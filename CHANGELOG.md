@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-28
 
+### Leasing a plot no longer stalls the server · compiled
+
+A plot's chunks used to be forced and read in one server task, which generated every fresh chunk on the server
+thread. With a whole suite leasing plots at once the server stopped ticking for 25 to 75 seconds, and any call a test
+made in that window gave up after eight seconds. The chunks now load over the following ticks, and the plot is kept
+and emptied once they have.
+
 ### A test can tick a bot by hand · green in the example projects, Fabric and NeoForge
 
 `Bot` gains `park`, `unpark`, `tick`, `tickUntilIdle`, `step`, `think` and `press`, and `@Bot.Parked` joins a bot
