@@ -88,6 +88,8 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
             TestScope.unbind();
             if (scope != null) scope.release();
         }
+        AssertionError checks = scope == null ? null : scope.checks();
+        if (checks != null) throw checks;
     }
 
     static Game game() {

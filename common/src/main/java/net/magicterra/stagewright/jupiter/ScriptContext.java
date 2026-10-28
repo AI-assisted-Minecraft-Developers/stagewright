@@ -61,6 +61,7 @@ final class ScriptContext {
         script.put("waitUntil", (Scripting.Function) this::waitUntil);
         script.put("settle", (Scripting.Function) this::settle);
         script.put("expect", (Scripting.Function) this::expect);
+        script.put("check", (Scripting.Function) this::check);
         script.put("record", (Scripting.Function) this::record);
         // t.store.put(key, value) and t.store.get(key): what the tests after a restart read.
         Map<String, Object> store = new LinkedHashMap<>();
@@ -99,6 +100,11 @@ final class ScriptContext {
                 if (failure == null) failure = t;
                 else failure.addSuppressed(t);
             }
+        }
+        AssertionError checks = scope == null ? null : scope.checks();
+        if (checks != null) {
+            if (failure == null) failure = checks;
+            else failure.addSuppressed(checks);
         }
         TestScope.unbind();
         return failure;
@@ -256,6 +262,29 @@ final class ScriptContext {
         ops.put("atLeast", (Scripting.Function) a -> { Expectations.atLeast(actual, arg(a)); return null; });
         ops.put("atMost", (Scripting.Function) a -> { Expectations.atMost(actual, arg(a)); return null; });
         return ops;
+    }
+
+    /**
+     * {@code t.check(condition, what)}: a soft assertion, reported when the test ends. {@code condition} is a value, or
+     * a function that fails the check by returning false or by a failed {@code t.expect} inside it.
+     */
+    private Object check(Object... args) {
+        Object condition = args.length > 0 ? args[0] : null;
+        String what = args.length > 1 ? String.valueOf(args[1]) : "a check";
+        if (!(condition instanceof Scripting.Function f)) {
+            game.check(Expectations.truthy(condition), what);
+            return null;
+        }
+        game.check(() -> {
+            Object result;
+            try {
+                result = f.call();
+            } catch (AssertionError e) {
+                throw new AssertionError(what + ": " + e.getMessage(), e);
+            }
+            if (Boolean.FALSE.equals(result)) throw new AssertionError(what);
+        });
+        return null;
     }
 
     /** {@code t.record(name, value)}: a value kept in the report beside the test's result. */

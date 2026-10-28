@@ -19,7 +19,8 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  * ({@code call: method} with {@code params}), a wait ({@code wait}, {@code waitUntil}, {@code settle}), a Java method
  * ({@code java: {class, method}}), a measurement ({@code perf}), or a named
  * step a script registered ({@code name: args}); any of them may carry {@code expect}, checked by
- * {@link Expectations#expect}, and {@code save: name}, which a later step reads as {@code ${name}} or
+ * {@link Expectations#expect}, or {@code check}, the same checked softly: a miss is reported when the test ends and the
+ * steps go on. And {@code save: name}, which a later step reads as {@code ${name}} or
  * {@code ${name.field}}. There is no expression language: a step that needs one is a named step written in JavaScript.
  */
 final class YamlTests {
@@ -32,7 +33,7 @@ final class YamlTests {
             "isolated", "afterRestart", "plot", "given", "when", "then", "steps");
     /** The keys a step may carry beside the one that says what it does. */
     private static final Set<String> MODIFIERS =
-            Set.of("params", "expect", "knownIssues", "save", "within", "ticks", "as");
+            Set.of("params", "expect", "check", "knownIssues", "save", "within", "ticks", "as");
     private static final Pattern REFERENCE =Pattern.compile("\\$\\{([A-Za-z_][\\w.]*)}");
 
     private YamlTests() {}
@@ -126,6 +127,18 @@ final class YamlTests {
                 KnownIssues known = step.containsKey("knownIssues") ? new KnownIssues(step.get("knownIssues")) : null;
                 if (known != null) result = known.subtract(result);
                 if (step.containsKey("expect")) Expectations.expect(result, substitute(step.get("expect"), saved));
+                if (step.containsKey("check")) {
+                    Object spec = substitute(step.get("check"), saved);
+                    Object checked = result;
+                    String where = label + (i + 1) + " (" + verb + ")";
+                    context.game().check(() -> {
+                        try {
+                            Expectations.expect(checked, spec);
+                        } catch (AssertionError e) {
+                            throw new AssertionError(where + ": " + e.getMessage(), e);
+                        }
+                    });
+                }
                 if (known != null) {
                     known.checkAllSeen();
                     context.record(label + (i + 1) + " known issues", known.count());

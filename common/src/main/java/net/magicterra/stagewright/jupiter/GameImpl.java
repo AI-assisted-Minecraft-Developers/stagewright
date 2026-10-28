@@ -76,6 +76,35 @@ final class GameImpl implements Game {
     }
 
     @Override
+    public void check(boolean holds, String what) {
+        TestScope scope = checking();
+        if (!holds) scope.failed(new AssertionError(what));
+    }
+
+    @Override
+    public void check(Assertion assertion) {
+        TestScope scope = checking();
+        try {
+            assertion.run();
+        } catch (AssertionError e) {
+            scope.failed(e);
+        } catch (RuntimeException | Error e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static TestScope checking() {
+        TestScope scope = TestScope.bound();
+        if (scope == null) {
+            throw new IllegalStateException("a check is reported when its test ends, so it may only be made from a"
+                    + " test's own thread");
+        }
+        return scope;
+    }
+
+    @Override
     public Map<String, Perf.Window> perf(Perf measurement) {
         return PerfSampler.measure(this, measurement);
     }

@@ -49,6 +49,25 @@ public interface Game {
     /** Wait for a condition on the server; see {@link Await}. */
     Await await();
 
+    /**
+     * A soft assertion: when {@code holds} is false, {@code what} is kept and the test goes on. Every check that failed
+     * is reported together once the test ends, and fails it, so a test probing many things sees all that are wrong,
+     * not the first. Only from the test's own thread.
+     */
+    void check(boolean holds, String what);
+
+    /**
+     * {@link #check(boolean, String)} for any assertion: an {@link AssertionError} {@code assertion} throws, as every
+     * JUnit assertion does, is kept instead of thrown; any other exception is thrown as it is.
+     */
+    void check(Assertion assertion);
+
+    /** An assertion for {@link #check(Assertion)}, typically {@code () -> assertEquals(expected, actual)}. */
+    @FunctionalInterface
+    interface Assertion {
+        void run() throws Throwable;
+    }
+
     /** Run {@code measurement}'s phases in order; each phase's median window by name, in phase order. */
     Map<String, Perf.Window> perf(Perf measurement);
 

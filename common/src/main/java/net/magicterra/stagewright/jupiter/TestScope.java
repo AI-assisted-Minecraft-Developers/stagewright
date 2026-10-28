@@ -2,14 +2,17 @@ package net.magicterra.stagewright.jupiter;
 
 import java.lang.reflect.AnnotatedElement;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
 import net.minecraft.server.MinecraftServer;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.opentest4j.MultipleFailuresError;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.parallel.ResourceAccessMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
@@ -33,6 +36,7 @@ final class TestScope {
     private final boolean script;
     // Pushed and run on the server thread; read in reverse so a value overridden twice ends as it started.
     private final Deque<Consumer<MinecraftServer>> undo = new ArrayDeque<>();
+    private final List<AssertionError> failedChecks = new ArrayList<>();
     private AutoCloseable held;
 
     private TestScope(String name, Set<String> locks, Set<String> readLocks, boolean isolated, boolean script) {
@@ -112,6 +116,21 @@ final class TestScope {
                 ? "locks: ['" + lock.substring(LOCK_PREFIX.length()) + "'] to the test's options, or isolated: true"
                 : "@ResourceLock(" + constant + ") to the test, or @Isolated to its class";
         throw new IllegalStateException(what + " in " + name + " changes state every test shares: add " + fix);
+    }
+
+    /** Keep a failed soft check; {@link #checks} reports it when the test ends. */
+    synchronized void failed(AssertionError check) {
+        failedChecks.add(check);
+    }
+
+    /**
+     * What the test's failed soft checks add up to, or null when none failed: the one failure itself, or every one
+     * of them under a heading that counts them.
+     */
+    synchronized AssertionError checks() {
+        if (failedChecks.isEmpty()) return null;
+        if (failedChecks.size() == 1) return failedChecks.getFirst();
+        return new MultipleFailuresError(failedChecks.size() + " checks failed", List.copyOf(failedChecks));
     }
 
     /** Remember how to put back what an override or a facet just changed; run on the server thread at the end. */
