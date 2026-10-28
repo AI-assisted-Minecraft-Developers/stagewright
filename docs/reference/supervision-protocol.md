@@ -76,7 +76,8 @@ not as one that stalled.
 
 `leaked` lists the non-daemon threads still alive, `DestroyJavaVM` excluded, and may be empty when
 the JVM is held up by something that is not a thread. The agent ends the JVM with `Runtime.halt(0)`
-right after sending it: the test events, not the exit code, carry the results.
+right after sending it: the test events, not the exit code, carry the results. The test engine fails the scene of a
+game whose agent sent `leaked`.
 
 ## What the supervisor concludes
 

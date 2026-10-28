@@ -88,6 +88,7 @@ public final class Supervisor implements AutoCloseable {
     private boolean connectionClosed;
     private boolean done;
     private boolean exiting;
+    private boolean forcedDown;
     private String crashReport;
     private long agentPid = -1;
     private long lastBeatNanos;
@@ -219,18 +220,38 @@ public final class Supervisor implements AutoCloseable {
     public boolean awaitExit(ProcessHandle game, Duration wait) throws InterruptedException {
         try {
             game.onExit().get(wait.toMillis(), TimeUnit.MILLISECONDS);
-            return true;
         } catch (java.util.concurrent.TimeoutException e) {
             return false;
         } catch (java.util.concurrent.ExecutionException e) {
-            return !game.isAlive();
+            if (game.isAlive()) return false;
         }
+        // The agent's last line, `leaked`, goes out just before it halts the JVM: read what is left of the
+        // connection, so that leaks() and forcedDown() answer for the whole run.
+        synchronized (lock) {
+            long deadline = System.nanoTime() + DRAIN_NANOS;
+            while (connected && !connectionClosed) {
+                long left = deadline - System.nanoTime();
+                if (left <= 0) break;
+                TimeUnit.NANOSECONDS.timedWait(lock, left);
+            }
+        }
+        return true;
     }
 
     /** The threads that held the JVM up after done, as the agent reported them. Empty when it ended by itself. */
     public List<Leak> leaks() {
         synchronized (lock) {
             return List.copyOf(leaks);
+        }
+    }
+
+    /**
+     * Whether the agent had to end the JVM: it was still up when the grace period after {@code done} ran out. True even
+     * when {@link #leaks()} is empty, which it is when what held the JVM up was not a thread.
+     */
+    public boolean forcedDown() {
+        synchronized (lock) {
+            return forcedDown;
         }
     }
 
@@ -433,6 +454,7 @@ public final class Supervisor implements AutoCloseable {
                 case "done" -> done = true;
                 case "exiting" -> exiting = true;
                 case "leaked" -> {
+                    forcedDown = true;
                     if (event.get("threads") instanceof List<?> threads) {
                         for (Object thread : threads) {
                             if (!(thread instanceof Map<?, ?> t)) continue;

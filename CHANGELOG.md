@@ -37,6 +37,15 @@ stripped, as for the loader jars. A build that compiles against its own WorldDri
 to take the api jar non-transitively or exclude `worlddriver-api`; WorldDriver's own build is one of them. The plugin's
 `stagewrightTestCompile` defaults already do.
 
+### A game that has to be forced down fails its scene, and a stall says where it is stuck · green in the engine's own tests
+
+A game whose JVM was still up thirty seconds after its run, and which the agent therefore halted, used to pass: the
+threads the agent named were collected and never shown. Its scene now fails, even when every test passed, and the
+failure, a `forcedDown` report entry and a line appended to the game's log name each thread that held the JVM up, with
+its top frames, its jars and the code that started it. A game that outlives the agent's halt as well is killed and
+fails the same way; before, it was left running. A stalled game's failure now carries the frames of its `main`,
+`Render thread` and `Server thread` from the agent's last sample, so it reads without opening the game's log.
+
 ---
 
 ## 2026-10-28

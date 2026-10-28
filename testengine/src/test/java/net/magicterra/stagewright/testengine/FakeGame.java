@@ -71,6 +71,19 @@ public final class FakeGame {
             finish(classId(c), "SUCCESSFUL", null);
         }
         test("{\"type\":\"ended\"}");
+        if (scenario.equals("leak")) {
+            // A mod's pool that outlives the run: the JVM stays up until the agent's grace period ends it.
+            Thread pool = new Thread(() -> {
+                try {
+                    Thread.sleep(600_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }, "mod-pool-1");
+            pool.start();
+            done();
+            return;
+        }
         done();
         System.exit(0);
     }

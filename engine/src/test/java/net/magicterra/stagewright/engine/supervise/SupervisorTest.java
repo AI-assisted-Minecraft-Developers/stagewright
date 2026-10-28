@@ -67,6 +67,7 @@ class SupervisorTest {
                 assertTrue(supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(15)), "the JVM should end itself");
                 assertEquals(0, game.exitValue());
                 assertEquals(List.of(), supervisor.leaks());
+                assertFalse(supervisor.forcedDown());
                 assertEquals("harness-ready", supervisor.phase());
                 assertEquals(7, supervisor.ticks());
                 assertEquals(game.pid(), supervisor.agentPid());
@@ -85,6 +86,7 @@ class SupervisorTest {
                 assertTrue(supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(15)),
                         "the agent should end a JVM that outlives the grace period");
                 assertEquals(0, game.exitValue());
+                assertTrue(supervisor.forcedDown());
                 List<Supervisor.Leak> leaks = supervisor.leaks();
                 assertEquals(1, leaks.size(), leaks.toString());
                 Supervisor.Leak leak = leaks.get(0);
@@ -282,6 +284,21 @@ class SupervisorTest {
             send(client, hello("not-the-token"));
             send(client, "{\"event\":\"done\"}");
             assertEquals(Ended.NEVER_CONNECTED, supervisor.await(game.toHandle(), limits(1, 5, 60, 60)));
+        } finally {
+            Supervisor.kill(game.toHandle());
+        }
+    }
+
+    @Test
+    void aLeakedLineWithNoThreadsStillSaysTheJvmWasForcedDown() throws Exception {
+        Process game = bare();
+        try (Supervisor supervisor = Supervisor.open(); Socket client = connect(supervisor)) {
+            send(client, hello(supervisor.token()));
+            send(client, "{\"event\":\"done\"}");
+            send(client, "{\"event\":\"leaked\",\"graceMs\":1000,\"threads\":[]}");
+            Thread.sleep(300);
+            assertTrue(supervisor.forcedDown());
+            assertEquals(List.of(), supervisor.leaks());
         } finally {
             Supervisor.kill(game.toHandle());
         }

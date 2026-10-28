@@ -84,7 +84,14 @@ reacts to events instead of polling files, and ends its wait in one of these way
 | `TIMED_OUT` | still going at `timeoutMinutes` |
 
 On anything but `DONE` the test engine ends the game's process and its children, and reports every test
-the game had not finished as failed with that reason, the game's phase and tick, and the path of its log.
+the game had not finished as failed with that reason, the game's phase and tick, and the path of its log. When the
+agent had sampled the game's own threads (`main`, `Render thread`, `Server thread`), which it does once nothing has
+moved for twenty seconds, their frames go into the same message: for `STALLED` that is where the game is stuck.
+
+After `DONE` the JVM is given the agent's grace period, thirty seconds, to end by itself. If the agent has to halt it,
+or it is still up ten seconds after that and the engine kills it, the scene fails even when every test passed: the
+failure, a `forcedDown` report entry and a line appended to the game's log name each thread that held the JVM up,
+with its top frames, the jars they run in and the code that started it.
 
 `HEARTBEAT_LOST` is the one case the agent cannot cover from inside. A JVM wedged at a safepoint stops every Java
 thread, the agent's with it; that is why the supervisor keeps a kill. But it is triggered by a fact with one meaning,
@@ -114,7 +121,5 @@ started by hand. With an agent attached it does nothing.
 
 ## Not done
 
-- The test engine collects the `leaked` threads and the idle stacks, and reports neither: a JVM the agent had to end
-  after its run passes silently, and a stalled game's failure gives its phase and tick but not where its threads were.
 - The companion client of a `dedicatedServerWithClient` scene is started without the agent. It is ended when its
   server's game ends, but nothing watches it for crashing or standing still.

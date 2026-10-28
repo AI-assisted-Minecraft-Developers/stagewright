@@ -22,11 +22,6 @@ meant for one class pays for every script scene. Script tests need a source Grad
 `JupiterRun.halt` arms an exit watchdog for a dedicated server started without the agent, by hand or
 through a run task the plugin cannot put an argument on. It goes if and when neither is supported.
 
-## Leaked threads and stall stacks are collected but not reported
-
-The test engine gathers both, yet a game the agent had to force down after its run still passes, and a stall
-failure names only the phase and the tick.
-
 ## The joined client of `dedicatedServerWithClient` runs without the agent
 
 Nothing notices it crashing or hanging.

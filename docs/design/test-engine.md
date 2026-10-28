@@ -105,7 +105,9 @@ during `smeltsIron`" from "the game crashed after its run". The channel is one-w
 decided before it starts, by system properties ([launch spec](../reference/launch-spec.md)).
 
 When the game ends, everything it did not report is closed out as failed with the reason: the run's own error (a
-`@DependsOn` cycle), a test it never discovered, or how the game ended — crashed, stalled, timed out, exited.
+`@DependsOn` cycle), a test it never discovered, or how the game ended — crashed, stalled (with where its threads
+stood), timed out, exited. A game that reported everything but had to be forced down after its run fails its scene,
+naming the threads that held it up ([supervision](supervision.md#the-supervisor)).
 
 ## Tests in a game run in parallel
 

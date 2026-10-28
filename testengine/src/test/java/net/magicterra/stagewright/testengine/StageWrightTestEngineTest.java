@@ -38,7 +38,7 @@ class StageWrightTestEngineTest {
         Path specs = Files.createDirectories(temp.resolve("launches"));
         System.setProperty(LaunchSpec.PROPERTY, specs.toString());
         for (String topology : List.of("pass", "assertFail", "crash", "undiscovered", "dynamic", "world",
-                "reqSkip", "otherSkip", "classSkip", "classSkipOther", "script", "restart")) {
+                "reqSkip", "otherSkip", "classSkip", "classSkipOther", "script", "restart", "leak")) {
             writeSpec(specs, topology, true);
         }
         writeSpec(specs, "worldDirty", false);
@@ -90,6 +90,31 @@ class StageWrightTestEngineTest {
         assertEquals(2, r.testEvents().succeeded().count());
         assertEquals(0, r.testEvents().failed().count());
         assertEquals(0, containersFailed(r).count());
+    }
+
+    @Test
+    void aGameTheAgentHadToForceDownFailsItsSceneNamingTheThread() throws IOException {
+        int grace = SceneRun.agentGraceSeconds;
+        SceneRun.agentGraceSeconds = 1;
+        EngineExecutionResults r;
+        try {
+            r = run("LeakFixture");
+        } finally {
+            SceneRun.agentGraceSeconds = grace;
+        }
+        // The tests themselves passed; it is the scene that fails.
+        assertEquals(2, r.testEvents().succeeded().count());
+        assertEquals(0, r.testEvents().failed().count());
+        Event scene = containersFailed(r).stream().filter(e -> e.getTestDescriptor().getDisplayName().equals("leak"))
+                .findFirst().orElseThrow(() -> new AssertionError("the scene should fail"));
+        String message = failure(scene).getMessage();
+        assertTrue(message.contains("had to be forced down") && message.contains("mod-pool-1"), message);
+        assertTrue(message.contains("started by "), message);
+        assertTrue(r.allEvents().reportingEntryPublished().stream()
+                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs().get("forcedDown"))
+                .anyMatch(v -> v != null && v.contains("mod-pool-1")));
+        Path log = temp.resolve("game-leak").resolve("stagewright").resolve("logs").resolve("leak-game.log");
+        assertTrue(Files.readString(log).contains("[stagewright] the game had to be forced down"), log.toString());
     }
 
     @Test
