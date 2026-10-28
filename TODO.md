@@ -22,6 +22,25 @@ meant for one class pays for every script scene. Script tests need a source Grad
 `JupiterRun.halt` arms an exit watchdog for a dedicated server started without the agent, by hand or
 through a run task the plugin cannot put an argument on. It goes if and when neither is supported.
 
+## Leaked threads and stall stacks are collected but not reported
+
+The test engine gathers both, yet a game the agent had to force down after its run still passes, and a stall
+failure names only the phase and the tick.
+
+## The joined client of `dedicatedServerWithClient` runs without the agent
+
+Nothing notices it crashing or hanging.
+
+## Leftovers of the old results path
+
+`results`, `RESULTS` and `resultsComplete()` in the agent and supervisor, and the `-Dstagewright.scenesDir` read,
+are reached by nothing now.
+
+## `mc_stagewright-api`'s POM declares no dependencies
+
+Its public types reference WorldDriver's api, so a project without the plugin has to add `worlddriver-api:dev`
+itself. The CLI runner also never calls `DriverRequirement`, so a missing WorldDriver shows up as a loader refusal.
+
 ## The launch-spec adapters have only met stand-ins for the loaders
 
 `Toolchain` finds ModDevGradle's and Loom's late-bound members by name, and the TestKit tests use run
