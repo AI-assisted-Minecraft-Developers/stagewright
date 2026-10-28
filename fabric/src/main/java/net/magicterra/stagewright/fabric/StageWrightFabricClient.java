@@ -3,9 +3,6 @@ package net.magicterra.stagewright.fabric;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.magicterra.stagewright.client.ClientDirector;
-import net.magicterra.stagewright.driver.client.ClientProbes;
-import net.magicterra.stagewright.harness.EndpointDescriptor;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 
 /**
  * Fabric's half of the client director: a tick source, and nothing else.
@@ -19,13 +16,9 @@ public final class StageWrightFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            ClientProbes.reset();
-            EndpointDescriptor.reset();
-        });
-        boolean directed = ClientDirector.arm("fabric");
+        boolean directed = ClientDirector.arm();
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
-            ClientDirector.onWorldReady("fabric");
+            ClientDirector.onWorldReady();
             if (directed) ClientDirector.tick();
         });
     }

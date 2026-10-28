@@ -4,6 +4,8 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import net.magicterra.stagewright.capability.Capabilities;
+import net.magicterra.stagewright.capability.CapabilityProvider;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.GameRules;
@@ -70,4 +72,32 @@ public interface Game {
 
     /** Set the server's tick rate for the rest of this test. Needs {@link Locks#TICK_RATE}. */
     void overrideTickRate(float ticksPerSecond);
+
+    /**
+     * Run {@code undo} on the server thread when the calling test ends, passed or not; the last registered runs
+     * first. For facets that change shared state, such as a player's inventory. Only from a test's own thread.
+     */
+    void afterTest(Consumer<MinecraftServer> undo);
+
+    /**
+     * A capability some mod in this run contributed (see {@link CapabilityProvider}): its facet, the same object for
+     * the rest of the test. When this game does not offer it the test is aborted, not failed, with a reason naming
+     * what is missing and what is offered instead.
+     */
+    Object capability(String name);
+
+    /** {@link #capability(String)} with the facet's type checked, for a Java test that owns both sides. */
+    default <T> T capability(String name, Class<T> type) {
+        Object facet = capability(name);
+        if (!type.isInstance(facet)) {
+            throw new IllegalStateException("the '" + name + "' capability is a " + facet.getClass().getName()
+                    + ", not a " + type.getName() + " — its provider and this test disagree about what that name means");
+        }
+        return type.cast(facet);
+    }
+
+    /** What this game offers: {@link Capabilities#has}, {@link Capabilities#available}, {@link Capabilities#registered}. */
+    default Capabilities capabilities() {
+        return Capabilities.in(this);
+    }
 }

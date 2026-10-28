@@ -3,7 +3,7 @@ package net.magicterra.stagewright.neoforge;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.magicterra.stagewright.StageWrightCommon;
-import net.magicterra.stagewright.scene.Mods;
+import net.magicterra.stagewright.capability.Mods;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -28,7 +28,7 @@ public final class StageWrightNeoForge {
         }
     }
 
-    /** Hand the scene API this runtime's mod list. Here rather than in {@code :common} because the
+    /** Hand the API this runtime's mod list. Here rather than in {@code :common} because the
      *  list lives in the loader, and {@code :stagewright-api} compiles against neither loader. */
     private static void installModList() {
         Map<String, String> byId = new LinkedHashMap<>();
@@ -40,7 +40,7 @@ public final class StageWrightNeoForge {
 
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
-        StageWrightCommon.onServerStarted(event.getServer(), "neoforge");
+        StageWrightCommon.onServerStarted(event.getServer());
     }
 
     /** Ahead of Architectury's HIGH listener, which detaches WorldDriver: cleanups still drive it. */

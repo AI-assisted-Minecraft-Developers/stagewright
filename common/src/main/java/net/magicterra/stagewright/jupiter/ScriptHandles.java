@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
  * The handles a script test's {@code t} leases and the overrides it makes, as plain values: what {@link Game},
  * {@link PlotImpl}, {@link BodyImpl} and {@link ClientConnection} give a Java test. A position is {@code {x, y, z}};
  * a block or item is its id. What is leased is given back, and what is overridden undone, when the test ends.
+ * {@code t.capability(name)} hands out a capability's facet through {@link ScriptFacets}.
  */
 final class ScriptHandles {
 
@@ -50,6 +51,9 @@ final class ScriptHandles {
             out.put("call", (Scripting.Function) a -> ScriptContext.route(client.registry(), "client.call", a));
             return out;
         });
+        // A capability's facet, its methods by name; absent aborts the test, as game.capability does.
+        t.put("capability", (Scripting.Function) args ->
+                ScriptFacets.wrap(game, game.capability(ScriptContext.string(args, 0, "t.capability(name)"))));
         t.put("override", (Scripting.Function) args -> {
             String rule = ScriptContext.string(args, 0, "t.override(rule, value)");
             Object value = args.length > 1 ? args[1] : null;

@@ -3,14 +3,13 @@ package net.magicterra.stagewright.harness;
 import java.lang.reflect.Method;
 
 /**
- * What the harness tells the supervision agent, when the JVM was started with one.
+ * What the game tells the supervision agent, when the JVM was started with one.
  *
  * <p>The agent's jar is on the system class path and this mod is loaded by the loader's own class
  * loader, so nothing here may link against an agent class: the agent's {@code Control} class is
  * looked up by name in the system loader and called by reflection, with JDK types in every
- * signature. When the JVM has no agent — a game started by hand, a JUnit attach — the lookup fails
- * once, every call does nothing, and the harness behaves as it always did. See
- * {@code docs/reference/supervision-protocol.md}.
+ * signature. When the JVM has no agent — a game started by hand — the lookup fails once and every
+ * call does nothing. See {@code docs/reference/supervision-protocol.md}.
  */
 public final class AgentBridge {
 
@@ -21,14 +20,12 @@ public final class AgentBridge {
     private final Method phase;
     private final Method ticks;
     private final Method done;
-    private final Method resultsComplete;
     private final Method test;
 
-    private AgentBridge(Method phase, Method ticks, Method done, Method resultsComplete, Method test) {
+    private AgentBridge(Method phase, Method ticks, Method done, Method test) {
         this.phase = phase;
         this.ticks = ticks;
         this.done = done;
-        this.resultsComplete = resultsComplete;
         this.test = test;
     }
 
@@ -43,9 +40,9 @@ public final class AgentBridge {
             Class<?> control = Class.forName(className, true, loader);
             return new AgentBridge(control.getMethod("phase", String.class),
                     control.getMethod("ticks", long.class), control.getMethod("done"),
-                    optional(control, "resultsComplete"), optional(control, "test", String.class));
+                    optional(control, "test", String.class));
         } catch (ReflectiveOperationException | LinkageError e) {
-            return new AgentBridge(null, null, null, null, null);
+            return new AgentBridge(null, null, null, null);
         }
     }
 
@@ -59,11 +56,11 @@ public final class AgentBridge {
     }
 
     /** Whether this JVM has an agent, and so someone who will end it and say what held it up. */
-    boolean attached() {
+    public boolean attached() {
         return done != null;
     }
 
-    /** Where the game says it is, such as {@code harness-ready}. */
+    /** Where the game says it is, such as {@code armed}. */
     public void phase(String name) {
         call(phase, name);
     }
@@ -73,7 +70,7 @@ public final class AgentBridge {
         call(ticks, delivered);
     }
 
-    /** The results file is complete and this JVM is about to be stopped. */
+    /** The run is over and this JVM is about to be stopped. */
     public void done() {
         call(done);
     }
@@ -81,11 +78,6 @@ public final class AgentBridge {
     /** One event of the in-game test run, a JSON object, relayed to whoever started this game. */
     public void test(String json) {
         call(test, json);
-    }
-
-    /** The results file is complete and this JVM stays up, held for something to attach to. */
-    void resultsComplete() {
-        call(resultsComplete);
     }
 
     private static void call(Method method, Object... arguments) {

@@ -1,24 +1,11 @@
 package net.magicterra.stagewright;
 
 import com.mojang.logging.LogUtils;
-import java.nio.file.Path;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 import net.magicterra.stagewright.driver.DriverRuntime;
-import net.magicterra.stagewright.driver.script.InProcessDriverBinding;
-import net.magicterra.stagewright.driver.endpoint.DriverEndpoint;
 import net.magicterra.stagewright.harness.AgentBridge;
-import net.magicterra.stagewright.harness.AttachedSessions;
-import net.magicterra.stagewright.harness.EndpointDescriptor;
-import net.magicterra.stagewright.harness.ResultsJsonl;
-import net.magicterra.stagewright.harness.StageWrightHarness;
-import net.magicterra.stagewright.harness.SuiteRegistry;
-import net.magicterra.stagewright.scene.Scene;
-import net.magicterra.stagewright.harness.SceneFilter;
-import net.magicterra.stagewright.harness.Scenes;
 import net.magicterra.stagewright.jupiter.JupiterRun;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 
@@ -27,67 +14,31 @@ public final class StageWrightCommon {
     public static final String MOD_ID = "mc_testkit";
     public static final Logger LOG = LogUtils.getLogger();
 
-    /** Results file, relative to the server's working directory (the loom runDir), in the
-     *  {@code stagewright/} directory every artifact of a run goes to. Repeated in the engine's
-     *  {@code RunDirectory.DEFAULT_RESULTS_FILE}: that module judges runs and never sees a Minecraft
-     *  classpath, so the two processes agree on the literal rather than on a class. */
-    private static final String DEFAULT_OUT_FILE = "stagewright/stagewright-results.jsonl";
+    /** Set when a dedicated server should wait for a real client to join before its tests start. */
+    private static final String AWAIT_PLAYER = "stagewright.awaitPlayer";
 
-    /** The property a supervisor renames the results file with; see {@link #outFile()}. */
-    private static final String RESULTS_PROPERTY = "stagewright.results";
-
-    /**
-     * Where this run writes its results.
-     *
-     * <p>Renaming has to reach the WRITER, which is the half that used to be missing. The CLI's
-     * {@code --results} and the plugin's {@code resultsFile} only ever changed which file the
-     * verdict opened; the harness kept writing the default name, so a renamed run produced a
-     * complete green results file and a verdict of "the run wrote no results" pointing at a path
-     * nothing had written.
-     *
-     * <p>Read at the moment the harness is built rather than cached in a static, because this class
-     * initialises during mod construction — before a loader that sets the property later has set it.
-     * The cost is one property read per suite.
-     */
-    private static String outFile() {
-        String named = System.getProperty(RESULTS_PROPERTY, "").trim();
-        return named.isEmpty() ? DEFAULT_OUT_FILE : named;
-    }
-
-    // Suite lifecycle state. All mutation is under this class's monitor (the static-synchronized
-    // methods); `harness` is volatile so onServerTick reads it lock-free every tick.
-    private static volatile StageWrightHarness harness;
     private static MinecraftServer armedServer;
-    private static String armedLoader;
-    private static List<Scene> resolvedScenes;   // resolved once at arm time on the server thread
-    private static String registryError;         // why resolvedScenes is empty, or null
-    // Volatile for the same lock-free per-tick read as `harness`.
-    private static volatile boolean registryFailureRecorded;
-    private static boolean armed;
-    private static boolean onDemandRequested;
 
     // ---- Startup tick-debt settle barrier ----
     // A freshly-STARTED MinecraftServer carries accumulated tick DEBT and runs unthrottled
     // catch-up ticks (~3 ms/tick instead of the steady 50 ms cadence) until it is caught up.
-    // Arming the scene harness during that burst makes tick-budgeted awaits fragile: entity
-    // promotion (and similar wall-clock-bound work the scenes await) costs 2-2.3x more ticks
-    // for the same real delay in the burst regime, which is exactly why wd.entityLeash needed
-    // repeated stop-bleeds (within 60→120→180). This barrier gates the harness.tick() FORWARD
-    // until the tick cadence has stabilized to the real ~50 ms rhythm — 10 consecutive server
-    // ticks spaced >=40 ms apart. Only the FORWARDING is gated: harness construction, the
-    // tick-pure await contract (SceneContext.within counts pure observed ticks) and
-    // PREP_BUDGET_TICKS are all untouched. Because harness.tick() is simply never called before
-    // settle, every tick budget naturally counts from the first post-settle tick. Safety valve:
-    // after 1200 observed ticks with no settle, arm anyway (WARN) so a pathological host can
-    // never hang the suite forever. All of this state is touched only from onServerTick (server
-    // thread), so it needs no synchronization.
+    // Starting the tests during that burst makes tick-budgeted waits fragile: entity promotion
+    // (and similar wall-clock-bound work tests wait for) costs 2-2.3x more ticks for the same real
+    // delay in the burst regime. So the tests start once the cadence has stabilized to the real
+    // ~50 ms rhythm — 10 consecutive server ticks spaced >=40 ms apart — or after 1200 ticks with
+    // no settle, so a pathological host can never hang the run. Server thread only.
     private static final long CADENCE_NANOS = 40_000_000L;   // 40 ms — floor of a real ~50 ms tick
     private static final int CADENCE_STREAK = 10;            // consecutive on-cadence ticks to settle
-    private static final int SETTLE_SAFETY_TICKS = 1200;     // never hang: force-arm after this many
+    private static final int SETTLE_SAFETY_TICKS = 1200;     // never hang: start anyway after this many
     private static boolean settled;
     private static int settleTickCount;
     private static int consecutiveCadenceTicks;
     private static long lastTickNanos;
+
+    /** Server ticks seen, which the supervision agent reads as this JVM's progress. */
+    private static long serverTicks;
+    private static final int AGENT_TICK_INTERVAL = 20;
+    private static boolean playersOpped;
 
     /** Why the client's verbs last failed to register, so a tick-by-tick retry logs each reason once. */
     private static volatile String clientVerbFailure;
@@ -111,100 +62,21 @@ public final class StageWrightCommon {
     }
 
     /**
-     * True when this run is a HOLD: stand the topology up and leave it standing, for whatever
-     * attaches from outside.
-     *
-     * <p>A separate property rather than {@code -Dstagewright.autorun=false}, because the two are
-     * set by different people. Autorun belongs to the host build's run configuration — a checked-in
-     * line in someone's {@code build.gradle} — and a hold is a thing you decide at the command line,
-     * about a run config you are not editing. Overriding the first from the second means two
-     * {@code -D}s for one key on one command line and a silent dependence on which the JVM reads
-     * last; getting that wrong does not fail, it runs the whole suite underneath whatever attached,
-     * which is how this was found.
-     */
-    public static boolean holding() {
-        return Boolean.getBoolean("stagewright.hold");
-    }
-
-    /**
-     * Arm the runtime when the server reaches STARTED. Two confluent paths meet here:
-     * <ul>
-     *   <li><b>autorun</b> ({@code -Dstagewright.autorun=true}) — build the harness immediately
-     *       (every gate run that is not a hold; a hold arms on-demand and waits for its caller);</li>
-     *   <li><b>on-demand</b> ({@code stagewright.autorun} unset) — arm but do NOT execute: record
-     *       "armed, awaiting mc.test.run" and wait for the {@code mc.test.run} RPC verb to trigger
-     *       {@link #triggerOnDemandRun()}.</li>
-     * </ul>
-     * In BOTH paths the {@code mc.test.*} verbs are registered here, directly — so the verb surface
-     * (and its hidden-schema contract) is identical whether
-     * or not the suite auto-runs. Runs on the server thread; called by every loader entry after
+     * The server reached STARTED: register the {@code mc.test.*} verbs. The tests themselves start from
+     * {@link #onServerTick} once the tick cadence has settled. Server thread; called by every loader entry after
      * worlddriver has wired its route sink at SERVER_STARTING.
      */
-    public static synchronized void onServerStarted(MinecraftServer server, String loader) {
-        if (armed) {
-            LOG.warn("[{}] harness already armed — ignoring duplicate onServerStarted", MOD_ID);
+    public static synchronized void onServerStarted(MinecraftServer server) {
+        if (armedServer == server) {
+            LOG.warn("[{}] already armed; ignoring duplicate onServerStarted", MOD_ID);
             return;
         }
         DriverRuntime.registerVerbs();
-        armed = true;
         armedServer = server;
-        armedLoader = loader;
-        // Resolve the registry once, on the server thread (correct ServiceLoader context class
-        // loader for SceneProvider discovery), and cache it: autorun builds the harness from it now;
-        // on-demand builds from the SAME list later, and needs its size synchronously to answer
-        // {scenes:N} without re-running ServiceLoader off the server thread.
-        //
-        // Narrowing happens here too, before the harness exists, so the suite header's registered
-        // list is the filtered one and every downstream rule (SWALLOWED, DRIFTED, the canary gates)
-        // keeps working against what this run actually meant to do.
-        String filter = SceneFilter.pattern();
-        SuiteRegistry.Resolved registry = SuiteRegistry.resolve(() -> Scenes.all(new InProcessDriverBinding()), filter);
-        resolvedScenes = registry.scenes();
-        registryError = registry.error();
-        if (registryError != null) {
-            LOG.error("[{}] the scene registry could not be built — the suite will record this"
-                    + " as its result instead of running", MOD_ID, registry.failure());
-        } else if (filter != null) {
-            LOG.warn("[{}] FILTERED to '{}' — {} of {} scenes. This run is NOT a gate result.",
-                    MOD_ID, filter, resolvedScenes.size(), registry.discovered());
-        }
-        // Register the mc.test.* verbs — BOTH autorun states, so the hidden-verb contract is
-        // topology-uniform.
-
         // Where a supervisor learns the game got this far, whatever happens next.
         AgentBridge.system().phase("armed");
-        if (holding()) {
-            LOG.info("[{}] HELD — the suite will not run itself ({} scenes registered, mc.test.run"
-                    + " still works). Stop the run to end the hold.", MOD_ID, resolvedScenes.size());
-        } else if (JupiterRun.selected()) {
-            LOG.info("[{}] running the JUnit tests the test engine selected; the scene suite will not run",
-                    MOD_ID);
-        } else if (Boolean.getBoolean("stagewright.autorun")) {
-            if (Boolean.getBoolean(AWAIT_PLAYER)) {
-                // Production topology: a dedicated server with a real client connected to it. The
-                // scenes must not start before that client is actually in — otherwise the run
-                // proves nothing the single-JVM topology did not already prove, and any scene that
-                // observes a player would be racing the login sequence.
-                LOG.info("[{}] armed, deferring the suite until a player joins (-D{}) — {} scenes",
-                        MOD_ID, AWAIT_PLAYER, resolvedScenes.size());
-                // Nothing moves from here until a player arrives, which is how a supervisor tells a
-                // client that never joined from a server busy with a long scene.
-                AgentBridge.system().phase("waiting-for-player");
-            } else {
-                startSuite(server, loader);
-            }
-        } else {
-            LOG.info("[{}] armed, awaiting mc.test.run ({} scenes) — stagewright.autorun not set",
-                    MOD_ID, resolvedScenes.size());
-        }
-
-        // Only where no client shares this JVM. An integrated server has one, and its ClientDirector
-        // publishes the same port later, once there is a world to attach to. This is a dedicated
-        // server's only attempt, so a hold whose endpoint nobody can read stops here rather than
-        // leaving whatever attaches to wait out its timeout.
-        if (server.isDedicatedServer() && !DriverEndpoint.publish(loader, server.getWorldData().getLevelName())) {
-            throw new IllegalStateException("StageWright: the endpoint descriptor -D"
-                    + EndpointDescriptor.PROPERTY + " asked for could not be published; the reason is logged above");
+        if (JupiterRun.selected()) {
+            LOG.info("[{}] running the tests the test engine selected", MOD_ID);
         }
     }
 
@@ -213,254 +85,63 @@ public final class StageWrightCommon {
         if (server != armedServer) return;
         try {
             JupiterRun.stop();
-            AttachedSessions.stop(server);
-            if (harness != null) harness.stop();
         } finally {
-            harness = null;
             armedServer = null;
-            armedLoader = null;
-            resolvedScenes = null;
-            registryError = null;
-            registryFailureRecorded = false;
-            armed = false;
-            onDemandRequested = false;
             settled = false;
             settleTickCount = 0;
             consecutiveCadenceTicks = 0;
             lastTickNanos = 0;
-            EndpointDescriptor.reset();
+            playersOpped = false;
         }
     }
 
-    /**
-     * On-demand suite trigger — the {@code mc.test.run} handler. Runs on the RPC socket thread:
-     * it idempotency-checks and SCHEDULES the harness build onto the server thread (the same
-     * execution context the autorun SERVER_STARTED path uses — the suite runs on server ticks, so
-     * the harness must never be built inline on the socket thread). Returns the accept envelope, or
-     * throws a loud {@link IllegalStateException} — never a silent re-run.
-     *
-     * @return {@code {accepted:true, scenes:N}} where N is the registered scene count
-     * @throws IllegalStateException if the runtime is not armed, or the suite already ran / is running
-     */
-    public static synchronized Map<String, Object> triggerOnDemandRun() {
-        MinecraftServer server = armedServer;
-        if (!armed || server == null || resolvedScenes == null) {
-            throw new IllegalStateException(
-                    "mc.test.run: the testkit runtime is not armed on this server — the scene harness "
-                    + "only exists where StageWrightCommon.onServerStarted fired (a testkit runtime). "
-                    + "Nothing to trigger here.");
-        }
-        if (AttachedSessions.active()) {
-            throw new IllegalStateException(
-                    "mc.test.run: an out-of-process run holds this world pinned — end it before starting the"
-                    + " in-game suite, which pins the world itself.");
-        }
-        if (harness != null || onDemandRequested) {
-            boolean done = suiteFinished();
-            throw new IllegalStateException(
-                    "mc.test.run: the scene suite has already " + (done ? "run" : "been started")
-                    + " on this server — refusing to re-run (idempotent; the JSONL done footer is the "
-                    + "sole completion signal).");
-        }
-        // Hardening (Task-1 review Minor 2): guard the accept against a stopping server. A stopping
-        // MinecraftServer silently DROPS anything handed to server.execute() — so accepting here would
-        // return {accepted:true} while the scheduled harness build never ran, latching onDemandRequested
-        // forever with no suite. Check isRunning() BEFORE accepting and fail loudly instead (minimal
-        // correct form — a pre-accept guard rather than a post-accept best-effort in the lambda, since
-        // once we've returned {accepted:true} the RPC caller has no further error channel).
-        if (!server.isRunning()) {
-            throw new IllegalStateException(
-                    "mc.test.run: the server is stopping — refusing to accept (a stopping server.execute() "
-                    + "queue would silently drop the scheduled harness build, latching the suite as "
-                    + "\"already started\" with nothing ever running).");
-        }
-        onDemandRequested = true;
-        List<Scene> scenes = resolvedScenes;
-        String loader = armedLoader;
-        // Build on the server thread. Re-check under the monitor there so a race with autorun (which
-        // sets `harness` on the server thread) cannot double-build.
-        server.execute(() -> {
-            synchronized (StageWrightCommon.class) {
-                if (armedServer != server || harness != null || registryFailureRecorded) return;
-                try {
-                    startSuite(server, loader);
-                } catch (Throwable t) {
-                    // Hardening (Task-1 review Minor 1): the harness ctor can throw (duplicate scene
-                    // name / origin-slot collision — see StageWrightHarness). If it does, RELEASE the
-                    // on-demand latch so a later mc.test.run can retry instead of being permanently told
-                    // "already been started" when nothing was ever built. harness stays null.
-                    onDemandRequested = false;
-                    LOG.error("[{}] mc.test.run: harness build failed on the server thread — "
-                            + "released the on-demand latch for retry", MOD_ID, t);
-                }
-            }
-        });
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("accepted", true);
-        result.put("scenes", scenes.size());
-        return result;
-    }
-
-    /**
-     * True once the suite has drained its registry and written the done footer.
-     *
-     * <p>Read by the client director to know when an INTEGRATED-server run is over. It is
-     * deliberately the harness's own flag rather than a poll of the results file: the file is the
-     * orchestrator's contract with the outside world, and having the in-JVM client race the
-     * orchestrator to read it would make the client's exit depend on filesystem timing.
-     */
-    public static boolean suiteFinished() {
-        if (registryFailureRecorded) return true;
-        StageWrightHarness h = harness;
-        return h != null && h.isFinished();
-    }
-
-    /** The server this runtime is armed on, or null where it is not. */
+    /** The server the verbs were registered on, while it runs. */
     public static synchronized MinecraftServer armedServer() {
         return armedServer;
     }
 
-    /** True once a suite has been built or asked for: the world is, or is about to be, the suite's. */
-    public static synchronized boolean suiteStarted() {
-        return harness != null || onDemandRequested || registryFailureRecorded;
-    }
-
     /**
-     * Tell every level it is not empty, every tick, for as long as this mod is loaded.
-     *
-     * <p>Vanilla stops ticking a {@code ServerLevel} that nobody is in. {@code ServerLevel.tick}
-     * computes {@code !players.isEmpty() || !getForcedChunks().isEmpty()} and, when that has been
-     * false for 300 consecutive ticks, jumps <b>over both the entity loop and
-     * {@code tickBlockEntities()}</b>. The level keeps ticking in every other respect — the server
-     * loop runs, chunks stay loaded, commands work, blocks can be placed and read back — so nothing
-     * about such a level looks stopped.
-     *
-     * <p>A dedicated topology has no player by definition, and the arena's chunks are pinned with a
-     * runtime {@code TicketType.FORCED} region ticket — which is NOT what {@code getForcedChunks()}
-     * returns. That reads the {@code /forceload} saved data, so the pin that keeps the arena loaded
-     * contributes nothing to the emptiness test. Fifteen seconds in, nothing moves on its own.
-     *
-     * <p>Everything that made this look like several unrelated bugs follows from WHEN a scene runs
-     * rather than from what it does: worlddriver's entity scene is seventh and passed inside the
-     * window, its block-entity probe is around the hundred-and-ninetieth and never ticked; a heavy
-     * modpack boots slowly enough that even the entity scene lands outside, so there the ENTITY half
-     * failed too and the two halves were investigated as different problems. Every chunk assertion
-     * answers true throughout, correctly — chunk status is not what is being tested.
-     *
-     * <p><b>Here rather than on the harness, and that placement is the whole point.</b> The first fix
-     * called this from {@code StageWrightHarness.observeServerTick}, which is only reached once a
-     * harness exists — and under {@code holding()} no harness is built at all until {@code mc.test.run}
-     * asks for one. A hold takes far longer than fifteen seconds to boot, publish its descriptor and
-     * be attached to, so everything that attaches to a hold before triggering a suite — today
-     * {@code :stagewright-junit}, tomorrow attached scripts — would have driven a world where nothing
-     * moved. Keeping a level awake is a property of "StageWright is loaded", not of "a suite is
-     * mid-run", and this mod is only ever present in a test run.
-     *
-     * <p>{@code resetEmptyTime()} is public and is exactly vanilla's own escape hatch: it is what
-     * {@code ServerChunkCache} calls when a chunk is force-loaded through the supported path. All
-     * levels rather than the arena's, because PREP generates terrain before a scene's level is
-     * chosen and a scene may name any dimension — and because the cost is one field write each.
+     * Server thread, every tick. A test server never empties its levels' idle timers — nobody may be online for the
+     * whole run — so the levels keep ticking entities.
      */
-    private static void keepLevelsAwake(MinecraftServer server) {
-        for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
-            level.resetEmptyTime();
-        }
-    }
-
     public static void onServerTick(MinecraftServer server) {
-        keepLevelsAwake(server);
-
-        // Liveness for the stall watchdog, ABOVE the settle barrier: this must count every server
-        // tick, including the catch-up ticks the barrier below deliberately swallows. A watchdog fed
-        // from the other side of that `return` would see a draining tick debt as a wedged server.
-        StageWrightHarness live = harness;
-        if (live != null) live.observeServerTick();
-
-        // Settle barrier: drain startup tick debt before arming scenes. See the field
-        // block above for the full rationale. Until the cadence settles we track tick spacing and
-        // forward NOTHING to the harness — so all tick budgets count from the first post-settle tick.
-        if (!settled) {
-            long now = System.nanoTime();
-            settleTickCount++;
-            if (lastTickNanos != 0L && (now - lastTickNanos) >= CADENCE_NANOS) {
-                if (++consecutiveCadenceTicks >= CADENCE_STREAK) {
-                    settled = true;
-                    LOG.info("[{}] testkit: tick cadence settled after {} server ticks (tick debt drained)",
-                            MOD_ID, settleTickCount);
-                }
-            } else if (lastTickNanos != 0L) {
-                consecutiveCadenceTicks = 0;
-            }
-            lastTickNanos = now;
-            if (!settled && settleTickCount >= SETTLE_SAFETY_TICKS) {
-                settled = true;
-                LOG.warn("[{}] testkit: tick cadence did NOT settle within {} server ticks — arming "
-                        + "anyway (tick debt may still be draining; awaits may run in the burst regime)",
-                        MOD_ID, SETTLE_SAFETY_TICKS);
-            }
-            if (!settled) return;
+        for (ServerLevel level : server.getAllLevels()) level.resetEmptyTime();
+        if (++serverTicks % AGENT_TICK_INTERVAL == 0) AgentBridge.system().ticks(serverTicks);
+        if (!settled && !settle()) return;
+        if (Boolean.getBoolean(AWAIT_PLAYER) && !playersOpped && server.getPlayerCount() > 0) {
+            playersOpped = true;
+            opTestPlayers(server);
         }
-        AttachedSessions.tick(server);
         JupiterRun.tick(server);
-        if (harness == null && !registryFailureRecorded && armed && !holding() && !JupiterRun.selected()
-                && Boolean.getBoolean("stagewright.autorun")
-                && Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() > 0) {
-            armDeferredSuite(server);
+    }
+
+    /** One tick of the settle barrier above; true once the cadence has settled. */
+    private static boolean settle() {
+        long now = System.nanoTime();
+        settleTickCount++;
+        if (lastTickNanos != 0L && (now - lastTickNanos) >= CADENCE_NANOS) {
+            if (++consecutiveCadenceTicks >= CADENCE_STREAK) {
+                settled = true;
+                LOG.info("[{}] tick cadence settled after {} server ticks (tick debt drained)", MOD_ID, settleTickCount);
+            }
+        } else if (lastTickNanos != 0L) {
+            consecutiveCadenceTicks = 0;
         }
-
-        StageWrightHarness h = harness;
-        if (h != null) h.tick();
-    }
-
-    /** Property that holds the suite back until a player is on the server. */
-    private static final String AWAIT_PLAYER = "stagewright.awaitPlayer";
-
-    /** Build the deferred harness, on the server thread, exactly once. */
-    private static synchronized void armDeferredSuite(MinecraftServer server) {
-        if (harness != null || registryFailureRecorded) return;
-        LOG.info("[{}] a player joined — starting the deferred suite ({} scenes)",
-                MOD_ID, resolvedScenes.size());
-        opTestPlayers(server);
-        startSuite(server, armedLoader);
-    }
-
-    /**
-     * Build the harness over the resolved registry — or, when it could not be resolved, write that
-     * as the run's whole result and end the run the way a finished suite ends it. Server thread,
-     * under this class's monitor.
-     */
-    private static void startSuite(MinecraftServer server, String loader) {
-        ResultsJsonl out = new ResultsJsonl(Path.of(outFile()));
-        if (registryError == null) {
-            harness = new StageWrightHarness(server, loader, resolvedScenes, out);
-            return;
+        lastTickNanos = now;
+        if (!settled && settleTickCount >= SETTLE_SAFETY_TICKS) {
+            settled = true;
+            LOG.warn("[{}] tick cadence did NOT settle within {} server ticks; starting anyway (tick debt may still"
+                    + " be draining, so waits may run in the burst regime)", MOD_ID, SETTLE_SAFETY_TICKS);
         }
-        out.writeRegistryFailure(loader, SceneFilter.pattern(), registryError);
-        registryFailureRecorded = true;
-        // A hold hands the world back rather than ending, exactly as a finished suite does.
-        if (!holding()) StageWrightHarness.haltAfterResults(server);
+        return settled;
     }
 
-    /**
-     * Give every player on this server operator rights.
-     *
-     * <p>Only ever reached on the await-player path, which is the multiplayer TEST topology: this
-     * server was launched by the harness, generates a throwaway world, and the sole player on it is
-     * the companion client the harness started. That client is a test actor, not a guest — the half
-     * of the suite that runs in its JVM has to be able to drive the game, and a dev-launched
-     * dedicated server ships an empty {@code ops.json} with {@code online-mode=false}, so without
-     * this every command it tries is refused for permissions.
-     *
-     * <p>Deliberately not done by writing {@code ops.json} at provision time: an offline-mode UUID
-     * is derived from the player's NAME, and the name a loader's dev client picks is generated per
-     * launch, so there is nothing to write until the player is actually here.
-     */
+    /** The real client joining a test server may need to run commands, as a test drives it. */
     private static void opTestPlayers(MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (server.getPlayerList().isOp(player.getGameProfile())) continue;
             server.getPlayerList().op(player.getGameProfile());
-            LOG.info("[{}] op'd the test client '{}' so client-side probes can run commands",
-                    MOD_ID, player.getGameProfile().getName());
+            LOG.info("[{}] op'd the test client '{}'", MOD_ID, player.getGameProfile().getName());
         }
     }
 }

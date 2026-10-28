@@ -114,7 +114,7 @@ final class TestScope {
         throw new IllegalStateException(what + " in " + name + " changes state every test shares: add " + fix);
     }
 
-    /** Server thread: remember how to put back what an override just changed. */
+    /** Remember how to put back what an override or a facet just changed; run on the server thread at the end. */
     synchronized void onEnd(Consumer<MinecraftServer> restore) {
         undo.push(restore);
     }

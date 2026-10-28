@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
-import net.magicterra.stagewright.scene.Mods;
+import net.magicterra.stagewright.capability.Mods;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.KnownIssue;
 import net.magicterra.stagewright.test.Requires;

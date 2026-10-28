@@ -25,12 +25,12 @@ class AgentBridgeTest {
             CALLS.add("done");
         }
 
-        public static void resultsComplete() {
-            CALLS.add("resultsComplete");
+        public static void test(String json) {
+            CALLS.add("test:" + json);
         }
     }
 
-    /** An agent from before holds were reported: everything but {@code resultsComplete}. */
+    /** An agent from before test events were relayed: everything but {@code test}. */
     public static final class OlderControl {
         public static void phase(String name) {}
 
@@ -41,16 +41,16 @@ class AgentBridgeTest {
         }
     }
 
-    @Test void aHeldResultIsReportedWithoutEndingAnything() {
+    @Test void aTestEventReachesTheAgent() {
         AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), FakeControl.class.getName());
-        bridge.resultsComplete();
-        assertEquals(List.of("resultsComplete"), FakeControl.CALLS);
+        bridge.test("{}");
+        assertEquals(List.of("test:{}"), FakeControl.CALLS);
     }
 
-    @Test void anOlderAgentStillWorksAndJustLosesTheHeldReport() {
+    @Test void anOlderAgentStillWorksAndJustLosesTheTestEvents() {
         AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), OlderControl.class.getName());
         assertTrue(bridge.attached());
-        assertDoesNotThrow(bridge::resultsComplete);
+        assertDoesNotThrow(() -> bridge.test("{}"));
         bridge.done();
         assertEquals(List.of("older-done"), FakeControl.CALLS);
     }

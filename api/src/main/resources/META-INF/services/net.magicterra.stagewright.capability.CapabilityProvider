@@ -1,0 +1,7 @@
+# The capability adapters StageWright itself ships. A mod contributing its own writes the same file
+# in its own jar; ServiceLoader unions them, and Capabilities rejects a duplicate name loudly.
+net.magicterra.stagewright.capability.ShippedCapabilities$Items
+net.magicterra.stagewright.capability.ShippedCapabilities$Menus
+net.magicterra.stagewright.capability.ShippedCapabilities$Equipment
+net.magicterra.stagewright.capability.ShippedCapabilities$Curios
+net.magicterra.stagewright.capability.ShippedCapabilities$FtbQuests

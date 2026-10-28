@@ -3,13 +3,11 @@ package net.magicterra.stagewright.driver.verbs;
 import java.util.ArrayList;
 import net.magicterra.stagewright.test.methods.TestQueriesApiBinding;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
 
-import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.worlddriver.api.schema.ApiError;
 import net.magicterra.worlddriver.api.schema.ApiException;
 import net.magicterra.worlddriver.api.schema.ApiTypes;
@@ -19,15 +17,12 @@ import net.magicterra.worlddriver.api.schema.RecordType;
 import net.magicterra.worlddriver.api.schema.annotation.Doc;
 import net.magicterra.worlddriver.api.schema.annotation.Length;
 import net.magicterra.worlddriver.api.schema.annotation.Named;
-import net.magicterra.worlddriver.api.schema.annotation.OnlyTrue;
-import net.magicterra.worlddriver.api.schema.annotation.Range;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.NoParams;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessApiBinding;
 import net.magicterra.worlddriver.api.methods.test.TestInputContracts;
 import net.magicterra.worlddriver.api.registry.ApiBatch;
 import net.magicterra.worlddriver.api.registry.ApiHandler;
-import net.magicterra.worlddriver.api.registry.ApiHandlers;
 import net.magicterra.worlddriver.api.registry.ApiMethod;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.bot.BotApi;
@@ -45,28 +40,15 @@ import net.magicterra.worlddriver.bot.BotHooks;
 public final class TestMethods {
     private TestMethods() {}
 
-    @Named("TestRunAccepted")
-    public record Accepted(
-            @OnlyTrue boolean accepted,
-            @Doc("Registered scenes the run will execute.") @Range(min = 0) int scenes) {}
-
     @Named("TestReset")
     public record Reset(@Doc("One token per effect the reset undid.") @Length(max = 64) List<String> reset) {}
 
     @Named("TestHeldKeys")
     public record Keys(TestInputContracts.HeldKeys keys) {}
 
-    private static final RecordType<Accepted> ACCEPTED = ApiTypes.record(Accepted.class);
-
     private static final RecordType<Reset> RESET = ApiTypes.record(Reset.class);
 
     private static final RecordType<Keys> KEYS = ApiTypes.record(Keys.class);
-
-    public static final MethodSpec<NoParams, Accepted> RUN = MethodSpec.of("mc.test.run", CommonTypes.NO_PARAMS,
-            ACCEPTED, "Start the StageWright scene suite on this server, once. Answers when the run is accepted; the "
-                    + "results file's done footer is the only completion signal. Refused when the suite already ran "
-                    + "or is running, and where no StageWright runtime is armed.")
-            .hidden().effects(Effect.WORLD_WRITE);
 
     public static final MethodSpec<NoParams, Reset> RESET_ENTRY = MethodSpec.of("mc.test.reset", CommonTypes.NO_PARAMS,
             RESET, "Reset this client between reused test runs: end the bot's task and fight, release held keys, close "
@@ -110,13 +92,11 @@ public final class TestMethods {
 
     private static List<ApiMethod<?, ?>> methods() {
         List<ApiMethod<?, ?>> all = new ArrayList<>(List.of(
-                new ApiMethod<>(RUN, ApiHandlers.immediate(p -> run())),
                 new ApiMethod<>(RESET_ENTRY, onClient(RESET_ENTRY, (bot, p) -> new Reset(bot.resetClientEntry()))),
                 new ApiMethod<>(HELD_KEYS, onClient(HELD_KEYS, (bot, p) -> new Keys(bot.heldKeys()))),
                 new ApiMethod<>(USE_ON_BLOCK, onClient(USE_ON_BLOCK, BotApi::useOnBlock))));
         all.addAll(TestHarnessApiBinding.methods(new HarnessService()));
         all.addAll(TestQueriesApiBinding.methods(new TestQueriesService()));
-        all.addAll(AttachedMethods.methods());
         return all;
     }
 
@@ -125,16 +105,6 @@ public final class TestMethods {
 
     public static void register(ApiRegistry api) {
         api.registerBatch(BATCH);
-    }
-
-    private static Accepted run() {
-        Map<String, Object> accepted;
-        try {
-            accepted = StageWrightCommon.triggerOnDemandRun();
-        } catch (IllegalStateException refused) {
-            throw ApiException.of(ApiError.Code.CAPABILITY_UNAVAILABLE, refused.getMessage());
-        }
-        return new Accepted(true, ((Number) accepted.get("scenes")).intValue());
     }
 
     private static BotApi bot(MethodSpec<?, ?> spec) {

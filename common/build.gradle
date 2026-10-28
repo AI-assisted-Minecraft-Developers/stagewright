@@ -10,9 +10,8 @@ dependencies {
     // Provides the @Environment annotation; do NOT use other Fabric Loader classes from common
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
 
-    // The published scene contract (Scene/SceneContext/SceneProvider/...). Split out so the
-    // artifact graph between this repo and worlddriver stays acyclic — see api/build.gradle for
-    // the full reasoning.
+    // The published API (the test API and the capability layer). Split out so the artifact graph
+    // between this repo and worlddriver stays acyclic — see api/build.gradle.
     implementation project(path: ':stagewright-api', configuration: 'namedElements')
 
     // StageWright depends on the driver it drives, so the mc.test.* methods register into its

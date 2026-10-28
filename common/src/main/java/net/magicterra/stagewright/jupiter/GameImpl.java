@@ -1,14 +1,18 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
+import net.magicterra.stagewright.capability.CapabilityProvider;
 import net.magicterra.stagewright.test.Await;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Locks;
@@ -29,6 +33,11 @@ final class GameImpl implements Game {
 
     private final MinecraftServer server;
     private final StoreImpl store;
+    /**
+     * Each running test's capability facets, so a facet that registers an undo registers it once per test. Weak: a
+     * test's scope is dropped when it ends, and its facets with it.
+     */
+    private final Map<TestScope, Map<String, Object>> facets = new WeakHashMap<>();
 
     GameImpl(MinecraftServer server) {
         this.server = server;
@@ -138,6 +147,31 @@ final class GameImpl implements Game {
             s.tickRateManager().setTickRate(ticksPerSecond);
             scope.onEnd(at -> at.tickRateManager().setTickRate(old));
         });
+    }
+
+    @Override
+    public void afterTest(Consumer<MinecraftServer> undo) {
+        TestScope.current("game.afterTest").onEnd(undo);
+    }
+
+    @Override
+    public Object capability(String name) {
+        CapabilityProvider provider = capabilities().require(name);
+        TestScope scope = TestScope.bound();
+        if (scope == null) return provider.facet(this);
+        Map<String, Object> cache;
+        synchronized (facets) {
+            cache = facets.computeIfAbsent(scope, s -> new HashMap<>());
+        }
+        // get/put rather than computeIfAbsent: building a facet may ask for another one, as curios asks for equip.
+        synchronized (cache) {
+            Object facet = cache.get(name);
+            if (facet == null) {
+                facet = provider.facet(this);
+                cache.put(name, facet);
+            }
+            return facet;
+        }
     }
 
     /** Whether {@code condition} held within {@code budget} ticks. */

@@ -63,17 +63,9 @@ subprojects {
         module.apply from: rootProject.file('gradle/nexus.gradle')
     }
 
-    // Three pure-JVM modules — no Minecraft, no loader, no loom — each providing its own
-    // java-library setup. Scope them out of the loom/architectury/MC pipeline that every other
-    // subproject shares. (group/version still come from allprojects.)
-    //
-    //   stagewright-junit     the JUnit 5 attach module (out-of-process RPC consumer)
-    //   stagewright-attached  the vocabulary BOTH homes share — see attached/build.gradle. Applying
-    //                         loom to it would put a Minecraft classpath under a module whose whole
-    //                         contract is not having one, and the CLI could not consume the result.
-    //   stagewright-cli       the command-line runner, which carries the two loader jars as
-    //                         resources and runs on a machine with no Minecraft classpath.
-    if (['stagewright-junit', 'stagewright-attached', 'stagewright-cli'].contains(project.name)) return
+    // The command-line runner is pure JVM — it carries the two loader jars as resources and runs on a
+    // machine with no Minecraft classpath — so it stays out of the loom/architectury pipeline.
+    if (project.name == 'stagewright-cli') return
 
     apply plugin: 'dev.architectury.loom'
     apply plugin: 'architectury-plugin'
@@ -144,23 +136,9 @@ subprojects {
                 // Strip <dependency> entries, because a mod jar NESTS its runtime deps via
                 // Jar-in-Jar: a consumer resolving the raw POM would end up with a second copy of
                 // something the jar already carries. The first external consumer hit exactly this.
-                //
-                // ONE EXCEPTION, and it is not a loophole — it is the rule applied correctly.
-                // mc_stagewright-attached is nested in NOTHING. It is a plain-JVM library holding the
-                // types on this module's own public surface (Expect, SceneFailure, SceneOutcome,
-                // Clock, Terrain, Canary); the loader jars shadow-bundle it for RUNTIME, and a
-                // consumer needs it at COMPILE time to see those types at all. Stripping it does not
-                // prevent a duplicate, it makes `mc_stagewright-api` fail to compile against for
-                // every consumer that has not separately guessed the coordinate.
                 pom.withXml {
                     def deps = asNode().dependencies
-                    if (!deps.isEmpty()) {
-                        def block = deps.first()
-                        block.dependency
-                                .findAll { it.artifactId.text() != 'mc_stagewright-attached' }
-                                .each { block.remove(it) }
-                        if (block.dependency.isEmpty()) asNode().remove(block)
-                    }
+                    if (!deps.isEmpty()) asNode().remove(deps.first())
                 }
             }
         }

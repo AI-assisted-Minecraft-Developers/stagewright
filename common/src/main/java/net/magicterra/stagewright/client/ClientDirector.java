@@ -3,10 +3,7 @@ package net.magicterra.stagewright.client;
 import java.util.Locale;
 
 import net.magicterra.stagewright.StageWrightCommon;
-import net.magicterra.stagewright.driver.endpoint.DriverEndpoint;
-import net.magicterra.stagewright.driver.client.ClientProbes;
 import net.magicterra.stagewright.harness.AgentBridge;
-import net.magicterra.stagewright.harness.EndpointDescriptor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
 import net.minecraft.client.gui.screens.ConnectScreen;
@@ -33,15 +30,15 @@ import net.minecraft.world.level.storage.LevelStorageSource;
  *
  * <ul>
  *   <li>{@code -Dstagewright.client.world=NAME} — open that singleplayer world, creating it first if
- *       it does not exist. World entry starts the integrated server, which arms the harness exactly
- *       as a dedicated server does, so the SAME scenes run under the client topology.</li>
- *   <li>{@code -Dstagewright.client.connect=HOST:PORT} — join a dedicated server. The suite runs on
- *       the SERVER in this topology; this client's job is to be a real connected player while it
- *       does, which is what makes the run a production-shaped test rather than a single-JVM one.</li>
+ *       it does not exist. World entry starts the integrated server, which runs the tests exactly
+ *       as a dedicated server does.</li>
+ *   <li>{@code -Dstagewright.client.connect=HOST:PORT} — join a dedicated server. The tests run on
+ *       the SERVER in this topology; this client's job is to be a real connected player while they
+ *       do, which is what makes the run a production-shaped test rather than a single-JVM one.</li>
  * </ul>
  *
  * <p>With neither property set {@link #arm(String)} returns false and the launcher does not drive
- * the client. Endpoint publication still follows each world entry when explicitly requested.
+ * the client.
  *
  * <p><b>Client-only.</b> This class imports {@code net.minecraft.client.*}. The rule is about
  * LOADING, not presence: each loader
@@ -64,8 +61,8 @@ public final class ClientDirector {
      *  than silently eating the whole budget. */
     private static final int DRIVE_TIMEOUT_TICKS = 20 * 300;
 
-    /** Ticks between "the suite is over" and killing the client, so the integrated server finishes
-     *  saving and the results file is flushed before the JVM goes away. */
+    /** Ticks between "the run is over" and stopping the client, so the integrated server finishes
+     *  saving before the JVM goes away. */
     private static final int EXIT_DELAY_TICKS = 60;
 
     private enum Phase { WAITING_FOR_TITLE, DRIVING, IN_WORLD, FINISHING }
@@ -81,9 +78,6 @@ public final class ClientDirector {
     private static final int AGENT_TICK_INTERVAL = 20;
     /** Set once the loading window has closed, so the log says so exactly once. */
     private static boolean loadReported;
-    /** Which loader this client is, for the probe results header. There is no server here to
-     *  have recorded it, so the entrypoint that knows hands it over. */
-    private static String loader = "unknown";
 
     private ClientDirector() {}
 
@@ -91,10 +85,9 @@ public final class ClientDirector {
      * True when a directive was given and the caller should start feeding {@link #tick()} from its
      * loader's client-tick event.
      */
-    public static boolean arm(String loaderName) {
+    public static boolean arm() {
         String directive = directive();
         if (directive == null) return false;
-        loader = loaderName;
         StageWrightCommon.LOG.info("[{}] client director armed: {}", StageWrightCommon.MOD_ID, directive);
         return true;
     }
@@ -162,14 +155,6 @@ public final class ClientDirector {
                     StageWrightCommon.LOG.info("[{}] client is in world after {} ticks",
                             StageWrightCommon.MOD_ID, driveTicks);
                     enter(Phase.IN_WORLD);
-                    // Only where a scene cannot reach: joined to a dedicated server, the suite runs
-                    // in the other JVM. In world mode the equivalent scene runs in THIS one.
-                    String connect = System.getProperty(P_CONNECT);
-                    if (connect != null && !connect.isBlank() && !StageWrightCommon.holding()) {
-                        // Not under a hold: the probe would drive the player it is holding still for,
-                        // and write a results file no gate is going to read.
-                        ClientProbes.arm(loader);
-                    }
                 } else if (++driveTicks > DRIVE_TIMEOUT_TICKS) {
                     StageWrightCommon.LOG.error("[{}] client never reached a world within {} ticks ({})",
                             StageWrightCommon.MOD_ID, DRIVE_TIMEOUT_TICKS, directive());
@@ -186,17 +171,10 @@ public final class ClientDirector {
                 }
             }
             case IN_WORLD -> {
-                ClientProbes.tick();
-                // Two different endings, one per topology. Integrated: the suite runs in THIS JVM,
-                // so the harness's own finished flag is authoritative. Connected: the suite runs on
-                // the dedicated server, which halts itself when done and drops us — so losing the
-                // level IS the completion signal, and the results file lives on that side.
-                if (StageWrightCommon.suiteFinished() || mc.level == null) {
-                    StageWrightCommon.LOG.info("[{}] suite over (finished={}, connected={}) — closing client",
-                            StageWrightCommon.MOD_ID, StageWrightCommon.suiteFinished(), mc.level != null);
-                    // Before finish(), so a probe still in flight when the server drops us writes a
-                    // verdict rather than leaving a file the judge has to interpret as absence.
-                    ClientProbes.finishIfUnresolved();
+                // The server ends the run by halting itself, integrated or dedicated, which drops this
+                // client out of its world: losing the level is the completion signal in both topologies.
+                if (mc.level == null) {
+                    StageWrightCommon.LOG.info("[{}] the server ended the run; closing client", StageWrightCommon.MOD_ID);
                     finish();
                 }
             }
@@ -277,23 +255,16 @@ public final class ClientDirector {
                 || mc.screen instanceof JoinMultiplayerScreen;
     }
 
-    /** Independent of the launcher: bind this client's API and publish each world's endpoint. */
-    public static void onWorldReady(String loaderName) {
+    /** Independent of the launcher: bind this client's API once it is in a world. */
+    public static void onWorldReady() {
         Minecraft mc = Minecraft.getInstance();
         var connection = mc.getConnection();
         if (mc.level == null || mc.player == null || connection == null
                 || !connection.getConnection().isConnected()) return;
         StageWrightCommon.onClientWorldReady();
-        if (!EndpointDescriptor.pending()) return;
-        var server = mc.getSingleplayerServer();
-        ServerData remote = mc.getCurrentServer();
-        String world = server != null ? server.getWorldData().getLevelName()
-                : remote == null ? "" : remote.ip;
-        DriverEndpoint.publish(loaderName, world);
     }
 
     private static boolean exitWhenDone() {
-        if (StageWrightCommon.holding()) return false;
         return !"false".equalsIgnoreCase(System.getProperty(P_EXIT, "true"));
     }
 

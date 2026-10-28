@@ -4,7 +4,7 @@ import java.lang.reflect.AnnotatedElement;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import net.magicterra.stagewright.scene.Mods;
+import net.magicterra.stagewright.capability.Mods;
 import net.magicterra.stagewright.test.Requires;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;

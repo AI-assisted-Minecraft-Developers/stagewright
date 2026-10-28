@@ -25,7 +25,6 @@ import com.google.gson.JsonParser;
 
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.harness.AgentBridge;
-import net.magicterra.stagewright.harness.StageWrightHarness;
 import net.minecraft.server.MinecraftServer;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.DiscoverySelector;
@@ -181,8 +180,38 @@ public final class JupiterRun {
                 // the log line above is the record
             }
         } finally {
-            if (Boolean.getBoolean(EXIT)) server.execute(() -> StageWrightHarness.haltAfterResults(server));
+            if (Boolean.getBoolean(EXIT)) server.execute(() -> halt(server));
         }
+    }
+
+    /** Grace between the server halting and forcing the JVM down: long enough for the save {@code halt} triggers. */
+    private static final long EXIT_GRACE_MS = 30_000;
+
+    /**
+     * End the game once its results are sent: halt the server, and make sure the JVM goes with it. A mod's leftover
+     * non-daemon thread keeps a JVM up after its world has saved; the supervision agent ends such a JVM and says which
+     * thread held it, so only a dedicated server without the agent needs this watchdog. A client's integrated server is
+     * left to the client's own orderly shutdown.
+     */
+    private static void halt(MinecraftServer server) {
+        // Before the halt: the agent's grace period for a JVM that will not end starts here.
+        AgentBridge.system().done();
+        server.halt(false);
+        if (!server.isDedicatedServer() || AgentBridge.system().attached()) return;
+        Thread watchdog = new Thread(() -> {
+            try {
+                Thread.sleep(EXIT_GRACE_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            StageWrightCommon.LOG.warn("[{}] the JVM is still up {}s after the run halted the server: a mod is holding"
+                    + " a non-daemon thread. Forcing exit.", StageWrightCommon.MOD_ID, EXIT_GRACE_MS / 1000);
+            Runtime.getRuntime().halt(0);
+        }, "stagewright-exit-watchdog");
+        // Daemon, so it cannot itself become the thread that keeps the JVM alive on a clean shutdown.
+        watchdog.setDaemon(true);
+        watchdog.start();
     }
 
     /** Keeps the Java tests of the round this game runs ({@link Rounds}); script tests are kept by their engine. */

@@ -36,12 +36,6 @@ repositories {
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
 
-    // Plain project dependency — :stagewright-attached is not a loom module, so it has no
-    // `namedElements` / `transformProduction*` configurations to ask for (nothing Minecraft to
-    // remap). Bundled all the same: its classes are on the api's public surface.
-    compileOnly project(':stagewright-attached')
-    shadowBundle project(':stagewright-attached')
-
     common(project(path: ':stagewright-api', configuration: 'namedElements')) { transitive false }
     shadowBundle project(path: ':stagewright-api', configuration: 'transformProductionNeoForge')
 

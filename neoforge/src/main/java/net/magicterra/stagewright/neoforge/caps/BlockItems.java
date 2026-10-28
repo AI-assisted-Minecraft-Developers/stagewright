@@ -2,141 +2,128 @@ package net.magicterra.stagewright.neoforge.caps;
 
 import java.util.ArrayList;
 import java.util.List;
-import net.magicterra.stagewright.scene.BlockInventory;
-import net.magicterra.stagewright.scene.CapabilityProvider;
-import net.magicterra.stagewright.scene.SceneContext;
-import net.magicterra.stagewright.contract.SceneFailure;
+import java.util.function.Function;
+import net.magicterra.stagewright.capability.BlockInventory;
+import net.magicterra.stagewright.capability.CapabilityProvider;
+import net.magicterra.stagewright.test.Game;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.items.IItemHandler;
 
 /**
- * The inventory of a block, through the item-handler capability rather than through
- * {@code Container}.
- *
- * <p>Vanilla's {@code Container} is a chest. Every machine in every tech mod is not — it has input
- * slots that refuse output, sided access, slot counts that change with an upgrade — and it exposes
- * all of that through this one capability. A scene that wants to put a stack in a machine and see
- * what comes out has exactly one portable way to do it, and this is it.
- *
- * <p>Vanilla containers implement it too, which is what makes this testable without any mod at all:
- * a chest answers {@code slots() == 27}.
+ * The inventory of a block, through the item-handler capability rather than through {@code Container}. Every machine
+ * in every tech mod — input slots that refuse output, sided access — exposes itself through this one capability, and
+ * vanilla containers implement it too: a chest answers {@code slots() == 27}.
  *
  * <pre>{@code
- * s.setBlock(0, 0, 0, 'minecraft:chest');
- * var inv = s.capability('itemhandler');
- * inv.insert(0, 0, 0, 0, 'minecraft:diamond', 3);
- * s.check('slot0', inv.item(0, 0, 0, 0)).isEqualTo('minecraft:diamond');
+ * BlockInventory inv = game.capability("itemhandler", BlockInventory.class);
+ * inv.insert(chest, 0, "minecraft:diamond", 3);
+ * assertEquals("minecraft:diamond", inv.item(chest, 0));
  * }</pre>
+ *
+ * <p>Positions are world positions in the overworld; every call runs on the server thread.
  */
 public final class BlockItems implements BlockInventory {
 
-    private final SceneContext ctx;
+    private final Game game;
 
-    private BlockItems(SceneContext ctx) {
-        this.ctx = ctx;
+    private BlockItems(Game game) {
+        this.game = game;
     }
 
-    /** Whether the block at this position exposes an item handler. */
     @Override
-    public boolean present(int dx, int dy, int dz) {
-        return handlerOrNull(dx, dy, dz) != null;
+    public boolean present(BlockPos pos) {
+        return at(pos, handlers -> !handlers.isEmpty());
     }
 
-    /** How many slots it has. */
     @Override
-    public int slots(int dx, int dy, int dz) {
-        return require(dx, dy, dz).getSlots();
+    public int slots(BlockPos pos) {
+        return at(pos, handlers -> require(pos, handlers).getSlots());
     }
 
-    /** The item id in one slot, or {@code "minecraft:air"} when empty. */
     @Override
-    public String item(int dx, int dy, int dz, int slot) {
-        return idOf(require(dx, dy, dz).getStackInSlot(slot));
+    public String item(BlockPos pos, int slot) {
+        return at(pos, handlers -> idOf(require(pos, handlers).getStackInSlot(slot)));
     }
 
-    /** How many are in one slot. */
     @Override
-    public int count(int dx, int dy, int dz, int slot) {
-        return require(dx, dy, dz).getStackInSlot(slot).getCount();
+    public int count(BlockPos pos, int slot) {
+        return at(pos, handlers -> require(pos, handlers).getStackInSlot(slot).getCount());
     }
 
-    /** Every non-empty slot as {@code "<slot>=<count> <itemid>"}, in slot order — one string list is
-     *  what a scene can put in {@code s.record()} and what a reader can compare between runs. */
     @Override
-    public List<String> contents(int dx, int dy, int dz) {
-        IItemHandler handler = require(dx, dy, dz);
-        List<String> out = new ArrayList<>();
-        for (int slot = 0; slot < handler.getSlots(); slot++) {
-            ItemStack stack = handler.getStackInSlot(slot);
-            if (!stack.isEmpty()) {
-                out.add(slot + "=" + stack.getCount() + " " + idOf(stack));
+    public List<String> contents(BlockPos pos) {
+        return at(pos, handlers -> {
+            IItemHandler handler = require(pos, handlers);
+            List<String> out = new ArrayList<>();
+            for (int slot = 0; slot < handler.getSlots(); slot++) {
+                ItemStack stack = handler.getStackInSlot(slot);
+                if (!stack.isEmpty()) out.add(slot + "=" + stack.getCount() + " " + idOf(stack));
             }
-        }
-        return out;
+            return out;
+        });
     }
 
-    /**
-     * Put items in a slot; returns how many did NOT fit.
-     *
-     * <p>The leftover is the answer, not a detail: a machine's input slot refusing an item is the
-     * behaviour most worth testing, and it refuses by returning the stack rather than by throwing.
-     */
+    /** Tries every side — see {@link BlockEnergy#handlers} for why. */
     @Override
-    public int insert(int dx, int dy, int dz, int slot, String itemId, int amount) {
-        require(dx, dy, dz);
-        ItemStack stack = new ItemStack(item(itemId), amount);
-        int leftover = amount;
-        for (IItemHandler handler : handlers(dx, dy, dz)) {
-            if (slot >= handler.getSlots()) continue;
-            int remaining = handler.insertItem(slot, stack, false).getCount();
-            if (remaining < amount) return remaining;
-            leftover = remaining;
-        }
-        return leftover;
+    public int insert(BlockPos pos, int slot, String itemId, int amount) {
+        return at(pos, handlers -> {
+            require(pos, handlers);
+            ItemStack stack = new ItemStack(item(itemId), amount);
+            int leftover = amount;
+            for (IItemHandler handler : handlers) {
+                if (slot >= handler.getSlots()) continue;
+                int remaining = handler.insertItem(slot, stack, false).getCount();
+                if (remaining < amount) return remaining;
+                leftover = remaining;
+            }
+            return leftover;
+        });
     }
 
-    /** Whether a slot would accept this item at all, changing nothing. */
     @Override
-    public boolean accepts(int dx, int dy, int dz, int slot, String itemId) {
-        require(dx, dy, dz);
-        ItemStack stack = new ItemStack(item(itemId), 1);
-        for (IItemHandler handler : handlers(dx, dy, dz)) {
-            if (slot < handler.getSlots() && handler.insertItem(slot, stack, true).isEmpty()) return true;
-        }
-        return false;
+    public boolean accepts(BlockPos pos, int slot, String itemId) {
+        return at(pos, handlers -> {
+            require(pos, handlers);
+            ItemStack stack = new ItemStack(item(itemId), 1);
+            for (IItemHandler handler : handlers) {
+                if (slot < handler.getSlots() && handler.insertItem(slot, stack, true).isEmpty()) return true;
+            }
+            return false;
+        });
     }
 
-    /** Take items out of a slot; returns how many actually came. */
     @Override
-    public int extract(int dx, int dy, int dz, int slot, int amount) {
-        require(dx, dy, dz);
-        for (IItemHandler handler : handlers(dx, dy, dz)) {
-            if (slot >= handler.getSlots()) continue;
-            int got = handler.extractItem(slot, amount, false).getCount();
-            if (got > 0) return got;
-        }
-        return 0;
+    public int extract(BlockPos pos, int slot, int amount) {
+        return at(pos, handlers -> {
+            require(pos, handlers);
+            for (IItemHandler handler : handlers) {
+                if (slot >= handler.getSlots()) continue;
+                int got = handler.extractItem(slot, amount, false).getCount();
+                if (got > 0) return got;
+            }
+            return 0;
+        });
     }
 
-    /** The no-side view first, then the six faces, deduplicated. See {@link BlockEnergy#handlers} for
-     *  why a write has to walk them. */
-    private List<IItemHandler> handlers(int dx, int dy, int dz) {
-        BlockPos pos = ctx.rel(dx, dy, dz);
+    private <T> T at(BlockPos pos, Function<List<IItemHandler>, T> work) {
+        return game.onServer(server -> work.apply(handlers(server.overworld(), pos)));
+    }
+
+    /** The no-side view first, then the six faces, deduplicated. See {@link BlockEnergy#handlers}. */
+    private static List<IItemHandler> handlers(ServerLevel level, BlockPos pos) {
         List<IItemHandler> out = new ArrayList<>();
-        IItemHandler noSide = ctx.level().getCapability(Capabilities.ItemHandler.BLOCK, pos, null);
+        IItemHandler noSide = level.getCapability(Capabilities.ItemHandler.BLOCK, pos, null);
         if (noSide != null) out.add(noSide);
         for (Direction side : Direction.values()) {
-            IItemHandler sided = ctx.level().getCapability(Capabilities.ItemHandler.BLOCK, pos, side);
-            if (sided == null) continue;
-            boolean seen = false;
-            for (IItemHandler known : out) if (known == sided) { seen = true; break; }
-            if (!seen) out.add(sided);
+            IItemHandler sided = level.getCapability(Capabilities.ItemHandler.BLOCK, pos, side);
+            if (sided != null && out.stream().noneMatch(known -> known == sided)) out.add(sided);
         }
         return out;
     }
@@ -147,27 +134,18 @@ public final class BlockItems implements BlockInventory {
 
     private static Item item(String itemId) {
         ResourceLocation id = ResourceLocation.tryParse(itemId);
-        Item found = id == null ? null : BuiltInRegistries.ITEM.get(id);
-        if (id == null || found == null || (found == net.minecraft.world.item.Items.AIR
-                && !"minecraft:air".equals(itemId))) {
-            throw new SceneFailure("no item is registered as '" + itemId + "'");
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
+            throw new IllegalStateException("no item is registered as '" + itemId + "'");
         }
-        return found;
+        return BuiltInRegistries.ITEM.get(id);
     }
 
-    private IItemHandler handlerOrNull(int dx, int dy, int dz) {
-        List<IItemHandler> all = handlers(dx, dy, dz);
-        return all.isEmpty() ? null : all.get(0);
-    }
-
-    private IItemHandler require(int dx, int dy, int dz) {
-        IItemHandler handler = handlerOrNull(dx, dy, dz);
-        if (handler == null) {
-            throw new SceneFailure("the block at (" + dx + "," + dy + "," + dz + ") is "
-                    + ctx.blockAt(dx, dy, dz) + ", which exposes no item handler here."
-                    + " Use itemhandler.present(dx,dy,dz) to branch instead of asserting.");
+    private static IItemHandler require(BlockPos pos, List<IItemHandler> handlers) {
+        if (handlers.isEmpty()) {
+            throw new IllegalStateException("the block at " + pos.toShortString() + " exposes no item handler here."
+                    + " Use itemhandler.present(pos) to branch instead of asserting.");
         }
-        return handler;
+        return handlers.get(0);
     }
 
     /** See {@link BlockEnergy.Provider} — available wherever NeoForge is. */
@@ -178,19 +156,18 @@ public final class BlockItems implements BlockInventory {
         }
 
         @Override
-        public boolean availableIn(SceneContext ctx) {
+        public boolean availableIn(Game game) {
             return true;
         }
 
         @Override
-        public Object facet(SceneContext ctx) {
-            return new BlockItems(ctx);
+        public Object facet(Game game) {
+            return new BlockItems(game);
         }
 
         @Override
         public String absentReason() {
-            return "the 'itemhandler' capability is NeoForge's block item capability, and this run"
-                    + " is not on NeoForge";
+            return "the 'itemhandler' capability is NeoForge's block item capability, and this run is not on NeoForge";
         }
     }
 }

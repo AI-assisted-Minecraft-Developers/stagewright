@@ -11,7 +11,6 @@ import java.util.concurrent.Executors;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import net.magicterra.stagewright.contract.StageWrightRpc;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.worlddriver.api.methods.CoreMethods;

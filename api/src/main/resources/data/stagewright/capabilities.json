@@ -1,6 +1,6 @@
 [
   {
-    "_comment": "Descriptors StageWright ships, so a pack that has one of these mods gets a handle on it having configured nothing. Each is gated on the CLASS, not the mod id: the class is exactly the condition under which its probe works, and every entry here was read out of the mod's own jar rather than remembered. A pack whose fork moved a class overrides any of these by name from config/stagewright/capabilities/. Deliberately short — this list is not an ecosystem census, and s.mods() already answers 'is X here'. An entry earns its place by naming a stable API root a scene would otherwise hardcode.",
+    "_comment": "Descriptors StageWright ships, so a pack that has one of these mods gets a handle on it having configured nothing. Each is gated on the CLASS, not the mod id: the class is exactly the condition under which its probe works, and every entry here was read out of the mod's own jar rather than remembered. A pack whose fork moved a class overrides any of these by name from config/stagewright/capabilities/. Deliberately short — this list is not an ecosystem census, and Mods already answers 'is X here'. An entry earns its place by naming a stable API root a test would otherwise hardcode.",
 
     "name": "mekanism",
     "classes": ["mekanism.api.MekanismAPI"],

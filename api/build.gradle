@@ -1,26 +1,12 @@
-// StageWright's PUBLISHED CONTRACT — the only thing a downstream mod compiles against to
-// contribute scenes: Scene, SceneContext, SceneProvider, SceneOutcome, SceneFailure, Canary.
-//
-// It exists to keep the artifact graph acyclic once StageWright and WorldDriver are separate
-// repos. StageWright's RUNTIME (stagewright-common: harness, results writer, the mc.test.*
-// verbs) depends on WorldDriver, while WorldDriver's `testmod` needs the scene types to declare
-// its wd.* dogfood scenes. In one Gradle build that is fine — different source sets, acyclic
-// task graph. Across two independently PUBLISHED artifacts it would be a version cycle, so the
-// contract is split out here where it depends on nobody:
+// StageWright's published API: the test API (net.magicterra.stagewright.test) and the capability layer
+// (net.magicterra.stagewright.capability). It depends on nothing of StageWright's, only on WorldDriver's :api,
+// so worlddriver's testmod can compile against it without a version cycle:
 //
 //     worlddriver :api  <-  stagewright-api  <-  worlddriver :common testmod
 //                                ^
 //                                `-- stagewright-common/-fabric/-neoforge  (+ worlddriver)
 //
-// Release order follows the arrows: worlddriver :api -> stagewright-api -> worlddriver -> stagewright runtime.
-// Being interfaces + value types, this artifact changes rarely, which is what keeps that
-// ordering from being a daily tax.
-//
-// Nothing beyond worlddriver's :api: reaching for worlddriver's :common, the harness, or the results
-// writer reintroduces the cycle the split exists to remove. It also owns the
-// package net.magicterra.stagewright.scene OUTRIGHT — Scenes (the built-in registry) lives in
-// .harness precisely so this package is not split across two modules, which FML resolves as a
-// hard java.lang.module.ResolutionException at boot.
+// It owns its packages outright: a package split across two modules is a ResolutionException under FML.
 architectury {
     common rootProject.enabled_platforms.split(',')
 }
@@ -33,16 +19,8 @@ dependencies {
     // Provides the @Environment annotation; do NOT use other Fabric Loader classes from common
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
 
-    // The vocabulary that is true wherever a scene runs — Expect, SceneFailure, SceneSkipped,
-    // SceneOutcome, Clock, Terrain, Canary. `api`, not `implementation`: those types are all over
-    // this module's PUBLIC surface (SceneContext.expect returns Expect; Scene carries Canary and
-    // Terrain), so a consumer compiling a scene needs them on its own compile classpath, and a
-    // published POM that omitted them would fail to compile for everyone who does not already
-    // happen to have the module.
-    //
-    // It carries its OWN package (net.magicterra.stagewright.contract) rather than a slice of this
-    // one — see the package-ownership note above, which is about exactly this and is load-bearing.
-    api project(':stagewright-attached')
+    // A capability that cannot work in this run aborts the test (TestAbortedException); the runtime bundles it.
+    compileOnly "org.opentest4j:opentest4j:1.3.0"
 
     // The JUnit-native test API (net.magicterra.stagewright.test) hands out WorldDriver's registry and callers.
     // WorldDriver's :api depends on nothing of ours, so it is published first and the graph stays acyclic.
