@@ -13,7 +13,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Game;
-import net.magicterra.worlddriver.api.methods.CoreMethods;
 import net.magicterra.worlddriver.api.registry.ApiBatch;
 import net.magicterra.worlddriver.api.registry.ApiErrors;
 import net.magicterra.worlddriver.api.registry.ApiMethod;
@@ -26,7 +25,7 @@ import org.junit.jupiter.api.extension.ParameterResolutionException;
 
 /**
  * The {@link Client} of this game. On an integrated server it is this JVM's own WorldDriver. Where a topology joins a
- * client to a dedicated server, it is a registry of WorldDriver's methods each forwarded over that client's RPC
+ * client to a dedicated server, it is a registry of the server's methods each forwarded over that client's RPC
  * connection, found through the port file the client writes in its working directory, which the test engine names
  * as {@value #COMPANION_DIR}. One connection per run, opened when a test first asks.
  */
@@ -65,7 +64,7 @@ final class ClientConnection {
                 throw new ParameterResolutionException("the client wrote no " + portFile + ": " + e);
             }
             rpc = StageWrightRpc.connect("ws://127.0.0.1:" + port + "/rpc", CONNECT_MS);
-            remote = forwarding(rpc);
+            remote = forwarding(rpc, game.registry());
         }
         ApiRegistry registry = remote;
         return () -> registry;
@@ -78,11 +77,18 @@ final class ClientConnection {
         remote = null;
     }
 
-    private static ApiRegistry forwarding(StageWrightRpc rpc) {
-        List<ApiMethod<?, ?>> methods = new ArrayList<>();
-        for (MethodSpec<?, ?> spec : CoreMethods.all()) methods.add(forward(spec, rpc));
+    /**
+     * Every method this server's registry has, each batch under its own owner and id, forwarded to the client: the
+     * client runs the same mods, so it serves the same methods, StageWright's {@code mc.test.*} and other mods' included.
+     * One the client lacks fails when called, with the client's own answer.
+     */
+    private static ApiRegistry forwarding(StageWrightRpc rpc, ApiRegistry local) {
         ApiRegistry registry = new ApiRegistry();
-        registry.registerBatch(new ApiBatch(ApiRegistry.CORE_OWNER, "client", methods));
+        for (ApiBatch batch : local.snapshot().batches().values()) {
+            List<ApiMethod<?, ?>> methods = new ArrayList<>();
+            for (ApiMethod<?, ?> method : batch.methods()) methods.add(forward(method.spec(), rpc));
+            registry.registerBatch(new ApiBatch(batch.owner(), batch.id(), methods));
+        }
         return registry;
     }
 
