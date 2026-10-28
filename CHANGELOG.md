@@ -12,6 +12,35 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-28
 
+### A test can tick a bot by hand · green in the example projects, Fabric and NeoForge
+
+`Bot` gains `park`, `unpark`, `tick`, `tickUntilIdle`, `step`, `think` and `press`, and `@Bot.Parked` joins a bot
+already off the tick list, so a test reads or changes the world between any two of the bot's ticks. This was only
+reachable through the hidden `mc.test.bots` method. Scripts get the same verbs, and `t.bot({parked: true})`.
+
+### Soft checks · green in the example projects, Fabric and NeoForge
+
+`game.check(holds, what)`, `game.check(() -> assertion)`, `t.check(...)` and a YAML step's `check:` keep a failure and
+let the test go on; every one that failed is reported together when the test ends, and fails it. A test probing many
+things used to stop at the first. A `@KnownIssue` test counts its failed checks as its failure.
+
+### Plots of any size, centred, in any dimension, and built from structures · green in the example projects, Fabric and NeoForge
+
+`@Plot.Size(x = 120, y = 8, z = 5)` sizes each axis on its own, up to 256 across and the dimension's full height;
+`@Plot.Centered` puts relative `(0, 0, 0)` in the middle; `@Plot.In("minecraft:the_nether")` leases the plot in another
+dimension. `plot.structure` places a structure template by id or from a structure file. Plots used to be cubes of at
+most 64 in the overworld with their origin at a corner. `Plot.size()` now answers a `Vec3i`.
+
+### Bodies can change dimension · green in the example projects, Fabric and NeoForge
+
+`Body.moveTo(dimension, feet)` and `Body.dimension()`, and `game.translate(pos, from, to)` maps a position between
+dimensions as a portal does, so a test can say where a portal or a teleporting item should have put the body.
+
+### A mob can be a body · green in the example projects, Fabric and NeoForge
+
+`game.npc(type, feet)` spawns a mob and hands it to WorldDriver as `mob:<name>` for the rest of the test, with the same
+tick verbs as a bot. The world still moves a parked mob; only a bot stands still while parked.
+
 ### A test can run after the game restarts on the same world · green in the example projects, Fabric and NeoForge
 
 `afterRestart` on a dependency puts a test in a later round: the scene's game runs what it can, exits, and starts
