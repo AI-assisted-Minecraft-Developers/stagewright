@@ -3,6 +3,7 @@ package net.magicterra.stagewright.jupiter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import net.magicterra.stagewright.test.Game;
@@ -18,9 +19,12 @@ import net.minecraft.nbt.NbtIo;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -45,7 +49,16 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
 
     private static final PlotLayout LAYOUT = new PlotLayout();
 
+    /** Loads a plot's chunks until the lease forces them, keyed by lease. */
+    private static final TicketType<Integer> TICKET = TicketType.create("stagewright_plot", Integer::compare);
+    /** Distance 2 from full is the level {@code setChunkForced} gives: entity-ticking. */
+    private static final int TICKET_DISTANCE = 2;
+    /** Generating fresh chunks is the slow case; a minute of ticks covers it while the whole suite starts at once. */
+    private static final int CHUNK_LOAD_TICKS = 1200;
+    private static final AtomicInteger LEASES = new AtomicInteger();
+
     private final Game game;
+    private final int lease = LEASES.incrementAndGet();
     private final ResourceKey<Level> dimension;
     private final int start;
     private final Vec3i size;
@@ -81,9 +94,20 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         int start = LAYOUT.lease(dimension, size.getX());
         PlotImpl plot = new PlotImpl(game, dimension, start, floorY, size, centered);
         try {
+            // The chunks load, and mostly generate, on worker threads while the server keeps ticking; reading the box
+            // before they have would generate them inside one server task and stall every other test's call.
+            MinecraftServer held = game.onServer(server -> {
+                plot.loadChunks(server, true);
+                return server;
+            });
+            // Evaluated on the server thread, once a tick.
+            game.await().within(CHUNK_LOAD_TICKS).as("the chunks of " + plot + " to load")
+                    .until(() -> plot.chunksLoaded(held));
             // One server task: nothing changes the box between keeping it and emptying it.
             game.runOnServer(server -> {
+                // Forcing a loaded chunk costs nothing, and a forced chunk keeps the dimension ticking with no player in it.
                 plot.forceChunks(server, true);
+                plot.loadChunks(server, false);
                 plot.before = RegionSnapshot.capture(plot.level(server),
                         new BlockPos(plot.box.minX(), plot.box.minY(), plot.box.minZ()), size.getX(), size.getY(),
                         size.getZ(), true, true);
@@ -93,7 +117,10 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         } catch (RuntimeException | Error e) {
             // Nothing was handed out yet: put the chunks back and free the stretch.
             try {
-                game.runOnServer(server -> plot.forceChunks(server, false));
+                game.runOnServer(server -> {
+                    plot.loadChunks(server, false);
+                    plot.forceChunks(server, false);
+                });
             } catch (RuntimeException suppressed) {
                 e.addSuppressed(suppressed);
             }
@@ -213,6 +240,21 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         return GameImpl.level(server, dimension);
     }
 
+    /**
+     * Server thread: add or drop this lease's ticket on each of its chunks, which has them loaded over the
+     * next ticks. {@code setChunkForced} on a chunk not yet loaded would load it on the spot.
+     */
+    private void loadChunks(MinecraftServer server, boolean load) {
+        ServerChunkCache chunks = level(server).getChunkSource();
+        for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
+            for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
+                ChunkPos pos = new ChunkPos(cx, cz);
+                if (load) chunks.addRegionTicket(TICKET, pos, TICKET_DISTANCE, lease);
+                else chunks.removeRegionTicket(TICKET, pos, TICKET_DISTANCE, lease);
+            }
+        }
+    }
+
     private void forceChunks(MinecraftServer server, boolean forced) {
         ServerLevel level = level(server);
         for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
@@ -220,6 +262,18 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
                 level.setChunkForced(cx, cz, forced);
             }
         }
+    }
+
+    /** Server thread: whether every chunk of the plot is loaded, its entities included. */
+    private boolean chunksLoaded(MinecraftServer server) {
+        ServerLevel level = level(server);
+        for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
+            for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
+                if (level.getChunkSource().getChunkNow(cx, cz) == null
+                        || !level.areEntitiesLoaded(ChunkPos.asLong(cx, cz))) return false;
+            }
+        }
+        return true;
     }
 
     /** Server thread: every cell to air and every non-player entity gone; the snapshot holds what was there. */
