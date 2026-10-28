@@ -238,11 +238,9 @@ final class ScriptContext {
         game.ticks(n);
     }
 
-    /** A plot leased for the test, as {@code t.plot({size})} answers it. */
+    /** A plot leased for the test, as {@code t.plot(options)} answers it. */
     @SuppressWarnings("unchecked")
-    Map<String, Object> plot(int size) {
-        Map<String, Object> options = new LinkedHashMap<>();
-        options.put("size", size);
+    Map<String, Object> plot(Map<String, Object> options) {
         return (Map<String, Object>) ((Scripting.Function) asScript().get("plot")).call(options);
     }
 

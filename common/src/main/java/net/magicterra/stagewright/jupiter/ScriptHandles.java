@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,6 +18,7 @@ import net.magicterra.worlddriver.api.methods.test.TestInputContracts.HeldKeys;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
+import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -36,14 +38,15 @@ final class ScriptHandles {
     private ScriptHandles() {}
 
     static void install(Map<String, Object> t, Game game, List<CloseableResource> leases) {
+        // t.plot({size, x, y, z, centered, dimension}), every option optional; x, y and z override size on their axis.
         t.put("plot", (Scripting.Function) args -> {
-            Object size = args.length > 0 && args[0] instanceof Map<?, ?> options ? options.get("size") : null;
-            int side = size == null ? PlotImpl.DEFAULT_SIZE : whole(size, "plot size");
-            if (side < 1 || side > PlotImpl.MAX_SIZE) {
-                throw new IllegalArgumentException("t.plot({size: " + side + "}): a plot's side runs from 1 to "
-                        + PlotImpl.MAX_SIZE);
-            }
-            PlotImpl plot = PlotImpl.lease(game, side);
+            Map<?, ?> options = args.length > 0 && args[0] instanceof Map<?, ?> m ? m : Map.of();
+            int side = options.containsKey("size") ? whole(options.get("size"), "plot size") : PlotImpl.DEFAULT_SIZE;
+            Vec3i size = new Vec3i(options.containsKey("x") ? whole(options.get("x"), "plot x") : side,
+                    options.containsKey("y") ? whole(options.get("y"), "plot y") : side,
+                    options.containsKey("z") ? whole(options.get("z"), "plot z") : side);
+            PlotImpl plot = PlotImpl.lease(game, size, Expectations.truthy(options.get("centered")),
+                    options.containsKey("dimension") ? dimension(options.get("dimension")) : Level.OVERWORLD);
             leases.add(plot);
             return plot(plot);
         });
@@ -119,8 +122,22 @@ final class ScriptHandles {
 
     private static Map<String, Object> plot(PlotImpl plot) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("size", plot.size());
+        out.put("size", position(new BlockPos(plot.size())));
+        out.put("min", position(new BlockPos(plot.min())));
+        out.put("max", position(new BlockPos(plot.max())));
+        out.put("dimension", plot.dimension().location().toString());
         out.put("origin", position(plot.origin()));
+        out.put("structure", (Scripting.Function) a -> {
+            ResourceLocation id = arg(a, 0) instanceof String s ? ResourceLocation.tryParse(s) : null;
+            if (id == null) throw new IllegalArgumentException("structure(id, x, y, z): id is a structure template's id");
+            plot.structure(id, whole(arg(a, 1), "x"), whole(arg(a, 2), "y"), whole(arg(a, 3), "z"));
+            return null;
+        });
+        out.put("structureFile", (Scripting.Function) a -> {
+            plot.structure(Path.of(ScriptContext.string(a, 0, "structureFile(path, x, y, z)")),
+                    whole(arg(a, 1), "x"), whole(arg(a, 2), "y"), whole(arg(a, 3), "z"));
+            return null;
+        });
         out.put("at", (Scripting.Function) a -> position(plot.at(whole(arg(a, 0), "x"), whole(arg(a, 1), "y"),
                 whole(arg(a, 2), "z"))));
         out.put("fill", (Scripting.Function) a -> {

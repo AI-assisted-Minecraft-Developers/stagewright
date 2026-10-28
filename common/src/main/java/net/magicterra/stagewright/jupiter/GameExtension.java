@@ -5,6 +5,9 @@ import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Player;
 import net.magicterra.stagewright.test.Plot;
+import net.minecraft.core.Vec3i;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -57,12 +60,18 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
             context.getStore(NAMESPACE).put("bot." + parameter.getIndex(), bot);
             return bot;
         }
-        int size = parameter.findAnnotation(Plot.Size.class).map(Plot.Size::value).orElse(PlotImpl.DEFAULT_SIZE);
-        if (size < 1 || size > PlotImpl.MAX_SIZE) {
-            throw new ParameterResolutionException("@Plot.Size(" + size + "): a plot's side runs from 1 to "
-                    + PlotImpl.MAX_SIZE);
+        Vec3i size = parameter.findAnnotation(Plot.Size.class)
+                .map(s -> new Vec3i(s.x() > 0 ? s.x() : s.value(), s.y() > 0 ? s.y() : s.value(),
+                        s.z() > 0 ? s.z() : s.value()))
+                .orElse(new Vec3i(PlotImpl.DEFAULT_SIZE, PlotImpl.DEFAULT_SIZE, PlotImpl.DEFAULT_SIZE));
+        ResourceKey<Level> dimension = parameter.findAnnotation(Plot.In.class)
+                .map(in -> ScriptHandles.dimension(in.value())).orElse(Level.OVERWORLD);
+        PlotImpl plot;
+        try {
+            plot = PlotImpl.lease(g, size, parameter.isAnnotated(Plot.Centered.class), dimension);
+        } catch (IllegalArgumentException e) {
+            throw new ParameterResolutionException(e.getMessage(), e);
         }
-        PlotImpl plot = PlotImpl.lease(g, size);
         // Closed — the plot put back — once the test method's context ends, after every @AfterEach.
         context.getStore(NAMESPACE).put("plot." + parameter.getIndex(), plot);
         return plot;

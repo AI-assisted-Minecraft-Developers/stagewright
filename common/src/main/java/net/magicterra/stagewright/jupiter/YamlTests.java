@@ -63,20 +63,29 @@ final class YamlTests {
             for (String key : OPTIONS) {
                 if (test.containsKey(key)) options.put(key, test.get(key));
             }
-            Integer plot = plotSize(test.get("plot"), where);
+            Map<String, Object> plot = plotOptions(test.get("plot"), where);
             List<Map<?, ?>> steps = steps(test, where);
             out.add(new Test(name, options, context -> run(context, plot, steps)));
         }
         return out;
     }
 
-    private static Integer plotSize(Object plot, String where) {
+    /** A test's {@code plot}, the options {@code t.plot} takes; null when it leases none. */
+    private static Map<String, Object> plotOptions(Object plot, String where) {
         if (plot == null) return null;
-        if (plot instanceof Map<?, ?> m && m.keySet().stream().allMatch("size"::equals)) {
-            return m.containsKey("size") ? ScriptContext.ticks(m.get("size"), where + ": plot size") : PlotImpl.DEFAULT_SIZE;
+        if (plot instanceof Map<?, ?> m && PLOT_KEYS.containsAll(m.keySet())) {
+            Map<String, Object> options = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : m.entrySet()) {
+                String key = String.valueOf(e.getKey());
+                boolean side = !key.equals("centered") && !key.equals("dimension");
+                options.put(key, side ? ScriptContext.ticks(e.getValue(), where + ": plot " + key) : e.getValue());
+            }
+            return options;
         }
-        throw new IllegalArgumentException(where + ": plot is {size: n}");
+        throw new IllegalArgumentException(where + ": plot is {size, x, y, z, centered, dimension}, each optional");
     }
+
+    private static final Set<String> PLOT_KEYS = Set.of("size", "x", "y", "z", "centered", "dimension");
 
     /** {@code given}, {@code when} and {@code then} in that order, or {@code steps}; never both. */
     private static List<Map<?, ?>> steps(Map<?, ?> test, String where) {
@@ -109,7 +118,7 @@ final class YamlTests {
         return verbs.get(0);
     }
 
-    private static void run(ScriptContext context, Integer plot, List<Map<?, ?>> steps) {
+    private static void run(ScriptContext context, Map<String, Object> plot, List<Map<?, ?>> steps) {
         Map<String, Object> saved = new HashMap<>();
         if (plot != null) saved.put("plot", context.plot(plot));
         run(context, steps, saved, "step ");
