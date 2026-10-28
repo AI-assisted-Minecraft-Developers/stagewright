@@ -151,7 +151,9 @@ final class SuiteDependencies {
             c.defaultDependencies(deps -> {
                 StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
                 if (suite == null) return;
-                add(project, deps, "net.magicterra:mc_stagewright-api:" + PluginVersion.get(), "dev");
+                // Its POM names WorldDriver's api, at the build StageWright was built against; which one the tests get,
+                // if any, is includeWorldDriver's and worldDriverVersion's to say, so the default brings it only below.
+                add(project, deps, "net.magicterra:mc_stagewright-api:" + PluginVersion.get(), "dev").setTransitive(false);
                 if (suite.getIncludeWorldDriver().getOrElse(true)) {
                     add(project, deps, "net.magicterra:worlddriver-api:" + suite.getWorldDriverVersion().get(), "dev");
                 }

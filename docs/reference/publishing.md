@@ -79,7 +79,7 @@ Group is `net.magicterra` throughout.
 
 | Coordinate | What it is | Classifiers | POM dependencies |
 |---|---|---|---|
-| `mc_stagewright-api` | The test API (`net.magicterra.stagewright.test`: `Game`, `Plot`, `Bot`, `Scene`, …) and the capability layer (`net.magicterra.stagewright.capability`). What a test author compiles against. | plain, `sources`, `dev` | none |
+| `mc_stagewright-api` | The test API (`net.magicterra.stagewright.test`: `Game`, `Plot`, `Bot`, `Scene`, …) and the capability layer (`net.magicterra.stagewright.capability`). What a test author compiles against. | plain, `sources`, `dev` | `worlddriver-api:dev`, compile scope |
 | `mc_stagewright-common` | The runtime: the in-game JUnit run, the script and YAML tests, the `mc.test.*` methods. Not consumed directly. | plain, `sources`, `dev` | none |
 | `mc_stagewright-fabric` | The loader mod jar, bundling api and common, and nesting the JUnit Platform the game runs. | plain, `sources`, `dev` | none |
 | `mc_stagewright-neoforge` | The same for NeoForge. | plain, `sources`, `dev` | none |
@@ -94,17 +94,22 @@ Every jar above, `sources` and `dev` included, and the CLI's `stagewright.jar` c
 project and SCM URL. All three builds take both from `gradle/license.gradle`; `scripts/check_packaging.py` checks the
 built jars and POMs.
 
-### Why the Minecraft-facing POMs declare nothing
+### Why the Minecraft-facing POMs declare (almost) nothing
 
 A mod jar nests its runtime dependencies through Jar-in-Jar and is remapped and self-contained. A POM that re-declared
 them would hand a consumer a second, unremapped copy of classes the jar already carries, so every module of the root
-build publishes a POM stripped of every `<dependency>`, and Gradle module metadata is disabled for them as well — a
-Gradle consumer prefers `.module` over the POM, and its `runtimeElements` variant would leak exactly what the POM
+build publishes a POM stripped of its `<dependency>` entries, and Gradle module metadata is disabled for them as well —
+a Gradle consumer prefers `.module` over the POM, and its `runtimeElements` variant would leak exactly what the POM
 strips.
 
-That includes `mc_stagewright-api`, whose public types name WorldDriver's API (`Game.registry()` answers WorldDriver's
-`ApiRegistry`). Whoever compiles against it declares `net.magicterra:worlddriver-api:<version>:dev` beside it; the
-Gradle plugin's `stagewrightTestCompile` configuration does both by default.
+The one exception is `mc_stagewright-api`, whose public types name WorldDriver's API (`Game.registry()` answers
+WorldDriver's `ApiRegistry`): its POM keeps `net.magicterra:worlddriver-api:<version>:dev` in compile scope, at the
+build StageWright was built against, so compiling against the api jar brings it. A module lists what it keeps in
+`ext.pomKeeps`. Minecraft, Gson and Fabric Loader, which its types also name, come with the consumer's own loader setup
+and stay stripped; so does opentest4j, which it only throws. A build that wants WorldDriver's api in other mappings, or
+its own WorldDriver (WorldDriver's build itself), excludes `worlddriver-api` from the dependency or declares it
+non-transitive. The Gradle plugin's `stagewrightTestCompile` defaults take the api jar non-transitively and add
+WorldDriver's api on their own, as `includeWorldDriver` and `worldDriverVersion` say.
 
 The engine, the agent, the test engine and the plugin are plain-JVM libraries, so their POMs declare what a consumer's
 build tool has to resolve.

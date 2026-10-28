@@ -31,11 +31,6 @@ failure names only the phase and the tick.
 
 Nothing notices it crashing or hanging.
 
-## `mc_stagewright-api`'s POM declares no dependencies
-
-Its public types reference WorldDriver's api, so a project without the plugin has to add `worlddriver-api:dev`
-itself.
-
 ## The launch-spec adapters have only met stand-ins for the loaders
 
 `Toolchain` finds ModDevGradle's and Loom's late-bound members by name, and the TestKit tests use run

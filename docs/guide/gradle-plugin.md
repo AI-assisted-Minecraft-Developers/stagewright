@@ -82,7 +82,8 @@ coordinate there without the plugin's help:
 ```groovy
 dependencies {
     // In place of the defaults: say, a WorldDriver api in other mappings.
-    stagewrightTestCompile 'net.magicterra:mc_stagewright-api:0.1.0-alpha.0+1.21.1:dev'
+    // Not transitive: its POM names WorldDriver's api in Mojang names.
+    stagewrightTestCompile('net.magicterra:mc_stagewright-api:0.1.0-alpha.0+1.21.1:dev') { transitive = false }
     stagewrightTestCompile 'com.example:worlddriver-api-yarn:1.0'
 }
 ```

@@ -28,6 +28,15 @@ open after its run, which nothing has started since the results file went; the s
 line as it does any event it does not know. `-Dstagewright.scenesDir` is no longer read: a pack's capability
 descriptors come from `config/stagewright/capabilities/` only. Nothing in StageWright set either.
 
+### `mc_stagewright-api`'s POM names WorldDriver's api · compiled
+
+The api's public types name WorldDriver's (`Game.registry()` answers its `ApiRegistry`), yet its POM declared nothing,
+so a build compiling tests against the api without the Gradle plugin had to know to add `worlddriver-api:dev` too. The
+POM now declares it in compile scope, at the build StageWright was built against; every other dependency is still
+stripped, as for the loader jars. A build that compiles against its own WorldDriver, or one in other mappings, now has
+to take the api jar non-transitively or exclude `worlddriver-api`; WorldDriver's own build is one of them. The plugin's
+`stagewrightTestCompile` defaults already do.
+
 ---
 
 ## 2026-10-28

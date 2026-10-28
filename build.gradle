@@ -136,9 +136,16 @@ subprojects {
                 // Strip <dependency> entries, because a mod jar NESTS its runtime deps via
                 // Jar-in-Jar: a consumer resolving the raw POM would end up with a second copy of
                 // something the jar already carries. The first external consumer hit exactly this.
+                // A module keeps the ones it lists in ext.pomKeeps ('group:artifact'); see
+                // docs/reference/publishing.md.
                 pom.withXml {
+                    def keep = module.findProperty('pomKeeps') ?: []
                     def deps = asNode().dependencies
-                    if (!deps.isEmpty()) asNode().remove(deps.first())
+                    if (deps.isEmpty()) return
+                    def block = deps.first()
+                    block.children().findAll { !((it.groupId.text() + ':' + it.artifactId.text()) in keep) }
+                            .each { block.remove(it) }
+                    if (block.children().isEmpty()) asNode().remove(block)
                 }
             }
         }
