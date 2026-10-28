@@ -1,78 +1,67 @@
 # Topologies
 
-A topology is the shape of the process tree a run happens in: which game processes start, how they
-are connected, and therefore what the scenes inside them are in a position to observe.
+A topology is the shape of the process tree a scene's tests run in: which game processes start, how they are
+connected, and therefore what the tests inside them are in a position to observe. A scene file names one with
+`topology:`.
 
-Three shapes matter, and they are not three ways of doing the same thing. Each one can establish
-facts the other two cannot.
+Three shapes matter, and they are not three ways of doing the same thing. Each one can establish facts the other two
+cannot.
 
 ## The three shapes
 
-All three run scenes on a **server**. A scene body executes on the server thread, in the server's
-JVM, always. What differs is which server, and whether a real game client is attached to it.
+In all three, tests run in the **server's** JVM, on a test thread beside the server thread. What differs is which
+server, and whether a real game client is connected to it.
 
 | Topology | What starts | A player is present | What only this shape can establish |
 |---|---|---|---|
-| `dedicatedServer` | one headless dedicated server | no | That a client-only verb is genuinely refused, and that an empty player list reads as empty. Neither is observable anywhere a client exists. |
-| `integratedServer` | one game client hosting its own integrated server | yes | Anything that needs client-side state in the same JVM, and anything measured in frames — client frame rate is a number here and is not defined elsewhere. |
-| `dedicatedServerWithClient` | a dedicated server, plus a real client joined to it over a network socket | yes | Anything whose subject is the wire between the two halves. |
+| `dedicatedServer` | one headless dedicated server | no | That a client-only call is genuinely refused, and that an empty player list reads as empty. Neither is observable anywhere a client exists. |
+| `integratedServer` | one game client hosting its own server | yes | Anything that needs client-side state in the same JVM, and anything measured in frames — the client frame rate is a number here and nowhere else. |
+| `dedicatedServerWithClient` | a dedicated server, plus a real client joined to it over a network socket | yes | Anything whose subject is the connection between the two halves. |
 
-The names are what a consuming project calls its topology declarations; StageWright itself has no
-enumeration of topologies and no opinion about the names. Those three are the conventional ones, and
-they are conventional because they say what starts. See [the Gradle plugin](gradle-plugin.md) for
-how a project declares one.
+On the two shapes with a client, the tests wait until the player has joined before they start.
 
-The topology label a run carries is a free string, which is why nothing that needs to know whether a
-client is present reads it. The JUnit attach module, for instance, detects the face of the JVM it
-attached to by asking whether a client-only call answers, not by reading the label.
+The names are the ones the Gradle plugin generates runs for and the command-line runner writes launch specs for. A
+build may map them to topologies of its own, or add others; see [the Gradle plugin](gradle-plugin.md#test-suites-tests--).
+Nothing reads the name to decide whether a client is present: `@Requires(CLIENT)`, `@Requires(DEDICATED_SERVER)` and
+`@Requires(INTEGRATED_SERVER)` are checked in the game, from how it was started.
 
 ## Why the two-process shape is not the one-process shape with extra steps
 
-A client that hosts its own integrated server is two halves of Minecraft in one JVM, joined by an
-in-memory connection. That connection never serialises a packet. So an assertion about what a mod
-sends over the wire, checked on an integrated server, has proved that the code which builds the
-packet is reachable and nothing about the packet.
+A client that hosts its own integrated server is two halves of Minecraft in one JVM, joined by an in-memory connection.
+That connection never serialises a packet. So an assertion about what a mod sends over the network, checked on an
+integrated server, has proved that the code which builds the packet is reachable and nothing about the packet.
 
-In the two-process shape the packet is encoded, pushed through a socket, and decoded before anything
-reads it. That is the difference between "works in singleplayer" and "works on a server", and it is
-the whole reason the third shape exists.
+In the two-process shape the packet is encoded, pushed through a socket, and decoded before anything reads it. That is
+the difference between "works in singleplayer" and "works on a server", and it is the whole reason the third shape
+exists.
 
-The dedicated server in that shape also holds a genuine `ServerPlayer` that arrived over the network,
-rather than a stand-in constructed locally, so every server-side check runs against the player list a
-production server actually has.
+The dedicated server in that shape also holds a genuine `ServerPlayer` that arrived over the network, rather than one
+constructed locally, so every server-side check runs against the player list a production server actually has.
 
-### The two ends are the same build
+### The two ends load the same mods
 
-Both halves run the same jar, built from the same checkout, on the same machine, with one loader per
-run. The world derives from a single per-loader template copied into the server's run directory
-before the run starts.
-
-There is therefore no version skew between the ends and no template divergence: the client joins a
-server whose world, mod set and protocol are byte-for-byte what that checkout produces standalone.
-This matters because a loader refuses a connection whose two ends disagree about the mod list, and
-because a disagreement about *content* would be reported as a disagreement about the mod under test.
-
-For the same reason, a companion client gets the same installed mods as the server it joins, in its
-own run directory. Before that was true, a companion launched with an empty `mods/` directory — which
-is not an error anywhere. The client boots, joins, arms nothing, and the run hangs until the server's
-budget ends it.
+A loader refuses a connection whose two ends disagree about the mod list, and a disagreement about content would read
+as a defect of the mod under test. So the client is started with the server's mods: under the Gradle plugin both runs
+come from the same loader project and source set, and the command-line runner gives the client the server's `mods/`
+unless `--client-mods` names others.
 
 ## Which facts need which shape
 
-Some questions can only be asked on a topology that has a real client, because the state they are
-about does not exist in a server JVM. Client screens, keybindings, input handling, the client's own
-view of an entity, and frame rate are all in that category.
+Some questions can only be asked where there is a real client, because the state they are about does not exist in a
+server JVM: client screens, keybindings, input handling, the client's own view of an entity, and frame rate.
 
-On the integrated-server shape, a scene can still reach them, because both ends share a JVM: a scene
-body on the server thread can route a call into the client and read the answer. On the two-process
-shape it cannot. That is the dividing line.
+A test reaches the client through its `Client` parameter (`t.client()` in a script), calling WorldDriver's client
+methods. On an integrated server those run in the same JVM; on `dedicatedServerWithClient` they travel to the client
+over its WorldDriver connection, and the test reads the same either way. The `Player` parameter is the client's player
+on both. A test taking either carries `@Requires(CLIENT)`, so it is reported as disabled on a dedicated server rather
+than failed.
 
-Frame rate specifically is measurable only where the JVM has a client rendering. The performance
-facet returns a number there and `NaN` everywhere else; guard on `hasFps()` rather than asserting on
-the value, or a server run fails on a measurement that was never available to it.
+Frame rate is measured only where the client renders in the same JVM as the tests, which is `integratedServer`. A
+`Perf.Window` has `fps` there and `NaN` everywhere else, including the server of `dedicatedServerWithClient`; guard on
+`hasFps()` rather than asserting on the value.
 
 ## Running one
 
-A scene declares the topology it runs in, and a test suite's `stagewrightTest<Name>` task starts that
-topology's games for it. See [the Gradle plugin](gradle-plugin.md#test-suites-tests--) for how a
-project declares a suite and maps or generates its topologies.
+A scene file declares its topology, and a suite's `stagewrightTest<Name>` task, or `stagewright test` with the
+command-line runner, starts that topology's games for it. The runner starts the two topologies with a client only when
+given `--client`; see [Getting started](getting-started.md#scenes-with-a-client).
