@@ -25,8 +25,11 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 final class YamlTests {
 
     private static final Set<String> FILE_KEYS = Set.of("scene", "tests");
-    private static final Set<String> TEST_KEYS =
-            Set.of("name", "scene", "requires", "dependsOn", "knownIssue", "plot", "given", "when", "then", "steps");
+    /** The options {@code test()} takes, passed on as they are. */
+    private static final List<String> OPTIONS =
+            List.of("requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart");
+    private static final Set<String> TEST_KEYS = Set.of("name", "scene", "requires", "dependsOn", "knownIssue", "locks",
+            "isolated", "afterRestart", "plot", "given", "when", "then", "steps");
     /** The keys a step may carry beside the one that says what it does. */
     private static final Set<String> MODIFIERS =
             Set.of("params", "expect", "knownIssues", "save", "within", "ticks", "as");
@@ -56,7 +59,7 @@ final class YamlTests {
             Map<String, Object> options = new LinkedHashMap<>();
             Object scene = test.containsKey("scene") ? test.get("scene") : file.get("scene");
             if (scene != null) options.put("scene", scene);
-            for (String key : List.of("requires", "dependsOn", "knownIssue")) {
+            for (String key : OPTIONS) {
                 if (test.containsKey(key)) options.put(key, test.get(key));
             }
             Integer plot = plotSize(test.get("plot"), where);

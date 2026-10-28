@@ -33,8 +33,11 @@ final class Relay implements Consumer<Map<String, Object>> {
     private final Set<TestDescriptor> planned = new HashSet<>();
     private final Set<TestDescriptor> started = new HashSet<>();
     private final Set<TestDescriptor> finished = new HashSet<>();
+    /** Classes and script files a round finished unsuccessfully, held until close-out. */
+    private final Map<TestDescriptor, TestExecutionResult> containers = new HashMap<>();
     private boolean plan;
     private boolean ended;
+    private int restart = -1;
     private Throwable error;
 
     Relay(Nodes.Scene scene, EngineExecutionListener listener, Coverage coverage) {
@@ -90,7 +93,7 @@ final class Relay implements Consumer<Map<String, Object>> {
             }
             case "finished" -> {
                 TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
-                if (d == null) return;
+                if (d == null || finished.contains(d)) return;
                 String status = String.valueOf(event.get("status"));
                 Map<?, ?> failure = event.get("failure") instanceof Map<?, ?> f ? f : null;
                 TestExecutionResult result = switch (status) {
@@ -100,9 +103,15 @@ final class Relay implements Consumer<Map<String, Object>> {
                             ? new AssertionError("the game reported a failure without a throwable")
                             : Relayed.failure(failure, false));
                 };
+                // A class or script file may have tests in a later round, after a restart: it finishes at close-out,
+                // with the first failure any round reported for it.
+                if (d instanceof Nodes.TestClass || d instanceof Nodes.ScriptFile) {
+                    if (result.getStatus() != TestExecutionResult.Status.SUCCESSFUL) containers.putIfAbsent(d, result);
+                    return;
+                }
                 // Children end before their parent: what the game never ran under this node is closed out first.
                 for (TestDescriptor child : d.getChildren()) {
-                    if (!finished.contains(child)) closeOut(child, "the game finished its parent without running it");
+                    if (!finished.contains(child)) closeOut(child, null, "the game finished its parent without running it");
                 }
                 finish(d, result);
             }
@@ -116,6 +125,7 @@ final class Relay implements Consumer<Map<String, Object>> {
             }
             case "error" -> error =event.get("failure") instanceof Map<?, ?> f ? Relayed.failure(f, false)
                     : new IllegalStateException("the game's test run could not start");
+            case "restart" -> restart = event.get("round") instanceof Number n ? n.intValue() : -1;
             case "ended" -> ended = true;
             default -> {
                 // A newer game may send more; what this version does not know it leaves alone.
@@ -128,27 +138,42 @@ final class Relay implements Consumer<Map<String, Object>> {
         return ended;
     }
 
+    /** The round the game asked to be started again for, once its run ended; -1 when it asked for none. */
+    synchronized int restart() {
+        return restart;
+    }
+
+    /** The next round's game is about to start: what this one said about its end no longer applies. */
+    synchronized void nextRound() {
+        ended = false;
+        restart = -1;
+    }
+
     /**
-     * Report every outer node the game did not finish as failed, saying why: the run's own error, a test the game
-     * never discovered, or {@code gameEnded} — why the game stopped before reaching it.
+     * Report every outer node the game did not finish as failed, saying why: the run's own error, the failure of the
+     * class or file around it, a test the game never discovered, or {@code gameEnded} — why the game stopped before
+     * reaching it.
      */
     synchronized void closeOut(Nodes.Scene scene, String gameEnded) {
         for (TestDescriptor c : scene.getChildren()) {
+            TestExecutionResult own = containers.get(c);
+            Throwable around = own == null ? null : own.getThrowable().orElse(null);
             boolean anyClosed = false;
-            for (TestDescriptor m : c.getChildren()) anyClosed |= closeOut(m, gameEnded);
+            for (TestDescriptor m : c.getChildren()) anyClosed |= closeOut(m, around, gameEnded);
             if (finished.contains(c)) continue;
             start(c);
-            finish(c, anyClosed ? TestExecutionResult.failed(new AssertionError("not every test in it ran"))
+            if (own != null) finish(c, own);
+            else finish(c, anyClosed ? TestExecutionResult.failed(new AssertionError("not every test in it ran"))
                     : TestExecutionResult.successful());
         }
     }
 
-    private boolean closeOut(TestDescriptor d, String gameEnded) {
+    private boolean closeOut(TestDescriptor d, Throwable around, String gameEnded) {
         boolean closed = false;
-        for (TestDescriptor child : d.getChildren()) closed |= closeOut(child, gameEnded);
+        for (TestDescriptor child : d.getChildren()) closed |= closeOut(child, around, gameEnded);
         if (finished.contains(d)) return closed;
         start(d);
-        finish(d, TestExecutionResult.failed(why(d, gameEnded)));
+        finish(d, TestExecutionResult.failed(around != null ? around : why(d, gameEnded)));
         return true;
     }
 

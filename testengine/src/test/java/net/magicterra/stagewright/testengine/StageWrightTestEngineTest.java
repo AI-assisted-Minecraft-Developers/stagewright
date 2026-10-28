@@ -38,7 +38,7 @@ class StageWrightTestEngineTest {
         Path specs = Files.createDirectories(temp.resolve("launches"));
         System.setProperty(LaunchSpec.PROPERTY, specs.toString());
         for (String topology : List.of("pass", "assertFail", "crash", "undiscovered", "dynamic", "world",
-                "reqSkip", "otherSkip", "classSkip", "classSkipOther", "script")) {
+                "reqSkip", "otherSkip", "classSkip", "classSkipOther", "script", "restart")) {
             writeSpec(specs, topology, true);
         }
         writeSpec(specs, "worldDirty", false);
@@ -117,6 +117,16 @@ class StageWrightTestEngineTest {
         }
         assertTrue(containersFailed(r).count() >= 1, "the scene container should fail");
         assertTrue(containersFailed(r).stream().anyMatch(e -> e.getTestDescriptor().getDisplayName().equals("crash")));
+    }
+
+    @Test
+    void aRestartTheGameAsksForRunsTheNextRoundOnTheSameDirectory() {
+        EngineExecutionResults r = run("RestartFixture");
+        assertEquals(0, r.testEvents().failed().count(), () -> String.valueOf(r.testEvents().failed().list()));
+        assertEquals(2, r.testEvents().succeeded().count());
+        assertEquals(0, containersFailed(r).count());
+        assertTrue(r.allEvents().reportingEntryPublished().stream()
+                .anyMatch(e -> e.toString().contains("round 1")), "the scene should report its restart");
     }
 
     @Test

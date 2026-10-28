@@ -13,6 +13,7 @@ import net.magicterra.stagewright.test.Await;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Locks;
 import net.magicterra.stagewright.test.Perf;
+import net.magicterra.stagewright.test.Store;
 import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.minecraft.server.MinecraftServer;
@@ -27,9 +28,16 @@ final class GameImpl implements Game {
     private static final long WALL_MARGIN_MS = 60_000;
 
     private final MinecraftServer server;
+    private final StoreImpl store;
 
     GameImpl(MinecraftServer server) {
         this.server = server;
+        this.store = new StoreImpl(server.getServerDirectory().resolve("stagewright").resolve(StoreImpl.FILE));
+    }
+
+    @Override
+    public Store store() {
+        return store;
     }
 
     @Override

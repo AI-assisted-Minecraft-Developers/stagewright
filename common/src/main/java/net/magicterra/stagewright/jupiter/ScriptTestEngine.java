@@ -45,7 +45,8 @@ public final class ScriptTestEngine implements TestEngine {
     static final String SCENE = "stagewright.junit.scene";
 
     /** The options {@code test()} understands. The scene is read by the test engine outside the game, not here. */
-    private static final Set<String> OPTIONS = Set.of("scene", "requires", "dependsOn", "knownIssue", "locks", "isolated");
+    private static final Set<String> OPTIONS = Set.of("scene", "requires", "dependsOn", "knownIssue", "locks", "isolated",
+            "afterRestart");
 
     private volatile TestDescriptor discovered;
 
@@ -74,8 +75,29 @@ public final class ScriptTestEngine implements TestEngine {
             String resource = selector.getClasspathResourceName();
             if (isYaml(resource)) engine.addChild(File.load(engine, resource, steps, javaStepsError));
         }
+        keepThisRound(engine);
         discovered = engine;
         return engine;
+    }
+
+    /**
+     * Leave only the tests of the round this game runs ({@link Rounds}), once every file has registered its own: a
+     * test's round may follow from one in another file, or from a Java test.
+     */
+    private static void keepThisRound(TestDescriptor engine) {
+        Map<String, Rounds.Upstream> upstream = new LinkedHashMap<>();
+        for (TestDescriptor child : engine.getChildren()) {
+            for (TestDescriptor t : child.getChildren()) {
+                Test test = (Test) t;
+                upstream.put(test.key(), new Rounds.Upstream(test.dependsOn(), test.afterRestart));
+            }
+        }
+        Rounds.scripts(upstream);
+        for (TestDescriptor child : engine.getChildren()) {
+            for (TestDescriptor t : new ArrayList<>(child.getChildren())) {
+                if (Rounds.of(((Test) t).key()) != Rounds.current()) child.removeChild(t);
+            }
+        }
     }
 
     /**
@@ -216,9 +238,13 @@ public final class ScriptTestEngine implements TestEngine {
             if (isolated != null && !(isolated instanceof Boolean)) {
                 throw new IllegalArgumentException("test '" + name + "': isolated is true or false");
             }
+            Object afterRestart = options.get("afterRestart");
+            if (afterRestart != null && !(afterRestart instanceof Boolean)) {
+                throw new IllegalArgumentException("test '" + name + "': afterRestart is true or false");
+            }
             addChild(new Test(id, this, name, requires(name, options.get("requires")),
                     dependencies(resource, name, options.get("dependsOn")), locks(name, options.get("locks")),
-                    Boolean.TRUE.equals(isolated), (String) known, body));
+                    Boolean.TRUE.equals(isolated), Boolean.TRUE.equals(afterRestart), (String) known, body));
         }
 
         /** Whether a test naming {@code scenes} runs in this game: every test does when no scene was chosen. */
@@ -323,11 +349,12 @@ public final class ScriptTestEngine implements TestEngine {
         private final List<String> dependsOn;
         private final Set<String> locks;
         private final boolean isolated;
+        private final boolean afterRestart;
         private final String knownIssue;
         private final Body body;
 
         private Test(UniqueId id, File file, String name, Requirement requirement, List<String> dependsOn,
-                     Set<String> locks, boolean isolated, String knownIssue, Body body) {
+                     Set<String> locks, boolean isolated, boolean afterRestart, String knownIssue, Body body) {
             super(id, name, ClasspathResourceSource.from(file.resource));
             this.file = file;
             this.name = name;
@@ -335,6 +362,7 @@ public final class ScriptTestEngine implements TestEngine {
             this.dependsOn = dependsOn;
             this.locks = locks;
             this.isolated = isolated;
+            this.afterRestart = afterRestart;
             this.knownIssue = knownIssue;
             this.body = body;
         }
@@ -385,7 +413,10 @@ public final class ScriptTestEngine implements TestEngine {
                     int hash = dependency.indexOf('#');
                     why = Dependencies.blockerFor(dependency.substring(0, hash), dependency.substring(hash + 1));
                 } else if (!scheduler.has(dependency)) {
-                    why = "is not in this run: not in this scene, or its file did not load";
+                    why = Dependencies.earlierRound(dependency);
+                    if (why != null && why.startsWith("is not")) {
+                        why += ": not in this scene, or its file did not load";
+                    }
                 }
                 if (why != null) {
                     return TestExecutionResult.aborted(new IllegalStateException("depends on " + dependency + ", which "

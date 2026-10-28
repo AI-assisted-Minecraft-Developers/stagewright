@@ -50,6 +50,9 @@ public interface Game {
     /** Run {@code measurement}'s phases in order; each phase's median window by name, in phase order. */
     Map<String, Perf.Window> perf(Perf measurement);
 
+    /** What tests keep across the scene's restarts; see {@link DependsOn#afterRestart()}. */
+    Store store();
+
     /**
      * Set a game rule for the rest of this test; it is put back when the test ends. Needs
      * {@code @ResourceLock(Locks.WORLD_RULES)}, as every override here needs the lock {@link Locks} names for it.

@@ -24,6 +24,10 @@ public final class FakeGame {
             dynamic(classes);
             return;
         }
+        if (scenario.equals("restart")) {
+            restart(classes.get(0), Integer.getInteger("stagewright.junit.round", -1));
+            return;
+        }
         if (scenario.equals("script")) {
             script(System.getProperty("stagewright.junit.scripts", ""));
             return;
@@ -105,6 +109,32 @@ public final class FakeGame {
         }
         finish(method, "SUCCESSFUL", null);
         finish(classId(c), "SUCCESSFUL", null);
+        test("{\"type\":\"ended\"}");
+        done();
+        System.exit(0);
+    }
+
+    /**
+     * Round 0 runs "a" and asks for round 1, which runs "b" and fails it if round 0's file is not still there: the
+     * engine starts the game again on the same directory, finishing the class only after the last round.
+     */
+    private static void restart(String c, int round) throws Exception {
+        java.nio.file.Path mark = java.nio.file.Path.of("round0.mark");
+        String m = round == 0 ? "a" : "b";
+        plan(List.of(c), List.of(m));
+        start(classId(c));
+        start(methodId(c, m));
+        if (round == 0) {
+            java.nio.file.Files.writeString(mark, "0");
+            finish(methodId(c, m), "SUCCESSFUL", null);
+        } else if (round == 1 && java.nio.file.Files.isRegularFile(mark)) {
+            finish(methodId(c, m), "SUCCESSFUL", null);
+        } else {
+            finish(methodId(c, m), "FAILED", "{\"class\":\"java.lang.AssertionError\",\"message\":"
+                    + q("round " + round + ", mark " + java.nio.file.Files.exists(mark)) + ",\"trace\":[]}");
+        }
+        finish(classId(c), "SUCCESSFUL", null);
+        if (round == 0) test("{\"type\":\"restart\",\"round\":1}");
         test("{\"type\":\"ended\"}");
         done();
         System.exit(0);

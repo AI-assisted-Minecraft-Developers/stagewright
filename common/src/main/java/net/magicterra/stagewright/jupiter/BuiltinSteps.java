@@ -22,7 +22,8 @@ import net.minecraft.world.level.block.entity.HopperBlockEntity;
  */
 final class BuiltinSteps {
 
-    static final Set<String> NAMES = Set.of("place", "insert", "container", "chunk.unload", "chunk.reload");
+    static final Set<String> NAMES = Set.of("place", "insert", "container", "chunk.unload", "chunk.reload",
+            "store.put", "store.get");
 
     private BuiltinSteps() {}
 
@@ -33,6 +34,15 @@ final class BuiltinSteps {
             case "container" -> container(context, args);
             case "chunk.unload" -> chunk(context, "unload", args);
             case "chunk.reload" -> chunk(context, "reload", args);
+            case "store.put" -> {
+                // {key: value, …}: each kept for the tests after a restart.
+                map(args, "store.put: {key: value}").forEach((k, v) -> context.game().store().put(String.valueOf(k), v));
+                yield null;
+            }
+            case "store.get" -> {
+                if (!(args instanceof String key)) throw new IllegalArgumentException("store.get: the key, a string");
+                yield context.game().store().get(key);
+            }
             default -> throw new IllegalArgumentException("no built-in step '" + name + "'");
         };
     }

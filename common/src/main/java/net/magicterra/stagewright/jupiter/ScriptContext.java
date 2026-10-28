@@ -62,6 +62,14 @@ final class ScriptContext {
         script.put("settle", (Scripting.Function) this::settle);
         script.put("expect", (Scripting.Function) this::expect);
         script.put("record", (Scripting.Function) this::record);
+        // t.store.put(key, value) and t.store.get(key): what the tests after a restart read.
+        Map<String, Object> store = new LinkedHashMap<>();
+        store.put("put", (Scripting.Function) a -> {
+            BuiltinSteps.run(this, "store.put", Map.of(String.valueOf(a[0]), a.length > 1 ? a[1] : "null"));
+            return null;
+        });
+        store.put("get", (Scripting.Function) a -> BuiltinSteps.run(this, "store.get", String.valueOf(a[0])));
+        script.put("store", store);
         ScriptHandles.install(script, game, leases);
         return script;
     }

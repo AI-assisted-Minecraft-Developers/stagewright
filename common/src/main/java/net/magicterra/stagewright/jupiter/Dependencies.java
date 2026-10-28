@@ -186,7 +186,7 @@ public final class Dependencies implements TestWatcher {
      */
     static String blockerFor(String className, String method) {
         Ref ref = new Ref(className, method);
-        if (!planned.contains(ref)) return "is not in this run";
+        if (!planned.contains(ref)) return earlierRound(ref.key());
         CompletableFuture<Void> ended = ENDED.get(ref);
         if (ended != null) {
             try {
@@ -206,6 +206,29 @@ public final class Dependencies implements TestWatcher {
             case ABORTED -> "was aborted";
             case DISABLED -> "is disabled";
         };
+    }
+
+    /**
+     * For a test this game does not run: null when it passed in an earlier round, before a restart; else why a test
+     * depending on it cannot run.
+     */
+    static String earlierRound(String key) {
+        String status = Rounds.endedBefore(key);
+        if (status == null) return "is not in this run";
+        return TestExecutionResult.Status.SUCCESSFUL.name().equals(status) ? null
+                : "did not pass before the restart (" + status + ")";
+    }
+
+    /** How every test of this game ended, by key, for the rounds after it. */
+    static Map<String, TestExecutionResult.Status> outcomes() {
+        Map<String, TestExecutionResult.Status> all = new HashMap<>();
+        for (Ref ref : planned) {
+            Outcome o = OUTCOMES.get(ref);
+            all.put(ref.key(), o == Outcome.SUCCEEDED ? TestExecutionResult.Status.SUCCESSFUL
+                    : o == Outcome.FAILED ? TestExecutionResult.Status.FAILED : TestExecutionResult.Status.ABORTED);
+        }
+        SCRIPTS.forEach((key, ended) -> all.put(key, ended.getNow(TestExecutionResult.Status.ABORTED)));
+        return all;
     }
 
     /** A script test has ended, {@code status} saying how. */
@@ -235,7 +258,11 @@ public final class Dependencies implements TestWatcher {
     static void awaitUpstream(ExtensionContext context) throws InterruptedException {
         boolean parallel = context.getConfigurationParameter(PARALLEL).map(Boolean::parseBoolean).orElse(false);
         for (Ref ref : upstream(context.getRequiredTestClass(), context.getRequiredTestMethod())) {
-            if (!planned.contains(ref)) Assumptions.abort("depends on " + ref + ", which is not in this run");
+            if (!planned.contains(ref)) {
+                String why = earlierRound(ref.key());
+                if (why != null) Assumptions.abort("depends on " + ref + ", which " + why);
+                continue;
+            }
             if (parallel) await(ENDED.get(ref));
             Outcome outcome = OUTCOMES.get(ref);
             if (outcome == null) {
@@ -256,8 +283,10 @@ public final class Dependencies implements TestWatcher {
         for (String key : scriptUpstream(context.getRequiredTestMethod())) {
             CompletableFuture<TestExecutionResult.Status> ended = SCRIPTS.get(key);
             if (ended == null) {
-                Assumptions.abort("depends on " + key + ", which is not in this run: not in this scene, or its file"
-                        + " did not load");
+                String why = earlierRound(key);
+                if (why == null) continue;
+                Assumptions.abort("depends on " + key + ", which " + why + (why.startsWith("is not")
+                        ? ": not in this scene, or its file did not load" : ""));
             }
             await(ended);
             TestExecutionResult.Status status = ended.getNow(TestExecutionResult.Status.ABORTED);

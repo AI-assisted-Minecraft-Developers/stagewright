@@ -30,7 +30,10 @@ import net.minecraft.server.MinecraftServer;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.DiscoverySelector;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
+import org.junit.platform.engine.FilterResult;
+import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.EngineFilter;
+import org.junit.platform.launcher.PostDiscoveryFilter;
 import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
 import org.junit.platform.launcher.TestPlan;
@@ -117,6 +120,8 @@ public final class JupiterRun {
             GameExtension.bind(game);
             // Handed over, not listed in META-INF/services: under Fabric's Knot a services file in this jar hides
             // the one in junit-jupiter-engine, and Jupiter goes missing.
+            Path artifacts = server.getServerDirectory().resolve("stagewright");
+            Rounds.load(artifacts);
             ScriptTestEngine scriptEngine = new ScriptTestEngine();
             Launcher launcher = LauncherFactory.create(LauncherConfig.builder().addTestEngines(scriptEngine).build());
             // Two plans, run side by side so a test of either kind may wait for one of the other. The scripts are
@@ -151,6 +156,12 @@ public final class JupiterRun {
                 Dependencies.javaOver();
                 scriptThread.join();
             }
+            Rounds.save(artifacts, Dependencies.outcomes());
+            if (Rounds.latest() > Rounds.current()) {
+                StageWrightCommon.LOG.info("[{}] round {} is over; tests remain for round {}, after a restart",
+                        StageWrightCommon.MOD_ID, Rounds.current(), Rounds.current() + 1);
+                relay.restart(Rounds.current() + 1);
+            }
             relay.ended();
             List<TestExecutionSummary> summaries = List.of(javaSummary.getSummary(), scriptSummary.getSummary());
             writeSummary(reports.resolve("summary.json"), entries, summaries);
@@ -174,11 +185,19 @@ public final class JupiterRun {
         }
     }
 
+    /** Keeps the Java tests of the round this game runs ({@link Rounds}); script tests are kept by their engine. */
+    private static final PostDiscoveryFilter THIS_ROUND = descriptor -> {
+        if (!(descriptor.getSource().orElse(null) instanceof MethodSource m)) return FilterResult.included("not a test");
+        int round = Rounds.of(m.getClassName() + "#" + m.getMethodName());
+        return round == Rounds.current() ? FilterResult.included("this round")
+                : FilterResult.excluded("runs in round " + round + " of the scene's restarts");
+    };
+
     /** What one engine discovers from {@code selectors}, configured as every in-game run is. */
     private static LauncherDiscoveryRequest request(List<? extends DiscoverySelector> selectors, String engine) {
         return LauncherDiscoveryRequestBuilder.request()
                 .selectors(selectors)
-                .filters(EngineFilter.includeEngines(engine))
+                .filters(EngineFilter.includeEngines(engine), THIS_ROUND)
                 .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")
                 // Below a junit-platform.properties on the game's class path, or a -D, so either may change them.
                 .parentConfigurationParameters(new Defaults(Map.of(

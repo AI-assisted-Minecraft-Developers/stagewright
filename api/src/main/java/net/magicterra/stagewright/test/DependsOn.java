@@ -34,4 +34,11 @@ public @interface DependsOn {
      * {@code "stagewright/tests/setup.js#builds the base"}.
      */
     String[] scripts() default {};
+
+    /**
+     * Run after the game has restarted on the world the named tests left: the scene's game runs every test it can
+     * first, stops, starts again on the same world, and runs this one then. What a test wants to hand across keeps in
+     * {@link Game#store()}.
+     */
+    boolean afterRestart() default false;
 }

@@ -95,6 +95,16 @@ final class AgentEvents implements TestExecutionListener {
         send(o);
     }
 
+    /**
+     * Tests remain for a later round: whoever started this game starts it again on the same world, with
+     * {@code -Dstagewright.junit.round=<round>}, once this one has exited.
+     */
+    void restart(int round) {
+        JsonObject o = event("restart");
+        o.addProperty("round", round);
+        send(o);
+    }
+
     /** Every plan of the run has finished: the Java tests' and the script tests', each announced as it started. */
     void ended() {
         send(event("ended"));

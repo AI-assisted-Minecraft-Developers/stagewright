@@ -122,7 +122,6 @@ final class SceneRun {
     private TestExecutionResult supervise(LaunchSpec spec, SceneFile.World world, Relay relay, Path artifacts,
                                           Path logs) throws IOException, InterruptedException {
         Path agentJar = AgentJar.stage(SceneRun.class, artifacts);
-        File gameLog = logs.resolve(scene.name + "-game.log").toFile();
 
         List<String> classes = new ArrayList<>();
         List<String> scripts = new ArrayList<>();
@@ -131,39 +130,56 @@ final class SceneRun {
             else classes.add(((Nodes.TestClass) c).className);
         }
 
-        Process companion = null;
-        try (Supervisor supervisor = Supervisor.open()) {
-            supervisor.onTest(relay);
-            List<String> extra = new ArrayList<>(List.of(
-                    supervisor.agentArgument(agentJar, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS),
-                    // Also what keeps the topology's own scene suite from starting: the game runs these only.
-                    "-Dstagewright.junit.classes=" + String.join(",", classes),
-                    "-Dstagewright.junit.scripts=" + String.join(",", scripts),
-                    // A script file may register tests for other scenes too; the game runs this one's.
-                    "-Dstagewright.junit.scene=" + scene.name,
-                    "-Dstagewright.junit.exitWhenDone=true",
-                    "-Dstagewright.scene.world=" + world.runtimeJson()));
-            // Where the companion client writes its WorldDriver port, for the tests' Client.
-            if (spec.companion() != null) {
-                extra.add("-Dstagewright.companion.dir=" + spec.companion().workingDirectory().toAbsolutePath());
+        // What the rounds before handed to the ones after; a scene's first round starts with neither.
+        Files.deleteIfExists(artifacts.resolve("store.json"));
+        Files.deleteIfExists(artifacts.resolve("rounds.json"));
+        for (int round = 0; ; round++) {
+            String suffix = round == 0 ? "" : "-round" + round;
+            File gameLog = logs.resolve(scene.name + suffix + "-game.log").toFile();
+            Process companion = null;
+            try (Supervisor supervisor = Supervisor.open()) {
+                supervisor.onTest(relay);
+                List<String> extra = new ArrayList<>(List.of(
+                        supervisor.agentArgument(agentJar, AGENT_GRACE_SECONDS, AGENT_IDLE_SECONDS),
+                        // Also what keeps the topology's own scene suite from starting: the game runs these only.
+                        "-Dstagewright.junit.classes=" + String.join(",", classes),
+                        "-Dstagewright.junit.scripts=" + String.join(",", scripts),
+                        // A script file may register tests for other scenes too; the game runs this one's.
+                        "-Dstagewright.junit.scene=" + scene.name,
+                        "-Dstagewright.junit.round=" + round,
+                        "-Dstagewright.junit.exitWhenDone=true",
+                        "-Dstagewright.scene.world=" + world.runtimeJson()));
+                // Where the companion client writes its WorldDriver port, for the tests' Client.
+                if (spec.companion() != null) {
+                    extra.add("-Dstagewright.companion.dir=" + spec.companion().workingDirectory().toAbsolutePath());
+                }
+                Process game = start(spec.primary(), extra, gameLog);
+                if (spec.companion() != null) {
+                    companion = start(spec.companion(), List.of(),
+                            logs.resolve(scene.name + suffix + "-companion.log").toFile());
+                }
+                Duration total = Duration.ofMinutes(spec.timeoutMinutes());
+                Duration stall = spec.stallMinutes() == 0 ? total : Duration.ofMinutes(spec.stallMinutes());
+                Supervisor.Ended ended = supervisor.await(game.toHandle(),
+                        new Supervisor.Limits(CONNECT_LIMIT, HEARTBEAT_LIMIT, stall, total));
+                if (ended != Supervisor.Ended.DONE) Supervisor.kill(game.toHandle());
+                // The supervisor's reader may still be handing over the last lines; they precede the end it saw.
+                boolean exited = supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(AGENT_GRACE_SECONDS + 10));
+                boolean again = ended == Supervisor.Ended.DONE && relay.ended() && relay.restart() == round + 1;
+                if (again) {
+                    // The next round opens the same world: this game must be gone, its session lock with it.
+                    if (!exited) Supervisor.kill(game.toHandle());
+                    relay.nextRound();
+                    listener.reportingEntryPublished(scene, ReportEntry.from("restart", "round " + (round + 1)));
+                    continue;
+                }
+                String why = describe(ended, supervisor, gameLog);
+                relay.closeOut(scene, why);
+                if (ended == Supervisor.Ended.DONE && relay.ended()) return TestExecutionResult.successful();
+                return TestExecutionResult.failed(new AssertionError("the game ended " + why));
+            } finally {
+                if (companion != null) Supervisor.kill(companion.toHandle());
             }
-            Process game = start(spec.primary(), extra, gameLog);
-            if (spec.companion() != null) {
-                companion = start(spec.companion(), List.of(), logs.resolve(scene.name + "-companion.log").toFile());
-            }
-            Duration total = Duration.ofMinutes(spec.timeoutMinutes());
-            Duration stall = spec.stallMinutes() == 0 ? total : Duration.ofMinutes(spec.stallMinutes());
-            Supervisor.Ended ended = supervisor.await(game.toHandle(),
-                    new Supervisor.Limits(CONNECT_LIMIT, HEARTBEAT_LIMIT, stall, total));
-            if (ended != Supervisor.Ended.DONE) Supervisor.kill(game.toHandle());
-            // The supervisor's reader may still be handing over the last lines; they precede the end it saw.
-            supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(AGENT_GRACE_SECONDS + 10));
-            String why = describe(ended, supervisor, gameLog);
-            relay.closeOut(scene, why);
-            if (ended == Supervisor.Ended.DONE && relay.ended()) return TestExecutionResult.successful();
-            return TestExecutionResult.failed(new AssertionError("the game ended " + why));
-        } finally {
-            if (companion != null) Supervisor.kill(companion.toHandle());
         }
     }
 
