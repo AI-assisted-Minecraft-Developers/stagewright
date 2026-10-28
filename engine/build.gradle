@@ -1,11 +1,7 @@
 // The parts of a StageWright run that are neither Gradle nor Minecraft.
 //
-// Judging a results file, and preparing the directory a run happens in, are the same work whether
-// the run was started by the Gradle plugin against a dev task or by the CLI against an installed
-// modpack. Holding them once is not tidiness: two implementations of the verdict rules would
-// eventually disagree about the same results file, and nothing would say which was right. This
-// repository already paid that bill once — the Python orchestrators it is retiring were exactly
-// that second implementation.
+// Preparing a run directory, supervising a game and reading JSON are the same work for the Gradle
+// plugin, the CLI and the test engine, so they are held once here.
 //
 // NO EXTERNAL DEPENDENCIES, and that constraint is inherited rather than chosen. This artifact
 // lands on a consumer's BUILDSCRIPT classpath through the gradle plugin, where a third-party
@@ -13,7 +9,7 @@
 // to have — worlddriver's lists no Maven Central at all.
 //
 // That is an argument against DEPENDING on a JSON library, not against USING one, and the two were
-// conflated here until a hand-written parser sat under the verdict. The library is vendored instead:
+// conflated here until a hand-written parser was the result. The library is vendored instead:
 // see src/main/java/.../engine/json/VENDORED.md.
 //
 // Relocating a real dependency with Shadow was measured as the alternative. It works only with

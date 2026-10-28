@@ -30,8 +30,8 @@ import net.magicterra.stagewright.engine.Json;
  * before the game starts and tells the game the address and a one-time token, so a game left over
  * from an earlier run cannot report into this one.
  *
- * <p>The results file stays the only verdict authority. Nothing here decides whether a run passed —
- * only when to look at the file, and what to say when there is nothing to look at.
+ * <p>Nothing here decides whether a test passed — only whether the game is done, and what to say
+ * when it stopped before it was.
  */
 public final class Supervisor implements AutoCloseable {
 

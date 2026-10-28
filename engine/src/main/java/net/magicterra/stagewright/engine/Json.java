@@ -9,18 +9,14 @@ import net.magicterra.stagewright.engine.json.JsonObject;
 import net.magicterra.stagewright.engine.json.JsonValue;
 
 /**
- * Reads one results line into plain Java values.
+ * Reads one JSON value into plain Java values.
  *
- * <p>An adapter over the vendored minimal-json, not a parser. This class used to be a hand-written
- * recursive-descent reader, which was a mistake worth naming: it is the component that decides
- * whether a build passes, and the places a JSON parser goes wrong — escapes, surrogate pairs, the
- * number grammar — are exactly the ones that fail quietly and produce a confident wrong verdict.
+ * <p>An adapter over the vendored minimal-json, not a parser: the places a hand-written JSON parser
+ * goes wrong — escapes, surrogate pairs, the number grammar — are exactly the ones that fail quietly.
  * See {@code json/VENDORED.md} for why the library is copied in rather than depended on.
  *
  * <p>Objects become {@link LinkedHashMap}, arrays {@link List}, numbers {@link Double}, and the rest
- * map to their obvious Java types — the shapes {@link Verdict} reads. Insertion order is preserved,
- * because a report that lists a run's scenes in a different order than the file did is harder to
- * check against the file.
+ * map to their obvious Java types. Insertion order is preserved.
  */
 public final class Json {
 

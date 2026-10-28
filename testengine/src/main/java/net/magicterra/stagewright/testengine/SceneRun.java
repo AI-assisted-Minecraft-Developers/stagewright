@@ -94,7 +94,7 @@ final class SceneRun {
             if (!declaration.excludedMods().isEmpty()) spec = withoutMods(spec, declaration.excludedMods(), modsScratch);
             // A run directory nothing else prepares, such as one the plugin generated: a dedicated server there needs
             // the EULA accepted and offline mode before it starts at all. Inside the put-back, like the scene's own.
-            RunDirectory.provision(spec.primary().workingDirectory(), List.of(), false, spec.server(), line -> { });
+            RunDirectory.provision(spec.primary().workingDirectory(), spec.server());
             writeServerProperties(serverProperties, world);
             return supervise(spec, world, relay, artifacts, logs);
         } finally {
