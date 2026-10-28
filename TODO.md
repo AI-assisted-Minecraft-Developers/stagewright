@@ -7,10 +7,10 @@ comment next to it. This file is only for what is *not done*.
 
 ## A body and a save cannot outlive one test
 
-A test's bodies and plot go back when it ends, so a campaign that plays one body through many steps
-on one world (worlddriver's survival ladder, deleted on 2026-10-28 for this reason) cannot be a
+A test's bodies and plot go back when it ends, so a long survival run that plays one body through
+many steps on one world (worlddriver had one, deleted on 2026-10-28 for this reason) cannot be a
 chain of `@DependsOn` tests. It needs a body that later tests can take over, the world kept between
-them, and a place for evidence rows beyond `record`'s report entries.
+them, and somewhere to keep what each step observed beyond `record`'s report entries.
 
 ## `--tests` does not narrow script tests
 
