@@ -6,11 +6,11 @@ agent. Written to be correct rather than readable in order. The reasons are in
 
 ## Attaching the agent
 
-The supervisor adds one JVM argument, placed where a `-D` goes — before the loader's argument file,
-so the JVM reads it rather than the launcher:
+The test engine adds one JVM argument, placed where a `-D` goes — after the run's own system properties and before
+the first `-cp` or argument file, so the JVM reads it rather than a launcher:
 
 ```
--javaagent:<agent jar>=<host>:<port>:<token>[,grace=<seconds>]
+-javaagent:<agent jar>=<host>:<port>:<token>[,grace=<seconds>][,idle=<seconds>]
 ```
 
 | Part | Meaning |
@@ -44,7 +44,7 @@ Every line has `event`. The agent's events:
 | `heartbeat` | `atMs`, `phase`, `ticks`, `classes` when the JVM can say, and `stacks` once `idle` seconds have passed with none of the three changing | every second |
 | `phase` | `phase` | when the game reports a phase different from the last |
 | `done` | none | when the game reports the run over |
-| `results` | none | when a held game's results are complete; it stays up and the agent ends nothing |
+| `results` | none | when a game held open after its run has its results complete; the agent ends nothing. Nothing in the current mod sends it |
 | `crash` | `report` (the path) | once for each file that appears in `<working directory>/crash-reports` after the agent started; the listing is taken in `premain`, so a previous run's reports are not this run's. Looked for once a second |
 | `leaked` | `graceMs`, `threads` | once, when the JVM is still up `grace` seconds after `done` |
 | `exiting` | none | from a shutdown hook, when the JVM ends in an orderly way |
@@ -70,28 +70,29 @@ not list it among the leaks.
 An element of `stacks` has `name` and `stack` (the top eight frames), for the threads called `main`,
 `Render thread` and `Server thread`.
 
-The phases the game reports are `armed` (the mod is loaded and the world is up), `waiting-for-player`
-(a dedicated server holding the suite until a client joins, which is why a client that never arrives
-shows as a server that stopped moving) and `harness-ready` (the suite is armed and running).
+The phases the game reports are `armed` (the server has started) and, from a client joined to a server, `client-`
+followed by where it is: `waiting-for-title`, `driving`, `in-world`, `finishing`. A server whose tests wait for a
+client to join keeps ticking while it waits, so a client that never arrives shows as a server that ran out of time,
+not as one that stalled.
 
 `leaked` lists the non-daemon threads still alive, `DestroyJavaVM` excluded, and may be empty when
 the JVM is held up by something that is not a thread. The agent ends the JVM with `Runtime.halt(0)`
-right after sending it: the results file, not the exit code, carries the verdict.
+right after sending it: the test events, not the exit code, carry the results.
 
 ## What the supervisor concludes
 
 | Ended | When |
 |---|---|
 | `DONE` | the agent sent `done`. Checked before whether the process is alive: a game that says so and exits in the same second is done, not dead |
-| `RESULTS` | the agent sent `results`: a game held open on purpose has its results complete. Ranks with `DONE` above a crash probe; the caller ends the game, since nothing else will |
+| `RESULTS` | the agent sent `results`: a game held open on purpose has its results complete. Ranks with `DONE` above a crash probe; the caller ends the game, since nothing else will. Unused while nothing sends `results` |
 | `PROCESS_DIED` | the process is gone and never said `done`, once its connection has closed so that its last lines are read |
 | `HEARTBEAT_LOST` | connected, and no line for longer than the limit: the whole JVM has stopped |
 | `NEVER_CONNECTED` | alive and silent for longer than the connect limit: it did not reach the agent |
 | `STALLED` | heartbeating, and none of `phase`, `ticks` and `classes` has changed for longer than the stall limit. Loading a pack moves `classes`, running a suite moves `ticks`, so a game that moves neither is stuck |
-| `CRASHED` | the agent sent `crash`, or the caller's probe said so; the command-line runner also asks whether a crash report has appeared, for a game whose JVM died before it could say. Ranks below `DONE` and `RESULTS` and above whether the process is alive |
+| `CRASHED` | the agent sent `crash`, or a probe the caller passed said so. Ranks below `DONE` and `RESULTS` and above whether the process is alive |
 | `TIMED_OUT` | alive and talking, and not done within the ceiling |
 
-`DONE` says when to read the results file, and nothing about what is in it.
+`DONE` says the game's run is over, and nothing about how its tests went: that is in the `test` events.
 
 ## The game to the agent
 
@@ -102,10 +103,10 @@ JVM was not started with the agent, and none throws.
 
 | Method | Meaning |
 |---|---|
-| `phase(String)` | where the game is: `harness-ready`, `scenes-running` |
+| `phase(String)` | where the game is, as listed above |
 | `ticks(long)` | server ticks delivered so far, sent with the next heartbeat |
-| `done()` | the run is over and its results file is complete |
-| `resultsComplete()` | the results file is complete and the JVM stays up, because it is held for something to attach to. Starts no grace period. Absent from an older agent, and the mod then loses only this report |
+| `done()` | the run is over and every test event has been sent |
+| `resultsComplete()` | the run's results are complete and the JVM stays up. Starts no grace period. The current mod does not call it |
 | `test(String)` | one event of the in-game test run, a JSON object, sent on as a `test` line's `data`. The agent does not read it. Absent from an older agent, and the game's tests then reach no one outside |
 
 ## Test events
