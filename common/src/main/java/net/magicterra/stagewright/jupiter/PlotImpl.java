@@ -5,13 +5,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Plot;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.BlockPosition;
-import net.magicterra.worlddriver.api.methods.world.WorldBlockingApi;
+import net.magicterra.worlddriver.api.methods.world.WorldApi;
+import net.magicterra.worlddriver.api.methods.world.WorldStubApi;
 import net.magicterra.worlddriver.api.methods.world.WorldContracts;
 import net.magicterra.worlddriver.api.methods.world.WorldContracts.RestoreParams;
 import net.magicterra.worlddriver.api.methods.world.WorldContracts.SnapshotParams;
@@ -91,12 +93,12 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         PlotImpl plot = new PlotImpl(game, dimension, start, floorY, size, centered);
         try {
             game.runOnServer(server -> plot.forceChunks(server, true));
-            WorldBlockingApi world = game.api(WorldBlockingApi::of);
             for (int i = 0; i < plot.snapshots.size(); i++) {
                 BoundingBox tile = plot.snapshots.get(i);
-                world.snapshot(new SnapshotParams(position(tile.minX(), tile.minY(), tile.minZ()),
+                SnapshotParams params = new SnapshotParams(position(tile.minX(), tile.minY(), tile.minZ()),
                         position(tile.maxX(), tile.maxY(), tile.maxZ()), Optional.of(dimension.location().toString()),
-                        Optional.of(plot.snapshotId(i)), true, true));
+                        Optional.of(plot.snapshotId(i)), true, true);
+                plot.onServer(world -> world.snapshot(params));
             }
             game.runOnServer(plot::empty);
             return plot;
@@ -118,8 +120,10 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         // Every entity out first: one that walked from one snapshot's box into another's would otherwise be there
         // twice when the first puts it back.
         game.runOnServer(server -> discardEntities(level(server)));
-        WorldBlockingApi world = game.api(WorldBlockingApi::of);
-        for (int i = 0; i < snapshots.size(); i++) world.restore(new RestoreParams(snapshotId(i), true, false));
+        for (int i = 0; i < snapshots.size(); i++) {
+            RestoreParams params = new RestoreParams(snapshotId(i), true, false);
+            onServer(world -> world.restore(params));
+        }
         // Only a plot that was put back may be handed out again; a failed restore leaves its stretch taken.
         game.runOnServer(server -> forceChunks(server, false));
         LAYOUT.release(dimension, start);
@@ -217,6 +221,15 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
             throw new IllegalArgumentException("(" + x + ", " + y + ", " + z + ") is outside the plot, whose cells run"
                     + " from " + min.toShortString() + " to " + max.toShortString());
         }
+    }
+
+    /**
+     * A {@code mc.world.*} call made on the server thread, where WorldDriver runs it at once. Through the blocking
+     * caller it would queue for the server thread and give up after a few seconds when another test holds that
+     * thread with a long task, as one ticking a bot through a whole walk does; queued here, it waits its turn.
+     */
+    private <R> R onServer(Function<WorldStubApi, CompletionStage<R>> call) {
+        return game.onServer(server -> call.apply(WorldApi.of(game.registry())).toCompletableFuture().join());
     }
 
     private ServerLevel level(MinecraftServer server) {
