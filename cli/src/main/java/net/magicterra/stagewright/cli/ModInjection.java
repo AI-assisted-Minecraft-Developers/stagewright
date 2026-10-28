@@ -101,8 +101,7 @@ final class ModInjection {
     static void requireLoader(String loader) {
         if (loader == null) {
             throw new IllegalArgumentException("cannot tell which loader this pack runs on, so there"
-                    + " is no way to pick the right StageWright build — pass --no-install if the pack"
-                    + " already has it");
+                    + " is no way to pick the right StageWright build");
         }
         if (!loader.equals("neoforge") && !loader.equals("fabric")) {
             throw new IllegalArgumentException("StageWright runs on neoforge or fabric, not " + loader);
@@ -154,7 +153,7 @@ final class ModInjection {
         try (InputStream in = ModInjection.class.getResourceAsStream(resource)) {
             if (in == null) {
                 throw new IllegalStateException("this CLI carries no StageWright build for '" + loader
-                        + "' (looked for " + resource + ") — pass --no-install and put one in the pack");
+                        + "' (looked for " + resource + ")");
             }
             Files.createDirectories(staged);
             Path out = staged.resolve(name);

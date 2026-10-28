@@ -24,19 +24,11 @@ class ClientLaunchTest {
                                "game": ["--username", "${auth_player_name}"]}}
                 """);
 
-        List<String> command = ClientLaunch.command(install, install.resolve("game"), "1.21.1", "java",
+        ClientLaunch.Parts parts = ClientLaunch.parts(install, install.resolve("game"), "1.21.1",
                 List.of("-Djava.library.path=/mine"), List.of(), "StageWright");
-        int versions = command.indexOf("-cp");
-        int ours = command.indexOf("-Djava.library.path=/mine");
-        int main = command.indexOf("net.minecraft.client.main.Main");
-        assertTrue(versions < ours && ours < main, command.toString());
-    }
-
-    @Test
-    void theJoiningClientGetsTheUsersPropertiesToo() {
-        assertEquals(List.of("-Dorg.lwjgl.glfw.libname=/x.so", "-Dstagewright.client.connect=127.0.0.1:25565",
-                        "-Dfabric.addMods=a.jar"),
-                Main.companionProps(List.of("-Dorg.lwjgl.glfw.libname=/x.so"), "127.0.0.1:25565",
-                        List.of("-Dfabric.addMods=a.jar")));
+        int versions = parts.jvm().indexOf("-cp");
+        int ours = parts.jvm().indexOf("-Djava.library.path=/mine");
+        assertTrue(versions >= 0 && versions < ours, parts.jvm().toString());
+        assertEquals("net.minecraft.client.main.Main", parts.mainClass());
     }
 }

@@ -43,7 +43,7 @@ import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
  * JUnit XML. The server plays in {@code stagewright/world}, which each scene starts afresh; the pack's own world is
  * left alone.
  *
- * <p>With {@code --client}, a client is installed as the scene runner installs one, and the scenes of the two
+ * <p>With {@code --client}, a client is installed, and the scenes of the two
  * topologies with a client run too: {@code integratedServer} in that client, {@code dedicatedServerWithClient} with
  * it joined to the pack's server. It runs in {@code stagewright/client}, since the engine deletes a client's saves
  * before each scene, with the server's mods or those {@code --client-mods} names.

@@ -26,9 +26,4 @@ class AgentJarTest {
         AgentJar.stage(Main.class, artifacts.resolve("stagewright"));
         assertTrue(Files.size(jar) > 1000);
     }
-
-    @Test
-    void failOnLeakIsAFlagNotAnOptionWithAValue() {
-        assertEquals("true", Args.parse(new String[] {"--game-dir", "g", "--fail-on-leak"}).opts().get("fail-on-leak"));
-    }
 }

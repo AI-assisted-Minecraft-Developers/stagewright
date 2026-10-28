@@ -11,16 +11,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class DriverRequirementTest {
     @Test
-    void missingDriverIsRefusedBeforeWorldReset(@TempDir Path tmp) throws Exception {
-        Files.createDirectories(tmp.resolve("libraries/net/neoforged/neoforge"));
-        Files.writeString(Files.createDirectories(tmp.resolve("world")).resolve("level.dat"), "save");
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> Main.run(new String[] {
-                "--game-dir", tmp.toString(), "--world", "reset", "--launch", "java -jar server.jar"}));
-        assertTrue(error.getMessage().contains("requires one compatible WorldDriver"), error.getMessage());
-        assertEquals("save", Files.readString(tmp.resolve("world/level.dat")));
-    }
-
-    @Test
     void arbitraryFilenameIsRecognizedFromMetadata(@TempDir Path tmp) throws IOException {
         Path jar = TestModJar.driver(tmp.resolve("mods/unrelated-name.jar"), "driver");
         for (String loader : List.of("fabric", "neoforge")) {

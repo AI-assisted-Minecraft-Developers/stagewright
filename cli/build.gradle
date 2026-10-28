@@ -12,15 +12,6 @@ java {
 
 repositories {
     mavenCentral()
-    maven {
-        // Rhino, for out-of-process scenes. Not on Maven Central, and FENCED to its own group.
-        // The fence is not tidiness: conformance-mods hit a repository whose domain had expired and
-        // whose parking page answered 200 to every path — Gradle takes the first repository that
-        // answers, so it black-holed the nine healthy ones declared after it and reported the damage
-        // as nine unparseable POMs.
-        url "https://maven.latvian.dev/releases"
-        content { includeGroup 'dev.latvian.mods' }
-    }
 }
 
 // The Minecraft-side jars this CLI installs into a pack, carried as resources rather than
@@ -30,9 +21,6 @@ repositories {
 // gradle/version.gradle holds to one version.
 configurations {
     bundledMods { transitive = false }
-    // The supervision agent, carried as a resource and not merged into the classes: a game loads it
-    // from a file, with -javaagent.
-    bundledAgent { transitive = false }
 }
 dependencies {
     // Built from engine/ through the includeBuild in settings.gradle, so this jar always carries
@@ -49,24 +37,11 @@ dependencies {
     // exist.
     bundledMods project(path: ':stagewright-neoforge', configuration: 'runtimeElements')
     bundledMods project(path: ':stagewright-fabric', configuration: 'runtimeElements')
-    bundledAgent "net.magicterra:stagewright-agent:${stagewrightVersion}"
 
-    // Out-of-process scenes. The SAME module the bundled mod jars shadow — which is the whole
-    // guarantee that one `.js` file behaves identically in both homes. A skew between this and the
-    // mods staged above would not fail loudly; it would make a scene mean two things.
-    implementation project(':stagewright-attached')
-
-    // Rhino and gson are compileOnly in that module, on purpose: inside the game both are already
-    // present (worlddriver embeds Rhino, Minecraft ships gson), and bundling either into a mod jar
-    // would put a second copy on the game's classpath. Out here nothing provides them, so this is
-    // where they become real. Same Rhino coordinate as the mod side — the KubeJS fork, not Mozilla's:
-    // two homes on two interpreters would not be running the same language.
-    implementation "dev.latvian.mods:rhino:2101.2.7-build.81"
+    // The client installer and the launch specs. The supervision agent and Rhino arrive inside the
+    // test engine's jar.
     implementation 'com.google.code.gson:gson:2.11.0'
 
-    // The parts of this CLI that can be tested without a modpack: which loader version a pack
-    // directory says it boots, and whether the name a run is judged on reaches the game. Both were
-    // wrong in a way no compiler catches and only a real pack revealed.
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
@@ -86,18 +61,10 @@ def stageBundledMods = tasks.register('stageBundledMods', Copy) {
 }
 tasks.named('processResources') { into('mods') { from stageBundledMods } }
 
-// Staged as /agent/stagewright-agent.jar, version stripped for the reason the mods' is.
-def stageBundledAgent = tasks.register('stageBundledAgent', Copy) {
-    from configurations.bundledAgent
-    into layout.buildDirectory.dir('bundled-agent')
-    rename(/^stagewright-agent-.*\.jar$/, 'stagewright-agent.jar')
-}
-tasks.named('processResources') { into('agent') { from stageBundledAgent } }
-
-// What this jar was built from, printed by `--version` and at the start of every run.
+// What this jar was built from, printed by `--version`.
 def buildInfo = tasks.register('buildInfo') {
     def out = layout.buildDirectory.file('generated/build-info/stagewright-cli-build.properties')
-    def parts = configurations.runtimeClasspath.incoming.files + configurations.bundledMods + configurations.bundledAgent
+    def parts = configurations.runtimeClasspath.incoming.files + configurations.bundledMods
     // No build time here: CI publishes the jar it tested because each later Gradle run in the job
     // finds this file up to date. A part's time is its file's, which the job writes only once.
     def version = stagewrightVersion
