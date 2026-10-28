@@ -205,8 +205,9 @@ itself.
 ## The `testmod` source-set convention
 
 This is the plugin's second, opt-in facet. It exists because tests belong out of the production jar:
-a mod that ships its scenes bundled into `main` ships test-only code, and test-only dependencies, to
-players.
+a mod that ships its tests bundled into `main` ships test-only code, and test-only dependencies, to
+players. A test suite (above) already creates its `testmod` source set when the project has none; this flag is for a
+project that wants the source set without declaring a suite.
 
 ```groovy
 stagewright {
