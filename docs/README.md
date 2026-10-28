@@ -17,11 +17,9 @@ Written for someone with a task in front of them.
 | Document | Read it when |
 |---|---|
 | [Getting started](guide/getting-started.md) | You want a first passing run, whether you ship a modpack and have no build tool or you build a mod with Gradle. |
-| [Writing a scene](guide/writing-a-scene.md) | You are writing scenes: the lifecycle, declaring what a scene needs, asserting, registration, naming, and what is frozen about the world. |
 | [Capabilities](guide/capabilities.md) | A scene needs to reach machinery the base game has no concept of, or you want to teach the framework about your own. |
 | [Topologies](guide/topologies.md) | You need to know which process shape can establish the fact you are trying to establish. |
 | [The Gradle plugin](guide/gradle-plugin.md) | You are wiring StageWright into a project: test suites, topologies, the source-set convention. |
-| [Attaching a JUnit suite](guide/junit-attach.md) | You need to assert something a scene cannot assert about itself, from outside the game process. |
 
 ## Reference — what the contracts are
 
@@ -30,8 +28,6 @@ built programs rely on, so they are stated as literal names, keys and codes.
 
 | Document | Covers |
 |---|---|
-| [Instrument contract](reference/instrument-contract.md) | The instrumentation surface reachable from outside the game, and the permanent assertions and canaries by which the framework establishes that it is itself sound. |
-| [Attached protocol](reference/attached-protocol.md) | The seven hidden methods by which a scene file running outside the game gets an arena in it and calls into it: the run, the answers, and how values cross. |
 | [Supervision protocol](reference/supervision-protocol.md) | What the agent in a game's JVM sends its supervisor, the conclusions drawn from it, and how the mod talks to the agent. |
 | [Scene file](reference/scene-file.md) | A scene's declaration: its topology, and the world it runs on — what applies at creation, what is set once loaded, and the defaults. |
 | [Launch spec](reference/launch-spec.md) | The file that tells the test engine how to start one topology's games, and what the engine adds to the command. |
@@ -44,7 +40,6 @@ wants to know what it was weighed against.
 
 | Document | Decision |
 |---|---|
-| [Attached scenes](design/attached-scenes.md) | Running scenes outside the game process: where that capability lives, what it can honestly offer, and what it must refuse rather than approximate. |
 | [Scene capabilities](design/scene-capabilities.md) | Moving from scenes that place blocks to scenes that test processes: the constraints that determined the shape, and the silent-failure modes it has to defend against. |
 | [Capability extensions](design/capability-extensions.md) | The two routes by which a third-party mod or a modpack teaches the framework something new, and the rule that makes the reflective route sound. |
 | [Test queries](design/test-queries.md) | StageWright's own `mc.test.*` questions — chunks, recipes, loot, advancements, structures: one method per subject, generated callers, and what is an answer rather than a failure. |
