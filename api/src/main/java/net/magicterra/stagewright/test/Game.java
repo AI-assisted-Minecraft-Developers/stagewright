@@ -7,8 +7,11 @@ import java.util.function.Function;
 import net.magicterra.stagewright.capability.Capabilities;
 import net.magicterra.stagewright.capability.CapabilityProvider;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.Level;
 
 /**
  * The game instance a test runs in, injected as a test method or constructor parameter. Tests run on a test
@@ -45,6 +48,13 @@ public interface Game {
 
     /** Let {@code n} server ticks pass. */
     void ticks(int n);
+
+    /**
+     * Where {@code pos} in {@code from} corresponds to in {@code to}, as a portal maps it: x and z scaled by the two
+     * dimensions' coordinate scales and kept inside the world border, y kept. The Nether's scale is 8, so overworld
+     * {@code (800, 64, -80)} is Nether {@code (100, 64, -10)}. Refuses a dimension this game does not have.
+     */
+    BlockPos translate(BlockPos pos, ResourceKey<Level> from, ResourceKey<Level> to);
 
     /** Wait for a condition on the server; see {@link Await}. */
     Await await();

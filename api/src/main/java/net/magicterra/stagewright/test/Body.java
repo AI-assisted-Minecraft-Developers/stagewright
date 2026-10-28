@@ -3,8 +3,10 @@ package net.magicterra.stagewright.test;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.Level;
 
 /**
  * A player in the game a test drives: a {@link Bot} or the real client's {@link Player}. Like {@link Game}, every
@@ -42,8 +44,18 @@ public interface Body {
         return onServer(ServerPlayer::blockPosition);
     }
 
+    /** The dimension the body is in. */
+    default ResourceKey<Level> dimension() {
+        return onServer(player -> player.level().dimension());
+    }
+
     /** Teleport the body to stand in {@code feet}, in the overworld, centred on the block. */
-    Body moveTo(BlockPos feet);
+    default Body moveTo(BlockPos feet) {
+        return moveTo(Level.OVERWORLD, feet);
+    }
+
+    /** Teleport the body to stand in {@code feet} in {@code dimension}, centred on the block. */
+    Body moveTo(ResourceKey<Level> dimension, BlockPos feet);
 
     /** Add {@code count} of {@code item} to the inventory; whatever does not fit is refused, not dropped. */
     Body give(Item item, int count);

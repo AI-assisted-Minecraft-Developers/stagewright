@@ -18,8 +18,11 @@ import net.magicterra.worlddriver.api.registry.Scripting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.Level;
 import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
 
 /**
@@ -56,6 +59,8 @@ final class ScriptHandles {
             return out;
         });
         t.put("player", (Scripting.Function) args -> body(BodyImpl.player(game)));
+        t.put("translate", (Scripting.Function) args -> position(game.translate(blockPos(arg(args, 0)),
+                dimension(arg(args, 1)), dimension(arg(args, 2)))));
         t.put("client", (Scripting.Function) args -> {
             Client client = ClientConnection.client(game);
             Map<String, Object> out = new LinkedHashMap<>();
@@ -137,8 +142,10 @@ final class ScriptHandles {
         out.put("name", body.name());
         out.put("ref", body.ref());
         out.put("pos", (Scripting.Function) a -> position(body.blockPos()));
+        out.put("dimension", (Scripting.Function) a -> body.dimension().location().toString());
+        // moveTo(pos) in the overworld, or moveTo(pos, dimension).
         out.put("moveTo", (Scripting.Function) a -> {
-            body.moveTo(blockPos(arg(a, 0)));
+            body.moveTo(a.length > 1 ? dimension(a[1]) : Level.OVERWORLD, blockPos(arg(a, 0)));
             return null;
         });
         out.put("give", (Scripting.Function) a -> {
@@ -235,6 +242,12 @@ final class ScriptHandles {
         out.put("y", pos.getY());
         out.put("z", pos.getZ());
         return out;
+    }
+
+    static ResourceKey<Level> dimension(Object id) {
+        ResourceLocation location = id instanceof String s ? ResourceLocation.tryParse(s) : null;
+        if (location == null) throw new IllegalArgumentException("a dimension is its id, but was " + Expectations.show(id));
+        return ResourceKey.create(Registries.DIMENSION, location);
     }
 
     private static BlockPos blockPos(Object v) {

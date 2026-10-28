@@ -1,6 +1,8 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
@@ -20,8 +22,13 @@ import net.magicterra.stagewright.test.Perf;
 import net.magicterra.stagewright.test.Store;
 import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.storage.ServerLevelData;
 
 /** The {@link Game} of the server this JVM runs. */
@@ -73,6 +80,29 @@ final class GameImpl implements Game {
     @Override
     public Await await() {
         return new AwaitImpl();
+    }
+
+    @Override
+    public BlockPos translate(BlockPos pos, ResourceKey<Level> from, ResourceKey<Level> to) {
+        return onServer(s -> {
+            ServerLevel target = level(s, to);
+            double scale = DimensionType.getTeleportationScale(level(s, from).dimensionType(), target.dimensionType());
+            // From the block's centre, as a portal maps the position of a body standing in it.
+            BlockPos scaled = BlockPos.containing((pos.getX() + 0.5) * scale, pos.getY(), (pos.getZ() + 0.5) * scale);
+            return target.getWorldBorder().clampToBounds(scaled.getX(), scaled.getY(), scaled.getZ());
+        });
+    }
+
+    /** Server thread: the level {@code dimension} names; refuses one this game does not have. */
+    static ServerLevel level(MinecraftServer server, ResourceKey<Level> dimension) {
+        ServerLevel level = server.getLevel(dimension);
+        if (level == null) {
+            List<String> have = new ArrayList<>();
+            for (ServerLevel l : server.getAllLevels()) have.add(l.dimension().location().toString());
+            throw new IllegalArgumentException("this game has no dimension " + dimension.location() + "; it has "
+                    + have);
+        }
+        return level;
     }
 
     @Override

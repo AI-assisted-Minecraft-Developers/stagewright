@@ -15,11 +15,13 @@ import net.magicterra.worlddriver.bot.BotTicker;
 import net.magicterra.worlddriver.bot.Roster;
 import net.magicterra.worlddriver.game.body.JoinedPlayers;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
@@ -53,12 +55,13 @@ class BodyImpl implements Body {
     }
 
     @Override
-    public Body moveTo(BlockPos feet) {
+    public Body moveTo(ResourceKey<Level> dimension, BlockPos feet) {
         runOnServer(player -> {
+            ServerLevel level = GameImpl.level(player.server, dimension);
             player.setDeltaMovement(Vec3.ZERO);
             player.resetFallDistance();
-            player.teleportTo(player.server.overworld(), feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5,
-                    player.getYRot(), player.getXRot());
+            player.teleportTo(level, feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, player.getYRot(),
+                    player.getXRot());
         });
         return this;
     }
