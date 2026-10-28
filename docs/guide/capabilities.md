@@ -128,7 +128,8 @@ census; `Mods` already answers "is X here".
 ### 2. Declare one in a JSON file
 
 For a mod nobody wrote an adapter for, when you have a `config/` folder and no build tool. Drop a
-file in `config/stagewright/capabilities/` (or the directory named with `-Dstagewright.scenesDir`):
+file in `config/stagewright/capabilities/` in the game directory (or in the directory the game's JVM names with
+`-Dstagewright.scenesDir=<dir>`):
 
 ```json
 // config/stagewright/capabilities/rituals.json
@@ -178,8 +179,7 @@ public final class RitualsCapability implements CapabilityProvider {
 ```
 
 Registered through `META-INF/services/net.magicterra.stagewright.capability.CapabilityProvider`. Any
-test can then reach it, including a script test in a pack's config folder — no new verb, nothing to
-import.
+test can then reach it, including a pack's script test — no new verb, nothing to import.
 
 **Write it typed, against your mod's real classes.** An adapter for Curios imports Curios' classes
 and therefore cannot even load in a runtime without Curios — which is correct, since it could not
@@ -190,7 +190,7 @@ reason is attached to every abort for a capability nothing offers: a test asking
 linkage error rather than a bare "nothing in this run offers it".
 
 That is also why the Curios and FTB Quests adapters StageWright ships are reflective and yours should
-not be. They ride in the harness jar, which is present in every run whether or not the mods they adapt
+not be. They ride in StageWright's own jar, which is present in every run whether or not the mods they adapt
 are, so their classes have to load in a runtime that has neither.
 
 Four contract points that nothing can check for you:
@@ -302,4 +302,5 @@ distance.
 
 ## Where to go next
 
-[Getting started](getting-started.md) covers installing test and descriptor files into a pack.
+[Getting started](getting-started.md#testing-a-modpack-with-no-build-tool) covers where a pack's tests go;
+descriptor files go in its `config/stagewright/capabilities/`.

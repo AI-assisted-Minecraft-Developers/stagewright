@@ -147,8 +147,8 @@ disabled registers no items, and no amount of mod-list checking notices.
 runtime, so tests gated on it would run against a pack that does not have the thing and then fail
 for a reason unrelated to the pack. Refusing the file is better than that.
 
-**Descriptors live in one folder**, `config/stagewright/capabilities/`, or the directory a
-supervisor names with `-Dstagewright.scenesDir`. A pack author has a folder; two flags and two
+**Descriptors live in one folder**, `config/stagewright/capabilities/`, or the directory the game's
+JVM names with `-Dstagewright.scenesDir`. A pack author has a folder; two flags and two
 directories would impose a build tool's filing system on somebody who does not have a build tool.
 
 ## The bundled adapters
@@ -163,7 +163,7 @@ examples that are not toys. Facets that act on a player take the `Body` to act o
 they changed through `Game.afterTest`.
 
 The Curios and FTB Quests halves are reflective, which the interface explicitly tells third parties **not** to copy. The
-reason is specific to shipping: they live in the harness jar, which is present in every run
+reason is specific to shipping: they live in StageWright's own jar, which is present in every run
 whether or not those mods are, so their classes must load in a runtime that has neither. An
 adapter shipped inside the mod it adapts has no such problem and should be written against real
 types.
