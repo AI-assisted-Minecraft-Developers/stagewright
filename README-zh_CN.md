@@ -152,7 +152,6 @@ public final class MagnetScenes implements SceneProvider {
 - [Writing a scene](docs/guide/writing-a-scene.md) —— 生命周期、断言、注册、命名。
 - [Capabilities](docs/guide/capabilities.md) —— 够到模组自己的机制，以及如何扩展这个接缝。
 - [Topologies](docs/guide/topologies.md) —— 各种进程形态，以及每一种能确立什么。
-- [Gates](docs/guide/gates.md) —— 如何运行这些检查，以及如何读它们的输出。
 - [The Gradle plugin](docs/guide/gradle-plugin.md) —— 任务、配置项、source set 约定。
 - [JUnit attach](docs/guide/junit-attach.md) —— 从运行中的游戏外部做断言。
 

@@ -20,8 +20,7 @@ Written for someone with a task in front of them.
 | [Writing a scene](guide/writing-a-scene.md) | You are writing scenes: the lifecycle, declaring what a scene needs, asserting, registration, naming, and what is frozen about the world. |
 | [Capabilities](guide/capabilities.md) | A scene needs to reach machinery the base game has no concept of, or you want to teach the framework about your own. |
 | [Topologies](guide/topologies.md) | You need to know which process shape can establish the fact you are trying to establish. |
-| [Running the checks](guide/gates.md) | You are running a suite and reading what came back, including the failures that are not a failing scene. |
-| [The Gradle plugin](guide/gradle-plugin.md) | You are wiring StageWright into a project: tasks, properties, the source-set convention. |
+| [The Gradle plugin](guide/gradle-plugin.md) | You are wiring StageWright into a project: test suites, topologies, the source-set convention. |
 | [Attaching a JUnit suite](guide/junit-attach.md) | You need to assert something a scene cannot assert about itself, from outside the game process. |
 
 ## Reference — what the contracts are
@@ -31,7 +30,6 @@ built programs rely on, so they are stated as literal names, keys and codes.
 
 | Document | Covers |
 |---|---|
-| [Orchestration contract](reference/orchestration-contract.md) | The interface between whatever launches the game and the harness inside it: startup, the results file, exit codes, in-game timing guarantees, scene discovery, manifest reconciliation, coordinate pinning. |
 | [Instrument contract](reference/instrument-contract.md) | The instrumentation surface reachable from outside the game, and the permanent assertions and canaries by which the framework establishes that it is itself sound. |
 | [Attached protocol](reference/attached-protocol.md) | The seven hidden methods by which a scene file running outside the game gets an arena in it and calls into it: the run, the answers, and how values cross. |
 | [Supervision protocol](reference/supervision-protocol.md) | What the agent in a game's JVM sends its supervisor, the conclusions drawn from it, and how the mod talks to the agent. |

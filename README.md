@@ -163,7 +163,6 @@ scene that skips proves nothing.
 - [Writing a scene](docs/guide/writing-a-scene.md) — lifecycle, assertions, registration, naming.
 - [Capabilities](docs/guide/capabilities.md) — reaching a mod's own machinery, and extending the seam.
 - [Topologies](docs/guide/topologies.md) — the process shapes and what each one can establish.
-- [Gates](docs/guide/gates.md) — running the checks and reading what comes back.
 - [The Gradle plugin](docs/guide/gradle-plugin.md) — tasks, properties, source-set convention.
 - [JUnit attach](docs/guide/junit-attach.md) — asserting from outside a running game.
 
