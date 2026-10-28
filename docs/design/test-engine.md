@@ -56,7 +56,7 @@ cannot swallow its own failure.
 The options are `scene`, `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`, counted toward
 coverage as `@Requires` is), `dependsOn` (a test's name in the same file, `file.js#name`, or a Java test as
 `com.example.SomeTest#method`; a test waits for those, and aborts when one did not pass), `knownIssue` (the reason,
-read as `@KnownIssue` is), `locks` and `isolated`. Script tests run beside the game's Java tests, and concurrently
+read as `@KnownIssue` is), `locks`, `isolated` and `afterRestart` ([below](#tests-after-a-restart)). Script tests run beside the game's Java tests, and concurrently
 among themselves as Jupiter's do (`stagewright.script.parallel.enabled` turns it off, `stagewright.script.parallel.threads`
 sizes it). Tests naming one lock never run at once, and an `isolated` test runs alone; the locks are `Locks`' names
 without `stagewright.` (`worldRules`, `worldClock`, `weather`, `tickRate`, `player:<name>`) or any the tests agree on,
@@ -86,7 +86,8 @@ on. The samples are taken by the wait's own condition, so nothing is added to th
 
 Both kinds share the built-in steps `place: {at, block, as}`, `insert: {into, items}`, `container: {of, …}` (what
 the container holds, item id to count, its other keys an expectation of that), `chunk.unload` and `chunk.reload`
-(`at`, or `{at, within}`). A position there is a handle a `place` named with `as` (in YAML also `${name}`),
+(`at`, or `{at, within}`), `store.put: {key: value}` and `store.get: key` ([after a restart](#tests-after-a-restart)).
+A position there is a handle a `place` named with `as` (in YAML also `${name}`),
 `[x, y, z]` inside the test's plot, or `{x, y, z}` in the world. A script may not register a step under a built-in
 name. A Java method annotated `@Step("name")` is a named step too, taken the same way: it is public and static, takes
 by type what it needs of `Game`, a `Map` of its arguments and the arguments as given (`Object`), and its class is
@@ -127,6 +128,21 @@ dependencies have ended: read-only where a Java test declared that, `isolated` a
 at a time runs each of its tests alone, since a test written for a sequential run may assume no other test runs
 beside it. A lock a script names is `stagewright.` and the name, so a Java test sharing a name of its own with
 scripts spells it that way.
+
+## Tests after a restart
+
+A test that must see what survives a restart — saved data, a chunk written to disk, a mod's load-time handling —
+says `afterRestart` (`@DependsOn(value = …, afterRestart = true)` in Java, `afterRestart: true` beside a script's
+`dependsOn`). A scene's tests then run in rounds, each round one game on the same world: a test runs in round 0
+unless it depends on a test after a restart, which puts it one round after the latest of those, and a test depending
+on one without a restart runs in that one's round. The game runs its round's tests (`-Dstagewright.junit.round`),
+writes how they ended to `stagewright/rounds.json`, and when a later round has tests sends `restart` before `ended`;
+the engine waits for that game to exit, so its world is unlocked, and starts the next one without deleting the world.
+A dependency from an earlier round is read from that file, so a test whose round-0 dependency failed aborts as it
+would have in one game. What a test hands to a later round it keeps in `Game.store()` (`store.put` and `store.get`
+in a script, `t.store` in JavaScript), `stagewright/store.json`; the engine deletes both files before a scene's first
+game. Each round's log is `<scene>-round<N>-game.log`. A class or script file is reported finished once, after the last
+round, so a class with tests in two rounds is one node outside.
 
 ## Every test runs somewhere
 

@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-28
 
+### A test can run after the game restarts on the same world · green in the example projects, Fabric and NeoForge
+
+`afterRestart` on a dependency puts a test in a later round: the scene's game runs what it can, exits, and starts
+again on the world it left, with `Game.store()` carrying values across. Restart-survival used to need a hand-written
+second scene and a world copied between them. The YAML options also accept `locks` and `isolated` now, which they
+refused though scripts in JavaScript took them.
+
 ### A scene can run without some of the game's mods · green on production Fabric and NeoForge packs
 
 `mods.exclude` names mods by id or jar name, in `mods/` or on the class path, and the scene's games start without them;
