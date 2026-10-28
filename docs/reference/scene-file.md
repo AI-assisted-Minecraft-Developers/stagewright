@@ -23,7 +23,7 @@ world:
 ```
 
 A key this version does not apply is refused, and so is a value of the wrong kind: a scene does not run on a world it
-did not ask for. `clients` is not applied yet.
+did not ask for. There is no key for more than one client yet.
 
 ## `mods`
 
@@ -67,15 +67,15 @@ which it otherwise does for a save made with worldgen mods.
 ## `topology`
 
 Required. The name a [launch spec](launch-spec.md) was written for. A Gradle suite with a `loaderProject` has
-`dedicatedServer` and `dedicatedServerWithClient`; `tests { topologies.put(…) }` maps other names to topologies the
-build declares.
+`dedicatedServer`, `integratedServer` and `dedicatedServerWithClient`; `tests { topologies.put(…) }` maps other names to
+topologies the build declares. The command-line runner has `dedicatedServer`, and the other two with `--client`.
 
 ## `world` — at creation
 
 Written into the primary game's `server.properties` before it starts, on top of what is there, and put back when the
 scene is over, so one scene's settings are never the next one's undeclared defaults. A dedicated server reads these
-when it creates its world; a client hosting its own server does not read the file, so on that topology they do not
-apply yet.
+when it creates its world; on `integratedServer`, StageWright reads the same keys from the file the same way and the
+client creates its singleplayer world from them.
 
 | Key | `server.properties` | Value |
 |---|---|---|
@@ -91,7 +91,9 @@ They only take effect on a new world, so a topology that keeps its world between
 scene declaring any of them. The game checks the datapacks once loaded: a pack it does not know, or one still enabled
 that was meant to be off, fails every test of the scene and names the packs the game has.
 
-Undeclared, each is whatever the topology's own `server.properties` says.
+Undeclared, each is whatever the topology's own `server.properties` says. On a topology whose launch spec marks it a
+`server`, the engine sets `level-seed=5471` there before the scene's own keys, so an undeclared seed is that fixed one;
+on `integratedServer` an undeclared key is a dedicated server's default — survival, easy, structures on, seed 5471.
 
 ## `world` — once loaded
 
