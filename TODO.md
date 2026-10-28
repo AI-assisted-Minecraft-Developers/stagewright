@@ -7,10 +7,10 @@ comment next to it. This file is only for what is *not done*.
 
 ## A body and a save cannot outlive one test
 
-A test's bodies and plot go back when it ends, so a long survival run that plays one body through
-many steps on one world (worlddriver had one, deleted on 2026-10-28 for this reason) cannot be a
-chain of `@DependsOn` tests. It needs a body that later tests can take over, the world kept between
-them, and somewhere to keep what each step observed beyond `record`'s report entries.
+A test's `Bot` leaves and its `Npc`s are removed when it ends, and no API lets a later test take a
+body over, so a survival run that plays one body through many steps cannot be a chain of tests. The
+rest is in place: `@DependsOn` runs on the world a test leaves behind (`afterRestart` keeps it across
+a restart) and `Game.store()` keeps observations between tests. What is missing is the body handover.
 
 ## `--tests` does not narrow script tests
 
@@ -39,7 +39,7 @@ are reached by nothing now.
 ## `mc_stagewright-api`'s POM declares no dependencies
 
 Its public types reference WorldDriver's api, so a project without the plugin has to add `worlddriver-api:dev`
-itself. The CLI runner also never calls `DriverRequirement`, so a missing WorldDriver shows up as a loader refusal.
+itself.
 
 ## The launch-spec adapters have only met stand-ins for the loaders
 
