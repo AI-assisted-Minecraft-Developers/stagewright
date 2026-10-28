@@ -19,7 +19,7 @@ def main():
     parser.add_argument('--jars', action='store_true')
     args = parser.parse_args()
     errors = []
-    pure_modules = ('attached', 'engine', 'agent', 'gradle-plugin', 'cli', 'junit')
+    pure_modules = ('engine', 'agent', 'gradle-plugin', 'cli')
     for module in ('api', *pure_modules, 'common', 'fabric', 'neoforge'):
         source = ROOT / module / 'src/main/java'
         for path in source.rglob('*.java'):
@@ -53,7 +53,7 @@ def main():
                         if name.startswith(('net/magicterra/worlddriver/', 'dev/latvian/mods/rhino/', 'io/netty/')):
                             errors.append(f'{jar.name}: duplicate driver or runtime library {name}')
                     names = set(archive.namelist())
-                    for own in ('harness/StageWrightHarness', 'scene/Scene', 'contract/DriverBinding'):
+                    for own in ('jupiter/JupiterRun', 'test/Game', 'capability/CapabilityProvider'):
                         name = 'net/magicterra/stagewright/' + own + '.class'
                         if name not in names:
                             errors.append(f'{jar.name}: missing framework contract {name}')

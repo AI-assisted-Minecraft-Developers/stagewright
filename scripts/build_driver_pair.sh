@@ -52,7 +52,7 @@ run_step "$stagewright_root" plugin ./gradlew -p gradle-plugin check publishToMa
 # generates stagewright-api's typed callers.
 run_step "$worlddriver_root" driver-api ./gradlew :api:publishToMavenLocal :api-processor:publishToMavenLocal \
     -PworlddriverBootstrap "-Pstagewright_version=$stagewright_candidate"
-run_step "$stagewright_root" contracts ./gradlew :stagewright-api:publishToMavenLocal :stagewright-attached:publishToMavenLocal "-Pworlddriver_version=$worlddriver_candidate"
+run_step "$stagewright_root" contracts ./gradlew :stagewright-api:publishToMavenLocal "-Pworlddriver_version=$worlddriver_candidate"
 run_step "$worlddriver_root" driver-bootstrap ./gradlew :api:publishToMavenLocal :common:publishToMavenLocal -PworlddriverBootstrap "-Pstagewright_version=$stagewright_candidate"
 run_step "$stagewright_root" framework ./gradlew build publishToMavenLocal "-Pworlddriver_version=$worlddriver_candidate"
 run_step "$worlddriver_root" driver ./gradlew build :api:generatePomFileForMavenJavaPublication :common:generatePomFileForMavenJavaPublication :fabric:generatePomFileForMavenJavaPublication :neoforge:generatePomFileForMavenJavaPublication "-Pstagewright_version=$stagewright_candidate"
