@@ -1,225 +1,127 @@
 # Getting started
 
-StageWright has two audiences and two entry points. Pick the one that describes you.
+StageWright runs tests inside a live Minecraft game. There are two ways in:
 
-- **You ship a modpack** and want to check it after an update. You have a server directory and no
-  build tool. Use [the standalone runner](#testing-a-modpack-with-no-build-tool).
-- **You build a mod** with Gradle and want scenes in your own repository. Use
-  [the Gradle plugin](#adding-stagewright-to-a-gradle-project).
+- **You build a mod with Gradle.** Apply the Gradle plugin and run `./gradlew stagewrightTest<Loader>`. Tests can be
+  JUnit 5 classes, YAML files or JavaScript files. See [Adding StageWright to a Gradle project](#adding-stagewright-to-a-gradle-project).
+- **You ship a modpack** and have a server directory, not a build. Run the command-line runner,
+  `java -jar stagewright.jar test <server-dir>`. Tests are YAML or JavaScript files. See
+  [Testing a modpack with no build tool](#testing-a-modpack-with-no-build-tool).
 
-Either way, you need Minecraft 1.21.1, Java 21, and either Fabric Loader 0.16 or newer with Fabric
-API, or NeoForge 21, with a compatible WorldDriver mod and its Architectury dependency.
-StageWright requires WorldDriver in every game process, including a joining client.
-The CLI supplies StageWright; install WorldDriver in `mods/` or pass `--mod <worlddriver.jar>`.
+Either way you need Minecraft 1.21.1, Java 21, and Fabric Loader 0.16 or newer with Fabric API or NeoForge 21. Every
+game process also needs [WorldDriver](https://github.com/AI-assisted-Minecraft-Developers/worlddriver) and the
+Architectury API it depends on: StageWright's tests reach the game through WorldDriver's methods, and its loader jars
+refuse to start without it.
 
-## Testing a modpack, with no build tool
+## What a test is made of
 
-One jar, one command. No Gradle, no test source set, no version matching by hand.
+Two files, always:
 
-Every build of `master` publishes the runner to the Nexus. This fetches the newest:
+- **A scene file**, `stagewright/scenes/<name>.yaml`, says which game the tests need: which
+  [topology](topologies.md) (a dedicated server, a client hosting its own server, or a dedicated server with a client
+  joined to it), and what world, files and mods it starts with. The [scene file reference](../reference/scene-file.md)
+  lists every key.
+- **Tests that name the scene.** A Java class says `@Scene("<name>")`; a YAML or JavaScript test file under
+  `stagewright/tests/` says `scene: <name>`.
 
-```bash
-curl -fLo stagewright.jar 'https://nexus.gardel.top/service/rest/v1/search/assets/download?repository=maven-releases&maven.groupId=net.magicterra&maven.artifactId=stagewright-cli&maven.extension=jar&maven.classifier=&sort=version'
+Every test naming one scene runs in the same game. The test engine starts that game, runs the tests in it, and
+reports them to whoever asked — Gradle, an IDE, or the command-line runner — as ordinary JUnit results.
+
+```yaml
+# stagewright/scenes/mymod.yaml
+topology: dedicatedServer
+world:
+  preset: minecraft:flat
+  difficulty: peaceful
 ```
 
-To build it from a checkout instead: it is a module of the root build, and it builds the two loader
-jars it bundles along the way.
+A Java test receives what it needs as parameters: the `Game`, a `Plot` (an empty box of the world leased to this test
+alone and put back afterwards), a `Bot` (a server-side player joined for this test), and more. Tests run on a test
+thread, not the server thread, so every call may block and the test reads top to bottom:
 
-```bash
-./gradlew :stagewright-cli:jar         # -> cli/build/libs/stagewright.jar
+```java
+package com.example.mymod.test;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import net.magicterra.stagewright.test.Bot;
+import net.magicterra.stagewright.test.Game;
+import net.magicterra.stagewright.test.Plot;
+import net.magicterra.stagewright.test.Scene;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import org.junit.jupiter.api.Test;
+
+@Scene("mymod")
+class FirstTest {
+
+    @Test
+    void aPlacedBlockReadsBack(Game game, @Plot.Size(8) Plot plot) {
+        plot.place(1, 0, 1, Blocks.STONE);
+        boolean stone = game.onServer(server ->
+                server.overworld().getBlockState(plot.at(1, 0, 1)).is(Blocks.STONE));
+        assertTrue(stone, "stone where the test placed it");
+    }
+
+    @Test
+    void aBotKeepsWhatItIsGiven(Bot bot) {
+        bot.give(Items.BREAD, 3);
+        assertEquals(3, bot.count(Items.BREAD));
+    }
+}
 ```
 
-```
-java -jar stagewright.jar --game-dir <the pack's server directory> --scenes <a folder of .js files>
-```
+The same two checks as a JavaScript test. `t` offers the test's verbs and handles; WorldDriver's methods are called
+by name with `t.call`:
 
-That hands the right framework build to the pack's loader, points the game at your scene files,
-works out how the pack starts, runs it, and judges the results. The process exit code is the verdict:
-`0` sound and passing, `1` a scene failed, `2` the framework itself is broken and the results are
-void, `3` the environment never let the suite run — the game never armed, stalled before writing results,
-or had no display.
+```javascript
+// stagewright/tests/first.js
+test('a placed block reads back', { scene: 'mymod' }, (t) => {
+    const plot = t.plot({ size: 8 });
+    plot.place(1, 0, 1, 'minecraft:stone');
+    t.expect(t.call('mc.world.block', { pos: plot.at(1, 0, 1) }).type).equals('minecraft:stone');
+});
 
-Both loader builds of the framework ride inside `stagewright.jar`, so there is no loader-and-version
-pairing for you to get right — which is the step that usually fails, and fails looking exactly like
-the mod not working. Other mods your scenes need come in through `--mod <jar>`, repeatable. None of
-them is copied into `mods/`: Fabric gets them through `-Dfabric.addMods`, NeoForge through
-`--fml.mavenRoots` and `--fml.mods`. A `--mod` jar whose file name the pack's `mods/` already has is
-skipped, since the pack's own copy loads anyway.
-
-The scene files are not copied either. The game reads `.js` scenes and `.json` capability
-descriptors straight from `--scenes`, through `-Dstagewright.scenesDir`. Scenes are plain JavaScript
-and register into the same registry, canaries and results file the compiled ones do. See
-[Writing a scene](writing-a-scene.md#scenes-written-in-javascript) for the model, and `--help` for
-the flags not covered here.
-
-Everything StageWright writes for itself lands under `<game dir>/stagewright/`: the results, the
-heartbeat, the launch logs, staged mods and natives. A client's game directory is otherwise left as
-it was — `mods/`, `config/`, `options.txt` — so it may be a player's own `.minecraft`. A dedicated
-server's directory also gets its EULA acceptance and the forced `server.properties` keys, and
-`--world` decides what happens to its world.
-
-### The flags you will reach for first
-
-| Flag | What it does |
-|---|---|
-| `--game-dir <dir>` | The pack's server directory, or a client's game directory. Required. |
-| `--scenes <dir>` | A folder of `.js` scenes and `.json` capability descriptors, read in place. A folder with no `.js` file is refused, and a `.js` file that registers no scene fails the run. |
-| `--mod <jar>` | Load this mod too. Repeatable. A path that is not a file is refused before anything runs, and so is `--mod` with `--no-install`. |
-| `--expect <file>` | Reconcile the run against an expected-scenes manifest. A manifest that names no scene is refused before the game starts. |
-| `--timeout <min>` | A ceiling, not a duration — the run ends when the results file carries its footer. Defaults to 45; at least 1. |
-| `--stall-timeout <min>` | End the run once nothing it writes has grown for this long. ENV if it had written no results yet; otherwise judged on what it wrote, and a suite with no done footer is RED. Defaults to 5; at least 1. Except for `--attached`, the game is watched through its agent instead of its files: it is stalled when its phase, its ticks delivered and its loaded classes all stand still for this long, and the verdict says where its main threads were. A client joined to a server is not judged on this, since it reports no ticks; a client that never joins shows as a server that stopped moving. |
-| `--fail-on-leak` | A game whose JVM outlives a finished suite is reported as a warning above the verdict, naming the threads that held it and the jars they run through; with this flag it is RED. Meant for a mod author testing their own mod: a pack author usually cannot change the mod that leaked. |
-| `--world reset\|keep` | What to do with a dedicated server's existing world. Required when one exists. |
-| `--no-install` | Load nothing; the pack already has StageWright in its `mods/`. With `--scenes`, that copy must be new enough to read `-Dstagewright.scenesDir`, or the run is ENV. |
-| `--launch "<command>"` | Start the server this way instead of detecting how. |
-| `-D<key>=<value>`, `-X<option>` | Passed to the game's JVM as given — `-Xmx8G`, or a system GLFW with `-Dorg.lwjgl.glfw.libname=<so>`. |
-
-`--help` and `--version` are only recognised as the **first** argument. Anywhere else they are
-unknown options. Every run also begins by printing what `--version` does — the jar's version, and
-the time and hash of each engine and framework jar inside it — so a CLI rebuilt without
-republishing the framework shows it.
-
-An option the CLI does not know is refused with the usage text and exit 3, and so is a value other
-than `reset` or `keep` for `--world`. A mistyped name is therefore an error before anything runs,
-rather than a setting that is silently never read — `--expected` for `--expect` would otherwise run
-with reconciliation off.
-
-A server whose world already exists is refused with ENV until you say which you meant: `--world reset`
-deletes it first, `--world keep` runs the scenes in it as it is. Neither is a safe default — one
-destroys a world someone may care about, the other lets a previous run's leftovers fail this one.
-
-Detection covers NeoForge and Forge argument files under `libraries/`, and a Fabric or Quilt server
-jar at the top level. When it cannot tell, it says so and asks for `--launch`. StageWright itself runs
-on NeoForge and Fabric, so without `--no-install` a Forge pack is refused.
-
-The server's output goes to `stagewright/stagewright-run.log` in the game directory, and the results
-to `stagewright/stagewright-results.jsonl` beside it.
-
-When a run ends without its results, the runner says how: the game crashed, exited, or stalled. A
-stall is reported with the screen a client sits on if it never reached its title screen, such as a
-mod's update prompt, and otherwise with whether the process was spinning or asleep. A mod that failed
-to construct is quoted from `logs/debug.log`, because the crash that follows it is rarely the cause.
-
-### Testing what only a client can reach
-
-A dedicated server cannot reach anything that exists only on a client: a GUI a mod adds, a screen a
-machine opens, the client half of a client-server split. Testing those needs a real client, which
-the runner installs and launches itself:
-
-```
-java -jar stagewright.jar --game-dir <a client game directory> \
-     --client neoforge:1.21.1:21.1.252 \
-     --scenes <a folder of .js files> --expect <manifest>
+test('a bot keeps what it is given', { scene: 'mymod' }, (t) => {
+    const bot = t.bot();
+    bot.give('minecraft:bread', 3);
+    t.expect(bot.count('minecraft:bread')).equals(3);
+});
 ```
 
-`--client` is `neoforge:<mc>:<version>`, `fabric:<mc>:<loader version>` or `vanilla:<mc>`, always
-exact. The first run installs that version, its libraries and its assets into `--install-dir`, which
-defaults to the official launcher's `.minecraft`; later runs reuse them. The layout is the launcher's
-own, so the same installation serves both, and downloads go through HMCL's `cache/SHA-1` directory in
-both directions. `--mirror bmclapi` tries BMCLAPI before the official servers, and `HTTPS_PROXY` is
-honoured.
+And in YAML, where a test is a list of steps:
 
-The player is offline, named by `--username` (default `StageWright`) — a test run has no business
-holding an account. The client creates a world of its own, `stagewright-<timestamp>`, so the suite
-runs on its integrated server. A GREEN run deletes that world; any other keeps it and prints where.
-
-The four settings a run cannot be correct without — no pause on lost focus, no accessibility
-onboarding, no narrator, no vsync — are set in the game's memory and kept out of `options.txt`, so a
-player's own settings survive the run.
-
-**A client needs a display.** On Linux that means `DISPLAY` or `WAYLAND_DISPLAY`; without one the
-run is ENV before anything starts. A local `DISPLAY` is also asked whether it lets the client in, with
-the cookie from `XAUTHORITY` or `$HOME/.Xauthority` (none when neither is set), and one that refuses
-is ENV with the server's reason.
-The runner never starts a virtual framebuffer: a display is the environment's to provide — the
-desktop, a CI image with Xvfb, or `xvfb-run` around the command. A client that passes these checks
-and still cannot open its window — it logs `glfwInit failed` — is killed and reported as ENV as soon
-as it says so, rather than left on the dialog NeoForge opens next.
-
-> **Note.** A crash on the client's first tick is the pack's, not the runner's. A client ticks
-> throughout its own loading, so every mod's client-tick handler fires while the loading overlay is
-> still up and configs are still loading. A mod that reads a config value there with no guard takes
-> the launch down under any launcher, with nothing of StageWright's on the stack. The crash report
-> under `<game dir>/crash-reports` names the mod.
-
-Each shape leaves its logs in its own place, and the game's log is not the launcher's:
-
-| Shape | The game's own log | The launcher's output |
-|---|---|---|
-| server | `stagewright/stagewright-run.log` | — the runner starts the server itself |
-| `--client` | `logs/latest.log` | `stagewright/stagewright-client-launch.log` |
-
-### The shape a player actually plays
-
-The two above are one JVM each. A real game is two, talking over a socket, and that seam is the only
-place a mod's halves can disagree — an unregistered packet, state behind a side check, plain desync.
-`--with-client` runs both halves from one command:
-
-```
-java -jar stagewright.jar --game-dir <the pack's server directory> --scenes <a folder of .js files> \
-     --client neoforge:1.21.1:21.1.252 \
-     --with-client <a client game directory, not the server's>
+```yaml
+# stagewright/tests/first.yaml
+scene: mymod
+tests:
+  - name: a placed block reads back
+    plot: { size: 8 }
+    given:
+      - place: { at: [1, 0, 1], block: "minecraft:stone", as: stone }
+    then:
+      - call: mc.world.block
+        params: { pos: "${stone}" }
+        expect: { type: { equals: "minecraft:stone" } }
 ```
 
-The scenes run on the server, which writes `stagewright/stagewright-results.jsonl`. The client has two
-jobs: to be logged in while they run, and to run the one probe only a joined client can — that a
-damage event survives the wire — writing `stagewright/stagewright-client-results.jsonl` in its own
-directory. Both files are judged, each as its own suite, and the worse verdict is the run's; a client
-that wrote no file is ENV. That is the rule the Gradle plugin applies to a topology's
-`companionResultsFile`, from the same engine code, so the pair cannot be GREEN here and RED there.
-The client loads the same framework build and the same `--mod` jars as the server, because a loader
-that finds a different mod list on each end refuses the connection, and it dials the local address at
-whatever port the pack's `server.properties` names.
-
-The server does not start the suite until a player is actually on it. That is what makes a client
-which never arrives a timeout you can read, rather than a passing run that quietly proved nothing.
-
-Judging is always about the run this command can see. That is why "a client that joins a server you
-started yourself" is not a mode: those scenes run on that server and write their results there, so the
-only honest thing this process could report about them is that it cannot see them.
-
-### Reconciling several runs
-
-```
-java -jar stagewright.jar --coverage run-a/stagewright/stagewright-results.jsonl,run-b/stagewright/stagewright-results.jsonl
-```
-
-This runs no game and takes no `--game-dir`. It answers the question no single run can be asked: did
-every scene these runs register execute in at least one of them? See
-[Topologies](topologies.md#a-skip-is-not-coverage) for why that matters. This runner's results
-record no build and a Gradle gate's in a git work tree do, so listing both together is ENV
-(`MIXED BUILDS`).
-
-### Scenes that run outside the game
-
-`--attached <dir>` loads scene files into the runner's own JVM and drives the game over RPC rather
-than in-process. It needs a driver mod in the pack to provide the socket, and it switches the run to
-a hold, because an autorun suite halts the server when it drains — which would take the socket down
-under the attached half mid-call. Attached scenes run first, then the in-process suite; both results
-are judged and the worse wins. If the socket closes partway, the scene it closed during fails, the
-scenes after it are recorded as not run, and the attached half is RED, even when the scenes involved
-are optional; the in-process suite then cannot be started, so that half is ENV, and with it the run.
-
-Each attached scene gets an arena of its own in the game, built, swept and checked for leftovers
-the way an in-process scene's is, and calls the same context methods by the same names:
-`s.setBlock(0, 0, 0, block('minecraft:stone'))` means the same thing in both places. What differs is
-time. There is no tick budget out here, so a scene waits with `waitUntil` on the wall clock, and
-`await`, `advance` and `ticks` are refused by name. The scene file you give `--attached` can be
-the one in `--scenes`; add `--parity` and the runner also compares, scene by scene, whether each one
-passed, was skipped or did not pass in both places, and a difference is RED. The wire format is in
-the [attached protocol](../reference/attached-protocol.md).
+[Writing tests](writing-tests.md) covers what a test can ask for, how to wait, how tests share the game, and the
+script and YAML forms in full.
 
 ## Adding StageWright to a Gradle project
 
 ### 1. Resolve the plugin
 
-StageWright's builds are on a public Nexus; see [Publishing](../reference/publishing.md) for the
-version scheme. Use the newest `0.1.0-alpha.<build number>+1.21.1` there:
+Builds of StageWright's `master` are published to the Nexus at `https://nexus.gardel.top/repository/maven-releases` as
+`0.1.0-alpha.<n>+1.21.1`. Until a build of the version you want is there, publish StageWright to your local Maven
+repository and use `0.1.0-snapshot+1.21.1`; [Publishing](../reference/publishing.md) gives the order.
 
 ```groovy
 // settings.gradle
 pluginManagement {
     repositories {
+        mavenLocal()
         maven {
             url 'https://nexus.gardel.top/repository/maven-releases'
             content { includeGroupByRegex 'net\\.magicterra(\\..*)?' }
@@ -229,144 +131,126 @@ pluginManagement {
 }
 ```
 
+### 2. Declare a test suite
+
+On a single-loader project under Fabric Loom, Architectury Loom or ModDevGradle:
+
 ```groovy
 // build.gradle
 plugins {
-    id 'java'
-    id 'net.magicterra.stagewright' version '0.1.0-alpha.0+1.21.1'
+    id 'net.magicterra.stagewright' version '0.1.0-snapshot+1.21.1'
 }
-```
 
-### 2. Compile against the scene API
-
-Your scenes compile against one artifact, which depends on nothing but Minecraft and the shared
-vocabulary module:
-
-```groovy
 repositories {
-    maven {
-        url 'https://nexus.gardel.top/repository/maven-releases'
-        content { includeGroup 'net.magicterra' }
-    }
+    mavenLocal()
+    maven { url 'https://nexus.gardel.top/repository/maven-releases'; content { includeGroup 'net.magicterra' } }
+    maven { url 'https://maven.architectury.dev/'; content { includeGroup 'dev.architectury' } }
 }
 
-dependencies {
-    testmodImplementation 'net.magicterra:mc_stagewright-api:0.1.0-alpha.0+1.21.1:dev'
-}
+stagewright { tests { fabric { } } }   // the suite's name is yours; `neoforge { }` reads better there
 ```
 
-The `dev` classifier matters. The plain artifact is the remapped one, which cannot be compiled
-against from a development environment; the `dev` one carries named mappings.
+That is all the wiring. The plugin creates a `testmod` source set that sees `main`, puts StageWright's test API,
+WorldDriver's API and JUnit Jupiter on its compile classpath, declares the runs each topology needs in your loader
+plugin, and registers `stagewrightTestFabric`. Nothing it adds reaches your production jar or `runClient`.
+[The Gradle plugin](gradle-plugin.md) explains each convention and how to change it, and how a multi-loader build
+declares one suite per loader.
 
-Put your scenes in a source set that is not packaged into your production jar. You have two ways to
-get one, and the difference is a matter of timing:
+### 3. Write the scene and the first test
 
-- **Register it yourself** — `sourceSets { testmod }` in the script body — when you want to declare
-  dependencies on it in the ordinary `dependencies { }` block, as above. The plugin's own wiring
-  runs late, so a configuration it creates does not exist yet when that block is evaluated.
-- **Let the plugin create it** — `stagewright { testmodSourceSet = true }` — when you only need the
-  source set and its classpath wired to `main`, and you declare nothing extra on it.
+Put the scene file in `src/testmod/resources/stagewright/scenes/mymod.yaml`, the Java test in `src/testmod/java/`, and
+any YAML or JavaScript tests in `src/testmod/resources/stagewright/tests/`, as in the examples above.
 
-See [the Gradle plugin](gradle-plugin.md#the-testmod-source-set-convention) for exactly what the flag
-does and, just as importantly, what it deliberately leaves to you.
-
-### 3. Put the harness in the run
-
-The framework has to be a **mod** in the run directory, not a library on the classpath. Under
-architectury-loom:
-
-```groovy
-dependencies {
-    modLocalRuntime 'net.magicterra:mc_stagewright-fabric:0.1.0-alpha.0+1.21.1'      // or -neoforge
-}
-```
-
-Under ModDevGradle, `localRuntime 'net.magicterra:mc_stagewright-neoforge:0.1.0-alpha.0+1.21.1'`, with
-`runtimeClasspath.extendsFrom localRuntime` as the NeoForge MDK declares it — not `runtimeOnly`,
-which is published with your mod. Either way
-the jar reaches the run the way any runtime-only mod does, and nothing is copied into `mods/`; see
-[Gates](gates.md#how-the-harness-reaches-the-game).
-
-### 4. Declare a topology
-
-```groovy
-stagewright {
-    topologies {
-        dedicatedServer {
-            runTask    = 'runStagewrightDedicatedServer'
-            expectFile = file('src/testmod/expected-scenes.txt')
-        }
-    }
-}
-```
-
-`runTask` names **your own** dev-run task — the one that starts a server with your mod and the
-harness loaded. That run configuration is where `-Dstagewright.autorun=true` belongs, along with
-anything else about how your game starts. See [the Gradle plugin](gradle-plugin.md) for the rest of
-the properties, and [Topologies](topologies.md) for what else you might declare.
-
-### 5. Write the first scene
-
-```java
-package com.example.mymod.scenes;
-
-import net.magicterra.stagewright.scene.*;
-import net.minecraft.world.level.block.Blocks;
-
-@SceneSet("mymod")
-public final class FirstScenes implements SceneProvider {
-
-    @SceneDef(budget = 100)
-    static void theFloorIsWhereIPutIt(SceneContext s) {
-        s.floor(5, Blocks.STONE);
-        s.expectBlock(0, 0, 0).as("the pad under the origin").isEqualTo(Blocks.STONE);
-        s.expectBlock(0, 1, 0).as("the space above it").isEqualTo(Blocks.AIR);
-    }
-}
-```
-
-Register the provider class so the runtime can find it. Create
-`src/testmod/resources/META-INF/services/net.magicterra.stagewright.scene.SceneProvider` containing
-one line:
-
-```
-com.example.mymod.scenes.FirstScenes
-```
-
-Add the scene's name to the manifest, in the same commit:
-
-```
-# src/testmod/expected-scenes.txt
-mymod.theFloorIsWhereIPutIt
-```
-
-A scene that is registered but not declared fails the run, and so does a name in the manifest that
-nothing registered. Both directions are checked on purpose; see
-[Writing a scene](writing-a-scene.md#a-scene-and-its-manifest-entry-land-together).
-
-### 6. Run it
+### 4. Run it
 
 ```bash
-./gradlew stagewrightDedicatedServer
+./gradlew stagewrightTestFabric
 ```
 
-While you are still writing the scene, run only that one:
+The task is a Gradle `Test` task: results appear in Gradle's test report under `build/reports/tests/`, a failure
+inside the game is a failed test with the game's stack trace, and each game's log is under `stagewright/logs/` in
+that topology's game directory ([which one](gradle-plugin.md#test-suites-tests--)). The task is not part of `check`,
+because it starts games.
+
+While writing one test class, run only that class:
 
 ```bash
-./gradlew stagewrightDedicatedServer -Pstagewright.scenes=mymod.theFloorIsWhereIPutIt
+./gradlew stagewrightTestFabric --tests com.example.mymod.test.FirstTest
 ```
 
-A filtered run costs a game boot instead of a game boot plus the whole suite, and it labels itself so
-nobody mistakes it for a full check. [Gates](gates.md#running-one-scene-while-you-write-it) covers
-what a filter does and does not prove.
+A `--tests` filter selects Java test classes and methods. It does not narrow script tests: every YAML and JavaScript
+test still runs, in the scenes they name.
 
-Do not pipe the output through `tail`. [Gates](gates.md#never-truncate-a-runs-output) explains why.
+## Testing a modpack with no build tool
+
+One jar, one command. Build it from a checkout of StageWright (it builds the two loader jars it carries along the
+way):
+
+```bash
+./gradlew :stagewright-cli:jar          # -> cli/build/libs/stagewright.jar
+```
+
+Builds of `master` also publish it to the Nexus as `net.magicterra:stagewright-cli`.
+
+Lay the tests out inside the pack's server directory:
+
+```
+<server-dir>/
+  mods/                         the pack's mods, WorldDriver among them (or pass it with --mod)
+  stagewright/
+    scenes/<name>.yaml          scene files
+    tests/*.yaml, tests/*.js    the tests
+    worlds/                     saves a scene starts from (optional, see world.from)
+```
+
+and run:
+
+```bash
+java -jar stagewright.jar test <server-dir>
+```
+
+The runner works out how the pack's server starts (NeoForge argument files under `libraries/`, or a Fabric server
+launcher at the top level; `--launch "<command>"` when it cannot tell), hands StageWright and your tests to the loader
+as extra mods without copying anything into `mods/`, and runs every `dedicatedServer` scene. The server plays in
+`<server-dir>/stagewright/world`, which each scene starts afresh; the pack's own world is not touched. JUnit XML
+reports go to `<server-dir>/stagewright/reports` (or `--reports <dir>`), and each game's log to
+`<server-dir>/stagewright/logs/`.
+
+The exit code is `0` when every test passed, `1` when one did not, and `3` when the run could not start.
+
+| Option | What it does |
+|---|---|
+| `--mod <jar>` | Also load this mod, such as WorldDriver. Repeatable. Skipped when `mods/` already has that file. |
+| `--launch "<cmd>"` | Start the server this way instead of detecting how. |
+| `--java <path>` | The Java to start the games with. |
+| `--timeout <min>` | The longest one scene's games may run. |
+| `--stall-timeout <min>` | End a scene's game once its phase, server ticks and loaded classes have all stood still this long. |
+| `-D<key>=<value>`, `-X<option>` | Passed to the games' JVMs as given, such as `-Xmx8G`. |
+| `--reports <dir>` | Where the JUnit XML goes. |
+
+### Scenes with a client
+
+`integratedServer` and `dedicatedServerWithClient` scenes need a real client, which the runner installs and starts
+itself when given `--client`:
+
+```bash
+java -jar stagewright.jar test <server-dir> --client neoforge:1.21.1:21.1.248
+```
+
+`--client` is `neoforge:<mc>:<version>` or `fabric:<mc>:<loader version>`, and must name the loader the server runs.
+The first run installs it into `--install-dir` (the official launcher's `.minecraft` by default, in the launcher's own
+layout, with downloads shared with HMCL's cache); `--mirror bmclapi` tries BMCLAPI first, and `HTTPS_PROXY` is honoured.
+The client runs in `<server-dir>/stagewright/client`, never a player's own directory, with the server's mods or those
+in `--client-mods <dir>`, as the offline player `--username` (`StageWright` by default).
+
+A client needs a display, and the runner does not start one: `DISPLAY`, or `WAYLAND_DISPLAY` when `DISPLAY` is unset.
+On a machine without a desktop, run it under `xvfb-run`.
+
+`java -jar stagewright.jar --help` lists every option.
 
 ## Where to go next
 
-- [Writing a scene](writing-a-scene.md) — the full authoring reference.
-- [Capabilities](capabilities.md) — reaching what the base game has no concept of.
-- [Topologies](topologies.md) — which process shape can establish which facts.
-- [Gates](gates.md) — running the checks and reading what comes back.
-- [The Gradle plugin](gradle-plugin.md) — tasks, properties and conventions.
-- [JUnit attach](junit-attach.md) — asserting from outside the game.
+- [Writing tests](writing-tests.md) — what a test can ask for, in Java, YAML and JavaScript.
+- [Topologies](topologies.md) — which kind of game can establish which facts.
+- [Capabilities](capabilities.md) — reaching a mod's own machinery.
+- [The Gradle plugin](gradle-plugin.md) — every property, task and convention.
