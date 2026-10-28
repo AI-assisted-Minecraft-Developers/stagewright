@@ -3,21 +3,13 @@ package net.magicterra.stagewright.jupiter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Plot;
-import net.magicterra.worlddriver.api.methods.shared.CommonTypes.BlockPosition;
-import net.magicterra.worlddriver.api.methods.world.WorldApi;
-import net.magicterra.worlddriver.api.methods.world.WorldStubApi;
 import net.magicterra.worlddriver.api.methods.world.WorldContracts;
-import net.magicterra.worlddriver.api.methods.world.WorldContracts.RestoreParams;
-import net.magicterra.worlddriver.api.methods.world.WorldContracts.SnapshotParams;
 import net.magicterra.worlddriver.game.edit.BlockEdits;
+import net.magicterra.worlddriver.game.edit.RegionSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.nbt.CompoundTag;
@@ -40,9 +32,9 @@ import net.minecraft.world.phys.AABB;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
- * One leased plot, on its dimension's row ({@link PlotLayout}), far from spawn. Its state is kept with WorldDriver's
- * {@code mc.world.snapshot} (entities included), in as many snapshots as its volume needs, and put back with
- * {@code mc.world.restore}.
+ * One leased plot, on its dimension's row ({@link PlotLayout}), far from spawn. Its state, block entities and
+ * entities included, is kept in a WorldDriver {@link RegionSnapshot} the plot holds itself rather than in
+ * {@code mc.world.snapshot}'s store, whose few dozen slots every test running at once would be competing for.
  */
 final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
 
@@ -52,28 +44,25 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     private static final int BASE_Y = 200;
 
     private static final PlotLayout LAYOUT = new PlotLayout();
-    private static final AtomicInteger LEASES = new AtomicInteger();
 
     private final Game game;
     private final ResourceKey<Level> dimension;
     private final int start;
-    private final int lease;
     private final Vec3i size;
     private final Vec3i anchor;
     /** The world box the plot covers. */
     private final BoundingBox box;
-    private final List<BoundingBox> snapshots;
+    /** What the box held before the lease; set once the lease has kept it. */
+    private RegionSnapshot before;
 
     private PlotImpl(Game game, ResourceKey<Level> dimension, int start, int floorY, Vec3i size, boolean centered) {
         this.game = game;
         this.dimension = dimension;
         this.start = start;
-        this.lease = LEASES.incrementAndGet();
         this.size = size;
         this.anchor = centered ? new Vec3i(size.getX() / 2, size.getY() / 2, size.getZ() / 2) : Vec3i.ZERO;
         this.box = new BoundingBox(start, floorY, ROW_Z, start + size.getX() - 1, floorY + size.getY() - 1,
                 ROW_Z + size.getZ() - 1);
-        this.snapshots = PlotLayout.tiles(box, WorldContracts.MAX_SNAPSHOT_VOLUME);
     }
 
     /** Lease a plot of {@code size} in {@code dimension}: load its chunks, keep its state, and empty it. */
@@ -92,15 +81,14 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         int start = LAYOUT.lease(dimension, size.getX());
         PlotImpl plot = new PlotImpl(game, dimension, start, floorY, size, centered);
         try {
-            game.runOnServer(server -> plot.forceChunks(server, true));
-            for (int i = 0; i < plot.snapshots.size(); i++) {
-                BoundingBox tile = plot.snapshots.get(i);
-                SnapshotParams params = new SnapshotParams(position(tile.minX(), tile.minY(), tile.minZ()),
-                        position(tile.maxX(), tile.maxY(), tile.maxZ()), Optional.of(dimension.location().toString()),
-                        Optional.of(plot.snapshotId(i)), true, true);
-                plot.onServer(world -> world.snapshot(params));
-            }
-            game.runOnServer(plot::empty);
+            // One server task: nothing changes the box between keeping it and emptying it.
+            game.runOnServer(server -> {
+                plot.forceChunks(server, true);
+                plot.before = RegionSnapshot.capture(plot.level(server),
+                        new BlockPos(plot.box.minX(), plot.box.minY(), plot.box.minZ()), size.getX(), size.getY(),
+                        size.getZ(), true, true);
+                plot.empty(server);
+            });
             return plot;
         } catch (RuntimeException | Error e) {
             // Nothing was handed out yet: put the chunks back and free the stretch.
@@ -117,15 +105,13 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     /** Put the plot back as the lease found it and release its chunks and stretch. */
     @Override
     public void close() {
-        // Every entity out first: one that walked from one snapshot's box into another's would otherwise be there
-        // twice when the first puts it back.
-        game.runOnServer(server -> discardEntities(level(server)));
-        for (int i = 0; i < snapshots.size(); i++) {
-            RestoreParams params = new RestoreParams(snapshotId(i), true, false);
-            onServer(world -> world.restore(params));
-        }
+        game.runOnServer(server -> {
+            ServerLevel level = level(server);
+            before.restore(level);
+            before.restoreEntities(level);
+            forceChunks(server, false);
+        });
         // Only a plot that was put back may be handed out again; a failed restore leaves its stretch taken.
-        game.runOnServer(server -> forceChunks(server, false));
         LAYOUT.release(dimension, start);
     }
 
@@ -223,21 +209,8 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         }
     }
 
-    /**
-     * A {@code mc.world.*} call made on the server thread, where WorldDriver runs it at once. Through the blocking
-     * caller it would queue for the server thread and give up after a few seconds when another test holds that
-     * thread with a long task, as one ticking a bot through a whole walk does; queued here, it waits its turn.
-     */
-    private <R> R onServer(Function<WorldStubApi, CompletionStage<R>> call) {
-        return game.onServer(server -> call.apply(WorldApi.of(game.registry())).toCompletableFuture().join());
-    }
-
     private ServerLevel level(MinecraftServer server) {
         return GameImpl.level(server, dimension);
-    }
-
-    private String snapshotId(int tile) {
-        return "stagewright.plot." + lease + "." + tile;
     }
 
     private void forceChunks(MinecraftServer server, boolean forced) {
@@ -249,7 +222,7 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         }
     }
 
-    /** Server thread: every cell to air and every non-player entity gone; the snapshots hold what was there. */
+    /** Server thread: every cell to air and every non-player entity gone; the snapshot holds what was there. */
     private void empty(MinecraftServer server) {
         ServerLevel level = level(server);
         BlockState air = Blocks.AIR.defaultBlockState();
@@ -257,15 +230,7 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
             // No neighbour updates and no drops: the plot is emptied, not mined.
             if (!level.getBlockState(pos).isAir()) level.setBlock(pos, air, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
         }
-        discardEntities(level);
-    }
-
-    private void discardEntities(ServerLevel level) {
         AABB area = AABB.of(box);
         for (Entity e : level.getEntities((Entity) null, area, e -> !(e instanceof Player))) e.discard();
-    }
-
-    private static BlockPosition position(int x, int y, int z) {
-        return new BlockPosition(x, y, z);
     }
 }
