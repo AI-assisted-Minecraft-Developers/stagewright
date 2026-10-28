@@ -299,7 +299,7 @@ supposed to earn anything. So those tests take a joined `Bot` or the client's `P
 **"Searched and found nothing" and "this generator cannot place that at all" are the same return
 value.** The structure search answers null immediately when the generator has no placement for
 the structure, and answers null after a long scan when it genuinely found none — and the only
-outward difference is how long it took. A test pinned to one structure is therefore asserting
+outward difference is how long it took. A test that asks about only one structure is therefore asserting
 about *the pack's worldgen configuration* while reporting it as worldgen being broken. Ask about
 several and assert that at least one is placeable, which is a line no playable pack fails.
 
