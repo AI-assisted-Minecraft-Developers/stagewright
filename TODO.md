@@ -12,6 +12,11 @@ on one world (worlddriver's survival ladder, deleted on 2026-10-28 for this reas
 chain of `@DependsOn` tests. It needs a body that later tests can take over, the world kept between
 them, and a place for evidence rows beyond `record`'s report entries.
 
+## `--tests` does not narrow script tests
+
+A Gradle filter naming a Java test class still starts every scene that has script tests and runs them, so a run
+meant for one class pays for every script scene. Script tests need a source Gradle's filter can match or exclude.
+
 ## The game still forces a JVM down when no agent is attached
 
 `JupiterRun.halt` arms an exit watchdog for a dedicated server started without the agent, by hand or
