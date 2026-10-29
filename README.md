@@ -138,6 +138,8 @@ dependencies between tests, restarts on the same world, performance measurements
 - [Capabilities](docs/guide/capabilities.md) — reaching a mod's own machinery, and extending that.
 - [Topologies](docs/guide/topologies.md) — the kinds of game and what each one can establish.
 - [The Gradle plugin](docs/guide/gradle-plugin.md) — tasks, properties, conventions.
+- [Moving from scenes to tests](docs/guide/migrating-from-scenes.md) — for a project with tests written for the old
+  `@SceneDef` / `scene()` way.
 
 The file formats and the published artifacts are under [`docs/reference/`](docs/reference/), the reasoning behind the
 larger decisions under [`docs/design/`](docs/design/), and [`docs/README.md`](docs/README.md) indexes all of it.

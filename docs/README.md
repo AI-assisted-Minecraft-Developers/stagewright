@@ -20,6 +20,7 @@ Written for someone with a task in front of them.
 | [Capabilities](guide/capabilities.md) | A test needs to reach machinery the base game has no concept of, or you want to teach the framework about your own. |
 | [Topologies](guide/topologies.md) | You need to know which kind of game can establish the fact you are trying to establish. |
 | [The Gradle plugin](guide/gradle-plugin.md) | You are wiring StageWright into a project: test suites, topologies, the source-set convention. |
+| [Moving from scenes to tests](guide/migrating-from-scenes.md) | Your project still has tests for the old scene way — `@SceneDef`, `scene()`, `expected-scenes.txt`, the topology tasks — and you are moving them to the new one. |
 
 ## Reference — what the contracts are
 
