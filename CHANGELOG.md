@@ -25,6 +25,12 @@ Gradle 9 no longer puts `junit-platform-launcher` on a `Test` task's runtime by 
 there failed with "Failed to load JUnit Platform". The `stagewrightTestEngine` configuration now carries the launcher
 at the engine's JUnit version. The plugin itself is not yet usable on Gradle 9 (see `TODO.md`).
 
+### A run's `dependsOn` given as a provider is qualified to the run's project · compiled
+
+Newer Fabric Loom (1.19) makes its run tasks depend on a provider of the `configureLaunch` task name rather than the
+name itself; the launch-specs task re-declared it as a bare name of its own, root, project and failed with "Task with
+name 'configureLaunch' not found in root project". A provider is now mapped the same way a plain name was.
+
 ### A topology can report leaked threads instead of failing on them · green in the engine's and the plugin's own tests
 
 `leaks = 'report'` on a topology in `topologies { }`, or on a suite for its generated topologies, keeps a game the

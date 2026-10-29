@@ -15,6 +15,7 @@ import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
@@ -150,11 +151,13 @@ public class StageWrightPlugin implements Plugin<Project> {
                         List<Object> needs = new ArrayList<>();
                         for (JavaExec run : launchRuns(project, suite, topologies)) {
                             // A bare task name in a run's dependsOn means a task of the run's project, which
-                            // need not be this one ('configureLaunch' under loom), so it is qualified here.
+                            // need not be this one ('configureLaunch' under loom, a provider of that name in
+                            // newer loom), so it is qualified here.
+                            String prefix = run.getProject().getPath().replaceAll(":$", "") + ":";
                             for (Object need : run.getDependsOn()) {
-                                needs.add(need instanceof CharSequence name && !name.toString().startsWith(":")
-                                        ? run.getProject().getPath().replaceAll(":$", "") + ":" + name
-                                        : need);
+                                needs.add(need instanceof Provider<?> provider
+                                        ? provider.map(v -> qualify(v, prefix))
+                                        : qualify(need, prefix));
                             }
                             needs.add(run.getInputs().getFiles());
                         }
@@ -236,6 +239,11 @@ public class StageWrightPlugin implements Plugin<Project> {
                     SuiteLaunch.leaks(topology.getLeaks().getOrNull(), "stagewright topology '" + topology.getName() + "'")));
         }
         return launches;
+    }
+
+    /** A bare task name made a path under {@code prefix}; anything else as it is. */
+    private static Object qualify(Object need, String prefix) {
+        return need instanceof CharSequence name && !name.toString().startsWith(":") ? prefix + name : need;
     }
 
     private List<JavaExec> launchRuns(Project project, StageWrightTestSuite suite,
