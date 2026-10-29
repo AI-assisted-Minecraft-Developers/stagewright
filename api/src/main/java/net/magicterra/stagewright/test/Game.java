@@ -129,6 +129,14 @@ public interface Game {
     void overrideTickRate(float ticksPerSecond);
 
     /**
+     * Freeze the world for the rest of this test, as {@code /tick freeze} does; it thaws when the test ends, failed or
+     * not. While frozen, {@link #ticks} and {@link Await} step the world instead of waiting: {@code ticks(1)} advances
+     * it by exactly one tick, and an await steps it one tick at a time until its condition holds. Needs
+     * {@link Locks#TICK_RATE}; calling it again changes nothing.
+     */
+    void freezeTicks();
+
+    /**
      * Run {@code undo} on the server thread when the calling test ends, passed or not; the last registered runs
      * first. For facets that change shared state, such as a player's inventory. Only from a test's own thread.
      */

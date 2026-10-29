@@ -41,6 +41,8 @@ final class TestScope {
     private final Deque<Consumer<MinecraftServer>> undo = new ArrayDeque<>();
     private final List<AssertionError> failedChecks = new ArrayList<>();
     private AutoCloseable held;
+    /** Whether the test froze the server's ticks, so its waits step them; see {@code Game.freezeTicks}. */
+    private volatile boolean frozeTicks;
 
     private TestScope(String name, Set<String> locks, Set<String> readLocks, boolean isolated, boolean script) {
         this.name = name;
@@ -138,6 +140,14 @@ final class TestScope {
                 ? "locks: ['" + lock.substring(LOCK_PREFIX.length()) + "'] to the test's options, or isolated: true"
                 : "@ResourceLock(" + constant + ") to the test, or @Isolated to its class";
         throw new IllegalStateException(what + " in " + name + " changes state every test shares: add " + fix);
+    }
+
+    boolean frozeTicks() {
+        return frozeTicks;
+    }
+
+    void frozeTicks(boolean frozen) {
+        frozeTicks = frozen;
     }
 
     /** Keep a failed soft check; {@link #takeChecks} reports it when the test ends. */

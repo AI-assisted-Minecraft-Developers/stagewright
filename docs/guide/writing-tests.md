@@ -94,6 +94,10 @@ Tests in a game run concurrently by default, classes and methods alike. What two
   `overrideTime`, `overrideWeather` or `overrideTickRate`, which is undone when the test ends and is refused unless
   the test holds the matching lock read-write: `@ResourceLock(Locks.WORLD_RULES)`, `Locks.WORLD_CLOCK`,
   `Locks.WEATHER`, `Locks.TICK_RATE`. `Locks.player(name)` names one player.
+- `game.freezeTicks()` freezes the world for the rest of the test, as `/tick freeze` does, and needs
+  `Locks.TICK_RATE`; it thaws when the test ends, whether it passed or not. While it is frozen, `game.ticks(n)` moves
+  the world on by exactly `n` ticks instead of waiting for them, and `game.await()` moves it on one tick at a time until
+  its condition holds, so a test can watch the world tick by tick.
 - `@Isolated` on a class runs it with the game to itself; `@Execution(ExecutionMode.SAME_THREAD)` keeps a class's own
   methods one at a time. A `junit-platform.properties` on the game's class path changes the defaults.
 - Anything else a test changes, it undoes with `game.afterTest(server -> …)`, which runs when the test ends, passed or
@@ -163,8 +167,9 @@ and `isolated`.
 `settle(fn, {ticks, within})`, `expect(value)` (`equals`, `contains`, `isEmpty`, `gt`, `lt`, `atLeast`, `atMost`),
 `check`, `record(name, value)`, `step(name, args)`, `perf`, `store`, `afterTest(fn)`, the handles `plot({size, x, y, z, centered,
 dimension})`, `bot()` or `bot({name, parked, keep, kept})`, `player()`, `npc(type, pos)`, `client()`, `capability(name)`,
-`translate(pos, from, to)`, `onServer(fn)`, and the overrides `override`, `overrideTime`, `overrideWeather`,
-`overrideTickRate`. Positions are `{x, y, z}`; blocks and items are ids. The script also has WorldDriver's own
+`translate(pos, from, to)`, `onServer(fn)`, the overrides `override`, `overrideTime`, `overrideWeather`,
+`overrideTickRate`, and `freezeTicks()`, after which `t.wait(n)` moves the frozen world on by exactly `n` ticks (as
+`game.freezeTicks` does in Java; it needs `locks: ['tickRate']`). Positions are `{x, y, z}`; blocks and items are ids. The script also has WorldDriver's own
 `Driver.*`.
 
 A script runs on a test thread, so two `t.call`s may land in different ticks. `t.onServer(fn)` runs `fn` on the server
@@ -209,8 +214,8 @@ What a script changes outside what it leased, it undoes with `t.afterTest(fn)`, 
 still use them. Several run last first; one that throws fails the test, and the others still run.
 
 ```javascript
-t.call('mc.action.runCommand', { command: 'tick freeze' });
-t.afterTest(() => t.call('mc.action.runCommand', { command: 'tick unfreeze' }));
+t.call('mc.action.runCommand', { command: 'gamerule doFireTick false' });
+t.afterTest(() => t.call('mc.action.runCommand', { command: 'gamerule doFireTick true' }));
 ```
 
 ### YAML

@@ -48,6 +48,14 @@ runs `fn` on the server thread as one task, as `game.onServer` does in Java, and
 which would wait for the server from its own thread, are refused there with a message naming the function. The
 in-game suites have not yet been run against this.
 
+### A test can freeze the world and step it tick by tick · green in the unit tests
+
+`game.freezeTicks()` / `t.freezeTicks()` freezes the server's ticks for the rest of the test and thaws them when it
+ends, passed or failed, under `Locks.TICK_RATE` as `overrideTickRate` is. While frozen, `game.ticks(n)` / `t.wait(n)`
+step the world exactly `n` ticks, and an await steps it until its condition holds. A pack test used to send
+`tick freeze` itself, which leaked into every later test when a failed expectation ended it first, and
+`overrideTickRate` cannot go below one tick a second. The in-game suites have not yet been run against this.
+
 ## 2026-10-29
 
 ### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests

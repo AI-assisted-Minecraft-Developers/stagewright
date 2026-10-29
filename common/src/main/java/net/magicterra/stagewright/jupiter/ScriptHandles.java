@@ -148,6 +148,11 @@ final class ScriptHandles {
             game.overrideTickRate(n.floatValue());
             return null;
         });
+        // Frozen for the rest of the test; t.wait(n) then steps the world n ticks.
+        t.put("freezeTicks", (Scripting.Function) args -> {
+            game.freezeTicks();
+            return null;
+        });
     }
 
     private static Map<String, Object> plot(PlotImpl plot) {

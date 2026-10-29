@@ -126,6 +126,13 @@ class ScriptOnServerTest {
     }
 
     @Test
+    void freezeTicksIsTheGamesAndTheWaitsAfterItAreTooWhichStepThem() {
+        run("t.freezeTicks(); t.wait(3);");
+        // -1 marks the freeze; GameImpl's ticks steps a frozen world, which needs a server to show.
+        assertEquals(List.of(-1, 3), waited);
+    }
+
+    @Test
     void aFunctionIsRequired() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> run("t.onServer(3);"));
         assertSame(IllegalArgumentException.class, e.getClass());

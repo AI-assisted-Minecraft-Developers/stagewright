@@ -219,6 +219,23 @@ final class GameImpl implements Game {
     }
 
     @Override
+    public void freezeTicks() {
+        TestScope scope = TestScope.current("game.freezeTicks");
+        scope.require(Locks.TICK_RATE, "Locks.TICK_RATE", "game.freezeTicks");
+        if (scope.frozeTicks()) return;
+        runOnServer(s -> {
+            // A world already frozen, by a command, is left frozen at the end.
+            boolean wasFrozen = s.tickRateManager().isFrozen();
+            s.tickRateManager().setFrozen(true);
+            scope.onEnd(at -> {
+                at.tickRateManager().stopStepping();
+                at.tickRateManager().setFrozen(wasFrozen);
+            });
+        });
+        scope.frozeTicks(true);
+    }
+
+    @Override
     public void afterTest(Consumer<MinecraftServer> undo) {
         TestScope.current("game.afterTest").onEnd(undo);
     }
@@ -251,7 +268,8 @@ final class GameImpl implements Game {
         TestScope scope = TestScope.bound();
         BooleanSupplier asTheTest = scope == null ? condition
                 : () -> TestScope.lending(scope, condition::getAsBoolean);
-        CompletableFuture<Boolean> done = ServerTicks.await(asTheTest, budget);
+        CompletableFuture<Boolean> done = scope != null && scope.frozeTicks() ? stepping(asTheTest, budget)
+                : ServerTicks.await(asTheTest, budget);
         try {
             return done.get(budget * WALL_MS_PER_TICK + WALL_MARGIN_MS, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
@@ -263,6 +281,23 @@ final class GameImpl implements Game {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("interrupted while waiting for server ticks", e);
         }
+    }
+
+    /**
+     * A wait on a world the test froze: let the world run up to {@code budget} ticks and stop it the tick
+     * {@code condition} holds. One server task, between two ticks, so the ticks stepped are the ticks counted: each
+     * stepped tick runs the world (the tick rate manager is asked at the start of a tick) and is counted at its end.
+     */
+    private CompletableFuture<Boolean> stepping(BooleanSupplier condition, int budget) {
+        return onServer(s -> {
+            CompletableFuture<Boolean> done = ServerTicks.await(() -> {
+                boolean holds = condition.getAsBoolean();
+                if (holds) s.tickRateManager().stopStepping();
+                return holds;
+            }, budget);
+            if (budget > 0) s.tickRateManager().stepGameIfPaused(budget);
+            return done;
+        });
     }
 
     private static RuntimeException rethrow(Throwable t) {

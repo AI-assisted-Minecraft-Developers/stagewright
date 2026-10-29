@@ -62,7 +62,8 @@ handles `plot({size, x, y, z, centered, dimension})`, `bot(name)` or `bot({name,
 item its id), and `translate(pos, from, to)`; `onServer(fn)`, which runs `fn` as one server task through
 `Game.onServer`, so the WorldDriver calls in it run in place on the server thread within one tick (what waits for the
 server is refused there by checking WorldDriver's `ServerThreadGuard`); and `override(rule, value)`, `overrideTime`,
-`overrideWeather` and `overrideTickRate`. What a test leases is given back and what it overrides undone when it
+`overrideWeather`, `overrideTickRate` and `freezeTicks` (after which a wait steps the frozen world through
+`ServerTickRateManager.stepGameIfPaused` instead of waiting for it). What a test leases is given back and what it overrides undone when it
 ends. The script also has WorldDriver's own `Driver.*`. A failed `t.expect`, or a wait out of ticks, cannot be caught
 by the script, so a test cannot swallow its own failure; it is an `Error`, which Rhino keeps from a script's `catch`.
 What `t.call` and the handles refuse can be: WorldDriver's `Scripting` lets a Java exception out of the script as it
