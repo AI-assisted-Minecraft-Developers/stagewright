@@ -28,9 +28,7 @@ class CatchableErrorsTest {
     }
 
     @Test
-    void aJavaFunctionsExceptionEscapesAScriptsCatchUnlessWrapped() {
-        // Why the wrapper exists: the script's catch never runs.
-        assertThrows(IllegalStateException.class, () -> run("try { f(); 'no' } catch (e) { 'caught' }", refuse));
+    void aWrappedFunctionsRefusalIsCaughtWithItsMessageAndType() {
         assertEquals("refused|java.lang.IllegalStateException", run(
                 "try { f(); 'no' } catch (e) { e.message + '|' + e.type }", errors.wrap(refuse, false)));
     }
@@ -60,8 +58,14 @@ class CatchableErrorsTest {
     void aFailedExpectationAndAnAbortStillCannotBeCaught() {
         assertThrows(AssertionError.class, () -> run("try { f(); } catch (e) { 'caught' }",
                 errors.wrap(a -> { throw new AssertionError("expected 1 but was 2"); }, false)));
-        assertThrows(TestAbortedException.class, () -> run("try { f(); } catch (e) { 'caught' }",
-                errors.wrap(a -> { throw new TestAbortedException("no such capability"); }, false)));
+        TestAbortedException abort = new TestAbortedException("no such capability");
+        Scripting.Function aborts = a -> { throw abort; };
+        // Wrapped for catching, and plain, as every other function of t is.
+        for (Scripting.Function f : List.of(errors.wrap(CatchableErrors.carryingAborts(aborts), false),
+                CatchableErrors.carryingAborts(aborts))) {
+            Throwable thrown = assertThrows(Throwable.class, () -> run("try { f(); 'no' } catch (e) { 'caught' }", f));
+            assertSame(abort, CatchableErrors.unwrapAbort(thrown));
+        }
     }
 
     @Test

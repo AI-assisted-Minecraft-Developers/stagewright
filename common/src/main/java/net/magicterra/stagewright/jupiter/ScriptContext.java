@@ -99,6 +99,9 @@ final class ScriptContext {
                 return f.call(a);
             });
         }
+        // An abort skips the test from any of t's functions, catch or not.
+        script.replaceAll((name, value) -> value instanceof Scripting.Function f ? CatchableErrors.carryingAborts(f)
+                : value);
         // What t.call and the handles refuse, a script can catch; a failed t.expect or wait it still cannot.
         Scripting scripting = WorldDriver.scripting();
         if (scripting != null) {
@@ -116,6 +119,7 @@ final class ScriptContext {
      * is the body's; what ending throws is added to it, or becomes the failure when the body passed.
      */
     Throwable end(Throwable failure) {
+        if (failure != null) failure = CatchableErrors.unwrapAbort(failure);
         if (errors != null && failure != null) failure = errors.explain(failure);
         // First, on this thread: a cleanup may call the game, and may still use what the test leased.
         List<Scripting.Function> cleanups;
@@ -171,7 +175,8 @@ final class ScriptContext {
             try {
                 cleanups.get(i).call();
             } catch (Throwable t) {
-                Throwable thrown = errors == null ? t : errors.explain(t);
+                Throwable thrown = CatchableErrors.unwrapAbort(t);
+                if (errors != null) thrown = errors.explain(thrown);
                 if (failure == null) failure = thrown;
                 else if (failure != thrown) failure.addSuppressed(thrown);
             }

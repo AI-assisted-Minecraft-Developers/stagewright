@@ -55,6 +55,7 @@ final class CatchableErrors {
             try {
                 answer = java.call(args);
             } catch (RuntimeException e) {
+                if (isAbort(e)) throw new Abort(e);
                 if (!catchable(e)) throw e;
                 return refusal(e);
             }
@@ -108,14 +109,50 @@ final class CatchableErrors {
         return value;
     }
 
-    /** Not an abort, which skips the rest of the test as it does in Java, nor anything on an interrupted thread. */
+    /** Nothing thrown on an interrupted thread, which is the test being stopped. */
     private static boolean catchable(RuntimeException e) {
-        if (Thread.currentThread().isInterrupted()) return false;
+        return !Thread.currentThread().isInterrupted();
+    }
+
+    /** Whether {@code e} is an abort ({@code TestAbortedException}), which skips the rest of the test as in Java. */
+    static boolean isAbort(Throwable e) {
         for (Class<?> c = e.getClass(); c != null; c = c.getSuperclass()) {
             // By name: in a Fabric development game the class may come from another loader.
-            if (c.getName().equals("org.opentest4j.TestAbortedException")) return false;
+            if (c.getName().equals("org.opentest4j.TestAbortedException")) return true;
         }
-        return true;
+        return false;
+    }
+
+    /**
+     * An abort on its way through the script. WorldDriver's engine hands a script's {@code catch} every exception a
+     * Java function throws, and only an {@link Error} passes through untouched, as a failed {@code t.expect} does; so
+     * an abort travels as this and {@link #unwrapAbort} gives the test its abort back.
+     */
+    static final class Abort extends Error {
+        Abort(RuntimeException abort) {
+            super(abort.getMessage(), abort, false, false);
+        }
+    }
+
+    /** {@code f}, with an abort it throws carried past the script's {@code catch}. */
+    static Scripting.Function carryingAborts(Scripting.Function f) {
+        return args -> {
+            try {
+                return f.call(args);
+            } catch (RuntimeException e) {
+                if (isAbort(e)) throw new Abort(e);
+                throw e;
+            }
+        };
+    }
+
+    /** The abort {@code failure} carries, wherever in its causes, or {@code failure} as it is. */
+    static Throwable unwrapAbort(Throwable failure) {
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t instanceof Abort) return t.getCause();
+            if (t.getCause() == t) break;
+        }
+        return failure;
     }
 
     private synchronized Scripting.Function factory() {
