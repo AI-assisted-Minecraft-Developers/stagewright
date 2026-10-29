@@ -20,6 +20,12 @@ server, and whether a real game client is connected to it.
 
 On the two shapes with a client, the tests wait until the player has joined before they start.
 
+On `dedicatedServerWithClient` both games are started with StageWright's supervision agent. A client that crashes,
+hangs, or exits while the server's tests are running fails the scene at once, with a message beginning `the joined
+client ended` that says how and names the client's log (`stagewright/logs/<scene>-companion.log` in the game
+directory), rather than leaving the server to wait for a player until its time runs out
+([how](../design/supervision.md#the-joined-client)).
+
 The names are the ones the Gradle plugin generates runs for and the command-line runner writes launch specs for. A
 build may map them to topologies of its own, or add others; see [the Gradle plugin](gradle-plugin.md#test-suites-tests--).
 Nothing reads the name to decide whether a client is present: `@Requires(CLIENT)`, `@Requires(DEDICATED_SERVER)` and

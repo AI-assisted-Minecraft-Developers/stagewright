@@ -76,6 +76,9 @@ public final class Supervisor implements AutoCloseable {
     /** The waits {@link #await} applies. */
     public record Limits(Duration connect, Duration heartbeat, Duration stall, Duration total) {}
 
+    /** How a wait on a game and the companion joined to it ended, and whether it was the companion that ended it. */
+    public record Ending(Ended ended, boolean companion) {}
+
     private static final long POLL_MS = 250;
     /** After the process is gone, how long to let its last lines be read before concluding it said nothing. */
     private static final long DRAIN_NANOS = TimeUnit.SECONDS.toNanos(2);
@@ -166,6 +169,39 @@ public final class Supervisor implements AutoCloseable {
                 if (external != null) return external;
                 Ended ended = evaluate(game, limits);
                 if (ended != null) return ended;
+                lock.wait(POLL_MS);
+            }
+        }
+    }
+
+    /**
+     * Wait until this supervisor's game is done, or it or the companion joined to it, which {@code joined} supervises,
+     * cannot carry on. The run is the game's: the companion only ever ends the wait as a failure, and its {@code DONE}
+     * is one too, since a client that says it is done before the run is over has left the server.
+     *
+     * <p>A companion's ending is answered only once the game has not ended either within the drain that follows: a
+     * server that crashes or halts drops its client, and then the server's ending is the cause and the answer.
+     */
+    public Ending await(ProcessHandle game, Limits limits, Supervisor joined, ProcessHandle companion,
+                        Limits companionLimits) throws InterruptedException {
+        game.onExit().thenRun(this::wake);
+        companion.onExit().thenRun(this::wake);
+        while (true) {
+            Ended own = peek(game, limits);
+            if (own != null) return new Ending(own, false);
+            Ended theirs = joined.peek(companion, companionLimits);
+            if (theirs != null) {
+                long deadline = System.nanoTime() + DRAIN_NANOS;
+                while (System.nanoTime() < deadline) {
+                    own = peek(game, limits);
+                    if (own != null) return new Ending(own, false);
+                    synchronized (lock) {
+                        lock.wait(POLL_MS);
+                    }
+                }
+                return new Ending(theirs, true);
+            }
+            synchronized (lock) {
                 lock.wait(POLL_MS);
             }
         }

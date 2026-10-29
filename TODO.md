@@ -17,10 +17,6 @@ player data. `Npc`s are still removed when their test ends.
 `JupiterRun.halt` arms an exit watchdog for a dedicated server started without the agent, by hand or
 through a run task the plugin cannot put an argument on. It goes if and when neither is supported.
 
-## The joined client of `dedicatedServerWithClient` runs without the agent
-
-Nothing notices it crashing or hanging.
-
 ## The launch-spec adapters have only met stand-ins for the loaders
 
 `Toolchain` finds ModDevGradle's and Loom's late-bound members by name, and the TestKit tests use run

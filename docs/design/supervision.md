@@ -93,6 +93,19 @@ or it is still up ten seconds after that and the engine kills it, the scene fail
 failure, a `forcedDown` report entry and a line appended to the game's log name each thread that held the JVM up,
 with its top frames, the jars they run in and the code that started it.
 
+### The joined client
+
+`dedicatedServerWithClient` starts two JVMs, and the client carries the agent as well, pointed at a second supervisor
+(one serves one process). The test engine waits on both from one loop. The server's run decides when the scene is
+over; the client can only end it early. A client that crashes (a crash report in its own directory), goes silent for
+the heartbeat limit, stalls, never reaches its agent, exits, or says `done` (which a joined client does once it is out
+of the world or has given up joining) while the server's run is still going ends the wait as the client's. The engine
+then kills the server, fails every test it had not finished and the scene with `the joined client ended (<ENDED>) …`,
+the client's phase and the path of its log, and publishes the same text as a `companion` report entry and appends it to
+the client's log. If the server ends within two seconds of the client, the server's ending is reported instead: a
+server that halts or crashes drops its client, and the client's end is then a consequence. Once the server's run is
+done the client is no longer watched; the engine ends it with the round, as before.
+
 `HEARTBEAT_LOST` is the one case the agent cannot cover from inside. A JVM wedged at a safepoint stops every Java
 thread, the agent's with it; that is why the supervisor keeps a kill. But it is triggered by a fact with one meaning,
 the heartbeat stopping, not by a log going quiet, and the limit can be short because nothing still running goes a

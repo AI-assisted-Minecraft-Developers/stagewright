@@ -49,18 +49,30 @@ class StageWrightTestEngineTest {
             writeSpec(specs, topology, true);
         }
         writeSpec(specs, "worldDirty", false);
+        writeSpec(specs, "clientStays", true, "companionStays");
+        writeSpec(specs, "clientLeaves", true, "companionLeaves");
+        writeSpec(specs, "clientCrashes", true, "companionCrashes");
     }
 
     private void writeSpec(Path specs, String topology, boolean cleanWorld) throws IOException {
+        writeSpec(specs, topology, cleanWorld, null);
+    }
+
+    /** With {@code companion}, a second fake game joined to the first, in a directory of its own, as a client is. */
+    private void writeSpec(Path specs, String topology, boolean cleanWorld, String companion) throws IOException {
         Path game = Files.createDirectories(temp.resolve("game-" + topology));
         Files.writeString(specs.resolve(topology + ".json"), """
                 {"gameDirectory": %s, "cleanWorld": %s, "timeoutMinutes": 2, "stallMinutes": 0, "server": %s,
-                 "primary": {"java": %s, "jvmArgs": ["-cp", %s], "mainClass": %s, "args": [%s],
-                             "workingDirectory": %s}}
-                """.formatted(q(game.toString()), cleanWorld, topology.equals("world"),
-                q(System.getProperty("java.home") + "/bin/java"),
-                q(System.getProperty("java.class.path")), q(FakeGame.class.getName()), q(topology),
-                q(game.toString())));
+                 "primary": %s%s}
+                """.formatted(q(game.toString()), cleanWorld, topology.equals("world"), process(topology, game),
+                companion == null ? "" : ", \"companion\": " + process(companion, game.resolve("client"))));
+    }
+
+    private static String process(String scenario, Path directory) {
+        return """
+                {"java": %s, "jvmArgs": ["-cp", %s], "mainClass": %s, "args": [%s], "workingDirectory": %s}"""
+                .formatted(q(System.getProperty("java.home") + "/bin/java"), q(System.getProperty("java.class.path")),
+                        q(FakeGame.class.getName()), q(scenario), q(directory.toString()));
     }
 
     @AfterEach
@@ -122,6 +134,42 @@ class StageWrightTestEngineTest {
                 .anyMatch(v -> v != null && v.contains("mod-pool-1")));
         Path log = temp.resolve("game-leak").resolve("stagewright").resolve("logs").resolve("leak-game.log");
         assertTrue(Files.readString(log).contains("[stagewright] the game had to be forced down"), log.toString());
+    }
+
+    @Test
+    void aJoinedClientThatStaysChangesNothing() {
+        EngineExecutionResults r = run("ClientStaysFixture");
+        assertEquals(2, r.testEvents().succeeded().count(), () -> String.valueOf(r.testEvents().failed().list()));
+        assertEquals(0, containersFailed(r).count(), () -> String.valueOf(containersFailed(r).list()));
+    }
+
+    @Test
+    void aJoinedClientThatCrashesIsSeenThroughItsAgent() {
+        // The client stays up after writing its crash report: only the agent in it can tell.
+        EngineExecutionResults r = run("ClientCrashesFixture");
+        String message = failureOf(r.testEvents(), "a()").getMessage();
+        assertTrue(message.contains("the joined client ended (CRASHED) by crashing: "), message);
+        assertTrue(message.contains("crash-client.txt"), message);
+    }
+
+    @Test
+    void aJoinedClientThatLeavesDuringTheRunFailsTheSceneNamingTheClient() throws IOException {
+        EngineExecutionResults r = run("ClientLeavesFixture");
+        assertEquals(0, r.testEvents().succeeded().count());
+        String message = failureOf(r.testEvents(), "a()").getMessage();
+        assertTrue(message.contains("the joined client ended (PROCESS_DIED)"), message);
+        assertTrue(message.contains("clientLeaves-companion.log"), message);
+        Event scene = containersFailed(r).stream()
+                .filter(e -> e.getTestDescriptor().getDisplayName().equals("clientLeaves")).findFirst()
+                .orElseThrow(() -> new AssertionError("the scene should fail"));
+        assertTrue(failure(scene).getMessage().startsWith("the joined client ended (PROCESS_DIED)"),
+                failure(scene).getMessage());
+        assertTrue(r.allEvents().reportingEntryPublished().stream()
+                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs().get("companion"))
+                .anyMatch(v -> v != null && v.contains("PROCESS_DIED")));
+        Path log = temp.resolve("game-clientLeaves").resolve("stagewright").resolve("logs")
+                .resolve("clientLeaves-companion.log");
+        assertTrue(Files.readString(log).contains("[stagewright] the joined client ended"), log.toString());
     }
 
     @Test

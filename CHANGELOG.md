@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### The joined client of `dedicatedServerWithClient` is watched too · green in the engine's own tests
+
+The client joined to a dedicated server used to run without the supervision agent, so a client that crashed, hung or
+quit went unnoticed and the server waited for its player until the scene timed out. The client now starts with the
+agent, reporting to a supervisor of its own, and any of those while the server's run is going fails the scene at once:
+the server is ended, and the scene and its unfinished tests fail with `the joined client ended (<how>) …` and the
+client's log, also published as a `companion` report entry and appended to that log. A client saying it is done before
+the run is over counts as leaving. When the server ends within two seconds of its client, the server's ending is the
+one reported. The server's own supervision is unchanged.
+
 ### `--tests` selects script tests too · green in the engine's and the plugin's own tests
 
 A Gradle `--tests` filter used to leave every script test in, so a run meant for one Java class still started every

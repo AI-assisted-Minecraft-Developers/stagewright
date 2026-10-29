@@ -29,7 +29,8 @@ import org.junit.platform.engine.reporting.ReportEntry;
 /**
  * One scene: start its game (and the companion its topology names), select the scene's classes, relay what the game
  * reports, and when the game is gone report everything it did not as failed with the reason it stopped. A game that
- * had to be forced down after its run fails the scene itself, naming what held it up.
+ * had to be forced down after its run fails the scene itself, naming what held it up, and so does a joined client
+ * that crashes, goes silent or leaves before the run is over.
  */
 final class SceneRun {
 
@@ -143,8 +144,11 @@ final class SceneRun {
         for (int round = 0; ; round++) {
             String suffix = round == 0 ? "" : "-round" + round;
             File gameLog = logs.resolve(scene.name + suffix + "-game.log").toFile();
+            File companionLog = logs.resolve(scene.name + suffix + "-companion.log").toFile();
             Process companion = null;
-            try (Supervisor supervisor = Supervisor.open()) {
+            // The joined client carries the agent too, reporting to a supervisor of its own: one serves one process.
+            try (Supervisor supervisor = Supervisor.open();
+                 Supervisor joined = spec.companion() == null ? null : Supervisor.open()) {
                 supervisor.onTest(relay);
                 List<String> extra = new ArrayList<>(List.of(
                         supervisor.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS),
@@ -161,14 +165,33 @@ final class SceneRun {
                     extra.add("-Dstagewright.companion.dir=" + spec.companion().workingDirectory().toAbsolutePath());
                 }
                 Process game = start(spec.primary(), extra, gameLog);
-                if (spec.companion() != null) {
-                    companion = start(spec.companion(), List.of(),
-                            logs.resolve(scene.name + suffix + "-companion.log").toFile());
+                if (joined != null) {
+                    companion = start(spec.companion(),
+                            List.of(joined.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS)), companionLog);
                 }
                 Duration total = Duration.ofMinutes(spec.timeoutMinutes());
                 Duration stall = spec.stallMinutes() == 0 ? total : Duration.ofMinutes(spec.stallMinutes());
-                Supervisor.Ended ended = supervisor.await(game.toHandle(),
-                        new Supervisor.Limits(CONNECT_LIMIT, HEARTBEAT_LIMIT, stall, total));
+                Supervisor.Limits limits = new Supervisor.Limits(CONNECT_LIMIT, HEARTBEAT_LIMIT, stall, total);
+                Supervisor.Ended ended;
+                if (joined == null) {
+                    ended = supervisor.await(game.toHandle(), limits);
+                } else {
+                    Supervisor.Ending ending = supervisor.await(game.toHandle(), limits, joined, companion.toHandle(),
+                            limits);
+                    if (ending.companion()) {
+                        // The run cannot go on without its player: end the game, and say it was the client.
+                        Supervisor.kill(game.toHandle());
+                        String why = describeCompanion(ending.ended(), joined.phase(), joined.ticks(),
+                                joined.crashReport(), joined.stacks(), companionLog);
+                        listener.reportingEntryPublished(scene, ReportEntry.from("companion", why));
+                        appendToLog(companionLog, "the joined client ended " + why);
+                        relay.closeOut(scene, "the joined client ended " + why);
+                        return TestExecutionResult.failed(new AssertionError("the joined client ended " + why
+                                + "\nthe game's log is " + gameLog
+                                + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
+                    }
+                    ended = ending.ended();
+                }
                 if (ended != Supervisor.Ended.DONE) Supervisor.kill(game.toHandle());
                 // The supervisor's reader may still be handing over the last lines; they precede the end it saw.
                 boolean exited = supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(agentGraceSeconds + 10));
@@ -237,6 +260,16 @@ final class SceneRun {
             }
         }
         return out.toString();
+    }
+
+    /**
+     * Why the client joined to the game ended the run, which only a failure of the client's does. Its {@code DONE} is
+     * the client giving up: it says so once it is out of the world, or never got into it, before the run was over.
+     */
+    static String describeCompanion(Supervisor.Ended ended, String phase, long ticks, String crashReport,
+                                    List<Supervisor.ThreadStack> stacks, File log) {
+        if (ended != Supervisor.Ended.DONE) return describe(ended, phase, ticks, crashReport, stacks, log);
+        return "(" + ended + ") by leaving the server before the run was over, in phase " + phase + "; its log is " + log;
     }
 
     /**

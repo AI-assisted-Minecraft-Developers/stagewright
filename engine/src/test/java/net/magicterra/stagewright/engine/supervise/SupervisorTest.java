@@ -331,6 +331,128 @@ class SupervisorTest {
         }
     }
 
+    /** A server whose run never ends, as one waiting on its tests is from outside, and the client joined to it. */
+    private static Supervisor.Ending awaitWithCompanion(String companionMode, Path companionDir, Limits companionLimits)
+            throws Exception {
+        try (Supervisor supervisor = Supervisor.open(); Supervisor joined = Supervisor.open()) {
+            Process game = start(supervisor, 20, "silent");
+            Process client = start(joined, 20, companionMode, companionDir);
+            try {
+                return supervisor.await(game.toHandle(), FAST, joined, client.toHandle(), companionLimits);
+            } finally {
+                Supervisor.kill(client.toHandle());
+                Supervisor.kill(game.toHandle());
+            }
+        }
+    }
+
+    @Test
+    void aCompanionThatCrashesEndsTheWaitAsTheCompanions(@TempDir Path clientDir) throws Exception {
+        assertEquals(new Supervisor.Ending(Ended.CRASHED, true), awaitWithCompanion("crash", clientDir, FAST));
+    }
+
+    @Test
+    void aCompanionThatSaysItIsDoneBeforeTheRunIsOverHasLeft(@TempDir Path clientDir) throws Exception {
+        assertEquals(new Supervisor.Ending(Ended.DONE, true), awaitWithCompanion("clean", clientDir, FAST));
+    }
+
+    @Test
+    void aCompanionWhoseProcessIsGoneEndsTheWait() throws Exception {
+        try (Supervisor supervisor = Supervisor.open(); Supervisor joined = Supervisor.open()) {
+            Process game = start(supervisor, 20, "silent");
+            Process client = start(joined, 20, "silent");
+            try {
+                long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
+                while (joined.agentPid() < 0 && System.nanoTime() < deadline) Thread.sleep(50);
+                assertTrue(joined.agentPid() > 0, "the companion's agent should have said hello");
+                client.destroyForcibly();
+                assertEquals(new Supervisor.Ending(Ended.PROCESS_DIED, true),
+                        supervisor.await(game.toHandle(), FAST, joined, client.toHandle(), FAST));
+                assertTrue(game.isAlive(), "the game is the caller's to end");
+            } finally {
+                Supervisor.kill(client.toHandle());
+                Supervisor.kill(game.toHandle());
+            }
+        }
+    }
+
+    @Test
+    void aCompanionThatGoesSilentIsAHeartbeatLostOfTheCompanion() throws Exception {
+        Process bareClient = bare();
+        try (Supervisor supervisor = Supervisor.open(); Supervisor joined = Supervisor.open();
+             Socket client = connect(joined)) {
+            Process game = start(supervisor, 20, "silent");
+            try {
+                send(client, hello(joined.token()));
+                assertEquals(new Supervisor.Ending(Ended.HEARTBEAT_LOST, true), supervisor.await(game.toHandle(), FAST,
+                        joined, bareClient.toHandle(), limits(5, 1, 60, 60)));
+            } finally {
+                Supervisor.kill(game.toHandle());
+            }
+        } finally {
+            Supervisor.kill(bareClient.toHandle());
+        }
+    }
+
+    @Test
+    void aCompanionThatNeverLoadsTheAgentIsNeverConnected() throws Exception {
+        Process bareClient = bare();
+        try (Supervisor supervisor = Supervisor.open(); Supervisor joined = Supervisor.open()) {
+            Process game = start(supervisor, 20, "silent");
+            try {
+                assertEquals(new Supervisor.Ending(Ended.NEVER_CONNECTED, true), supervisor.await(game.toHandle(),
+                        FAST, joined, bareClient.toHandle(), limits(1, 5, 60, 60)));
+            } finally {
+                Supervisor.kill(game.toHandle());
+            }
+        } finally {
+            Supervisor.kill(bareClient.toHandle());
+        }
+    }
+
+    @Test
+    void theGameEndingTheRunIsTheGamesWhileTheCompanionCarriesOn() throws Exception {
+        try (Supervisor supervisor = Supervisor.open(); Supervisor joined = Supervisor.open()) {
+            Process game = start(supervisor, 20, "clean");
+            Process client = start(joined, 20, "silent");
+            try {
+                assertEquals(new Supervisor.Ending(Ended.DONE, false),
+                        supervisor.await(game.toHandle(), FAST, joined, client.toHandle(), FAST));
+            } finally {
+                Supervisor.kill(client.toHandle());
+                Supervisor.kill(game.toHandle());
+            }
+        }
+    }
+
+    @Test
+    void aGameThatEndsJustAfterItsCompanionIsTheCause() throws Exception {
+        Process bareGame = bare();
+        Process bareClient = bare();
+        try (Supervisor supervisor = Supervisor.open(); Supervisor joined = Supervisor.open();
+             Socket server = connect(supervisor); Socket client = connect(joined)) {
+            send(server, hello(supervisor.token()));
+            send(client, hello(joined.token()));
+            // The client drops out first, as it does when the server halts under it, and the server's end follows.
+            send(client, "{\"event\":\"done\"}");
+            Thread later = new Thread(() -> {
+                try {
+                    Thread.sleep(700);
+                    send(server, "{\"event\":\"done\"}");
+                } catch (IOException | InterruptedException ignored) {
+                    // The assertion below says what went wrong.
+                }
+            });
+            later.setDaemon(true);
+            later.start();
+            assertEquals(new Supervisor.Ending(Ended.DONE, false),
+                    supervisor.await(bareGame.toHandle(), FAST, joined, bareClient.toHandle(), FAST));
+        } finally {
+            Supervisor.kill(bareClient.toHandle());
+            Supervisor.kill(bareGame.toHandle());
+        }
+    }
+
     private static Socket connect(Supervisor supervisor) throws IOException {
         return new Socket(InetAddress.getLoopbackAddress(), supervisor.port());
     }

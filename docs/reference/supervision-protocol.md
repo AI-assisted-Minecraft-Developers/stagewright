@@ -71,8 +71,9 @@ An element of `stacks` has `name` and `stack` (the top eight frames), for the th
 
 The phases the game reports are `armed` (the server has started) and, from a client joined to a server, `client-`
 followed by where it is: `waiting-for-title`, `driving`, `in-world`, `finishing`. A server whose tests wait for a
-client to join keeps ticking while it waits, so a client that never arrives shows as a server that ran out of time,
-not as one that stalled.
+client to join keeps ticking while it waits, so it never stalls on its own account; the client's agent, reporting to a
+supervisor of its own, is what says why it never arrived. A joined client sends `done` once it has left the world, or
+given up joining it.
 
 `leaked` lists the non-daemon threads still alive, `DestroyJavaVM` excluded, and may be empty when
 the JVM is held up by something that is not a thread. The agent ends the JVM with `Runtime.halt(0)`
@@ -92,6 +93,12 @@ game whose agent sent `leaked`.
 | `TIMED_OUT` | alive and talking, and not done within the ceiling |
 
 `DONE` says the game's run is over, and nothing about how its tests went: that is in the `test` events.
+
+A client joined to a dedicated server is watched by a second supervisor, with the same limits, from the same loop
+(`Supervisor.await(game, limits, joined, client, limits)`). The run is the server's, so every ending of the client's
+while the server's run is going, its `DONE` included, ends the wait as the client's: a client that says it is done has
+left. When the server ends too within two seconds of that, the server's ending is the answer, since a server that halts
+or crashes drops its client.
 
 ## The game to the agent
 

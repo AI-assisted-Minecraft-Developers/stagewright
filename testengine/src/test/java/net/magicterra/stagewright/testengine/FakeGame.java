@@ -19,6 +19,31 @@ public final class FakeGame {
         // The agent connects on its own thread and drops what the game sends before that; a real game takes seconds
         // to reach its first event, this one has to wait the connection out.
         Thread.sleep(1500);
+        if (scenario.equals("companionStays")) {
+            // A joined client: it reports nothing and stays until the engine ends it.
+            Thread.sleep(120_000);
+            return;
+        }
+        if (scenario.equals("companionLeaves")) {
+            // A joined client that is gone while the server is still running its tests.
+            System.exit(3);
+        }
+        if (scenario.equals("companionCrashes")) {
+            // A joined client that crashes and stays up, as one whose mod holds a thread does.
+            java.nio.file.Path report = java.nio.file.Path.of("crash-reports", "crash-client.txt");
+            java.nio.file.Files.createDirectories(report.getParent());
+            java.nio.file.Files.writeString(report, "---- Minecraft Crash Report ----");
+            Thread.sleep(120_000);
+            return;
+        }
+        if (scenario.equals("clientLeaves") || scenario.equals("clientCrashes")) {
+            // A server whose run waits on its player; it would never end by itself.
+            plan(classes(), List.of("a", "b"));
+            start(classId(classes().get(0)));
+            start(methodId(classes().get(0), "a"));
+            Thread.sleep(120_000);
+            return;
+        }
         List<String> classes = List.of(System.getProperty("stagewright.junit.classes", "").split(","));
         if (scenario.equals("dynamic")) {
             dynamic(classes);
@@ -86,6 +111,10 @@ public final class FakeGame {
         }
         done();
         System.exit(0);
+    }
+
+    private static List<String> classes() {
+        return List.of(System.getProperty("stagewright.junit.classes", "").split(","));
     }
 
     /** What the engine should have handed a game of the "world" scenario; null when it did. */
