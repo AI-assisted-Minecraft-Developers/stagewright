@@ -530,14 +530,27 @@ class StageWrightTestEngineTest {
     }
 
     @Test
-    void scriptNodesNameTheirFileAsTheClassAndTheTestAsTheMethod() {
+    void scriptNodesNameTheirSceneAndFileAsTheClassAndTheTestAsTheMethod() {
         TestDescriptor test = EngineTestKit.engine("stagewright")
                 .selectors(selectClasspathResource("stagewright/tests/arithmetic.js")).execute()
                 .testEvents().succeeded().list().get(0).getTestDescriptor();
         assertEquals(java.util.Optional.of(MethodSource.from("stagewright/tests/arithmetic.js", "adds")),
                 test.getSource());
-        assertEquals(java.util.Optional.of(ClassSource.from("stagewright/tests/arithmetic.js")),
-                test.getParent().orElseThrow().getSource());
+        TestDescriptor file = test.getParent().orElseThrow();
+        assertEquals(java.util.Optional.of(ClassSource.from("script/stagewright/tests/arithmetic.js")),
+                file.getSource());
+        assertEquals(java.util.Optional.of(ClassSource.from("script")), file.getParent().orElseThrow().getSource());
+    }
+
+    /** Gradle files a test's XML by the nearest class source above it: the scene and the class, not the class alone. */
+    @Test
+    void javaNodesNameTheirSceneAndClassAsTheClass() {
+        TestDescriptor test = run("PassFixture").testEvents().succeeded().list().get(0).getTestDescriptor();
+        assertEquals(FIXTURES + "PassFixture", ((MethodSource) test.getSource().orElseThrow()).getClassName());
+        TestDescriptor testClass = test.getParent().orElseThrow();
+        assertEquals(java.util.Optional.of(ClassSource.from("pass/" + FIXTURES + "PassFixture")),
+                testClass.getSource());
+        assertEquals(java.util.Optional.of(ClassSource.from("pass")), testClass.getParent().orElseThrow().getSource());
     }
 
     /**

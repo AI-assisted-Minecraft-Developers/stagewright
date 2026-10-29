@@ -111,7 +111,7 @@ public final class StageWrightTestEngine implements TestEngine {
                 Set<String> only = scenesOf.get(entry.getKey());
                 if (only != null && !only.contains(sceneName)) continue;
                 Nodes.Scene scene = scenes.computeIfAbsent(sceneName, n -> new Nodes.Scene(uniqueId, n));
-                Nodes.TestClass testClass = new Nodes.TestClass(scene.getUniqueId(), scanned.get());
+                Nodes.TestClass testClass = new Nodes.TestClass(scene, scanned.get());
                 for (ClassScan.Method m : scanned.get().methods()) {
                     if (entry.getValue().test(m)) {
                         testClass.addChild(new Nodes.TestMethod(testClass.getUniqueId(), scanned.get().className(), m));
@@ -136,7 +136,7 @@ public final class StageWrightTestEngine implements TestEngine {
                             .filter(c -> c instanceof Nodes.ScriptFile f && f.resource.equals(entry.getKey()))
                             .map(Nodes.ScriptFile.class::cast).findFirst().orElse(null);
                     if (file == null) {
-                        file = new Nodes.ScriptFile(scene.getUniqueId(), entry.getKey());
+                        file = new Nodes.ScriptFile(scene, entry.getKey());
                         scene.addChild(file);
                     }
                     file.addChild(new Nodes.ScriptTest(file.getUniqueId(), entry.getKey(), test.name()));
