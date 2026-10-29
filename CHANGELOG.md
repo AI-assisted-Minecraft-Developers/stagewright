@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### A script test can catch what `t.call` and the handles refuse · green in the unit tests, against WorldDriver's script engine
+
+A refused `t.call`, or a refusal from `t.plot`, `t.bot`, `t.player`, `t.npc`, `t.client` or a method of what they
+return, used to go straight through the script's `try`/`catch`: WorldDriver hands a Java exception to the script engine
+as it is, and the engine runs only a script's `finally` for one. So a test could not check that a command is refused,
+nor clean up after one. Those functions now reach the script through a small script function that throws an `Error`
+with the refusal's `message`, its Java class as `type` and WorldDriver's error code as `code`. One left uncaught fails
+the test as before, with the Java exception as its cause. A failed `t.expect`, a wait out of ticks and an abort still
+cannot be caught. The in-game script suites have not yet been run against this.
+
 ### A scene the command-line runner cannot launch is skipped, not failed · green in the engine's and the CLI's own tests
 
 Run without `--client`, `stagewright test` failed every test of every `integratedServer` scene with "topology

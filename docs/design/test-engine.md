@@ -59,8 +59,12 @@ handles `plot({size, x, y, z, centered, dimension})`, `bot(name)` or `bot({name,
 `npc(type, pos, dimension)`, `client()` and `capability(name)`, as plain objects (a position is `{x, y, z}`, a block or
 item its id), and `translate(pos, from, to)`; and `override(rule, value)`, `overrideTime`, `overrideWeather` and
 `overrideTickRate`. What a test leases is given back and what it overrides undone when it
-ends. The script also has WorldDriver's own `Driver.*`. A failed `t.expect` cannot be caught by the script, so a test
-cannot swallow its own failure.
+ends. The script also has WorldDriver's own `Driver.*`. A failed `t.expect`, or a wait out of ticks, cannot be caught
+by the script, so a test cannot swallow its own failure; it is an `Error`, which Rhino keeps from a script's `catch`.
+What `t.call` and the handles refuse can be: WorldDriver's `Scripting` lets a Java exception out of the script as it
+is, which Rhino does not hand to a `catch` either, so each of those functions reaches the script through a small
+script function that throws an `Error` (`message`, `type`, `code`) when the Java side answers with a refusal
+(`CatchableErrors`). One left uncaught fails the test with the Java exception as its cause.
 
 The options are `scene`, `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`, counted toward
 coverage as `@Requires` is), `dependsOn` (a test's name in the same file, `file.js#name`, or a Java test as

@@ -15,6 +15,7 @@ import com.google.gson.JsonPrimitive;
 
 import net.magicterra.stagewright.test.Game;
 import net.minecraft.core.BlockPos;
+import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
@@ -42,6 +43,10 @@ final class ScriptContext {
     /** Positions the test's steps named with {@code as}. */
     private final Map<String, BlockPos> handles = new LinkedHashMap<>();
     private Map<String, Object> script;
+    /** What turned the refusals of {@code t.call} and the handles into script errors; null until the script asks. */
+    private CatchableErrors errors;
+    /** {@code t.plot} as Java calls it for a YAML test, its refusals left as they were thrown. */
+    private Scripting.Function javaPlot;
 
     ScriptContext(Game game, Map<String, Scripting.Function> steps, JavaSteps javaSteps, TestDescriptor test,
                   EngineExecutionListener listener) {
@@ -72,6 +77,16 @@ final class ScriptContext {
         store.put("get", (Scripting.Function) a -> BuiltinSteps.run(this, "store.get", String.valueOf(a[0])));
         script.put("store", store);
         ScriptHandles.install(script, game, leases, test.getDisplayName());
+        javaPlot = (Scripting.Function) script.get("plot");
+        // What t.call and the handles refuse, a script can catch; a failed t.expect or wait it still cannot.
+        Scripting scripting = WorldDriver.scripting();
+        if (scripting != null) {
+            errors = new CatchableErrors(scripting);
+            script.put("call", errors.wrap((Scripting.Function) script.get("call"), false));
+            for (String handle : List.of("plot", "bot", "player", "npc", "client")) {
+                script.put(handle, errors.wrap((Scripting.Function) script.get(handle), true));
+            }
+        }
         return script;
     }
 
@@ -80,6 +95,7 @@ final class ScriptContext {
      * is the body's; what ending throws is added to it, or becomes the failure when the body passed.
      */
     Throwable end(Throwable failure) {
+        if (errors != null && failure != null) failure = errors.explain(failure);
         TestScope scope = TestScope.bound();
         List<Runnable> undo = new ArrayList<>();
         if (scope != null && scope.changedAnything()) undo.add(() -> game.runOnServer(scope::restore));
@@ -250,7 +266,8 @@ final class ScriptContext {
     /** A plot leased for the test, as {@code t.plot(options)} answers it. */
     @SuppressWarnings("unchecked")
     Map<String, Object> plot(Map<String, Object> options) {
-        return (Map<String, Object>) ((Scripting.Function) asScript().get("plot")).call(options);
+        asScript();
+        return (Map<String, Object>) javaPlot.call(options);
     }
 
     void record(String name, Object value) {

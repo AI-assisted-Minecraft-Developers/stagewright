@@ -152,8 +152,22 @@ and `isolated`.
 `check`, `record(name, value)`, `step(name, args)`, `perf`, `store`, the handles `plot({size, x, y, z, centered,
 dimension})`, `bot()` or `bot({name, parked, keep, kept})`, `player()`, `npc(type, pos)`, `client()`, `capability(name)`,
 `translate(pos, from, to)`, and the overrides `override`, `overrideTime`, `overrideWeather`, `overrideTickRate`.
-Positions are `{x, y, z}`; blocks and items are ids. The script also has WorldDriver's own `Driver.*`. A failed
-`t.expect` cannot be caught by the script.
+Positions are `{x, y, z}`; blocks and items are ids. The script also has WorldDriver's own `Driver.*`.
+
+What `t.call` and the handles (`t.plot`, `t.bot`, `t.player`, `t.npc`, `t.client` and their methods) refuse can be
+caught, so a test can check that something is refused, and carry on:
+
+```javascript
+try {
+  t.call('mc.action.runCommand', { command: 'op somebody' });
+  t.check(false, 'the command should have been refused');
+} catch (e) {
+  t.expect(e.message).contains('permission');   // e.type is the Java class, e.code WorldDriver's error code
+}
+```
+
+A refusal nobody catches fails the test, as before. A failed `t.expect` and a `t.waitUntil` or `t.settle` that runs
+out of ticks cannot be caught, so a test cannot swallow its own failure.
 
 ### YAML
 
