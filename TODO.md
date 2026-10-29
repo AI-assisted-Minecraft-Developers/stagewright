@@ -33,10 +33,3 @@ with LuckPerms refuses every command and `@s` is another test's bot; a bot's `na
 (`agent-body-N`); a topology that cannot launch fails its tests instead of skipping them; the CLI has no `leaks`
 option, does not follow a symlinked tests directory, and does not notice a stale harness jar in `mods/`; scripts have
 no `Java` global and no way to run several commands in one tick; plots far from spawn lose non-persistent mobs.
-
-## The launch-spec adapters have only met stand-ins for the loaders
-
-`Toolchain` finds ModDevGradle's and Loom's late-bound members by name, and the TestKit tests use run
-tasks that declare the same members. Run `stagewrightTestFabric` and `…Neoforge` with
-`--configuration-cache` once, store and reuse, and compare the written launch specs with the ones
-from a run without it.

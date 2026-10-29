@@ -12,6 +12,12 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### The launch specs come out the same under the configuration cache · green against worlddriver
+
+`stagewrightLaunchSpecsFabric` and `…Neoforge` on worlddriver's Fabric Loom 1.13 and ModDevGradle 2.0.141 build,
+written plain, then with `--configuration-cache` stored, then reused, are byte-identical. The adapters that find the
+loaders' late-bound run members had until now only been exercised against stand-ins.
+
 ### The tests join the project's own `main` mod under ModDevGradle · green against a third party
 
 The plugin picked the mod the tests join as the first mod, by name, holding a source set *named* `main`. A mod may
