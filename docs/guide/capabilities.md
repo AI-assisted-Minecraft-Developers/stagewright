@@ -164,6 +164,21 @@ ordinary abort forever.
 **Declaring a name StageWright ships replaces ours.** That is how a pack whose fork of a mod moved a
 class corrects the framework without waiting for a release.
 
+**That folder is the only place descriptors are read from.** It is resolved against the game's working
+directory when the game starts: the pack's server directory under the command-line runner, and the run
+directory under the Gradle plugin, which the plugin's runs own. Descriptors are not read from the test
+class path, from `stagewright/tests/` or from beside the scene files. A pack keeps them in its own
+`config/`; a Gradle project, or a pack that wants a descriptor for one scene only, writes it from the
+scene file's `files:`, which puts it there before the game starts and takes it away after:
+
+```yaml
+# stagewright/scenes/rituals.yaml
+topology: dedicatedServer
+files:
+  config/stagewright/capabilities/rituals.json: |
+    { "name": "mymod:rituals", "mods": ["mymod"], "probe": "com.mymod.RitualApi" }
+```
+
 ### 3. Ship a typed adapter
 
 A mod that wants its own machinery testable ships one in its own jar:

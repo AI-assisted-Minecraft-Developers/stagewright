@@ -55,6 +55,10 @@ files:
 The world is under that directory too, so a file can go into it: `stagewright/world/datapacks/…` for a pack's server
 under the command-line runner, `saves/<world>/…` for a client hosting its own.
 
+This is also how a scene supplies [capability descriptors](../guide/capabilities.md#2-declare-one-in-a-json-file): the
+game reads them only from `config/stagewright/capabilities/` in its working directory, so a descriptor the pack does
+not already have there is written by the scene as `config/stagewright/capabilities/<file>.json`.
+
 ## `world.from`
 
 A save to start from instead of a new world: a zip or a directory, as a class path resource under `stagewright/`
