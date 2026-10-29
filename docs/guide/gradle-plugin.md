@@ -69,6 +69,7 @@ The rest is conventions, each of which a suite may set:
 | `includeWorldDriver` | true: WorldDriver is among the defaults of both configurations below |
 | `worldDriverVersion` | the WorldDriver build this StageWright was built against |
 | `serverPort`, `timeoutMinutes` | 25621, 20 |
+| `leaks` | `'fail'`: a game forced down after its run fails its scene; `'report'` only reports it (see the topology table below) |
 
 What a suite needs comes as the defaults of two configurations of the plugin's own, in its loader
 project. Declaring anything in one replaces that configuration's defaults, so a build can change any
@@ -185,6 +186,7 @@ A topology declares no task of its own; it only names the runs a suite's launch 
 | `timeoutMinutes` | `int` | `20` | The longest one scene's games may run. |
 | `stallMinutes` | `int` | `5` | How long a game may go without its phase, ticks delivered or loaded classes changing before the scene is ended. See [supervision](../reference/supervision-protocol.md). |
 | `client` | `boolean` | `false` | The run task is a game client rather than a dedicated server. The plugin never starts a display. |
+| `leaks` | `String` | `'fail'` | What a game the supervision agent had to force down after its run does to its scene. `'fail'` fails it; `'report'` leaves the verdict to the tests, for a launcher whose own threads never end, such as Architectury's transformer in a dev run. The held-up threads are reported either way. A generated topology takes the suite's `leaks`. |
 
 Per suite `<name>` the plugin registers:
 

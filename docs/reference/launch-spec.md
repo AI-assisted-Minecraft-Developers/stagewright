@@ -15,6 +15,7 @@ matching file when it starts that scene. Why the engine does not ask Gradle is i
   "cleanWorld": true,
   "timeoutMinutes": 20,
   "stallMinutes": 5,
+  "leaks": "fail",
   "primary": {
     "java": "/usr/lib/jvm/java-21-openjdk/bin/java",
     "jvmArgs": ["-Xmx2g", "-Dstagewright.awaitPlayer=true", "@/abs/argfile"],
@@ -35,6 +36,7 @@ matching file when it starts that scene. Why the engine does not ask Gradle is i
 | `cleanWorld` | delete `worldDirectory` (and a client's `saves`) before each scene starts; default true |
 | `timeoutMinutes` | the longest a scene's game may run; default 20 |
 | `stallMinutes` | how long the game may go without changing phase, ticks or loaded classes before it is ended; 0 turns this off; default 5 |
+| `leaks` | what a game the supervision agent had to force down after its run does to its scene: `fail` (the default) fails it, `report` leaves the verdict to its tests. Either way the held-up threads go into a `forcedDown` report entry and the game's log ([supervision](../design/supervision.md#the-supervisor)); any other value refuses the spec |
 | `server` | the primary is a dedicated server: before each scene the engine accepts the EULA in its working directory and puts `online-mode=false`, `level-seed=5471` and `sync-chunk-writes=false` into its `server.properties` (the scene's own world keys are written after, so a declared seed wins), so a directory nothing else prepared starts; default false |
 | `primary` | the game the tests run in |
 | `companion` | optional: a second game started with it and ended after it, such as the client that joins a dedicated server |

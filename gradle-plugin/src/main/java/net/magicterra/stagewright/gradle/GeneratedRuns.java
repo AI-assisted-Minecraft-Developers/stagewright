@@ -65,16 +65,18 @@ final class GeneratedRuns {
         Project loader = loader(plugin, suite);
         String path = loader.getPath().equals(":") ? "" : loader.getPath();
         int timeout = suite.getTimeoutMinutes().getOrElse(StageWrightPlugin.DEFAULT_TIMEOUT_MINUTES);
+        String leaks = SuiteLaunch.leaks(suite.getLeaks().getOrNull(), "stagewright test suite '" + suite.getName() + "'");
         List<SuiteLaunch> launches = new ArrayList<>();
         launches.add(new SuiteLaunch(DEDICATED_SERVER, path + ":" + taskName(suite, "DedicatedServer"), null,
                 loader.file(runDir(suite, "dedicated-server")), true, timeout, StageWrightPlugin.DEFAULT_STALL_MINUTES,
-                true));
+                true, leaks));
         launches.add(new SuiteLaunch(DEDICATED_SERVER_WITH_CLIENT,
                 path + ":" + taskName(suite, "DedicatedServerWithClient"), path + ":" + taskName(suite, "JoiningClient"),
-                loader.file(runDir(suite, "with-client")), true, timeout, StageWrightPlugin.DEFAULT_STALL_MINUTES, true));
+                loader.file(runDir(suite, "with-client")), true, timeout, StageWrightPlugin.DEFAULT_STALL_MINUTES, true,
+                leaks));
         launches.add(new SuiteLaunch(INTEGRATED_SERVER, path + ":" + taskName(suite, "IntegratedServer"), null,
                 loader.file(runDir(suite, "integrated-server")), true, timeout, StageWrightPlugin.DEFAULT_STALL_MINUTES,
-                false));
+                false, leaks));
         return launches;
     }
 

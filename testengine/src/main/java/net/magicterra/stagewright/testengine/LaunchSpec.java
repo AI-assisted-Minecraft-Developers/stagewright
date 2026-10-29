@@ -16,9 +16,26 @@ import net.magicterra.stagewright.engine.Json;
  * {@code docs/reference/launch-spec.md}.
  */
 record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, boolean cleanWorld, int timeoutMinutes,
-                  int stallMinutes, boolean server, Process primary, Process companion) {
+                  int stallMinutes, boolean server, Leaks leaks, Process primary, Process companion) {
 
     static final String PROPERTY = "stagewright.launches";
+
+    /** What a game the agent had to force down after its run does to its scene; reported either way. */
+    enum Leaks {
+        /** The scene fails. */
+        FAIL,
+        /** The scene's verdict is its tests'; for a launcher whose own threads never end, such as Architectury's in dev. */
+        REPORT;
+
+        static Leaks parse(Object value) {
+            if (value == null) return FAIL;
+            return switch (String.valueOf(value)) {
+                case "fail" -> FAIL;
+                case "report" -> REPORT;
+                default -> throw new IllegalArgumentException("'leaks' is '" + value + "'; it is 'fail' or 'report'");
+            };
+        }
+    }
 
     /**
      * One JVM: {@code java jvmArgs… mainClass args…}, in {@code workingDirectory}; {@code mainClass} is null when an
@@ -76,7 +93,7 @@ record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, bool
                 gameDirectory.resolve(o.get("worldDirectory") instanceof String w ? w : "world"),
                 !Boolean.FALSE.equals(o.get("cleanWorld")),
                 number(o, "timeoutMinutes", 20), number(o, "stallMinutes", 5), Boolean.TRUE.equals(o.get("server")),
-                process((Map<?, ?>) o.get("primary")),
+                Leaks.parse(o.get("leaks")), process((Map<?, ?>) o.get("primary")),
                 companion instanceof Map<?, ?> c ? process(c) : null);
     }
 

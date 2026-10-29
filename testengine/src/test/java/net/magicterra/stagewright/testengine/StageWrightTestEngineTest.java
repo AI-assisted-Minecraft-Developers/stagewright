@@ -45,7 +45,7 @@ class StageWrightTestEngineTest {
         Path specs = Files.createDirectories(temp.resolve("launches"));
         System.setProperty(LaunchSpec.PROPERTY, specs.toString());
         for (String topology : List.of("pass", "assertFail", "crash", "undiscovered", "dynamic", "world",
-                "reqSkip", "otherSkip", "classSkip", "classSkipOther", "script", "restart", "leak")) {
+                "reqSkip", "otherSkip", "classSkip", "classSkipOther", "script", "restart", "leak", "leakReport")) {
             writeSpec(specs, topology, true);
         }
         writeSpec(specs, "worldDirty", false);
@@ -62,9 +62,10 @@ class StageWrightTestEngineTest {
     private void writeSpec(Path specs, String topology, boolean cleanWorld, String companion) throws IOException {
         Path game = Files.createDirectories(temp.resolve("game-" + topology));
         Files.writeString(specs.resolve(topology + ".json"), """
-                {"gameDirectory": %s, "cleanWorld": %s, "timeoutMinutes": 2, "stallMinutes": 0, "server": %s,
+                {"gameDirectory": %s, "cleanWorld": %s, "timeoutMinutes": 2, "stallMinutes": 0, "server": %s,%s
                  "primary": %s%s}
-                """.formatted(q(game.toString()), cleanWorld, topology.equals("world"), process(topology, game),
+                """.formatted(q(game.toString()), cleanWorld, topology.equals("world"),
+                topology.equals("leakReport") ? " \"leaks\": \"report\"," : "", process(topology, game),
                 companion == null ? "" : ", \"companion\": " + process(companion, game.resolve("client"))));
     }
 
@@ -133,6 +134,28 @@ class StageWrightTestEngineTest {
                 .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs().get("forcedDown"))
                 .anyMatch(v -> v != null && v.contains("mod-pool-1")));
         Path log = temp.resolve("game-leak").resolve("stagewright").resolve("logs").resolve("leak-game.log");
+        assertTrue(Files.readString(log).contains("[stagewright] the game had to be forced down"), log.toString());
+    }
+
+    @Test
+    void aTopologyThatReportsLeaksNamesTheThreadAndKeepsTheScenePassing() throws IOException {
+        int grace = SceneRun.agentGraceSeconds;
+        SceneRun.agentGraceSeconds = 1;
+        EngineExecutionResults r;
+        try {
+            r = run("LeakReportFixture");
+        } finally {
+            SceneRun.agentGraceSeconds = grace;
+        }
+        assertEquals(2, r.testEvents().succeeded().count());
+        assertEquals(0, r.testEvents().failed().count());
+        assertEquals(0, containersFailed(r).count(), () -> String.valueOf(containersFailed(r).list()));
+        assertTrue(r.allEvents().reportingEntryPublished().stream()
+                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs().get("forcedDown"))
+                .anyMatch(v -> v != null && v.contains("had to be forced down") && v.contains("mod-pool-1")
+                        && v.contains("started by ")));
+        Path log = temp.resolve("game-leakReport").resolve("stagewright").resolve("logs")
+                .resolve("leakReport-game.log");
         assertTrue(Files.readString(log).contains("[stagewright] the game had to be forced down"), log.toString());
     }
 

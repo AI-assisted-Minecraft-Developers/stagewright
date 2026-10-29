@@ -69,6 +69,8 @@ which it otherwise does for a save made with worldgen mods.
 Required. The name a [launch spec](launch-spec.md) was written for. A Gradle suite with a `loaderProject` has
 `dedicatedServer`, `integratedServer` and `dedicatedServerWithClient`; `tests { topologies.put(…) }` maps other names to
 topologies the build declares. The command-line runner has `dedicatedServer`, and the other two with `--client`.
+How a topology's games are bounded and judged — `timeoutMinutes`, `stallMinutes`, `leaks` — is the topology's, not
+the scene's: it is set in the Gradle `topologies { }` block, or on the suite for its generated topologies.
 
 ## `world` — at creation
 

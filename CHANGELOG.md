@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### A topology can report leaked threads instead of failing on them · green in the engine's and the plugin's own tests
+
+`leaks = 'report'` on a topology in `topologies { }`, or on a suite for its generated topologies, keeps a game the
+agent had to force down after its run from failing its scene; the `forcedDown` report entry and the line in the game's
+log are written as before. The default, `'fail'`, is unchanged. An Architectury development run never ends by itself,
+because the transformer's own thread pools never shut down, so every scene there failed on threads that were neither
+the game's nor a mod's.
+
 ### The joined client of `dedicatedServerWithClient` is watched too · green in the engine's own tests
 
 The client joined to a dedicated server used to run without the supervision agent, so a client that crashed, hung or

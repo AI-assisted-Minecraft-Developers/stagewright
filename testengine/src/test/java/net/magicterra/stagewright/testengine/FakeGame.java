@@ -96,7 +96,7 @@ public final class FakeGame {
             finish(classId(c), "SUCCESSFUL", null);
         }
         test("{\"type\":\"ended\"}");
-        if (scenario.equals("leak")) {
+        if (scenario.startsWith("leak")) {
             // A mod's pool that outlives the run: the JVM stays up until the agent's grace period ends it.
             Thread pool = new Thread(() -> {
                 try {

@@ -69,6 +69,12 @@ public abstract class StageWrightTopology implements Named {
     public abstract Property<Integer> getStallMinutes();
 
     /**
+     * What a game the supervision agent had to force down after its run does to its scene: {@code "fail"} fails it,
+     * {@code "report"} leaves the verdict to the tests. Reported the same either way. Convention: {@code "fail"}.
+     */
+    public abstract Property<String> getLeaks();
+
+    /**
      * The run task starts a game client rather than a dedicated server. Convention: {@code false}.
      *
      * <p>A client needs a display; the plugin does not start one: a desktop, a CI image with Xvfb, or

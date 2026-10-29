@@ -85,6 +85,12 @@ public abstract class StageWrightTestSuite implements Named {
     public abstract Property<Integer> getTimeoutMinutes();
 
     /**
+     * {@link StageWrightTopology#getLeaks()} for the generated topologies: {@code "fail"} or {@code "report"}.
+     * Convention: {@code "fail"}.
+     */
+    public abstract Property<String> getLeaks();
+
+    /**
      * Whether the plugin brings WorldDriver as well as StageWright into the generated runs, and its api onto the
      * tests' compile classpath. Convention: true; WorldDriver's own build, which is WorldDriver, turns it off.
      */

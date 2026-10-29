@@ -39,11 +39,14 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
         final int stallMinutes;
         /** The primary is a dedicated server, so the engine prepares its directory as one. */
         final boolean server;
+        /** {@code fail} or {@code report}: what a game forced down after its run does to its scene. */
+        final String leaks;
         final CompanionLaunch primary;
         final CompanionLaunch companion;
 
         Entry(String topology, File gameDirectory, boolean cleanWorld, int timeoutMinutes,
-              int stallMinutes, boolean server, CompanionLaunch primary, CompanionLaunch companion) {
+              int stallMinutes, boolean server, String leaks, CompanionLaunch primary, CompanionLaunch companion) {
+            this.leaks = leaks;
             this.topology = topology;
             this.gameDirectory = gameDirectory;
             this.cleanWorld = cleanWorld;
@@ -82,6 +85,7 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
                     .add("timeoutMinutes", entry.timeoutMinutes)
                     .add("stallMinutes", entry.stallMinutes)
                     .add("server", entry.server)
+                    .add("leaks", entry.leaks)
                     .add("primary", primary);
             if (entry.companion != null) {
                 json.add("companion", process(entry.companion,

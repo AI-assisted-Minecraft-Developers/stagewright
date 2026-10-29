@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.testengine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -60,6 +61,18 @@ class ClassScanAndLaunchSpecTest {
     void extraArgumentsLandBeforeAnArgumentFile() {
         assertEquals(List.of("java", "-Da", "-javaagent:a", "@args.txt", "Main", "arg"),
                 process(List.of("-Da", "@args.txt")).command(List.of("-javaagent:a")));
+    }
+
+    @Test
+    void leaksFailUnlessTheSpecSaysReport() {
+        Map<String, Object> primary = Map.of("java", "java", "workingDirectory", ".");
+        assertEquals(LaunchSpec.Leaks.FAIL,
+                LaunchSpec.parse("t", Map.of("gameDirectory", ".", "primary", primary)).leaks());
+        assertEquals(LaunchSpec.Leaks.REPORT,
+                LaunchSpec.parse("t", Map.of("gameDirectory", ".", "leaks", "report", "primary", primary)).leaks());
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> LaunchSpec.parse("t", Map.of("gameDirectory", ".", "leaks", "ignore", "primary", primary)));
+        assertTrue(e.getMessage().contains("'fail' or 'report'"), e.getMessage());
     }
 
     @Test

@@ -47,6 +47,7 @@ class TestSuiteLaunchSpecsTest {
                         companionRunTask = 'runClient'
                         gameDirectory = file('run-server')
                         timeoutMinutes = 7
+                        leaks = 'report'
                     } }
                     tests { fabric {
                 %s
@@ -79,6 +80,7 @@ class TestSuiteLaunchSpecsTest {
         assertTrue(json.getBoolean("cleanWorld", false));
         assertEquals(7, json.getInt("timeoutMinutes", 0));
         assertEquals(5, json.getInt("stallMinutes", 0));
+        assertEquals("report", json.getString("leaks", null));
 
         JsonObject primary = json.get("primary").asObject();
         assertEquals("Server", primary.getString("mainClass", null));

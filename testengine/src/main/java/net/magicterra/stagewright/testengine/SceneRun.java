@@ -121,7 +121,7 @@ final class SceneRun {
                 : SceneMods.apply(spec.companion(), exclude, scratch.resolve("companion"));
         listener.reportingEntryPublished(scene, ReportEntry.from("mods", "excluded " + primary.excluded()));
         return new LaunchSpec(spec.topology(), spec.gameDirectory(), spec.worldDirectory(), spec.cleanWorld(),
-                spec.timeoutMinutes(), spec.stallMinutes(), spec.server(), primary.process(),
+                spec.timeoutMinutes(), spec.stallMinutes(), spec.server(), spec.leaks(), primary.process(),
                 companion == null ? null : companion.process());
     }
 
@@ -199,7 +199,8 @@ final class SceneRun {
                 if (!exited) Supervisor.kill(game.toHandle());
                 if (ended == Supervisor.Ended.DONE && (supervisor.forcedDown() || !exited)) {
                     String report = forcedDown(round, supervisor.leaks(), exited, agentGraceSeconds);
-                    forced.add(report);
+                    // Reported the same either way; only the verdict is the topology's to choose.
+                    if (spec.leaks() == LaunchSpec.Leaks.FAIL) forced.add(report);
                     listener.reportingEntryPublished(scene, ReportEntry.from("forcedDown", report));
                     appendToLog(gameLog, report);
                 }

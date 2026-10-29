@@ -91,7 +91,8 @@ moved for twenty seconds, their frames go into the same message: for `STALLED` t
 After `DONE` the JVM is given the agent's grace period, thirty seconds, to end by itself. If the agent has to halt it,
 or it is still up ten seconds after that and the engine kills it, the scene fails even when every test passed: the
 failure, a `forcedDown` report entry and a line appended to the game's log name each thread that held the JVM up,
-with its top frames, the jars they run in and the code that started it.
+with its top frames, the jars they run in and the code that started it. A topology with `leaks = 'report'` keeps the
+report and leaves the verdict to the tests.
 
 ### The joined client
 

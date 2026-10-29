@@ -64,6 +64,7 @@ public class StageWrightPlugin implements Plugin<Project> {
             topology.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
             topology.getClient().convention(false);
             topology.getStallMinutes().convention(DEFAULT_STALL_MINUTES);
+            topology.getLeaks().convention(SuiteLaunch.LEAKS_FAIL);
             topology.getGameDirectory().convention(project.getLayout().getProjectDirectory()
                     .dir("run-stagewright-" + topology.getName()));
         });
@@ -71,6 +72,7 @@ public class StageWrightPlugin implements Plugin<Project> {
         tests.all(suite -> {
             suite.getServerPort().convention(GeneratedRuns.DEFAULT_SERVER_PORT);
             suite.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
+            suite.getLeaks().convention(SuiteLaunch.LEAKS_FAIL);
             // A single-loader project is its own loader; null leaves it unset elsewhere.
             suite.getLoaderProject().convention(project.provider(() ->
                     project.getExtensions().findByName("loom") != null
@@ -225,7 +227,8 @@ public class StageWrightPlugin implements Plugin<Project> {
                     topology.getGameDirectory().get().getAsFile(), topology.getCleanWorld().getOrElse(true),
                     topology.getTimeoutMinutes().getOrElse(DEFAULT_TIMEOUT_MINUTES),
                     topology.getStallMinutes().getOrElse(DEFAULT_STALL_MINUTES),
-                    !topology.getClient().getOrElse(false)));
+                    !topology.getClient().getOrElse(false),
+                    SuiteLaunch.leaks(topology.getLeaks().getOrNull(), "stagewright topology '" + topology.getName() + "'")));
         }
         return launches;
     }
@@ -253,7 +256,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                     javaExec(project, suite, launch.topology(), launch.companionRunTask(), "companionRunTask"));
             entries.add(new StageWrightLaunchSpecsTask.Entry(launch.topology(), launch.gameDirectory(),
                     launch.cleanWorld(), launch.timeoutMinutes(), launch.stallMinutes(), launch.server(),
-                    primary, companion));
+                    launch.leaks(), primary, companion));
         }
         return entries;
     }
