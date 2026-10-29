@@ -109,6 +109,71 @@ class TestCommandTest {
     }
 
     @Test
+    void theTestsComeFromTheServerUnlessTestsNamesADirectory(@TempDir Path dir) throws IOException {
+        Path server = Files.createDirectories(dir.resolve("server/stagewright/tests")).getParent().getParent();
+        assertEquals(server.resolve("stagewright"), TestCommand.testsDir(server, Map.of()));
+        Path repo = Files.createDirectories(dir.resolve("repo/suite/tests")).getParent();
+        assertEquals(repo, TestCommand.testsDir(server, Map.of("tests", repo.toString())));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> TestCommand.testsDir(server, Map.of("tests", dir.resolve("repo").toString())));
+        assertTrue(e.getMessage().contains("repo/tests is not a directory"), e.getMessage());
+    }
+
+    @Test
+    void theClientsModsComeFromClientModsThenTheClientDirThenTheServer() {
+        Path client = Path.of("/packs/client");
+        assertEquals(PACK.resolve("mods"), TestCommand.clientMods(PACK, null, Map.of()));
+        assertEquals(client.resolve("mods"), TestCommand.clientMods(PACK, client, Map.of()));
+        assertEquals(Path.of("/elsewhere/mods"),
+                TestCommand.clientMods(PACK, client, Map.of("client-mods", "/elsewhere/mods")));
+    }
+
+    @Test
+    void aClientDirThatIsNotADirectoryIsRefused(@TempDir Path dir) {
+        assertEquals(null, TestCommand.clientDir(Map.of()));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> TestCommand.clientDir(Map.of("client-dir", dir.resolve("missing").toString())));
+        assertTrue(e.getMessage().startsWith("--client-dir "), e.getMessage());
+    }
+
+    @Test
+    void theClientDirsEntriesButItsOwnAreLinkedNotCopied(@TempDir Path dir) throws IOException {
+        Path pack = Files.createDirectories(dir.resolve("pack-client"));
+        Files.writeString(Files.createDirectories(pack.resolve("config")).resolve("a.toml"), "a = 1");
+        Files.writeString(Files.createDirectories(pack.resolve("kubejs/server_scripts")).resolve("x.js"), "//");
+        Files.writeString(pack.resolve("options.txt"), "lang:zh_cn");
+        for (String own : List.of("mods", "saves", "logs", "crash-reports", "stagewright")) {
+            Files.createDirectories(pack.resolve(own));
+        }
+        Path client = Files.createDirectories(dir.resolve("server/stagewright/client"));
+        // Left by a run without --client-dir, and by one whose pack-client had an entry it has no longer.
+        Files.writeString(Files.createDirectories(client.resolve("config")).resolve("generated.toml"), "b = 2");
+        Files.createSymbolicLink(client.resolve("gone"), Files.createDirectories(dir.resolve("elsewhere")));
+        Files.createDirectories(client.resolve("saves/StageWright"));
+
+        assertEquals(3, TestCommand.linkClientDir(pack, client, line -> { }));
+        for (String linked : List.of("config", "kubejs", "options.txt")) {
+            assertTrue(Files.isSymbolicLink(client.resolve(linked)), linked);
+            assertEquals(pack.resolve(linked), Files.readSymbolicLink(client.resolve(linked)));
+        }
+        assertEquals("a = 1", Files.readString(client.resolve("config/a.toml")));
+        assertFalse(Files.exists(client.resolve("gone"), java.nio.file.LinkOption.NOFOLLOW_LINKS));
+        assertTrue(Files.isDirectory(dir.resolve("elsewhere")), "a link is taken out, not what it names");
+        assertFalse(Files.exists(pack.resolve("config/generated.toml")), "the client's own config is not moved over");
+        assertTrue(Files.isDirectory(client.resolve("saves/StageWright")), "the client keeps its own saves");
+        assertFalse(Files.isSymbolicLink(client.resolve("saves")));
+        for (String own : List.of("mods", "logs", "crash-reports", "stagewright")) {
+            assertFalse(Files.isSymbolicLink(client.resolve(own)), own);
+        }
+
+        assertEquals(0, TestCommand.linkClientDir(null, client, line -> { }));
+        try (var list = Files.list(client)) {
+            assertEquals(List.of("saves"), list.map(p -> p.getFileName().toString()).toList(),
+                    "a run with no --client-dir keeps no link of the one before");
+        }
+    }
+
+    @Test
     void aClientsPropertiesComeBeforeTheLoadersOwn() {
         ModInjection.Arguments mods = new ModInjection.Arguments(List.of("-Dfabric.addMods=a.jar"), List.of());
         List<String> props = TestCommand.clientProps(List.of("-Xmx2G"), mods, "stagewright.client.world=W");

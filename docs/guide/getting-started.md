@@ -212,7 +212,9 @@ Lay the tests out inside the pack's server directory:
 ```
 
 Any of these may be a symbolic link, to tests kept in a repository of their own for instance, and so may the files in
-them: the runner copies what the links point to.
+them: the runner copies what the links point to. Or keep `scenes/`, `tests/` and `worlds/` together anywhere else and
+name that directory with `--tests <dir>`; the run's own files (the world, logs, reports) still go under
+`<server-dir>/stagewright/`.
 
 Then run:
 
@@ -235,6 +237,7 @@ The exit code is `0` when every test passed, `1` when one did not, and `3` when 
 
 | Option | What it does |
 |---|---|
+| `--tests <dir>` | The directory holding `tests/`, `scenes/` and `worlds/`, instead of `<server-dir>/stagewright`. |
 | `--mod <jar>` | Also load this mod, such as WorldDriver. Repeatable. Skipped when `mods/` already has that file. |
 | `--launch "<cmd>"` | Start the server this way instead of detecting how. |
 | `--java <path>` | The Java to start the games with. |
@@ -260,6 +263,12 @@ The first run installs it into `--install-dir` (the official launcher's `.minecr
 layout, with downloads shared with HMCL's cache); `--mirror bmclapi` tries BMCLAPI first, and `HTTPS_PROXY` is honoured.
 The client runs in `<server-dir>/stagewright/client`, never a player's own directory, with the server's mods or those
 in `--client-mods <dir>`, as the offline player `--username` (`StageWright` by default).
+
+A pack whose client needs more than its mods, such as its `config/`, `kubejs/` or `options.txt`, names its client
+directory with `--client-dir <dir>`. Everything in it except `mods/`, `saves/`, `logs/` and `crash-reports/` is linked
+into the client's directory, not copied, so the client reads the pack's files as they are when the run starts, and what
+a mod writes there lands in the pack's directory. The client then loads `<dir>/mods` unless `--client-mods` names
+others. The links are symbolic links; on Windows they need Developer Mode or an administrator.
 
 A client needs a display, and the runner does not start one: `DISPLAY`, or `WAYLAND_DISPLAY` when `DISPLAY` is unset.
 On a machine without a desktop, run it under `xvfb-run`.

@@ -37,8 +37,9 @@ import org.junit.platform.reporting.legacy.xml.LegacyXmlReportGeneratingListener
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClasspathRoots;
 
 /**
- * {@code stagewright test <game-dir>}: the YAML and JavaScript tests under {@code <game-dir>/stagewright/}, with the
- * scenes beside them, run in the pack's own dedicated server the way the Gradle plugin runs a mod's. The tests and
+ * {@code stagewright test <game-dir>}: the YAML and JavaScript tests under {@code <game-dir>/stagewright/} (or the
+ * directory {@code --tests} names), with the scenes beside them, run in the pack's own dedicated server the way the
+ * Gradle plugin runs a mod's. The tests and
  * scenes go into the game as a mod of their own, staged with StageWright as {@link ModInjection} stages it; the CLI
  * writes the launch spec the plugin would have written and runs the same JUnit engine in this JVM, which writes
  * JUnit XML. The server plays in {@code stagewright/world}, which each scene starts afresh; the pack's own world is
@@ -47,7 +48,8 @@ import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
  * <p>With {@code --client}, a client is installed, and the scenes of the two
  * topologies with a client run too: {@code integratedServer} in that client, {@code dedicatedServerWithClient} with
  * it joined to the pack's server. It runs in {@code stagewright/client}, since the engine deletes a client's saves
- * before each scene, with the server's mods or those {@code --client-mods} names.
+ * before each scene, with the server's mods or those {@code --client-mods} names, and the rest of a client directory
+ * {@code --client-dir} names linked in.
  */
 final class TestCommand {
 
@@ -61,7 +63,13 @@ final class TestCommand {
     /** The singleplayer world an integrated server's scene plays in. */
     static final String CLIENT_WORLD = "StageWright";
     private static final Set<String> VALUED = Set.of("launch", "java", "reports", "timeout", "stall-timeout",
-            "client", "client-mods", "install-dir", "username", "mirror", "leaks");
+            "client", "client-mods", "client-dir", "tests", "install-dir", "username", "mirror", "leaks");
+    /**
+     * What a client directory named by {@code --client-dir} keeps to itself: {@code mods/} comes from
+     * {@code --client-mods}, the engine deletes the scene's save under {@code saves/}, and logs, crash reports and the
+     * run's own {@code stagewright/} are this run's output, which must not land in the pack's directory.
+     */
+    static final Set<String> CLIENT_DIR_OWN = Set.of("mods", "saves", "logs", "crash-reports", RunDirectory.ARTIFACT_DIR);
 
     private TestCommand() {}
 
@@ -91,10 +99,10 @@ final class TestCommand {
         if (gameDir == null) throw new IllegalArgumentException("stagewright test needs the pack's server directory");
         if (!Files.isDirectory(gameDir)) throw new IllegalArgumentException(gameDir + " is not a directory");
         leaks(opts);
-        Path source = gameDir.resolve(RunDirectory.ARTIFACT_DIR);
-        if (!Files.isDirectory(source.resolve("tests"))) {
-            throw new IllegalArgumentException("no tests: " + source.resolve("tests") + " is not a directory");
-        }
+        // What the run writes stays under the server directory wherever the tests come from: they may be a repository's.
+        Path artifacts = gameDir.resolve(RunDirectory.ARTIFACT_DIR);
+        Path source = testsDir(gameDir, opts);
+        Path clientSource = clientDir(opts);
         Consumer<String> log = line -> System.out.println("[stagewright] " + line);
 
         String loader = GameLaunch.loader(gameDir);
@@ -108,7 +116,7 @@ final class TestCommand {
                     + " \"<command>\"");
         }
 
-        Path work = source.resolve("build");
+        Path work = artifacts.resolve("build");
         deleteTree(work);
         Path root = work.resolve("root");
         // worlds: the saves a scene's world.from names.
@@ -137,10 +145,10 @@ final class TestCommand {
             }
             ClientPreflight.requireDisplay(System.getProperty("os.name", ""), System.getenv());
             // Its own directory, never a player's: the engine deletes the saves of a client it starts.
-            Path clientDir = source.resolve("client");
+            Path clientDir = artifacts.resolve("client");
             Files.createDirectories(clientDir);
-            linkMods(Path.of(opts.getOrDefault("client-mods", gameDir.resolve("mods").toString()))
-                    .toAbsolutePath().normalize(), clientDir.resolve("mods"), log);
+            linkClientDir(clientSource, clientDir, log);
+            linkMods(clientMods(gameDir, clientSource, opts), clientDir.resolve("mods"), log);
             Path installDir = Main.installDir(opts);
             String versionId = install(client, installDir, opts, java, log);
             ModInjection.Arguments clientMods = ModInjection.prepare(clientDir, loader, mods, log);
@@ -156,6 +164,7 @@ final class TestCommand {
                     List.of("-Dstagewright.awaitPlayer=true"));
             write(launches, topology(WITH_CLIENT, gameDir, SERVER_WORLD, true, awaiting, joining, opts));
         } else {
+            if (clientSource != null) log.accept("--client-dir is unused: the run was given no --client");
             for (String name : List.of(INTEGRATED, WITH_CLIENT)) {
                 write(launches, unavailable(name, "the run was given no --client, so there is no client to start"));
             }
@@ -165,8 +174,67 @@ final class TestCommand {
         // user's choice here, not a mistake in a build.
         System.setProperty("stagewright.launches.missing", "skip");
 
-        Path reports = Path.of(opts.getOrDefault("reports", source.resolve("reports").toString())).toAbsolutePath();
+        Path reports = Path.of(opts.getOrDefault("reports", artifacts.resolve("reports").toString())).toAbsolutePath();
         return execute(root, reports, log);
+    }
+
+    /** {@code --tests}, or {@code <server-dir>/stagewright}: the directory holding {@code tests/} and {@code scenes/}. */
+    static Path testsDir(Path gameDir, Map<String, String> opts) {
+        Path dir = opts.containsKey("tests")
+                ? Path.of(opts.get("tests")).toAbsolutePath().normalize()
+                : gameDir.resolve(RunDirectory.ARTIFACT_DIR);
+        if (!Files.isDirectory(dir.resolve("tests"))) {
+            throw new IllegalArgumentException("no tests: " + dir.resolve("tests") + " is not a directory");
+        }
+        return dir;
+    }
+
+    /** {@code --client-dir}, or null when there is none. */
+    static Path clientDir(Map<String, String> opts) {
+        if (!opts.containsKey("client-dir")) return null;
+        Path dir = Path.of(opts.get("client-dir")).toAbsolutePath().normalize();
+        if (!Files.isDirectory(dir)) throw new IllegalArgumentException("--client-dir " + dir + " is not a directory");
+        return dir;
+    }
+
+    /** The jars the client loads: {@code --client-mods}, else the client directory's {@code mods/}, else the server's. */
+    static Path clientMods(Path gameDir, Path clientSource, Map<String, String> opts) {
+        if (opts.containsKey("client-mods")) return Path.of(opts.get("client-mods")).toAbsolutePath().normalize();
+        return (clientSource != null ? clientSource : gameDir).resolve("mods");
+    }
+
+    /**
+     * Give the client in {@code clientDir} every entry of {@code from} but those in {@link #CLIENT_DIR_OWN}, each as a
+     * symbolic link, so the client reads the pack's {@code config/}, {@code kubejs/}, {@code options.txt} and the like
+     * as they are now, and nothing of the pack is copied. What a mod writes into a linked directory lands in the pack's.
+     * The links of the run before are taken out first, those of entries since removed included; with {@code from} null
+     * that is all it does. Answers how many entries were linked.
+     */
+    static int linkClientDir(Path from, Path clientDir, Consumer<String> log) throws IOException {
+        Files.createDirectories(clientDir);
+        try (Stream<Path> list = Files.list(clientDir)) {
+            for (Path p : list.toList()) {
+                if (Files.isSymbolicLink(p)) Files.delete(p);
+            }
+        }
+        if (from == null) return 0;
+        List<Path> entries;
+        try (Stream<Path> list = Files.list(from)) {
+            entries = list.filter(p -> !CLIENT_DIR_OWN.contains(p.getFileName().toString())).sorted().toList();
+        }
+        for (Path entry : entries) {
+            Path target = clientDir.resolve(entry.getFileName().toString());
+            // What the client wrote there itself in a run without --client-dir: this run's own, so it goes.
+            deleteTree(target);
+            try {
+                Files.createSymbolicLink(target, entry.toAbsolutePath());
+            } catch (IOException | UnsupportedOperationException e) {
+                throw new EnvFailure("cannot link " + entry + " into " + clientDir + " (" + e.getMessage() + ") — on"
+                        + " Windows, symbolic links need Developer Mode or an administrator");
+            }
+        }
+        log.accept("the client reads " + entries.size() + " entries of " + from + " through links");
+        return entries.size();
     }
 
     private static String install(ClientSpec client, Path installDir, Map<String, String> opts, String java,

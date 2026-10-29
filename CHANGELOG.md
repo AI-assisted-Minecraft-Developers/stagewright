@@ -92,6 +92,15 @@ plugin: every one of four third-party builds added the same few lines reading a 
 whitespace, now goes last onto both games of every launch spec, generated or mapped, so a `-D` in it wins over the
 same one in the run. No game has been started with it yet.
 
+### The command-line runner takes the tests and the client's files from where the pack keeps them · green in the unit tests
+
+`--tests <dir>` names the directory holding `tests/`, `scenes/` and `worlds/`, so a pack's tests no longer have to sit
+inside its server directory, linked in file by file or copied there before each run. `--client-dir <dir>` names a client
+game directory: everything in it except `mods/`, `saves/`, `logs/` and `crash-reports/` is linked into the client the
+runner starts, so the client reads the pack's `config/`, `kubejs/`, `options.txt` and the rest instead of only its mods,
+and `--client-mods` defaults to `<dir>/mods`. Before, a pack had to copy those into `<server-dir>/stagewright/client`
+itself. The run's own files stay under `<server-dir>/stagewright/` either way.
+
 ## 2026-10-29
 
 ### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests

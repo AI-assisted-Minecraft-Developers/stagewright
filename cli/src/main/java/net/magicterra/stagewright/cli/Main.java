@@ -98,13 +98,13 @@ public final class Main {
         out.println("""
                 stagewright — run a modpack's tests
 
-                  java -jar stagewright.jar test <server-dir> [--mod <jar>]... [--reports <dir>]
-                                                        [--launch "<cmd>"] [--java <path>] [--timeout <min>]
-                                                        [--stall-timeout <min>] [--leaks fail|report]
-                                                        [-D…] [-X…]
-                                                        [--client <spec> [--client-mods <dir>]
-                                                         [--install-dir <dir>] [--username <name>]
-                                                         [--mirror bmclapi]]
+                  java -jar stagewright.jar test <server-dir> [--tests <dir>] [--mod <jar>]...
+                                                        [--reports <dir>] [--launch "<cmd>"] [--java <path>]
+                                                        [--timeout <min>] [--stall-timeout <min>]
+                                                        [--leaks fail|report] [-D…] [-X…]
+                                                        [--client <spec> [--client-dir <dir>]
+                                                         [--client-mods <dir>] [--install-dir <dir>]
+                                                         [--username <name>] [--mirror bmclapi]]
                   java -jar stagewright.jar --version   what this jar was built from
 
                 Runs the YAML and JavaScript tests in <server-dir>/stagewright/tests, with the scenes in
@@ -113,6 +113,8 @@ public final class Main {
                 handed to the loader, never copied into mods/. JUnit XML goes to --reports (default
                 <server-dir>/stagewright/reports).
 
+                  --tests <dir>       the directory holding tests/, scenes/ and worlds/ (default:
+                                      <server-dir>/stagewright), so they can live outside the server
                   --mod <jar>         also load this mod (repeatable — e.g. the driver whose verbs your
                                       tests call). Skipped if the pack's mods/ already has that file
                   --launch "<cmd>"    start the server this way instead of detecting it
@@ -131,7 +133,11 @@ public final class Main {
                                       neoforge:1.21.1:21.1.248 — installed if it is not already. The
                                       integratedServer and dedicatedServerWithClient scenes then run
                                       too, in a client under <server-dir>/stagewright/client
-                  --client-mods <dir> the jars that client loads (default: the server's mods/)
+                  --client-dir <dir>  a client game directory: everything in it but mods/, saves/,
+                                      logs/ and crash-reports/ (config/, kubejs/, options.txt, …) is
+                                      linked into the client's, never copied
+                  --client-mods <dir> the jars that client loads (default: <client-dir>/mods, else the
+                                      server's mods/)
                   --install-dir <dir> where versions/, libraries/ and assets/ live (default: the
                                       official launcher's .minecraft). Downloads are verified and
                                       shared with HMCL through its cache/SHA-1 directory

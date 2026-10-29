@@ -49,7 +49,7 @@ constructed locally, so every server-side check runs against the player list a p
 A loader refuses a connection whose two ends disagree about the mod list, and a disagreement about content would read
 as a defect of the mod under test. So the client is started with the server's mods: under the Gradle plugin both runs
 come from the same loader project and source set, and the command-line runner gives the client the server's `mods/`
-unless `--client-mods` names others.
+unless `--client-mods` or `--client-dir` names others.
 
 ## Which facts need which shape
 

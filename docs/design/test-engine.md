@@ -210,7 +210,7 @@ command-line runner writes the same file from a game directory. The engine knows
 
 `stagewright test <server-dir>` is for a pack with no build: its YAML and JavaScript tests sit in
 `<server-dir>/stagewright/tests` and its scenes in `stagewright/scenes`, with the saves scenes start from in
-`stagewright/worlds`. The CLI copies them, following symbolic links, and packs them into a resource-only mod
+`stagewright/worlds` (or in the directory `--tests` names). The CLI copies them, following symbolic links, and packs them into a resource-only mod
 (`fabric.mod.json` and a `lowcodefml` `neoforge.mods.toml`, so either loader takes it), hands it to the pack's server
 with StageWright's loader jar as it hands any mod — `-Dfabric.addMods`, or `--fml.mods`, warning about any StageWright
 in `mods/` that is not that jar and any WorldDriver there beside one given with `--mod` — and writes the
@@ -220,7 +220,8 @@ scene starts afresh is never the pack's. With `--client <spec>` it also installs
 and writes the other two specs: `integratedServer`, the client alone in `saves/StageWright`, and
 `dedicatedServerWithClient`, the pack's server waiting for that client to join. The client runs in
 `stagewright/client`, never a player's directory, since the engine deletes a client's saves before each scene, and
-loads the jars of `--client-mods` (the server's `mods/` by default) linked into its own `mods/`. Without `--client` it
+loads the jars of `--client-mods` (`<client-dir>/mods`, else the server's `mods/`, by default) linked into its own
+`mods/`, with every other entry of `--client-dir` but `saves/`, `logs/` and `crash-reports/` linked beside it. Without `--client` it
 writes those two specs as `unavailable`, and it runs the engine with `stagewright.launches.missing=skip`, so a scene
 whose topology it cannot launch is reported skipped with the reason instead of failing
 ([launch spec](../reference/launch-spec.md)); the Gradle plugin sets neither, since there a missing topology is a
