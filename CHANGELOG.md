@@ -71,6 +71,15 @@ components). Scripts get `t.capabilities()` (`has`, `registered`, `available`, w
 `mods.exclude` refused a name that matched no mod of a game, so a scene with a server and a client could not exclude
 a mod (LuckPerms) that only the server had. Such a name is now passed over: the scene's `mods` report entry says which
 names matched nothing (per game, `server:` and `client:`, when there are two), and the engine prints a line saying so.
+### The command-line runner's results say which scene they came from · green in the unit tests
+
+The runner wrote all results into one `TEST-stagewright.xml` suite named `StageWright`, where a test that runs in two
+scenes appeared twice, and a run that passed printed nothing about what it ran. It now writes one `TEST-<scene>.xml`
+per scene, its `testsuite` named for the scene; each testcase's `classname` is what the engine reports, `<scene>/<file>`
+or `<scene>/<class>`, as in Gradle's XML. Only tests that lie in no scene, such as one reported as having run in none,
+stay in `TEST-stagewright.xml`, which is not written when there are none. The console has a line as each scene ends
+(`scene mms passed: 31 tests, 29 passed, 2 skipped, in 312.4 s`), and one for a scene that was skipped, with its reason.
+
 ### Gradle's results say which scene each test ran in · green in the plugin's and the engine's tests, under Gradle 8.14 and 9.3.1
 
 A test class that runs in three scenes came out of `stagewrightTest<Name>` as `TEST-<class>-1.xml` to `-3.xml`, with

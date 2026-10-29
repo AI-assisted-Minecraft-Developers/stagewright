@@ -226,8 +226,11 @@ The runner works out how the pack's server starts (NeoForge argument files under
 launcher at the top level; `--launch "<command>"` when it cannot tell), hands StageWright and your tests to the loader
 as extra mods without copying anything into `mods/`, and runs every `dedicatedServer` scene. The server plays in
 `<server-dir>/stagewright/world`, which each scene starts afresh; the pack's own world is not touched. JUnit XML
-reports go to `<server-dir>/stagewright/reports` (or `--reports <dir>`), with what each test recorded (`t.record`) as
-`<property>` elements of its `<testcase>`, and each game's log to `<server-dir>/stagewright/logs/`.
+reports go to `<server-dir>/stagewright/reports` (or `--reports <dir>`), one file per scene, `TEST-<scene>.xml`, whose
+suite is named for the scene and whose test classes read `<scene>/<file>`, so a test that runs in two scenes shows as
+two rows that say which is which. What each test recorded (`t.record`) is a `<property>` element of its `<testcase>`.
+Each game's log goes to `<server-dir>/stagewright/logs/`, and the console has a line for each scene as it ends: passed
+or failed, with how many of its tests passed, failed and were skipped.
 
 A StageWright jar already in `mods/` loads instead of the runner's own; one that is not the build the runner carries
 is named in a warning when the run starts, as is a WorldDriver jar in `mods/` when `--mod` names another one. Such a

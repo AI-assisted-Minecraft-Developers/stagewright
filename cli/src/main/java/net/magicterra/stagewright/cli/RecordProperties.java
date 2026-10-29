@@ -91,7 +91,8 @@ final class RecordProperties implements TestExecutionListener {
         }
     }
 
-    private static String uniqueId(Element testcase) {
+    /** The unique id JUnit wrote into the testcase's {@code <system-out>}, or the empty string. */
+    static String uniqueId(Element testcase) {
         for (Node child = testcase.getFirstChild(); child != null; child = child.getNextSibling()) {
             if (child instanceof Element e && e.getTagName().equals("system-out")) {
                 Matcher m = UNIQUE_ID.matcher(e.getTextContent());

@@ -50,6 +50,9 @@ import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
  * it joined to the pack's server. It runs in {@code stagewright/client}, since the engine deletes a client's saves
  * before each scene, with the server's mods or those {@code --client-mods} names, and the rest of a client directory
  * {@code --client-dir} names linked in.
+ *
+ * <p>The results are JUnit XML, one file per scene ({@link SceneResults}), with a line on the console as each scene
+ * ends.
  */
 final class TestCommand {
 
@@ -427,8 +430,10 @@ final class TestCommand {
             SummaryGeneratingListener summary = new SummaryGeneratingListener();
             PrintWriter out = new PrintWriter(System.out, true);
             RecordProperties records = new RecordProperties();
-            launcher.execute(request, summary, new LegacyXmlReportGeneratingListener(reports, out), records);
+            launcher.execute(request, summary, new LegacyXmlReportGeneratingListener(reports, out), records,
+                    new SceneResults(log));
             records.writeInto(reports);
+            SceneResults.split(reports);
             TestExecutionSummary result = summary.getSummary();
             result.printTo(out);
             result.printFailuresTo(out, 20);

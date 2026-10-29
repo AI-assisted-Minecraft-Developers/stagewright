@@ -215,7 +215,9 @@ command-line runner writes the same file from a game directory. The engine knows
 with StageWright's loader jar as it hands any mod — `-Dfabric.addMods`, or `--fml.mods`, warning about any StageWright
 in `mods/` that is not that jar and any WorldDriver there beside one given with `--mod` — and writes the
 `dedicatedServer` launch spec from the start command it detects, with the `leaks` its `--leaks` names (`fail` unless
-told otherwise, as in the plugin). It then runs this engine in its own JVM and writes JUnit XML. The server plays in `stagewright/world` (`--universe`, and the spec's `worldDirectory`), so the world each
+told otherwise, as in the plugin). It then runs this engine in its own JVM and writes JUnit XML, split into one `<testsuite>` file per scene named
+for it, since JUnit's own report puts the whole engine in one suite; each testcase's `classname` is the engine's
+`<scene>/<file>`, as in Gradle's files. The server plays in `stagewright/world` (`--universe`, and the spec's `worldDirectory`), so the world each
 scene starts afresh is never the pack's. With `--client <spec>` it also installs that client
 and writes the other two specs: `integratedServer`, the client alone in `saves/StageWright`, and
 `dedicatedServerWithClient`, the pack's server waiting for that client to join. The client runs in
