@@ -56,6 +56,16 @@ step the world exactly `n` ticks, and an await steps it until its condition hold
 `tick freeze` itself, which leaked into every later test when a failed expectation ended it first, and
 `overrideTickRate` cannot go below one tick a second. The in-game suites have not yet been run against this.
 
+### Scripts can ask what the game has · green in the unit tests
+
+The old scene API answered how many mods, recipes, loot tables, advancements and structures a pack had, whether a
+class was there and which capabilities were offered; the test path did not, so a pack test ported to a script lost
+those checks. New: `mc.test.mods` (`list` with versions, `has` for one id); a `list` op, with an optional namespace,
+on `mc.test.loot`, `mc.test.advancements` and `mc.test.structures`; a `count` op on `mc.test.recipes`, and the
+`audit` reply's totals (`total`, `succeeded`, `failuresBySerializer`; the `AuditReport` record gains those three
+components). Scripts get `t.capabilities()` (`has`, `registered`, `available`, without aborting) and
+`t.hasClass(name)`. The in-game suites have not yet been run against this.
+
 ## 2026-10-29
 
 ### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests

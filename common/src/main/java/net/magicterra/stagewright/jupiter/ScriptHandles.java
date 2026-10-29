@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import net.magicterra.stagewright.capability.Capabilities;
 import net.magicterra.stagewright.test.Body;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Driven;
@@ -103,6 +104,17 @@ final class ScriptHandles {
         // A capability's facet, its methods by name; absent aborts the test, as game.capability does.
         t.put("capability", (Scripting.Function) args ->
                 ScriptFacets.wrap(game, game.capability(ScriptContext.string(args, 0, "t.capability(name)"))));
+        // What this game offers, without aborting: {has(name), registered(), available()}, as game.capabilities().
+        t.put("capabilities", (Scripting.Function) args -> {
+            Capabilities capabilities = game.capabilities();
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("has", (Scripting.Function) a -> capabilities.has(ScriptContext.string(a, 0, "has(name)")));
+            out.put("registered", (Scripting.Function) a -> capabilities.registered());
+            out.put("available", (Scripting.Function) a -> capabilities.available());
+            return out;
+        });
+        // Whether a class by this name loads in the game; it is not initialised.
+        t.put("hasClass", (Scripting.Function) args -> hasClass(ScriptContext.string(args, 0, "t.hasClass(name)")));
         t.put("override", (Scripting.Function) args -> {
             String rule = ScriptContext.string(args, 0, "t.override(rule, value)");
             Object value = args.length > 1 ? args[1] : null;
@@ -153,6 +165,24 @@ final class ScriptHandles {
             game.freezeTicks();
             return null;
         });
+    }
+
+    /**
+     * Whether {@code name} loads, through the loader that loaded StageWright — the game's, which sees every mod —
+     * and then the thread's. A class that is there but fails to link counts as absent.
+     */
+    static boolean hasClass(String name) {
+        for (ClassLoader loader : new ClassLoader[] {ScriptHandles.class.getClassLoader(),
+                Thread.currentThread().getContextClassLoader()}) {
+            if (loader == null) continue;
+            try {
+                Class.forName(name, false, loader);
+                return true;
+            } catch (ClassNotFoundException | LinkageError absent) {
+                // Try the next loader.
+            }
+        }
+        return false;
     }
 
     private static Map<String, Object> plot(PlotImpl plot) {

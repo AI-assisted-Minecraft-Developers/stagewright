@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.Set;
 import net.magicterra.stagewright.test.methods.RecipesContracts.AuditReport;
 import net.magicterra.stagewright.test.methods.RecipesContracts.Closure;
+import net.magicterra.stagewright.test.methods.RecipesContracts.Counted;
+import net.magicterra.stagewright.test.methods.RecipesContracts.KindCount;
 import net.magicterra.stagewright.test.methods.RecipesContracts.IngredientsOf;
 import net.magicterra.stagewright.test.methods.RecipesContracts.ProducedBy;
 import net.magicterra.stagewright.test.methods.RecipesContracts.Slot;
@@ -96,6 +98,7 @@ final class RecipeGraph {
         int attempted = 0;
         int skipped = 0;
         List<String> failures = new ArrayList<>();
+        Map<String, Integer> bySerializer = new LinkedHashMap<>();
         for (Map.Entry<String, RecipeHolder<?>> entry : byId.entrySet()) {
             if (!(entry.getValue().value() instanceof CraftingRecipe recipe) || isDynamic(recipe)) {
                 skipped++;
@@ -105,24 +108,46 @@ final class RecipeGraph {
             String declared = idOf(resultOf(recipe));
             String kind = typeOf(recipe);
             String made;
+            String failure = null;
             try {
                 made = assembleId(recipe);
+                if (made.isEmpty()) {
+                    failure = "declares " + declared + " but makes nothing from its own ingredients";
+                } else if (!made.equals(declared)) {
+                    failure = "declares " + declared + " but makes " + made;
+                }
             } catch (RuntimeException e) {
-                failures.add(entry.getKey() + " [" + kind + "]: threw " + e.getClass().getSimpleName()
-                        + (e.getMessage() == null ? "" : " (" + e.getMessage() + ")"));
-                continue;
+                failure = "threw " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " (" + e.getMessage() + ")");
             }
-            if (made.isEmpty()) {
-                failures.add(entry.getKey() + " [" + kind + "]: declares " + declared
-                        + " but makes nothing from its own ingredients");
-            } else if (!made.equals(declared)) {
-                failures.add(entry.getKey() + " [" + kind + "]: declares " + declared + " but makes " + made);
+            if (failure != null) {
+                failures.add(entry.getKey() + " [" + kind + "]: " + failure);
+                bySerializer.merge(kind, 1, Integer::sum);
             }
         }
         failures.sort(String::compareTo);
         List<String> cut = failures.subList(0, Math.min(failures.size(), 1000)).stream()
                 .map(f -> f.length() > 1024 ? f.substring(0, 1024) : f).toList();
-        return new AuditReport(attempted, skipped, failures.size(), cut);
+        return new AuditReport(byId.size(), attempted, attempted - failures.size(), skipped, failures.size(),
+                mostFirst(bySerializer), cut);
+    }
+
+    /** How many recipes are loaded, in all and per recipe type. */
+    Counted count() {
+        Map<String, Integer> byType = new LinkedHashMap<>();
+        for (RecipeHolder<?> holder : byId.values()) {
+            ResourceLocation type = BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType());
+            byType.merge(type == null ? "?" : type.toString(), 1, Integer::sum);
+        }
+        return new Counted(byId.size(), mostFirst(byType));
+    }
+
+    /** Counts by kind, most first, then by name; cut at the reply's limit. */
+    private static List<KindCount> mostFirst(Map<String, Integer> counts) {
+        return counts.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+                .limit(4096)
+                .map(e -> new KindCount(e.getKey().length() > 256 ? e.getKey().substring(0, 256) : e.getKey(), e.getValue()))
+                .toList();
     }
 
     /**

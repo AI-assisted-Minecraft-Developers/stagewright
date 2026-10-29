@@ -31,4 +31,7 @@ public interface TestQueriesApi {
     @Spec(value = StructuresContracts.class, spec = "STRUCTURES")
     CompletionStage<StructuresContracts.StructuresReply> structures(
             StructuresContracts.StructuresOp op, CallContext ctx);
+
+    @Spec(value = ModsContracts.class, spec = "MODS")
+    CompletionStage<ModsContracts.ModsReply> mods(ModsContracts.ModsOp op, CallContext ctx);
 }

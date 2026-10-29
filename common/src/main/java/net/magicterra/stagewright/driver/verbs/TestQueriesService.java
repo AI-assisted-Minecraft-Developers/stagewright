@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.driver.verbs;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +25,9 @@ import net.magicterra.worlddriver.api.schema.ApiException;
 import net.magicterra.worlddriver.api.schema.ApiIssue;
 import net.magicterra.worlddriver.api.thread.ServerThreadGuard;
 import net.magicterra.stagewright.test.methods.AdvancementsContracts;
+import net.magicterra.stagewright.capability.Mods;
 import net.magicterra.stagewright.test.methods.LootContracts;
+import net.magicterra.stagewright.test.methods.ModsContracts;
 import net.magicterra.stagewright.test.methods.RecipesContracts;
 import net.magicterra.stagewright.test.methods.StructuresContracts;
 import net.magicterra.worlddriver.bot.BotRegistry;
@@ -82,6 +85,7 @@ final class TestQueriesService implements TestQueriesApi {
                         c.maxDepth().orElse(RecipesContracts.DEFAULT_MAX_DEPTH));
                 case RecipesContracts.Uncraftable u -> graph.uncraftable();
                 case RecipesContracts.Audit a -> graph.audit();
+                case RecipesContracts.Count c -> graph.count();
             };
             return CompletableFuture.completedFuture(reply);
         });
@@ -97,6 +101,10 @@ final class TestQueriesService implements TestQueriesApi {
             LootContracts.LootReply reply = switch (op) {
                 case LootContracts.Exists e -> new LootContracts.Existence(lootTable(server, e.table()) != LootTable.EMPTY);
                 case LootContracts.Roll r -> roll(server, r);
+                case LootContracts.ListTables l -> {
+                    List<String> ids = listed(server.reloadableRegistries().getKeys(Registries.LOOT_TABLE), l.namespace());
+                    yield new LootContracts.TableList(ids.size(), cut(ids));
+                }
             };
             return CompletableFuture.completedFuture(reply);
         });
@@ -176,6 +184,11 @@ final class TestQueriesService implements TestQueriesApi {
                     progress.getRemainingCriteria().forEach(remaining::add);
                     yield new AdvancementsContracts.Progressed(progress.isDone(), completed, remaining);
                 }
+                case AdvancementsContracts.ListAdvancements l -> {
+                    List<String> ids = listed(server.getAdvancements().getAllAdvancements().stream()
+                            .map(AdvancementHolder::id).toList(), l.namespace());
+                    yield new AdvancementsContracts.AdvancementList(ids.size(), cut(ids));
+                }
             };
             return CompletableFuture.completedFuture(reply);
         });
@@ -220,10 +233,49 @@ final class TestQueriesService implements TestQueriesApi {
                     yield new StructuresContracts.Covering(out);
                 }
                 case StructuresContracts.Locate l -> locate(level(server, l.dimension()), l);
+                case StructuresContracts.ListStructures l -> {
+                    List<String> ids = listed(structureRegistry(server.overworld()).keySet(), l.namespace());
+                    yield new StructuresContracts.StructureList(ids.size(), cut(ids));
+                }
             };
             return CompletableFuture.completedFuture(reply);
         });
     }
+
+    /** The loader's list, which needs no server: a client answers it too. */
+    @Override
+    public CompletionStage<ModsContracts.ModsReply> mods(ModsContracts.ModsOp op, CallContext ctx) {
+        if (!Mods.isInstalled()) {
+            return CompletableFuture.failedFuture(ApiException.of(ApiError.Code.CAPABILITY_UNAVAILABLE,
+                    "the loader never handed StageWright its mod list"));
+        }
+        return CompletableFuture.completedFuture(switch (op) {
+            case ModsContracts.ListMods l -> {
+                List<ModsContracts.Mod> mods = new ArrayList<>();
+                for (String id : Mods.ids()) mods.add(new ModsContracts.Mod(id, clip(Mods.version(id), 256)));
+                yield new ModsContracts.ModList(mods.size(), mods.subList(0, Math.min(mods.size(), 10000)));
+            }
+            case ModsContracts.Has h -> new ModsContracts.Present(Mods.loaded(h.id()),
+                    Mods.loaded(h.id()) ? Optional.of(clip(Mods.version(h.id()), 256)) : Optional.empty());
+        });
+    }
+
+    private static String clip(String s, int max) {
+        return s.length() > max ? s.substring(0, max) : s;
+    }
+
+    /** {@code ids} in {@code namespace}, or all of them, sorted. */
+    private static List<String> listed(Collection<ResourceLocation> ids, Optional<String> namespace) {
+        return ids.stream().filter(id -> namespace.isEmpty() || id.getNamespace().equals(namespace.get()))
+                .map(ResourceLocation::toString).sorted().toList();
+    }
+
+    /** The first {@code LIST_MAX} of {@code ids}: what a list reply may carry. */
+    private static List<String> cut(List<String> ids) {
+        return ids.subList(0, Math.min(ids.size(), LIST_MAX));
+    }
+
+    private static final int LIST_MAX = 100_000;
 
     /** Expensive: it scans and generates chunks, so the milliseconds are reported found or not. */
     private static StructuresContracts.Located locate(ServerLevel level, StructuresContracts.Locate l) {

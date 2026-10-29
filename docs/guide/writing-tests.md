@@ -187,6 +187,12 @@ const kinds = t.onServer(() => {
 What waits for the server cannot run inside it — `t.wait`, `t.waitUntil`, `t.settle`, `t.plot`, `t.bot`, `t.perf` —
 and is refused with a message saying so, as are a WorldDriver method that waits and the overrides.
 
+What the game has, a script asks without leaving it: `t.capabilities()` answers `has(name)`, `registered()` and
+`available()`, as `game.capabilities()` does in Java, without aborting the test; `t.hasClass(name)` says whether a class
+by that name loads, which is a cheap way to tell whether a mod's code is there; and the `mc.test.*` queries
+([test queries](../design/test-queries.md)) list the loaded mods (`mc.test.mods`), loot tables, advancements and
+structures, and count recipes, through `t.call`.
+
 What `t.call` and the handles (`t.plot`, `t.bot`, `t.player`, `t.npc`, `t.client` and their methods) refuse can be
 caught, so a test can check that something is refused, and carry on:
 

@@ -24,7 +24,7 @@ public final class RecipesContracts {
     public static final int DEFAULT_MAX_DEPTH = 64;
 
     @Tag("op") @Named("TestRecipesParams")
-    public sealed interface RecipesOp permits Producing, Ingredients, ClosureOf, Uncraftable, Audit {}
+    public sealed interface RecipesOp permits Producing, Ingredients, ClosureOf, Uncraftable, Audit, Count {}
 
     @Variant("producing")
     public record Producing(@Doc("Item whose makers are wanted.") @ResourceId String item) implements RecipesOp {}
@@ -46,13 +46,23 @@ public final class RecipesContracts {
     @Variant("audit")
     public record Audit() implements RecipesOp {}
 
+    @Variant("count")
+    public record Count() implements RecipesOp {}
+
+    /** How many recipes of one kind: a recipe type, or for an audit's failures a serializer. */
+    @Named("TestRecipeKindCount")
+    public record KindCount(
+            @Doc("A recipe type id (minecraft:crafting), or for audit failures a serializer id; ? when unregistered.")
+            @Length(max = 256) String kind,
+            @Range(min = 0) int count) {}
+
     /** One ingredient slot: every item that fits it. Empty means nothing registered can fill it. */
     @Named("TestRecipeSlot")
     public record Slot(@Length(max = 4096) List<@ResourceId String> accepts) {}
 
     @Tag("op") @Named("TestRecipesReply")
     public sealed interface RecipesReply
-            permits ProducedBy, IngredientsOf, Closure, UncraftableRecipes, AuditReport {}
+            permits ProducedBy, IngredientsOf, Closure, UncraftableRecipes, AuditReport, Counted {}
 
     @Variant("producing")
     public record ProducedBy(@Length(max = 4096) List<@ResourceId String> recipes) implements RecipesReply {}
@@ -88,12 +98,23 @@ public final class RecipesContracts {
 
     @Variant("audit")
     public record AuditReport(
+            @Doc("Every recipe loaded: attempted plus skipped.") @Range(min = 0) int total,
             @Doc("Grid recipes that were laid out from their own ingredients and assembled.") @Range(min = 0) int attempted,
+            @Doc("Attempted recipes that made what they declare: attempted minus failureCount.")
+            @Range(min = 0) int succeeded,
             @Doc("Recipes that are not grid recipes or compute themselves at runtime, so cannot be run generically.")
             @Range(min = 0) int skipped,
             @Doc("Total failures, even when the list below is cut.") @Range(min = 0) int failureCount,
+            @Doc("Failures per serializer, most first; every failure is counted, the cut ones included.")
+            @Length(max = 4096) List<KindCount> failuresBySerializer,
             @Doc("'<recipe> [<serializer>]: <what went wrong>', sorted.")
             @Length(max = 1000) List<@Length(max = 1024) String> failures) implements RecipesReply {}
+
+    @Variant("count")
+    public record Counted(
+            @Doc("Every recipe loaded.") @Range(min = 0) int total,
+            @Doc("Recipes per recipe type, most first.") @Length(max = 4096) List<KindCount> byType)
+            implements RecipesReply {}
 
     public static final UnionType<RecipesOp> RECIPES_PARAMS = ApiTypes.union(RecipesOp.class);
 
@@ -105,6 +126,7 @@ public final class RecipesContracts {
                     + "recipe's slots and result; closure walks every ingredient of an item down to raw materials "
                     + "and says what could not be resolved or was cut short; uncraftable lists recipes with an "
                     + "unfillable slot; audit lays each grid recipe out from its own ingredients and reports those "
-                    + "that make something other than they declare.")
+                    + "that make something other than they declare, with its totals; count says how many recipes "
+                    + "are loaded, in all and per recipe type.")
             .hidden();
 }

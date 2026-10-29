@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.test.methods;
 
 import java.util.List;
+import java.util.Optional;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.ResourceId;
 import net.magicterra.worlddriver.api.methods.shared.Responses.BotRef;
 import net.magicterra.worlddriver.api.schema.ApiTypes;
@@ -9,6 +10,7 @@ import net.magicterra.worlddriver.api.schema.UnionType;
 import net.magicterra.worlddriver.api.schema.annotation.Doc;
 import net.magicterra.worlddriver.api.schema.annotation.Length;
 import net.magicterra.worlddriver.api.schema.annotation.Named;
+import net.magicterra.worlddriver.api.schema.annotation.Range;
 import net.magicterra.worlddriver.api.schema.annotation.Tag;
 import net.magicterra.worlddriver.api.schema.annotation.Variant;
 
@@ -17,7 +19,12 @@ public final class AdvancementsContracts {
     private AdvancementsContracts() {}
 
     @Tag("op") @Named("TestAdvancementsParams")
-    public sealed interface AdvancementsOp permits Grant, Revoke, Progress {}
+    public sealed interface AdvancementsOp permits Grant, Revoke, Progress, ListAdvancements {}
+
+    @Variant("list")
+    public record ListAdvancements(
+            @Doc("Only the advancements of this namespace, e.g. minecraft. Omitted: every advancement.")
+            Optional<@Length(min = 1, max = 64) String> namespace) implements AdvancementsOp {}
 
     @Variant("grant")
     public record Grant(@Doc("A server player, e.g. player:steve.") @BotRef String bot,
@@ -32,7 +39,14 @@ public final class AdvancementsContracts {
             @Doc("Advancement id.") @ResourceId String id) implements AdvancementsOp {}
 
     @Tag("op") @Named("TestAdvancementsReply")
-    public sealed interface AdvancementsReply permits Granted, Revoked, Progressed {}
+    public sealed interface AdvancementsReply permits Granted, Revoked, Progressed, AdvancementList {}
+
+    @Variant("list")
+    public record AdvancementList(
+            @Doc("Advancements loaded (in the namespace, when one was named), even when the list below is cut.")
+            @Range(min = 0) int count,
+            @Doc("Their ids, sorted; the first 100000.") @Length(max = 100000) List<@ResourceId String> advancements)
+            implements AdvancementsReply {}
 
     @Variant("grant")
     public record Granted(
@@ -59,7 +73,7 @@ public final class AdvancementsContracts {
     public static final MethodSpec<AdvancementsOp, AdvancementsReply> ADVANCEMENTS = MethodSpec.of(
                     "mc.test.advancements", ADVANCEMENTS_PARAMS, ADVANCEMENTS_REPLY,
                     "grant awards every unmet criterion of an advancement to a server player, revoke takes every met "
-                            + "one back, progress reads where it stands. Progress is saved with the player, so a "
+                            + "one back, progress reads where it stands, list names every advancement loaded. Progress is saved with the player, so a "
                             + "test that grants should revoke what the grant reported. An unknown player is "
                             + "invalid_params at /bot, an unknown advancement at /id.")
             .hidden().effects(MethodSpec.Effect.WORLD_WRITE);

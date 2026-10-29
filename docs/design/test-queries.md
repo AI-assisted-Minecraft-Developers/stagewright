@@ -5,17 +5,31 @@ close, what a loot table can give, whether an advancement is held, where a struc
 chunk leaving memory. They are WorldDriver methods that StageWright registers, so a test in the game, a script and an
 outside client reach them the same way.
 
-## Five methods
+## Six methods
 
 One method per subject, the question named by `op`, as WorldDriver's `mc.bot.roster` names its own:
 
 | Method | `op` |
 |---|---|
 | `mc.test.chunks` | `unload`, `reload` |
-| `mc.test.recipes` | `producing`, `ingredients`, `closure`, `uncraftable`, `audit` |
-| `mc.test.loot` | `exists`, `roll` |
-| `mc.test.advancements` | `grant`, `revoke`, `progress` |
-| `mc.test.structures` | `registered`, `at`, `locate` |
+| `mc.test.recipes` | `producing`, `ingredients`, `closure`, `uncraftable`, `audit`, `count` |
+| `mc.test.loot` | `exists`, `roll`, `list` |
+| `mc.test.advancements` | `grant`, `revoke`, `progress`, `list` |
+| `mc.test.structures` | `registered`, `at`, `locate`, `list` |
+| `mc.test.mods` | `list`, `has` |
+
+What a pack has, a test can count and list: `list` names every loot table, advancement or structure, sorted, or only
+those of a `namespace`, with a `count` that holds even when the list is cut at 100000; `mc.test.mods` lists the loaded
+mods with their versions (`count`, `mods: [{id, version}]`), and `has` asks for one id (`has`, `version`). `count` on
+recipes gives the number loaded, in all and per recipe type, and `audit` reports its totals beside the failures:
+`total`, `attempted`, `succeeded`, `skipped`, `failureCount` and `failuresBySerializer`. A script reaches all of them
+through `t.call`:
+
+```javascript
+const mods = t.call('mc.test.mods', { op: 'list' });
+t.record('mods.count', mods.count);
+t.expect(t.call('mc.test.mods', { op: 'has', id: 'worlddriver' }).has).equals(true);
+```
 
 All are hidden: callable on every transport and left out of tool lists, since every tool listed is sent with every
 prompt to every model client, and these serve tests, not agents. A new question goes under the subject it belongs to

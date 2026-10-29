@@ -39,6 +39,13 @@ class ScriptHandlesTest {
     }
 
     @Test
+    void hasClassAnswersWhetherAClassLoadsWithoutInitialisingIt() {
+        assertTrue(ScriptHandles.hasClass("java.lang.String"));
+        assertTrue(ScriptHandles.hasClass(ScriptHandlesTest.class.getName()));
+        assertEquals(false, ScriptHandles.hasClass("com.example.definitely.NotHere"));
+    }
+
+    @Test
     void anUnknownKeyIsRefusedWithTheKeysThereAre() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
                 () -> ScriptHandles.press(Press.of("player:a"), Map.of("crouch", true)));

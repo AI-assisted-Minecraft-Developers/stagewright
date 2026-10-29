@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.test.methods;
 
 import java.util.List;
+import java.util.Optional;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.ResourceId;
 import net.magicterra.worlddriver.api.schema.ApiTypes;
 import net.magicterra.worlddriver.api.schema.MethodSpec;
@@ -17,7 +18,12 @@ public final class LootContracts {
     private LootContracts() {}
 
     @Tag("op") @Named("TestLootParams")
-    public sealed interface LootOp permits Exists, Roll {}
+    public sealed interface LootOp permits Exists, Roll, ListTables {}
+
+    @Variant("list")
+    public record ListTables(
+            @Doc("Only the tables of this namespace, e.g. minecraft. Omitted: every table.")
+            Optional<@Length(min = 1, max = 64) String> namespace) implements LootOp {}
 
     @Variant("exists")
     public record Exists(@Doc("Loot table id, e.g. minecraft:chests/simple_dungeon.") @ResourceId String table)
@@ -38,7 +44,14 @@ public final class LootContracts {
             @Doc("Items of it produced, stack sizes summed.") @Range(min = 0) long total) {}
 
     @Tag("op") @Named("TestLootReply")
-    public sealed interface LootReply permits Existence, Rolled {}
+    public sealed interface LootReply permits Existence, Rolled, TableList {}
+
+    @Variant("list")
+    public record TableList(
+            @Doc("Tables registered (in the namespace, when one was named), even when the list below is cut.")
+            @Range(min = 0) int count,
+            @Doc("Their ids, sorted; the first 100000.") @Length(max = 100000) List<@ResourceId String> tables)
+            implements LootReply {}
 
     @Variant("exists")
     public record Existence(
@@ -56,7 +69,7 @@ public final class LootContracts {
     public static final UnionType<LootReply> LOOT_REPLY = ApiTypes.union(LootReply.class);
 
     public static final MethodSpec<LootOp, LootReply> LOOT = MethodSpec.of("mc.test.loot", LOOT_PARAMS, LOOT_REPLY,
-            "exists says whether a loot table is registered; roll rolls a chest-shaped table a counted number of times "
+            "exists says whether a loot table is registered; list names every one, or a namespace's; roll rolls a chest-shaped table a counted number of times "
                     + "at the overworld origin and counts what came out. An unknown or non-chest table is "
                     + "invalid_params.")
             .hidden();
