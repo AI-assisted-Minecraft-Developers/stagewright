@@ -29,6 +29,16 @@ persistent on its first tick there: a zombie a test summoned into its plot was g
 A mob that enters a server level inside a plot leased at that moment is now made persistent, on both loaders. Mobs a
 test spawns with `game.npc` / `t.npc` were persistent already. The in-game suites have not yet been run against this.
 
+### `game.check` works inside `game.onServer`, and `game.onServerHolds` answers a plain boolean · green in the unit tests
+
+A soft check belongs to the test that makes it, which was found from the test's thread only, so `game.check` inside
+`game.onServer` work (or an `await` condition) failed with "only from a test's own thread". The work now runs as part
+of the test that started it: a check there counts for that test, and a capability's facet is that test's. What the test
+must undo or give back — an override, `game.afterTest`, `game.npc` — is still refused there with the same message.
+`game.onServerHolds(condition)` is new: `assertTrue(game.onServer(s -> …))` does not compile, because JUnit's
+`BooleanSupplier` overload leaves the result type open, and it needed `game.<Boolean>onServer(…)`. The in-game suites
+have not yet been run against this.
+
 ## 2026-10-29
 
 ### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests

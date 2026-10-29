@@ -3,6 +3,7 @@ package net.magicterra.stagewright.test;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import net.magicterra.stagewright.capability.Capabilities;
 import net.magicterra.stagewright.capability.CapabilityProvider;
@@ -36,9 +37,19 @@ public interface Game {
      * Run {@code work} on the server thread and answer its result here, so a group of reads and writes happens
      * between two ticks with nothing else interleaved. Must not itself call a blocking {@code Game} method: the
      * server thread would wait for itself, so that is refused at once. Called on the server thread, as from an
-     * {@link Await} condition, it runs {@code work} there and then.
+     * {@link Await} condition, it runs {@code work} there and then. The work runs as part of the calling test:
+     * {@link #check} counts for it there, while an override or {@link #afterTest}, which the test must undo, is refused.
      */
     <T> T onServer(Function<MinecraftServer, T> work);
+
+    /**
+     * Whether {@code condition} holds, asked in one server task as {@link #onServer(Function)} asks: for
+     * {@code assertTrue(game.onServerHolds(s -> …))}, which does not compile with {@code onServer}, since JUnit's
+     * {@code BooleanSupplier} overload leaves its result type unknown.
+     */
+    default boolean onServerHolds(Predicate<MinecraftServer> condition) {
+        return onServer(condition::test);
+    }
 
     /** {@link #onServer(Function)} for work with no result. */
     default void runOnServer(Consumer<MinecraftServer> work) {
@@ -76,7 +87,8 @@ public interface Game {
     /**
      * A soft assertion: when {@code holds} is false, {@code what} is kept and the test goes on. Every check that failed
      * is reported together once the test ends, and fails it, so a test probing many things sees all that are wrong,
-     * not the first. Only from the test's own thread.
+     * not the first. From the test's own thread, or inside an {@link #onServer} task or {@link Await} condition the
+     * test started.
      */
     void check(boolean holds, String what);
 

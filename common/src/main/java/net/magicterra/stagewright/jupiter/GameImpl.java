@@ -68,8 +68,10 @@ final class GameImpl implements Game {
     public <T> T onServer(Function<MinecraftServer, T> work) {
         // Already there, as an await condition is: nothing to wait for, so run it now.
         if (server.isSameThread()) return work.apply(server);
+        // The calling test goes along, so a soft check made in the task is that test's.
+        TestScope scope = TestScope.bound();
         try {
-            return server.submit(() -> work.apply(server)).join();
+            return server.submit(() -> TestScope.lending(scope, () -> work.apply(server))).join();
         } catch (CompletionException e) {
             throw rethrow(e.getCause() == null ? e : e.getCause());
         }
@@ -137,7 +139,7 @@ final class GameImpl implements Game {
         TestScope scope = TestScope.bound();
         if (scope == null) {
             throw new IllegalStateException("a check is reported when its test ends, so it may only be made from a"
-                    + " test's own thread");
+                    + " test's own thread, or a server task or await condition the test started");
         }
         return scope;
     }
@@ -246,7 +248,10 @@ final class GameImpl implements Game {
         if (server.isSameThread()) {
             throw new IllegalStateException("a tick wait was started on the server thread, which would wait for itself");
         }
-        CompletableFuture<Boolean> done = ServerTicks.await(condition, budget);
+        TestScope scope = TestScope.bound();
+        BooleanSupplier asTheTest = scope == null ? condition
+                : () -> TestScope.lending(scope, condition::getAsBoolean);
+        CompletableFuture<Boolean> done = ServerTicks.await(asTheTest, budget);
         try {
             return done.get(budget * WALL_MS_PER_TICK + WALL_MARGIN_MS, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {

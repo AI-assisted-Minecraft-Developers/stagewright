@@ -48,12 +48,16 @@ things it does.
   `game.api(WorldBlockingApi::of).block(new BlockParams(at, false))`. A body is passed to them as `bot.ref()`.
 - **Minecraft itself** on the server thread: `game.onServer(server -> …)` runs the work between two ticks and returns
   its result; `bot.onServer(player -> …)` does the same with the bot's `ServerPlayer`. The work must not call a blocking
-  `Game` method.
+  `Game` method. It runs as part of the test, so `game.check` works inside it; an override, `game.afterTest` and
+  `game.npc`, which the test has to undo, are refused there. `game.onServerHolds(server -> …)` answers whether a
+  condition holds, asked the same way, as a plain `boolean`: `assertTrue(game.onServer(…))` does not compile, because
+  JUnit's `assertTrue` also takes a `BooleanSupplier` and the result type cannot be worked out.
 - **Time**: `game.ticks(n)` lets `n` server ticks pass. `game.await().within(200).as("the door opens").until(() -> …)`
   checks a condition on the server thread after every tick and fails the test with that description when the budget,
   counted in ticks, runs out.
 - **Soft checks**: `game.check(holds, "what")` or `game.check(() -> assertEquals(a, b))` keeps a failure and lets the
-  test go on; every failed check is reported together when the test ends, and fails it.
+  test go on; every failed check is reported together when the test ends, and fails it. A check may also be made
+  inside the test's `game.onServer` work and its `await` conditions.
 
 ```java
 @Test

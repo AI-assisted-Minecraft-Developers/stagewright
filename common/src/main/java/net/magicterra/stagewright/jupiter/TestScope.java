@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import net.minecraft.server.MinecraftServer;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -25,6 +26,8 @@ import org.junit.platform.commons.support.AnnotationSupport;
 final class TestScope {
 
     private static final ThreadLocal<TestScope> CURRENT = new ThreadLocal<>();
+    /** The test whose server task this thread is running; see {@link #lending}. */
+    private static final ThreadLocal<TestScope> LENT = new ThreadLocal<>();
 
     /** How a script names a lock: a {@link net.magicterra.stagewright.test.Locks} value without this prefix. */
     static final String LOCK_PREFIX = "stagewright.";
@@ -94,12 +97,31 @@ final class TestScope {
         CURRENT.remove();
     }
 
-    /** The test on this thread, or null. */
+    /** The test on this thread, or the one whose server task this thread is running; or null. */
     static TestScope bound() {
-        return CURRENT.get();
+        TestScope scope = CURRENT.get();
+        return scope != null ? scope : LENT.get();
     }
 
-    /** The test on this thread; refuses when there is none. */
+    /**
+     * Run {@code work} on this thread as part of {@code scope}'s test, for a task the test hands the server thread:
+     * what only reads the test or adds to it ({@link #bound}: a soft check, a capability's facet) works there, while
+     * what must be undone or given back when the test ends ({@link #current}) is still refused. Nests: the scope
+     * lent before is lent again after. With no scope, {@code work} runs as it is.
+     */
+    static <T> T lending(TestScope scope, Supplier<T> work) {
+        if (scope == null) return work.get();
+        TestScope before = LENT.get();
+        LENT.set(scope);
+        try {
+            return work.get();
+        } finally {
+            if (before == null) LENT.remove();
+            else LENT.set(before);
+        }
+    }
+
+    /** The test that owns this thread; refuses when there is none, a thread it only lent itself to included. */
     static TestScope current(String what) {
         TestScope scope = CURRENT.get();
         if (scope == null) {

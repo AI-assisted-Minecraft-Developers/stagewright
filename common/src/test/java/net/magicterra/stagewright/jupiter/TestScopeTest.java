@@ -46,6 +46,40 @@ class TestScopeTest {
     }
 
     @Test
+    void aServerTaskSeesTheTestThatStartedItButCannotChangeWhatItMustUndo() throws Exception {
+        TestScope scope = TestScope.ofScript("checks on the server", Set.of(), false);
+        Object[] seen = new Object[2];
+        Thread server = new Thread(() -> TestScope.lending(scope, () -> {
+            seen[0] = TestScope.bound();
+            try {
+                TestScope.current("game.override");
+            } catch (IllegalStateException refused) {
+                seen[1] = refused;
+            }
+            return null;
+        }));
+        server.start();
+        server.join();
+        assertSame(scope, seen[0]);
+        IllegalStateException refused = assertInstanceOf(IllegalStateException.class, seen[1]);
+        assertTrue(refused.getMessage().contains("test method's own thread"), refused.getMessage());
+    }
+
+    @Test
+    void aLentScopeEndsWithItsTaskAndNestsBackToTheOneBefore() {
+        TestScope outer = TestScope.ofScript("outer", Set.of(), false);
+        TestScope inner = TestScope.ofScript("inner", Set.of(), false);
+        assertNull(TestScope.bound());
+        TestScope.lending(outer, () -> {
+            assertSame(inner, TestScope.lending(inner, TestScope::bound));
+            assertSame(outer, TestScope.bound());
+            return null;
+        });
+        assertNull(TestScope.bound());
+        assertEquals("ran", TestScope.lending(null, () -> "ran"));
+    }
+
+    @Test
     void aScriptHoldingTheLockOrIsolatedMayOverride() {
         assertDoesNotThrow(() -> TestScope.ofScript("rains", Set.of(Locks.WEATHER), false)
                 .require(Locks.WEATHER, "Locks.WEATHER", "game.overrideWeather"));
