@@ -9,6 +9,7 @@ import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -211,24 +212,38 @@ final class TestCommand {
      * symbolic link, so the client reads the pack's {@code config/}, {@code kubejs/}, {@code options.txt} and the like
      * as they are now, and nothing of the pack is copied. What a mod writes into a linked directory lands in the pack's.
      * The links of the run before are taken out first, those of entries since removed included; with {@code from} null
-     * that is all it does. Answers how many entries were linked.
+     * that is all it does. A real file or directory where a link would go is refused before anything changes: it is
+     * what a run without {@code --client-dir}, or a script, left there, and it may hold the only copy of something.
+     * Answers how many entries were linked.
      */
     static int linkClientDir(Path from, Path clientDir, Consumer<String> log) throws IOException {
         Files.createDirectories(clientDir);
+        List<Path> entries = List.of();
+        if (from != null) {
+            try (Stream<Path> list = Files.list(from)) {
+                entries = list.filter(p -> !CLIENT_DIR_OWN.contains(p.getFileName().toString())).sorted().toList();
+            }
+            List<String> occupied = new ArrayList<>();
+            for (Path entry : entries) {
+                Path target = clientDir.resolve(entry.getFileName().toString());
+                if (Files.exists(target, LinkOption.NOFOLLOW_LINKS) && !Files.isSymbolicLink(target)) {
+                    occupied.add(target.toString());
+                }
+            }
+            if (!occupied.isEmpty()) {
+                throw new EnvFailure("--client-dir " + from + " would replace what is already in the client's"
+                        + " directory: " + String.join(", ", occupied) + ". The runner links these from --client-dir"
+                        + " and will not delete a real file or directory: move or delete them, then run again");
+            }
+        }
         try (Stream<Path> list = Files.list(clientDir)) {
             for (Path p : list.toList()) {
                 if (Files.isSymbolicLink(p)) Files.delete(p);
             }
         }
         if (from == null) return 0;
-        List<Path> entries;
-        try (Stream<Path> list = Files.list(from)) {
-            entries = list.filter(p -> !CLIENT_DIR_OWN.contains(p.getFileName().toString())).sorted().toList();
-        }
         for (Path entry : entries) {
             Path target = clientDir.resolve(entry.getFileName().toString());
-            // What the client wrote there itself in a run without --client-dir: this run's own, so it goes.
-            deleteTree(target);
             try {
                 Files.createSymbolicLink(target, entry.toAbsolutePath());
             } catch (IOException | UnsupportedOperationException e) {

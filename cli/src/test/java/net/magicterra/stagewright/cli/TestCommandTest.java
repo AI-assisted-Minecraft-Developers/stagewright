@@ -146,9 +146,9 @@ class TestCommandTest {
             Files.createDirectories(pack.resolve(own));
         }
         Path client = Files.createDirectories(dir.resolve("server/stagewright/client"));
-        // Left by a run without --client-dir, and by one whose pack-client had an entry it has no longer.
-        Files.writeString(Files.createDirectories(client.resolve("config")).resolve("generated.toml"), "b = 2");
+        // Left by a run whose pack-client had an entry it has no longer, and one it still has.
         Files.createSymbolicLink(client.resolve("gone"), Files.createDirectories(dir.resolve("elsewhere")));
+        Files.createSymbolicLink(client.resolve("config"), Files.createDirectories(dir.resolve("old-config")));
         Files.createDirectories(client.resolve("saves/StageWright"));
 
         assertEquals(3, TestCommand.linkClientDir(pack, client, line -> { }));
@@ -159,7 +159,6 @@ class TestCommandTest {
         assertEquals("a = 1", Files.readString(client.resolve("config/a.toml")));
         assertFalse(Files.exists(client.resolve("gone"), java.nio.file.LinkOption.NOFOLLOW_LINKS));
         assertTrue(Files.isDirectory(dir.resolve("elsewhere")), "a link is taken out, not what it names");
-        assertFalse(Files.exists(pack.resolve("config/generated.toml")), "the client's own config is not moved over");
         assertTrue(Files.isDirectory(client.resolve("saves/StageWright")), "the client keeps its own saves");
         assertFalse(Files.isSymbolicLink(client.resolve("saves")));
         for (String own : List.of("mods", "logs", "crash-reports", "stagewright")) {
@@ -171,6 +170,27 @@ class TestCommandTest {
             assertEquals(List.of("saves"), list.map(p -> p.getFileName().toString()).toList(),
                     "a run with no --client-dir keeps no link of the one before");
         }
+    }
+
+    @Test
+    void aRealDirectoryWhereALinkWouldGoIsRefusedAndLeftAlone(@TempDir Path dir) throws IOException {
+        Path pack = Files.createDirectories(dir.resolve("pack-client"));
+        Files.createDirectories(pack.resolve("config"));
+        Files.createDirectories(pack.resolve("kubejs"));
+        Files.writeString(pack.resolve("options.txt"), "lang:zh_cn");
+        Path client = Files.createDirectories(dir.resolve("server/stagewright/client"));
+        // Copies an earlier layout made, and a link of the run before.
+        Files.writeString(Files.createDirectories(client.resolve("config")).resolve("mine.toml"), "b = 2");
+        Files.writeString(client.resolve("options.txt"), "lang:en_us");
+        Files.createSymbolicLink(client.resolve("kubejs"), Files.createDirectories(dir.resolve("old-kubejs")));
+
+        EnvFailure e = assertThrows(EnvFailure.class, () -> TestCommand.linkClientDir(pack, client, line -> { }));
+        assertTrue(e.getMessage().contains(client.resolve("config").toString()), e.getMessage());
+        assertTrue(e.getMessage().contains(client.resolve("options.txt").toString()), e.getMessage());
+        assertFalse(e.getMessage().contains(client.resolve("kubejs").toString()), "a link is the runner's own");
+        assertEquals("b = 2", Files.readString(client.resolve("config/mine.toml")), "the directory is left as it was");
+        assertEquals("lang:en_us", Files.readString(client.resolve("options.txt")));
+        assertTrue(Files.isSymbolicLink(client.resolve("kubejs")), "nothing changes when the run is refused");
     }
 
     @Test

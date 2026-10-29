@@ -271,7 +271,10 @@ A pack whose client needs more than its mods, such as its `config/`, `kubejs/` o
 directory with `--client-dir <dir>`. Everything in it except `mods/`, `saves/`, `logs/` and `crash-reports/` is linked
 into the client's directory, not copied, so the client reads the pack's files as they are when the run starts, and what
 a mod writes there lands in the pack's directory. The client then loads `<dir>/mods` unless `--client-mods` names
-others. The links are symbolic links; on Windows they need Developer Mode or an administrator.
+others. The links are symbolic links; on Windows they need Developer Mode or an administrator. If the client's
+directory already holds a real file or directory where a link should go — a `config/` the client wrote in a run
+without `--client-dir`, or one a script copied in — the run stops before changing anything and names each one: move
+or delete them and run again. The runner replaces only the links it made itself.
 
 A client needs a display, and the runner does not start one: `DISPLAY`, or `WAYLAND_DISPLAY` when `DISPLAY` is unset.
 On a machine without a desktop, run it under `xvfb-run`.

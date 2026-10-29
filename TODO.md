@@ -19,5 +19,5 @@ resolved at configuration time. Fabric Loom 1.19 needs Gradle 9.8, so worlddrive
 
 ## What the third-party consumers found
 
-Moving six consumers to this path (2026-10-29) left these open, by weight: scene-level report entries (`world`,
-`mods`) reach no XML; the CLI's `--client-dir` has not been through a client run.
+Moving six consumers to this path (2026-10-29) left this open: scene-level report entries (`world`, `mods`) reach
+no XML.

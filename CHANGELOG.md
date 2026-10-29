@@ -12,6 +12,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-30
 
+### `--client-dir` no longer deletes a real directory in the client's place · green in the CLI's own tests
+
+The runner links every entry of `--client-dir` into its client directory, `<server-dir>/stagewright/client`, and
+deleted whatever stood where a link was to go. On a server pack whose script had copied `config/` and `kubejs/` there
+before, the run silently deleted both copies and linked the pack's in their place. The runner now replaces only the
+links it made itself: a real file or directory in the way stops the run before anything changes, with an error naming
+each one and saying to move or delete it. Otherwise `--client-dir` has now been through a client run on that pack (223
+mods, all 37 tests of the scenes with a client passing): the log said `the client reads 2 entries of …/run/client through links` and `loads the 223
+mods in …/run/client/mods`, and the client wrote about 1200 files into the linked `config/`, which is what linking is
+for.
+
 ### A kept bot survives a restart · compiled, the file carry-over covered by JVM tests
 
 `@Bot.Keep` / `t.bot({keep: true})` handed a bot to a later test in the same game only: a test after a restart
