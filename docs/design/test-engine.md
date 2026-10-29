@@ -189,7 +189,7 @@ command-line runner writes the same file from a game directory. The engine knows
 
 `stagewright test <server-dir>` is for a pack with no build: its YAML and JavaScript tests sit in
 `<server-dir>/stagewright/tests` and its scenes in `stagewright/scenes`, with the saves scenes start from in
-`stagewright/worlds`. The CLI packs them into a resource-only mod
+`stagewright/worlds`. The CLI copies them, following symbolic links, and packs them into a resource-only mod
 (`fabric.mod.json` and a `lowcodefml` `neoforge.mods.toml`, so either loader takes it), hands it to the pack's server
 with StageWright's loader jar as it hands any mod — `-Dfabric.addMods`, or `--fml.mods` — and writes the
 `dedicatedServer` launch spec from the start command it detects, with the `leaks` its `--leaks` names (`fail` unless

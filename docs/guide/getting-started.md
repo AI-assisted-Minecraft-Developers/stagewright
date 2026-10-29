@@ -211,7 +211,10 @@ Lay the tests out inside the pack's server directory:
     worlds/                     saves a scene starts from (optional, see world.from)
 ```
 
-and run:
+Any of these may be a symbolic link, to tests kept in a repository of their own for instance, and so may the files in
+them: the runner copies what the links point to.
+
+Then run:
 
 ```bash
 java -jar stagewright.jar test <server-dir>

@@ -86,6 +86,21 @@ class TestCommandTest {
     }
 
     @Test
+    void aSymlinkedTestsDirectoryAndTheLinksInsideItAreCopiedAsFiles(@TempDir Path dir) throws IOException {
+        Path elsewhere = Files.createDirectories(dir.resolve("repo/tests/sub"));
+        Files.writeString(elsewhere.resolve("a.js"), "test('a', t => {});");
+        Path single = Files.writeString(dir.resolve("repo/b.yaml"), "tests: []");
+        Files.createSymbolicLink(elsewhere.getParent().resolve("b.yaml"), single);
+        Path linked = Files.createSymbolicLink(Files.createDirectories(dir.resolve("pack/stagewright")).resolve("tests"),
+                elsewhere.getParent());
+        Path to = dir.resolve("root/stagewright/tests");
+        assertEquals(2, TestCommand.copyTree(linked, to));
+        assertEquals("test('a', t => {});", Files.readString(to.resolve("sub/a.js")));
+        assertFalse(Files.isSymbolicLink(to.resolve("b.yaml")), "the file the link names, not the link");
+        assertEquals("tests: []", Files.readString(to.resolve("b.yaml")));
+    }
+
+    @Test
     void aClientsPropertiesComeBeforeTheLoadersOwn() {
         ModInjection.Arguments mods = new ModInjection.Arguments(List.of("-Dfabric.addMods=a.jar"), List.of());
         List<String> props = TestCommand.clientProps(List.of("-Xmx2G"), mods, "stagewright.client.world=W");

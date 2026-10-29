@@ -30,6 +30,6 @@ Moving six consumers to this path (2026-10-29) left these open, by weight: a scr
 `waitUntil` or `expect`, and has no after-test hook, so nothing cleans up after a failure; `t.record` values reach no
 report, and a blank value fails the test; `mc.action.runCommand` runs as the first player, which is a bot, so a pack
 with LuckPerms refuses every command and `@s` is another test's bot; a bot's `name` is not its player name
-(`agent-body-N`); a topology that cannot launch fails its tests instead of skipping them; the CLI does not follow a
-symlinked tests directory, and does not notice a stale harness jar in `mods/`; scripts have
+(`agent-body-N`); a topology that cannot launch fails its tests instead of skipping them; the CLI does not notice a
+stale harness jar in `mods/`; scripts have
 no `Java` global and no way to run several commands in one tick; plots far from spawn lose non-persistent mobs.

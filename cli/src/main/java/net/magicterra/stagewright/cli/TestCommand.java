@@ -7,6 +7,7 @@ import java.io.UncheckedIOException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -112,7 +113,8 @@ final class TestCommand {
         Path root = work.resolve("root");
         // worlds: the saves a scene's world.from names.
         for (String dir : List.of("scenes", "tests", "worlds")) {
-            copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir));
+            int copied = copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir));
+            if (Files.isDirectory(source.resolve(dir))) log.accept(copied + " files from " + source.resolve(dir));
         }
         Path jar = modJar(root, work.resolve(MOD_ID + ".jar"));
         List<Path> mods = new ArrayList<>(extraMods);
@@ -352,15 +354,25 @@ final class TestCommand {
         }
     }
 
-    private static void copyTree(Path from, Path to) throws IOException {
-        if (!Files.isDirectory(from)) return;
-        try (Stream<Path> walk = Files.walk(from)) {
+    /**
+     * Copy {@code from} into {@code to}, following symbolic links, the directory itself included: a pack that links its
+     * tests in from a repository of their own must not get an empty mod. Answers how many files were copied.
+     */
+    static int copyTree(Path from, Path to) throws IOException {
+        if (!Files.isDirectory(from)) return 0;
+        int files = 0;
+        try (Stream<Path> walk = Files.walk(from, FileVisitOption.FOLLOW_LINKS)) {
             for (Path p : walk.toList()) {
                 Path target = to.resolve(from.relativize(p).toString());
-                if (Files.isDirectory(p)) Files.createDirectories(target);
-                else Files.copy(p, target);
+                if (Files.isDirectory(p)) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.copy(p, target);
+                    files++;
+                }
             }
         }
+        return files;
     }
 
     private static void deleteTree(Path root) throws IOException {

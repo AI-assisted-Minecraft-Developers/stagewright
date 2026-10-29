@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### The command-line runner follows symbolic links in the tests and scenes · green in the CLI's own tests
+
+`stagewright/tests`, `scenes` and `worlds` under a pack's server directory, and anything inside them, may now be
+symbolic links: the runner copies the files they point to into the mod it builds. A linked directory used to copy as
+an empty one, so a pack whose tests were linked in from a repository of their own ran no test and said nothing. The
+runner now also logs how many files it took from each directory.
+
 ### The command-line runner takes `--leaks` · green in the CLI's own tests
 
 `stagewright test <server-dir> --leaks report` writes `leaks: report` into the launch specs it generates, as `leaks =
