@@ -10,6 +10,18 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-30
+
+### A script's call waits for a busy server instead of giving up after 8 seconds · green in the unit tests
+
+WorldDriver withdraws a task the server thread has not started within 8 seconds and answers `not_executed`. Under a
+heavy pack, with several tests leasing plots at once, a merely busy server made `t.call` (and `t.client().call` and a
+YAML test's calls) fail that way. A test's call is now made again while it is answered `not_executed`, for up to
+WorldDriver's longest call wait (ten minutes); any other answer, and `not_executed` once that runs out, is the call's
+answer as before. A stopped server is still caught by the engine's watchdog. A Java test's generated callers
+(`game.api(...)`) still give up after 8 seconds; `game.onServer` never did. The in-game suites have not yet been run
+against this.
+
 ## 2026-10-29
 
 ### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests
