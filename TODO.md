@@ -17,6 +17,23 @@ player data. `Npc`s are still removed when their test ends.
 `JupiterRun.halt` arms an exit watchdog for a dedicated server started without the agent, by hand or
 through a run task the plugin cannot put an argument on. It goes if and when neither is supported.
 
+## The plugin does not run on Gradle 9
+
+`StageWrightLaunchSpecsTask` resolves the run's classpath while executing (`CompanionLaunch.writeClasspathArgFile`),
+and the run belongs to another project, which Gradle 9 refuses: "Resolution of the configuration
+':fabric:testmodRuntimeClasspath' was attempted without an exclusive lock". The classpath has to become a task input
+resolved at configuration time. Fabric Loom 1.19 needs Gradle 9.8, so worlddriver stays on Loom 1.13 until then.
+
+## What the third-party consumers found
+
+Moving six consumers to this path (2026-10-29) left these open, by weight: a script cannot catch a failed call,
+`waitUntil` or `expect`, and has no after-test hook, so nothing cleans up after a failure; `t.record` values reach no
+report, and a blank value fails the test; `mc.action.runCommand` runs as the first player, which is a bot, so a pack
+with LuckPerms refuses every command and `@s` is another test's bot; a bot's `name` is not its player name
+(`agent-body-N`); a topology that cannot launch fails its tests instead of skipping them; the CLI has no `leaks`
+option, does not follow a symlinked tests directory, and does not notice a stale harness jar in `mods/`; scripts have
+no `Java` global and no way to run several commands in one tick; plots far from spawn lose non-persistent mobs.
+
 ## The launch-spec adapters have only met stand-ins for the loaders
 
 `Toolchain` finds ModDevGradle's and Loom's late-bound members by name, and the TestKit tests use run
