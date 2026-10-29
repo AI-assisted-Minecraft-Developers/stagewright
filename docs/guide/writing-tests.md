@@ -163,8 +163,24 @@ and `isolated`.
 `settle(fn, {ticks, within})`, `expect(value)` (`equals`, `contains`, `isEmpty`, `gt`, `lt`, `atLeast`, `atMost`),
 `check`, `record(name, value)`, `step(name, args)`, `perf`, `store`, `afterTest(fn)`, the handles `plot({size, x, y, z, centered,
 dimension})`, `bot()` or `bot({name, parked, keep, kept})`, `player()`, `npc(type, pos)`, `client()`, `capability(name)`,
-`translate(pos, from, to)`, and the overrides `override`, `overrideTime`, `overrideWeather`, `overrideTickRate`.
-Positions are `{x, y, z}`; blocks and items are ids. The script also has WorldDriver's own `Driver.*`.
+`translate(pos, from, to)`, `onServer(fn)`, and the overrides `override`, `overrideTime`, `overrideWeather`,
+`overrideTickRate`. Positions are `{x, y, z}`; blocks and items are ids. The script also has WorldDriver's own
+`Driver.*`.
+
+A script runs on a test thread, so two `t.call`s may land in different ticks. `t.onServer(fn)` runs `fn` on the server
+thread as one task and answers what it returns; the `t.call`, `t.step` and `t.check` it makes run there and then, all
+in the same tick, with nothing else in between:
+
+```javascript
+const kinds = t.onServer(() => {
+  t.call('mc.action.runCommand', { command: `setblock ${a.x} ${a.y} ${a.z} minecraft:stone` });
+  t.call('mc.action.runCommand', { command: `setblock ${b.x} ${b.y} ${b.z} minecraft:stone` });
+  return [t.call('mc.world.block', { pos: a }).type, t.call('mc.world.block', { pos: b }).type];
+});
+```
+
+What waits for the server cannot run inside it — `t.wait`, `t.waitUntil`, `t.settle`, `t.plot`, `t.bot`, `t.perf` —
+and is refused with a message saying so, as are a WorldDriver method that waits and the overrides.
 
 What `t.call` and the handles (`t.plot`, `t.bot`, `t.player`, `t.npc`, `t.client` and their methods) refuse can be
 caught, so a test can check that something is refused, and carry on:

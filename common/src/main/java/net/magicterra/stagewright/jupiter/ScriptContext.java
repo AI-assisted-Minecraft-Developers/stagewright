@@ -22,6 +22,7 @@ import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.api.schema.ApiError;
 import net.magicterra.worlddriver.api.schema.ApiException;
+import net.magicterra.worlddriver.api.thread.ServerThreadGuard;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
 import org.junit.platform.engine.TestDescriptor;
@@ -88,8 +89,16 @@ final class ScriptContext {
         });
         store.put("get", (Scripting.Function) a -> BuiltinSteps.run(this, "store.get", String.valueOf(a[0])));
         script.put("store", store);
+        script.put("onServer", (Scripting.Function) this::onServer);
         ScriptHandles.install(script, game, leases, test.getDisplayName());
         javaPlot = (Scripting.Function) script.get("plot");
+        for (String blocking : BLOCKING) {
+            Scripting.Function f = (Scripting.Function) script.get(blocking);
+            script.put(blocking, (Scripting.Function) a -> {
+                refuseOnServerThread("t." + blocking);
+                return f.call(a);
+            });
+        }
         // What t.call and the handles refuse, a script can catch; a failed t.expect or wait it still cannot.
         Scripting scripting = WorldDriver.scripting();
         if (scripting != null) {
@@ -168,6 +177,29 @@ final class ScriptContext {
             }
         }
         return failure;
+    }
+
+    /** What waits for ticks or leases, and so cannot run inside {@code t.onServer}. */
+    private static final List<String> BLOCKING = List.of("wait", "waitUntil", "settle", "plot", "bot", "perf");
+
+    /**
+     * {@code t.onServer(fn)}: {@code fn} run on the server thread, as one server task, and its answer. What it calls —
+     * {@code t.call}, {@code t.step}, {@code t.check} — runs there and then, within the same tick; WorldDriver runs a
+     * call made on the server thread in place rather than queueing it.
+     */
+    private Object onServer(Object... args) {
+        if (!(args.length > 0 && args[0] instanceof Scripting.Function fn)) {
+            throw new IllegalArgumentException("t.onServer(fn) takes a function");
+        }
+        return game.onServer(server -> fn.call());
+    }
+
+    /** Refuse {@code what} on the server thread, where its wait would be for the thread that is waiting. */
+    private static void refuseOnServerThread(String what) {
+        if (ServerThreadGuard.onServerThread()) {
+            throw new IllegalStateException(what + " cannot be called inside t.onServer: it waits for the server, and"
+                    + " the server thread would be waiting for itself. Call it before or after t.onServer");
+        }
     }
 
     /** {@code t.call(method, params)}: any WorldDriver method, answered as plain values. */

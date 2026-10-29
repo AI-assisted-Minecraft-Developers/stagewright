@@ -39,6 +39,15 @@ must undo or give back — an override, `game.afterTest`, `game.npc` — is stil
 `BooleanSupplier` overload leaves the result type open, and it needed `game.<Boolean>onServer(…)`. The in-game suites
 have not yet been run against this.
 
+### A script can make several calls in one tick with `t.onServer` · green in the unit tests, against WorldDriver's script engine
+
+A script runs on a test thread, so each `t.call` hopped to the server thread on its own and two of them could land in
+different ticks; a pack test that needed a setup and its check in the same tick had no way to say so. `t.onServer(fn)`
+runs `fn` on the server thread as one task, as `game.onServer` does in Java, and answers its result; `t.call`,
+`t.step` and `t.check` inside it run in place. `t.wait`, `t.waitUntil`, `t.settle`, `t.plot`, `t.bot` and `t.perf`,
+which would wait for the server from its own thread, are refused there with a message naming the function. The
+in-game suites have not yet been run against this.
+
 ## 2026-10-29
 
 ### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests
