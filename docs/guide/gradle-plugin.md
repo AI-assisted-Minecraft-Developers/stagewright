@@ -205,7 +205,8 @@ The test task prints one line per scene as it finishes, passing or not:
 ```
 
 The JUnit XML under `build/test-results/stagewrightTest<Name>/` has one file per scene and test class (or
-script file), named for both: `TEST-survival-com.example.FurnaceTest.xml`. Inside it the `testsuite` name and
+script file), named for both, with Gradle's spelling of the slash: `TEST-survival#2fcom.example.FurnaceTest.xml`.
+Inside it the `testsuite` name and
 each `testcase`'s `classname` are `survival/com.example.FurnaceTest`, so a class that runs in several scenes
 gives one clearly named file per scene. A test's own name is the method's, as before, and `--tests` still
 selects by the real class and method. An IDE that runs the suite through Gradle cannot jump from a result to

@@ -24,41 +24,43 @@ and `t.client().call` keep the client's own limit. A stopped server is still cau
 `game.onServer` never had a limit. Green in worlddriver's full suite on both loaders; a really busy server has not
 been reproduced.
 
-### A mob inside a leased plot no longer despawns · green in the unit tests
+### A mob inside a leased plot no longer despawns · green in the self-test suite on both loaders
 
 Plots are at z = −200000, so no player is ever within 128 blocks of one, and the game discards a mob that is not
 persistent on its first tick there: a zombie a test summoned into its plot was gone before the test could look at it.
 A mob that enters a server level inside a plot leased at that moment is now made persistent, on both loaders. Mobs a
-test spawns with `game.npc` / `t.npc` were persistent already. The in-game suites have not yet been run against this.
+test spawns with `game.npc` / `t.npc` were persistent already. A zombie summoned into a plot is still there 40 ticks
+later, in WorldDriver's script suite on both loaders.
 
-### `game.check` works inside `game.onServer`, and `game.onServerHolds` answers a plain boolean · green in the unit tests
+### `game.check` works inside `game.onServer`, and `game.onServerHolds` answers a plain boolean · green in the self-test suite on both loaders
 
 A soft check belongs to the test that makes it, which was found from the test's thread only, so `game.check` inside
 `game.onServer` work (or an `await` condition) failed with "only from a test's own thread". The work now runs as part
 of the test that started it: a check there counts for that test, and a capability's facet is that test's. What the test
 must undo or give back — an override, `game.afterTest`, `game.npc` — is still refused there with the same message.
 `game.onServerHolds(condition)` is new: `assertTrue(game.onServer(s -> …))` does not compile, because JUnit's
-`BooleanSupplier` overload leaves the result type open, and it needed `game.<Boolean>onServer(…)`. The in-game suites
-have not yet been run against this.
+`BooleanSupplier` overload leaves the result type open, and it needed `game.<Boolean>onServer(…)`. Both are covered by
+a Java case in WorldDriver's suite, green on both loaders.
 
-### A script can make several calls in one tick with `t.onServer` · green in the unit tests, against WorldDriver's script engine
+### A script can make several calls in one tick with `t.onServer` · green in the self-test suite on both loaders
 
 A script runs on a test thread, so each `t.call` hopped to the server thread on its own and two of them could land in
 different ticks; a pack test that needed a setup and its check in the same tick had no way to say so. `t.onServer(fn)`
 runs `fn` on the server thread as one task, as `game.onServer` does in Java, and answers its result; `t.call`,
 `t.step` and `t.check` inside it run in place. `t.wait`, `t.waitUntil`, `t.settle`, `t.plot`, `t.bot` and `t.perf`,
-which would wait for the server from its own thread, are refused there with a message naming the function. The
-in-game suites have not yet been run against this.
+which would wait for the server from its own thread, are refused there with a message naming the function. A script
+case in WorldDriver's suite reads the same tick count before and after two commands inside it, on both loaders.
 
-### A test can freeze the world and step it tick by tick · green in the unit tests
+### A test can freeze the world and step it tick by tick · the script form green in the self-test suite on both loaders
 
 `game.freezeTicks()` / `t.freezeTicks()` freezes the server's ticks for the rest of the test and thaws them when it
 ends, passed or failed, under `Locks.TICK_RATE` as `overrideTickRate` is. While frozen, `game.ticks(n)` / `t.wait(n)`
 step the world exactly `n` ticks, and an await steps it until its condition holds. A pack test used to send
 `tick freeze` itself, which leaked into every later test when a failed expectation ended it first, and
-`overrideTickRate` cannot go below one tick a second. The in-game suites have not yet been run against this.
+`overrideTickRate` cannot go below one tick a second. `t.freezeTicks()` then `t.wait(3)` moves the game time by exactly 3
+in WorldDriver's script suite on both loaders; `game.freezeTicks()` has only its unit test.
 
-### Scripts can ask what the game has · green in the unit tests
+### Scripts can ask what the game has · green in the self-test suite on both loaders
 
 The old scene API answered how many mods, recipes, loot tables, advancements and structures a pack had, whether a
 class was there and which capabilities were offered; the test path did not, so a pack test ported to a script lost
@@ -66,7 +68,7 @@ those checks. New: `mc.test.mods` (`list` with versions, `has` for one id); a `l
 on `mc.test.loot`, `mc.test.advancements` and `mc.test.structures`; a `count` op on `mc.test.recipes`, and the
 `audit` reply's totals (`total`, `succeeded`, `failuresBySerializer`; the `AuditReport` record gains those three
 components). Scripts get `t.capabilities()` (`has`, `registered`, `available`, without aborting) and
-`t.hasClass(name)`. The in-game suites have not yet been run against this.
+`t.hasClass(name)`. Each is called once in WorldDriver's script suite, green on both loaders.
 
 ### Excluding a mod the game does not have no longer fails the scene · green in the engine's unit tests
 
@@ -86,17 +88,18 @@ Run against the magic-server-modpack pack with the engine from before it named c
 `TEST-mms.xml` (31 tests, 1 skipped) and `TEST-mms-client.xml` (31 skipped); the engine's `<scene>/<file>` class names
 have not yet been through a CLI run.
 
-### Gradle's results say which scene each test ran in · green in the plugin's and the engine's tests, under Gradle 8.14 and 9.3.1
+### Gradle's results say which scene each test ran in · green in the self-test suite on both loaders
 
 A test class that runs in three scenes came out of `stagewrightTest<Name>` as `TEST-<class>-1.xml` to `-3.xml`, with
 nothing in them naming the scene, and a passing run printed nothing at all. Gradle files its XML by the class the test
 engine reports, and the engine reported the plain class. It now reports a class or script file as
-`<scene>/<class>` (`TEST-survival-com.example.FurnaceTest.xml`, `testsuite` and `classname`
-`survival/com.example.FurnaceTest`), and each scene under its own name; `--tests` still matches the real class and
-method. The plugin prints `[stagewright] <scene>: N passed, M skipped` (and how many failed, when any did) as each scene
-finishes. An IDE running the suite through Gradle can no longer jump from a result to its class. The command-line
-runner's JUnit XML takes its `classname` from the same place, so a test there now reads `survival/com.example.FurnaceTest`
-as well. Verified against a stand-in game, not yet in a real one.
+`<scene>/<class>` (`testsuite` and `classname` `survival/com.example.FurnaceTest`, filed as
+`TEST-survival#2fcom.example.FurnaceTest.xml`, Gradle's spelling of the slash), and each scene under its own name;
+`--tests` still matches the real class and method. The plugin prints `[stagewright] <scene>: N passed, M skipped` (and
+how many failed, when any did) as each scene finishes. An IDE running the suite through Gradle can no longer jump from a
+result to its class. The command-line runner's JUnit XML takes its `classname` from the same place, so a test there now
+reads `survival/com.example.FurnaceTest` as well. Seen in WorldDriver's full suites on both loaders: one file per scene
+and class, and a summary line per scene.
 
 ### `-Pstagewright.jvmArgs` adds JVM arguments to every game the plugin starts · green in the plugin's tests
 
@@ -119,7 +122,7 @@ used it yet.
 
 ## 2026-10-29
 
-### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests; the CLI's XML green against a third party
+### What a test records reaches the reports, an empty value included · green in the self-test suite on both loaders; the CLI's XML green against a third party
 
 `t.record(name, value)` and a Java test's `TestReporter` entries were relayed as JUnit report entries, which Gradle's
 test report does not read at all and JUnit's XML keeps only as text in a test's output; a blank value threw "value must
@@ -128,19 +131,19 @@ not be null or blank" inside the script, where it could not be caught, and faile
 publishes it as the test's report entry (a blank value as `stagewright.blank` naming it) and prints it as a line of
 output, which is where Gradle's test report shows it, and the command-line runner adds each test's records to its
 `<testcase>` in the JUnit XML as `<property name value>`. A blank value is kept as the empty string. A script's records
-no longer appear in the in-game JUnit XML under `stagewright/junit/`; the game's log has them. The in-game suites have
-not yet been run against this. In the command-line runner's XML it was confirmed on 2026-10-30 against the
+no longer appear in the in-game JUnit XML under `stagewright/junit/`; the game's log has them. WorldDriver's suite
+records a blank value on both loaders. In the command-line runner's XML it was confirmed on 2026-10-30 against the
 magic-server-modpack pack's dedicated-server scene: 27 of its 30 passing tests carried their records as `<property>`.
 
-### A script test can register cleanup with `t.afterTest` · green in the unit tests, against WorldDriver's script engine
+### A script test can register cleanup with `t.afterTest` · green in the self-test suite on both loaders
 
 `t.afterTest(fn)` runs `fn` when the test ends, passed or not, as `game.afterTest` does for a Java test: on the test
 thread, before the test's plots and bots are given back, several of them last first. One that throws fails the test
 (beside the body's own failure, if it had one) and the others still run. A script had no way to undo what it changed
 through commands, such as a `tick freeze`, once a failed `t.expect` had ended it, so the change leaked into every later
-test. The in-game script suites have not yet been run against this.
+test. WorldDriver's script suite checks the order the hooks run in, on both loaders.
 
-### A script test can catch what `t.call` and the handles refuse · green in the unit tests, against WorldDriver's script engine
+### A script test can catch what `t.call` and the handles refuse · green in the self-test suite on both loaders
 
 A refused `t.call`, or a refusal from `t.plot`, `t.bot`, `t.player`, `t.npc`, `t.client` or a method of what they
 return, used to go straight through the script's `try`/`catch`: WorldDriver hands a Java exception to the script engine
@@ -148,7 +151,7 @@ as it is, and the engine runs only a script's `finally` for one. So a test could
 nor clean up after one. Those functions now reach the script through a small script function that throws an `Error`
 with the refusal's `message`, its Java class as `type` and WorldDriver's error code as `code`. One left uncaught fails
 the test as before, with the Java exception as its cause. A failed `t.expect`, a wait out of ticks and an abort still
-cannot be caught. The in-game script suites have not yet been run against this.
+cannot be caught. WorldDriver's script suite catches a refused call on both loaders.
 
 ### A scene the command-line runner cannot launch is skipped, not failed · green against a third party
 
