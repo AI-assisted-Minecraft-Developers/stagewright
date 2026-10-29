@@ -71,7 +71,8 @@ components). Scripts get `t.capabilities()` (`has`, `registered`, `available`, w
 `mods.exclude` refused a name that matched no mod of a game, so a scene with a server and a client could not exclude
 a mod (LuckPerms) that only the server had. Such a name is now passed over: the scene's `mods` report entry says which
 names matched nothing (per game, `server:` and `client:`, when there are two), and the engine prints a line saying so.
-### The command-line runner's results say which scene they came from · green in the unit tests
+
+### The command-line runner's results say which scene they came from · green against a third party
 
 The runner wrote all results into one `TEST-stagewright.xml` suite named `StageWright`, where a test that runs in two
 scenes appeared twice, and a run that passed printed nothing about what it ran. It now writes one `TEST-<scene>.xml`
@@ -79,6 +80,9 @@ per scene, its `testsuite` named for the scene; each testcase's `classname` is w
 or `<scene>/<class>`, as in Gradle's XML. Only tests that lie in no scene, such as one reported as having run in none,
 stay in `TEST-stagewright.xml`, which is not written when there are none. The console has a line as each scene ends
 (`scene mms passed: 31 tests, 29 passed, 2 skipped, in 312.4 s`), and one for a scene that was skipped, with its reason.
+Run against the magic-server-modpack pack with the engine from before it named classes by scene, it wrote
+`TEST-mms.xml` (31 tests, 1 skipped) and `TEST-mms-client.xml` (31 skipped); the engine's `<scene>/<file>` class names
+have not yet been through a CLI run.
 
 ### Gradle's results say which scene each test ran in · green in the plugin's and the engine's tests, under Gradle 8.14 and 9.3.1
 
@@ -90,8 +94,7 @@ engine reports, and the engine reported the plain class. It now reports a class 
 method. The plugin prints `[stagewright] <scene>: N passed, M skipped` (and how many failed, when any did) as each scene
 finishes. An IDE running the suite through Gradle can no longer jump from a result to its class. The command-line
 runner's JUnit XML takes its `classname` from the same place, so a test there now reads `survival/com.example.FurnaceTest`
-as well (not run: its build does not compile against the WorldDriver currently in the local repository). Verified
-against a stand-in game, not yet in a real one.
+as well. Verified against a stand-in game, not yet in a real one.
 
 ### `-Pstagewright.jvmArgs` adds JVM arguments to every game the plugin starts · green in the plugin's tests
 
@@ -101,18 +104,20 @@ plugin: every one of four third-party builds added the same few lines reading a 
 whitespace, now goes last onto both games of every launch spec, generated or mapped, so a `-D` in it wins over the
 same one in the run. No game has been started with it yet.
 
-### The command-line runner takes the tests and the client's files from where the pack keeps them · green in the unit tests
+### The command-line runner takes the tests and the client's files from where the pack keeps them · `--tests` green against a third party, `--client-dir` green in the unit tests
 
 `--tests <dir>` names the directory holding `tests/`, `scenes/` and `worlds/`, so a pack's tests no longer have to sit
 inside its server directory, linked in file by file or copied there before each run. `--client-dir <dir>` names a client
 game directory: everything in it except `mods/`, `saves/`, `logs/` and `crash-reports/` is linked into the client the
 runner starts, so the client reads the pack's `config/`, `kubejs/`, `options.txt` and the rest instead of only its mods,
 and `--client-mods` defaults to `<dir>/mods`. Before, a pack had to copy those into `<server-dir>/stagewright/client`
-itself. The run's own files stay under `<server-dir>/stagewright/` either way.
+itself. The run's own files stay under `<server-dir>/stagewright/` either way. `--tests` ran the magic-server-modpack
+pack's tests from its repository against its server; `--client-dir` acts only with `--client`, and no client run has
+used it yet.
 
 ## 2026-10-29
 
-### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests
+### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests; the CLI's XML green against a third party
 
 `t.record(name, value)` and a Java test's `TestReporter` entries were relayed as JUnit report entries, which Gradle's
 test report does not read at all and JUnit's XML keeps only as text in a test's output; a blank value threw "value must
@@ -122,7 +127,8 @@ publishes it as the test's report entry (a blank value as `stagewright.blank` na
 output, which is where Gradle's test report shows it, and the command-line runner adds each test's records to its
 `<testcase>` in the JUnit XML as `<property name value>`. A blank value is kept as the empty string. A script's records
 no longer appear in the in-game JUnit XML under `stagewright/junit/`; the game's log has them. The in-game suites have
-not yet been run against this.
+not yet been run against this. In the command-line runner's XML it was confirmed on 2026-10-30 against the
+magic-server-modpack pack's dedicated-server scene: 27 of its 30 passing tests carried their records as `<property>`.
 
 ### A script test can register cleanup with `t.afterTest` · green in the unit tests, against WorldDriver's script engine
 
@@ -142,7 +148,10 @@ with the refusal's `message`, its Java class as `type` and WorldDriver's error c
 the test as before, with the Java exception as its cause. A failed `t.expect`, a wait out of ticks and an abort still
 cannot be caught. The in-game script suites have not yet been run against this.
 
-### A scene the command-line runner cannot launch is skipped, not failed · green in the engine's and the CLI's own tests
+### A scene the command-line runner cannot launch is skipped, not failed · green against a third party
+
+Confirmed on 2026-10-30 with the magic-server-modpack pack run without `--client`: its `mms-client` scene was reported
+skipped, all 31 of its tests with the reason, and the run exited 0, where before it failed 31 tests.
 
 Run without `--client`, `stagewright test` failed every test of every `integratedServer` scene with "topology
 'integratedServer' has no launch spec", and a test only such a scene could run failed the whole run as one that ran
