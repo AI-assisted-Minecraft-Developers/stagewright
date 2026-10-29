@@ -18,7 +18,6 @@ import com.google.gson.JsonPrimitive;
 import net.magicterra.stagewright.test.Game;
 import net.minecraft.core.BlockPos;
 import net.magicterra.worlddriver.api.call.CallContext;
-import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.api.schema.ApiError;
 import net.magicterra.worlddriver.api.schema.ApiException;
@@ -103,7 +102,7 @@ final class ScriptContext {
         script.replaceAll((name, value) -> value instanceof Scripting.Function f ? CatchableErrors.carryingAborts(f)
                 : value);
         // What t.call and the handles refuse, a script can catch; a failed t.expect or wait it still cannot.
-        Scripting scripting = WorldDriver.scripting();
+        Scripting scripting = GameImpl.scripting(game);
         if (scripting != null) {
             errors = new CatchableErrors(scripting);
             script.put("call", errors.wrap((Scripting.Function) script.get("call"), false));

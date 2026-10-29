@@ -21,8 +21,11 @@ import net.magicterra.stagewright.test.Locks;
 import net.magicterra.stagewright.test.Npc;
 import net.magicterra.stagewright.test.Perf;
 import net.magicterra.stagewright.test.Store;
+import net.magicterra.worlddriver.api.call.CallContext;
 import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
+import net.magicterra.worlddriver.api.registry.Scripting;
+import net.magicterra.worlddriver.script.HostedScripts;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
@@ -59,9 +62,34 @@ final class GameImpl implements Game {
         return store;
     }
 
+    /**
+     * WorldDriver's registry, every call through it allowed to wait this long for a busy game thread to take it.
+     * The registry's own limit is a few seconds, which suits an agent that would rather hear "busy"; a test may wait
+     * as long as WorldDriver lets any call wait, while plots generate under a heavy pack. A stopped server is the
+     * engine's watchdog's to catch.
+     */
+    static final long THREAD_WAIT_MS = CallContext.SERVER_CAP_MS;
+
+    private volatile ApiRegistry registry;
+    private volatile Scripting scripting;
+
     @Override
     public ApiRegistry registry() {
-        return WorldDriver.registry();
+        ApiRegistry r = registry;
+        if (r == null) registry = r = WorldDriver.registry().withThreadWait(THREAD_WAIT_MS);
+        return r;
+    }
+
+    /** The script engine script tests run in: WorldDriver's, over {@link #registry()}, so their calls wait as long. */
+    Scripting scripting() {
+        Scripting s = scripting;
+        if (s == null) scripting = s = new HostedScripts(registry());
+        return s;
+    }
+
+    /** {@code game}'s script engine; WorldDriver's own for a game that is not this class, as in a unit test. */
+    static Scripting scripting(Game game) {
+        return game instanceof GameImpl impl ? impl.scripting() : WorldDriver.scripting();
     }
 
     @Override

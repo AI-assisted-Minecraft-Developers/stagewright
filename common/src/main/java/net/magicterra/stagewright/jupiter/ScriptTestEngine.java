@@ -12,7 +12,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import net.magicterra.stagewright.test.Requires;
-import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import org.junit.platform.engine.EngineDiscoveryRequest;
 import org.junit.platform.engine.EngineExecutionListener;
@@ -185,7 +184,7 @@ public final class ScriptTestEngine implements TestEngine {
                     }
                     return file;
                 }
-                Scripting scripting = WorldDriver.scripting();
+                Scripting scripting = GameImpl.scripting(GameExtension.game());
                 if (scripting == null) throw new IllegalStateException("WorldDriver is not up, so no script can run");
                 Map<String, Object> globals = Map.of(
                         "test", (Scripting.Function) file::register,
