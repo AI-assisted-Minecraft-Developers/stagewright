@@ -178,8 +178,8 @@ in the same tick, with nothing else in between:
 
 ```javascript
 const kinds = t.onServer(() => {
-  t.call('mc.action.runCommand', { command: `setblock ${a.x} ${a.y} ${a.z} minecraft:stone` });
-  t.call('mc.action.runCommand', { command: `setblock ${b.x} ${b.y} ${b.z} minecraft:stone` });
+  t.call('mc.action.runCommand', { cmd: `setblock ${a.x} ${a.y} ${a.z} minecraft:stone` });
+  t.call('mc.action.runCommand', { cmd: `setblock ${b.x} ${b.y} ${b.z} minecraft:stone` });
   return [t.call('mc.world.block', { pos: a }).type, t.call('mc.world.block', { pos: b }).type];
 });
 ```
@@ -198,7 +198,7 @@ caught, so a test can check that something is refused, and carry on:
 
 ```javascript
 try {
-  t.call('mc.action.runCommand', { command: 'op somebody' });
+  t.call('mc.action.runCommand', { cmd: 'op somebody' });
   t.check(false, 'the command should have been refused');
 } catch (e) {
   t.expect(e.message).contains('permission');   // e.type is the Java class, e.code WorldDriver's error code
@@ -220,8 +220,8 @@ What a script changes outside what it leased, it undoes with `t.afterTest(fn)`, 
 still use them. Several run last first; one that throws fails the test, and the others still run.
 
 ```javascript
-t.call('mc.action.runCommand', { command: 'gamerule doFireTick false' });
-t.afterTest(() => t.call('mc.action.runCommand', { command: 'gamerule doFireTick true' }));
+t.call('mc.action.runCommand', { cmd: 'gamerule doFireTick false' });
+t.afterTest(() => t.call('mc.action.runCommand', { cmd: 'gamerule doFireTick true' }));
 ```
 
 ### YAML
