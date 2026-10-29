@@ -195,6 +195,26 @@ Per suite `<name>` the plugin registers:
 | `stagewrightLaunchSpecs<Name>` | Writes `build/stagewright/launches/<name>/<sceneTopology>.json` from each topology's run tasks, generated or mapped ([format](../reference/launch-spec.md)). The classpath goes into an argument file beside them, referenced from `jvmArgs`. Runs the run tasks' own prerequisites first; never up to date. |
 | `stagewrightTest<Name>` | A `Test` task on the JUnit Platform with only the `stagewright` engine, passing `-Dstagewright.launches` pointing at that directory. `--tests` matches a script test as `<path>.<name>` (`stagewright/tests/validation/42_combat.js.42_combat`); a pattern containing `/` gets a leading `*` before the run, since Gradle would otherwise hand the engine no class to start from. Never up to date; not part of `check`, because it starts games. |
 
+### Extra JVM arguments for one machine
+
+Some arguments belong to the machine running the tests rather than to the build: a heap size, a
+temporary directory on a bigger disk, a patched native library. Pass them as the Gradle property
+`stagewright.jvmArgs`, separated by spaces:
+
+```bash
+./gradlew stagewrightTestNeoforge -Pstagewright.jvmArgs="-Xmx6g -Djava.io.tmpdir=/data/tmp -Dorg.lwjgl.glfw.libname=/opt/glfw/libglfw.so"
+```
+
+or once in `~/.gradle/gradle.properties`:
+
+```properties
+stagewright.jvmArgs=-Xmx6g -Djava.io.tmpdir=/data/tmp
+```
+
+Every game the plugin starts gets them, the server and the client that joins it alike, whether its runs
+are generated or mapped from `topologies { }`. They come after the run's own arguments and the suite's
+`jvmArgs`, so where both set the same `-D` property, this one wins. An argument cannot contain a space.
+
 The engine is resolved as `net.magicterra:stagewright-testengine` at the plugin's own version, from
 the project's repositories, through the `stagewrightTestEngine` configuration.
 
