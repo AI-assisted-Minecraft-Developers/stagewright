@@ -195,6 +195,8 @@ public final class FakeGame {
         start(file);
         start(file + "/[test:adds]");
         test("{\"type\":\"report\",\"id\":" + q(file + "/[test:adds]") + ",\"entries\":{\"sum\":\"2\"}}");
+        test("{\"type\":\"record\",\"id\":" + q(file + "/[test:adds]") + ",\"name\":\"note\",\"value\":\"two\\nlines\"}");
+        test("{\"type\":\"record\",\"id\":" + q(file + "/[test:adds]") + ",\"name\":\"none found\",\"value\":\"\"}");
         if ("script".equals(scene)) finish(file + "/[test:adds]", "SUCCESSFUL", null);
         else finish(file + "/[test:adds]", "FAILED", "{\"class\":\"java.lang.AssertionError\",\"message\":"
                 + q("-Dstagewright.junit.scene was " + scene) + ",\"trace\":[]}");

@@ -117,6 +117,13 @@ connection as heartbeats, crashes and `done`. Because it is one ordered stream, 
 during `smeltsIron`" from "the game crashed after its run". The channel is one-way; what the game should run is
 decided before it starts, by system properties ([launch spec](../reference/launch-spec.md)).
 
+What a test records — a script's `t.record`, a Java test's `TestReporter` entry — travels as a `record` event of its
+own rather than as a JUnit report entry, because a report entry refuses a blank value and a script recording an empty
+result is ordinary; the game also writes it to its log, a line each. The engine publishes it as the test's report
+entry (a blank one as `stagewright.blank` naming it, the one form a report entry can take) and prints it as a line of
+output, since Gradle's test report reads no report entries; the command-line runner turns the entries into each
+`<testcase>`'s `<properties>`, finding the testcase by the `unique-id:` line JUnit's XML keeps in its output.
+
 When the game ends, everything it did not report is closed out as failed with the reason: the run's own error (a
 `@DependsOn` cycle), a test it never discovered, or how the game ended — crashed, stalled (with where its threads
 stood), timed out, exited. A game that reported everything but had to be forced down after its run fails its scene,

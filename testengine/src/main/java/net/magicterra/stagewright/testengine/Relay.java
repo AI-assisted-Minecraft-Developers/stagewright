@@ -2,7 +2,6 @@ package net.magicterra.stagewright.testengine;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -115,12 +114,17 @@ final class Relay implements Consumer<Map<String, Object>> {
                 }
                 finish(d, result);
             }
-            case "report" -> {
+            case "record" -> {
                 TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
-                if (d != null && event.get("entries") instanceof Map<?, ?> entries && !entries.isEmpty()) {
-                    Map<String, String> values = new LinkedHashMap<>();
-                    entries.forEach((k, v) -> values.put(String.valueOf(k), String.valueOf(v)));
-                    listener.reportingEntryPublished(d, ReportEntry.from(values));
+                if (d != null && event.get("name") instanceof String name) {
+                    record(d, name, event.get("value") instanceof String v ? v : "");
+                }
+            }
+            case "report" -> {
+                // An older game's records.
+                TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
+                if (d != null && event.get("entries") instanceof Map<?, ?> entries) {
+                    entries.forEach((k, v) -> record(d, String.valueOf(k), String.valueOf(v)));
                 }
             }
             case "error" -> error =event.get("failure") instanceof Map<?, ?> f ? Relayed.failure(f, false)
@@ -188,6 +192,21 @@ final class Relay implements Consumer<Map<String, Object>> {
                     + " class the game has is not the one scanned here. The game's log says which");
         }
         return new AssertionError("the game ended before this test finished: " + gameEnded);
+    }
+
+    /**
+     * A value the test recorded in the game. Published as a report entry under its name, which a build tool's report
+     * or an IDE shows; a blank value, which a report entry cannot hold, as {@value StageWrightTestEngine#BLANK_RECORD}
+     * naming it. Also printed, one line each, since Gradle's own test report reads no report entries at all: in its
+     * test report the line is the output of whichever test was running then, and says which test it belongs to.
+     */
+    private void record(TestDescriptor d, String name, String value) {
+        if (name.isBlank()) return;
+        String label = key(d) != null ? key(d) : d.getDisplayName();
+        System.out.println("[stagewright] record " + sceneName + " " + label + ": " + name + " = "
+                + value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n"));
+        listener.reportingEntryPublished(d, value.isBlank()
+                ? ReportEntry.from(StageWrightTestEngine.BLANK_RECORD, name) : ReportEntry.from(name, value));
     }
 
     /** A test's key for coverage, the same in every scene; null for a container. */

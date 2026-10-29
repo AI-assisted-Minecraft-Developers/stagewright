@@ -169,6 +169,13 @@ try {
 A refusal nobody catches fails the test, as before. A failed `t.expect` and a `t.waitUntil` or `t.settle` that runs
 out of ticks cannot be caught, so a test cannot swallow its own failure.
 
+`t.record(name, value)` keeps a value beside the test's result: a string as it is, an empty one included, anything
+else as JSON. A Java test does the same with JUnit's `TestReporter`. Each value is a line in the game's log
+(`record <file>#<test>: <name> = <value>`), and the engine reports it as the test's report entry, which an IDE shows,
+and prints it as a line of output, which is where Gradle's test report has it (in the output of whichever test was
+running then; the line names the scene and the test it belongs to). The command-line runner's JUnit XML lists each as
+a `<property>` of the test's `<testcase>`.
+
 What a script changes outside what it leased, it undoes with `t.afterTest(fn)`, as a Java test does with
 `game.afterTest`: `fn` runs when the test ends, passed or not, before its plots and bots are given back, so it may
 still use them. Several run last first; one that throws fails the test, and the others still run.

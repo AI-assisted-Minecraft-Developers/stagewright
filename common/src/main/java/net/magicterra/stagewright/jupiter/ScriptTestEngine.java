@@ -396,7 +396,7 @@ public final class ScriptTestEngine implements TestEngine {
             TestExecutionResult result = upstream(scheduler);
             if (result == null) {
                 try (AutoCloseable held = scheduler.hold(locks, isolated)) {
-                    result = run(listener);
+                    result = run();
                 } catch (Exception e) {
                     result = TestExecutionResult.failed(e);
                 }
@@ -426,9 +426,8 @@ public final class ScriptTestEngine implements TestEngine {
             return scheduler.blocker(this);
         }
 
-        private TestExecutionResult run(EngineExecutionListener listener) {
-            ScriptContext context = new ScriptContext(GameExtension.game(), file.steps.scripts(), file.steps.java(), this,
-                    listener);
+        private TestExecutionResult run() {
+            ScriptContext context = new ScriptContext(GameExtension.game(), file.steps.scripts(), file.steps.java(), this);
             TestScope.bind(TestScope.ofScript(getDisplayName(), locks, isolated));
             Throwable failure = null;
             try {

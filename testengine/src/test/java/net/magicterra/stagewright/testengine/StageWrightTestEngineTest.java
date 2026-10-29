@@ -445,6 +445,31 @@ class StageWrightTestEngineTest {
     }
 
     @Test
+    void aRecordedValueIsAReportEntryABlankOneIncludedAndALineOfOutput() {
+        java.io.PrintStream out = System.out;
+        java.io.ByteArrayOutputStream printed = new java.io.ByteArrayOutputStream();
+        EngineExecutionResults r;
+        System.setOut(new java.io.PrintStream(printed, true, java.nio.charset.StandardCharsets.UTF_8));
+        try {
+            r = EngineTestKit.engine("stagewright")
+                    .selectors(selectClasspathResource("stagewright/tests/arithmetic.js")).execute();
+        } finally {
+            System.setOut(out);
+        }
+        List<java.util.Map<String, String>> entries = r.allEvents().reportingEntryPublished().stream()
+                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs()).toList();
+        assertTrue(entries.contains(java.util.Map.of("note", "two\nlines")), entries.toString());
+        // A report entry cannot hold a blank value: the blank one names itself under a key of its own.
+        assertTrue(entries.contains(java.util.Map.of(StageWrightTestEngine.BLANK_RECORD, "none found")),
+                entries.toString());
+        String text = printed.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(text.contains("[stagewright] record script stagewright/tests/arithmetic.js#adds: note = two\\nlines"),
+                text);
+        assertTrue(text.contains("[stagewright] record script stagewright/tests/arithmetic.js#adds: none found = \n"),
+                text);
+    }
+
+    @Test
     void yamlTestsTakeTheFilesSceneAndAreReportedTheSameWay() {
         EngineExecutionResults r = EngineTestKit.engine("stagewright")
                 .selectors(selectClasspathResource("stagewright/tests/declared.yaml")).execute();

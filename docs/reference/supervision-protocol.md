@@ -126,7 +126,8 @@ The in-game JUnit run reports itself through `test`, in the order it happens; th
 | `started` | `id` | when a node starts |
 | `skipped` | `id`, `reason` | instead of `started` and `finished`, and for none of the node's children; a `reason` beginning `@Requires: ` is an unmet requirement |
 | `finished` | `id`, `status` (`SUCCESSFUL`, `FAILED`, `ABORTED`), `failure` when there is one | when a node ends |
-| `report` | `id`, `entries` (an object of string values) | when a test publishes a report entry, such as a script's `t.record` or a `perf` result |
+| `record` | `id`, `name`, `value` (a string, possibly empty) | when a test records a value: a script's `t.record` (a YAML test's `perf` result and known-issue counts among them), or each pair of a Java test's `TestReporter` entry. The game also writes it to its log, one line each |
+| `report` | `id`, `entries` (an object of string values) | sent by older games instead of `record`; still read as one record per entry |
 | `restart` | `round` | before `ended`, when tests remain for a later round: whoever started the game starts it again on the same world with `-Dstagewright.junit.round=<round>` once it has exited. A class or script file may then report `finished` in each round |
 | `ended` | none | once, after the last node of every plan; `done` follows when the game was told to exit |
 | `error` | `failure` | instead of `planned`, when the run could not start, such as a `@DependsOn` cycle |

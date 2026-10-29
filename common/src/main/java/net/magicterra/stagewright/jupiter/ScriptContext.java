@@ -19,9 +19,7 @@ import net.magicterra.worlddriver.api.game.WorldDriver;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
-import org.junit.platform.engine.EngineExecutionListener;
 import org.junit.platform.engine.TestDescriptor;
-import org.junit.platform.engine.reporting.ReportEntry;
 
 /**
  * The {@code t} a script test's body receives: the Java test context's verbs, as plain functions over plain values,
@@ -37,7 +35,6 @@ final class ScriptContext {
     private final Map<String, Scripting.Function> steps;
     private final JavaSteps javaSteps;
     private final TestDescriptor test;
-    private final EngineExecutionListener listener;
     /** What the body leased — plots, bots — in the order it did. */
     private final List<CloseableResource> leases = new ArrayList<>();
     /** Positions the test's steps named with {@code as}. */
@@ -50,13 +47,11 @@ final class ScriptContext {
     /** {@code t.plot} as Java calls it for a YAML test, its refusals left as they were thrown. */
     private Scripting.Function javaPlot;
 
-    ScriptContext(Game game, Map<String, Scripting.Function> steps, JavaSteps javaSteps, TestDescriptor test,
-                  EngineExecutionListener listener) {
+    ScriptContext(Game game, Map<String, Scripting.Function> steps, JavaSteps javaSteps, TestDescriptor test) {
         this.game = game;
         this.steps = steps;
         this.javaSteps = javaSteps;
         this.test = test;
-        this.listener = listener;
     }
 
     Map<String, Object> asScript() {
@@ -346,12 +341,16 @@ final class ScriptContext {
         return null;
     }
 
-    /** {@code t.record(name, value)}: a value kept in the report beside the test's result. */
+    /**
+     * {@code t.record(name, value)}: a value kept in the report beside the test's result, and in the game's log. A
+     * string is kept as it is, an empty one included; anything else as JSON.
+     */
     private Object record(Object... args) {
         String name = string(args, 0, "t.record(name, value)");
+        if (name.isBlank()) throw new IllegalArgumentException("t.record(name, value): the name must not be blank");
         Object value = args.length > 1 ? args[1] : null;
-        listener.reportingEntryPublished(test, ReportEntry.from(name,
-                value instanceof String s ? s : GSON.toJson(value)));
+        Records.publish(test.getUniqueId().toString(), Records.label(test.getSource().orElse(null),
+                test.getDisplayName()), name, value instanceof String s ? s : GSON.toJson(value));
         return null;
     }
 

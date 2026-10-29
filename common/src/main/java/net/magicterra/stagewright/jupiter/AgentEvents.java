@@ -85,14 +85,11 @@ final class AgentEvents implements TestExecutionListener {
         send(o);
     }
 
+    /** A Java test's {@code TestReporter} entry: each of its pairs a record, as a script's {@code t.record} is. */
     @Override
     public void reportingEntryPublished(TestIdentifier id, ReportEntry entry) {
-        JsonObject o = event("report");
-        o.addProperty("id", id.getUniqueId());
-        JsonObject entries = new JsonObject();
-        entry.getKeyValuePairs().forEach(entries::addProperty);
-        o.add("entries", entries);
-        send(o);
+        String label = Records.label(id.getSource().orElse(null), id.getDisplayName());
+        entry.getKeyValuePairs().forEach((name, value) -> Records.publish(id.getUniqueId(), label, name, value));
     }
 
     /**

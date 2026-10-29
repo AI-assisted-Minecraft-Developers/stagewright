@@ -358,7 +358,9 @@ final class TestCommand {
             Launcher launcher = LauncherFactory.create();
             SummaryGeneratingListener summary = new SummaryGeneratingListener();
             PrintWriter out = new PrintWriter(System.out, true);
-            launcher.execute(request, summary, new LegacyXmlReportGeneratingListener(reports, out));
+            RecordProperties records = new RecordProperties();
+            launcher.execute(request, summary, new LegacyXmlReportGeneratingListener(reports, out), records);
+            records.writeInto(reports);
             TestExecutionSummary result = summary.getSummary();
             result.printTo(out);
             result.printFailuresTo(out, 20);

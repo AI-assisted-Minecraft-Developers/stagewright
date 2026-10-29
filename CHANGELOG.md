@@ -12,6 +12,18 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests
+
+`t.record(name, value)` and a Java test's `TestReporter` entries were relayed as JUnit report entries, which Gradle's
+test report does not read at all and JUnit's XML keeps only as text in a test's output; a blank value threw "value must
+not be null or blank" inside the script, where it could not be caught, and failed the test. A record now travels as a
+`record` test event of its own: the game writes it to its log (`record <file>#<test>: <name> = <value>`), the engine
+publishes it as the test's report entry (a blank value as `stagewright.blank` naming it) and prints it as a line of
+output, which is where Gradle's test report shows it, and the command-line runner adds each test's records to its
+`<testcase>` in the JUnit XML as `<property name value>`. A blank value is kept as the empty string. A script's records
+no longer appear in the in-game JUnit XML under `stagewright/junit/`; the game's log has them. The in-game suites have
+not yet been run against this.
+
 ### A script test can register cleanup with `t.afterTest` · green in the unit tests, against WorldDriver's script engine
 
 `t.afterTest(fn)` runs `fn` when the test ends, passed or not, as `game.afterTest` does for a Java test: on the test

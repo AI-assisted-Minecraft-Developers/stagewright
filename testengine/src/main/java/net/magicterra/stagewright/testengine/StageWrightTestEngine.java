@@ -39,6 +39,12 @@ public final class StageWrightTestEngine implements TestEngine {
     /** The suite's test roots, path-separated: where the script tests under {@value ScriptScan#DIRECTORY} are. */
     public static final String TEST_ROOTS = "stagewright.testRoots";
 
+    /**
+     * The key of the report entry that stands for a value a test recorded blank, which a report entry cannot hold: its
+     * value is the name the test recorded under, and the recorded value is the empty string.
+     */
+    public static final String BLANK_RECORD = "stagewright.blank";
+
     @Override
     public String getId() {
         return ID;
