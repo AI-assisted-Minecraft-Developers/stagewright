@@ -2,6 +2,7 @@ package net.magicterra.stagewright.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
@@ -101,6 +102,57 @@ class ModInjectionTest {
 
         assertEquals(ModInjection.Arguments.NONE, args);
         assertEquals("shipped", TestModJar.marker(mods.resolve("mc_stagewright-neoforge-0.1.0+1.21.1.jar")));
+    }
+
+    @Test
+    void aStaleStageWrightInModsIsNamedBeforeTheChecksRefuseIt(@TempDir Path tmp) throws IOException {
+        Path gameDir = tmp.resolve("pack");
+        Path mods = Files.createDirectories(gameDir.resolve("mods"));
+        // A build from before StageWright required WorldDriver: no dependency on it.
+        Path stale = mods.resolve("mc_stagewright-neoforge.jar");
+        try (java.util.zip.ZipOutputStream out = new java.util.zip.ZipOutputStream(Files.newOutputStream(stale))) {
+            out.putNextEntry(new java.util.zip.ZipEntry("META-INF/neoforge.mods.toml"));
+            out.write("[[mods]]\nmodId=\"mc_testkit\"\nversion=\"0.1.0+1.21.1\"\n".getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+        }
+        TestModJar.driver(mods.resolve("driver.jar"), "driver");
+
+        List<String> log = new java.util.ArrayList<>();
+        assertThrows(IllegalArgumentException.class, () -> ModInjection.prepare(gameDir, "neoforge", List.of(), log::add));
+
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("WARNING: " + stale + " is a StageWright build (0.1.0+1.21.1)")),
+                log.toString());
+    }
+
+    @Test
+    void aWorldDriverInModsBesideAnotherGivenWithModIsNamed(@TempDir Path tmp) throws IOException {
+        Path gameDir = tmp.resolve("pack");
+        Path mods = Files.createDirectories(gameDir.resolve("mods"));
+        Path left = TestModJar.driver(mods.resolve("worlddriver-old.jar"), "left behind");
+        Path mine = TestModJar.driver(tmp.resolve("worlddriver-new.jar"), "today's build");
+
+        List<String> log = new java.util.ArrayList<>();
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> ModInjection.prepare(gameDir, "fabric", List.of(mine), log::add));
+
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("WARNING: " + left + " is a WorldDriver build")
+                && l.contains("--mod " + mine)), log.toString());
+        assertTrue(e.getMessage().contains(left.toString()), e.getMessage());
+    }
+
+    @Test
+    void theCliOwnStageWrightInModsIsNotWarnedAbout(@TempDir Path tmp) throws IOException {
+        Path gameDir = tmp.resolve("pack");
+        Path mods = Files.createDirectories(gameDir.resolve("mods"));
+        TestModJar.driver(mods.resolve("driver.jar"), "driver");
+        try (var in = ModInjection.class.getResourceAsStream("/mods/mc_stagewright-fabric.jar")) {
+            Files.copy(in, mods.resolve("mc_stagewright-fabric.jar"));
+        }
+
+        List<String> log = new java.util.ArrayList<>();
+        ModInjection.prepare(gameDir, "fabric", List.of(), log::add);
+
+        assertFalse(log.stream().anyMatch(l -> l.startsWith("WARNING")), log.toString());
     }
 
     @Test

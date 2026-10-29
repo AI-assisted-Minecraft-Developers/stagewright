@@ -65,11 +65,27 @@ final class DriverRequirement {
                 + " does not declare a required WorldDriver dependency; install the current StageWright");
         List<Mod> drivers = mods.stream().filter(m -> m.id().equals("worlddriver")).toList();
         if (drivers.size() != 1) throw new IllegalArgumentException("StageWright requires one compatible WorldDriver mod for "
-                + loaderName + ", found " + drivers.size() + ". Install it in " + dir + " or pass --mod <worlddriver.jar>");
+                + loaderName + ", found " + drivers.size()
+                + (drivers.isEmpty() ? "" : " (" + String.join(", ", drivers.stream().map(Mod::source).toList()) + ")")
+                + ". Install it in " + dir + " or pass --mod <worlddriver.jar>");
         Mod driver = drivers.get(0);
         if (!accepts(framework.driverRange(), driver.version())) throw new IllegalArgumentException(
                 "WorldDriver " + driver.version() + " in " + driver.source() + " is incompatible with "
                 + framework.source() + ": requires " + framework.driverRange());
+    }
+
+    /** The version {@code jar} declares for the mod {@code id} ({@code mc_testkit} or {@code worlddriver}); null if none. */
+    static String declaredVersion(Path jar, String loader, String id) {
+        return read(jar, loader).stream().filter(m -> m.id().equals(id))
+                .map(m -> m.version() == null ? "no version" : m.version()).findFirst().orElse(null);
+    }
+
+    /** The jars directly in {@code dir}, by name; none when it is no directory. */
+    static List<Path> jars(Path dir) {
+        if (!Files.isDirectory(dir)) return List.of();
+        try (var files = Files.list(dir)) {
+            return files.filter(DriverRequirement::isJar).sorted().toList();
+        } catch (IOException e) { throw new UncheckedIOException("cannot inspect " + dir, e); }
     }
 
     static boolean isFramework(Path jar, String loader) {

@@ -227,6 +227,10 @@ as extra mods without copying anything into `mods/`, and runs every `dedicatedSe
 reports go to `<server-dir>/stagewright/reports` (or `--reports <dir>`), and each game's log to
 `<server-dir>/stagewright/logs/`.
 
+A StageWright jar already in `mods/` loads instead of the runner's own; one that is not the build the runner carries
+is named in a warning when the run starts, as is a WorldDriver jar in `mods/` when `--mod` names another one. Such a
+jar is usually left over from an earlier way of running the tests, and is best taken out of `mods/`.
+
 The exit code is `0` when every test passed, `1` when one did not, and `3` when the run could not start.
 
 | Option | What it does |

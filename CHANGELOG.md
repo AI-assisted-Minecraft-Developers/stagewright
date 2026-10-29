@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### The command-line runner names a stale StageWright or WorldDriver jar in `mods/` · green in the CLI's own tests
+
+A StageWright jar in the pack's `mods/` loads in place of the one the runner carries, and an old one (from before
+StageWright required WorldDriver) then failed the runner's checks with a message about a missing dependency, not about
+a file left behind. The runner now warns as it starts, naming each StageWright jar in `mods/` whose bytes are not its
+own with the version it declares, and each WorldDriver jar there when `--mod` names another under a different name;
+the error for two WorldDrivers now lists both files. A pack that ships the runner's own StageWright gets no warning.
+
 ### The command-line runner follows symbolic links in the tests and scenes · green in the CLI's own tests
 
 `stagewright/tests`, `scenes` and `worlds` under a pack's server directory, and anything inside them, may now be

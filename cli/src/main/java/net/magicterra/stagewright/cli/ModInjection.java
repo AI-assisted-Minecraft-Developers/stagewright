@@ -58,6 +58,11 @@ final class ModInjection {
      */
     static Arguments prepare(Path gameDir, String loader, List<Path> extras, Consumer<String> log) {
         requireLoader(loader);
+        Path staged = gameDir.resolve(RunDirectory.ARTIFACT_DIR).resolve("mods");
+        deleteTree(staged);
+        Path ours = unpackFramework(loader, staged);
+        // Before the checks: an old StageWright in mods/ fails them, and the warning says which file it is.
+        warnOtherHarnessJars(gameDir, loader, ours, extras, log);
         DriverRequirement.check(gameDir, loader, extras, true);
         for (Path left : ModInstall.ledgered(gameDir)) {
             log.accept("NOTE: an older StageWright CLI copied " + left.getFileName() + " into mods/."
@@ -65,16 +70,16 @@ final class ModInjection {
                     + " put it there.");
         }
 
-        Path staged = gameDir.resolve(RunDirectory.ARTIFACT_DIR).resolve("mods");
-        deleteTree(staged);
         List<Path> jars = new ArrayList<>();
-        Path ours = unpackFramework(loader, staged);
         List<Path> packs = DriverRequirement.frameworkJars(gameDir, loader);
         boolean extraFramework = extras.stream().anyMatch(p -> DriverRequirement.isFramework(p, loader));
         if (packs.isEmpty() && !extraFramework) {
             jars.add(ours);
         } else {
-            for (Path pack : packs) log.accept(usingThePacks(pack, ours, "this CLI's StageWright"));
+            // A copy with other bytes was warned about above.
+            for (Path pack : packs) {
+                if (sha1(pack).equals(sha1(ours))) log.accept(usingThePacks(pack, ours, "this CLI's StageWright"));
+            }
         }
         for (Path extra : extras) {
             if (!Files.isRegularFile(extra)) {
@@ -161,6 +166,35 @@ final class ModInjection {
             return out;
         } catch (IOException e) {
             throw new UncheckedIOException("cannot unpack " + resource, e);
+        }
+    }
+
+    /**
+     * Name every jar in mods/ that declares StageWright or WorldDriver and is not the one this run means to load: a
+     * StageWright other than the build this CLI carries (it loads in its place, and a copy from before WorldDriver was
+     * required fails the checks), and a WorldDriver beside another one given with {@code --mod} under another name (the
+     * game would get both). Such a jar is easily left behind by an earlier way of running the tests.
+     */
+    static void warnOtherHarnessJars(Path gameDir, String loader, Path ours, List<Path> extras, Consumer<String> log) {
+        List<Path> extraDrivers = extras.stream().filter(Files::isRegularFile)
+                .filter(p -> DriverRequirement.declaredVersion(p, loader, "worlddriver") != null).toList();
+        for (Path jar : DriverRequirement.jars(gameDir.resolve("mods"))) {
+            String framework = DriverRequirement.declaredVersion(jar, loader, "mc_testkit");
+            if (framework != null && !sha1(jar).equals(sha1(ours))) {
+                log.accept("WARNING: " + jar + " is a StageWright build (" + framework + ") other than the one this"
+                        + " CLI carries (" + DriverRequirement.declaredVersion(ours, loader, "mc_testkit") + "). The"
+                        + " game loads it instead, so this run tests that copy. Take it out of mods/ unless the pack"
+                        + " ships StageWright on purpose.");
+            }
+            String driver = DriverRequirement.declaredVersion(jar, loader, "worlddriver");
+            if (driver == null) continue;
+            for (Path extra : extraDrivers) {
+                // One of the same name is not loaded at all; the pack's copy is, as prepare says.
+                if (extra.getFileName().equals(jar.getFileName())) continue;
+                log.accept("WARNING: " + jar + " is a WorldDriver build (" + driver + "), and --mod " + extra
+                        + " is another (" + DriverRequirement.declaredVersion(extra, loader, "worlddriver") + "). A"
+                        + " game loads one WorldDriver: take " + jar.getFileName() + " out of mods/ to test the other.");
+            }
         }
     }
 
