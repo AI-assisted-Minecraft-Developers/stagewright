@@ -6,6 +6,7 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -43,9 +44,14 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
         final String leaks;
         final CompanionLaunch primary;
         final CompanionLaunch companion;
+        /** Appended to both games' JVM arguments, after the run's own: {@value StageWrightPlugin#JVM_ARGS_PROPERTY}. */
+        final List<String> extraJvmArgs;
 
         Entry(String topology, File gameDirectory, boolean cleanWorld, int timeoutMinutes,
-              int stallMinutes, boolean server, String leaks, CompanionLaunch primary, CompanionLaunch companion) {
+              int stallMinutes, boolean server, String leaks, CompanionLaunch primary, CompanionLaunch companion,
+              List<String> extraJvmArgs) {
+            // An ArrayList: the configuration cache cannot read back an empty List.copyOf ("null array").
+            this.extraJvmArgs = new ArrayList<>(extraJvmArgs);
             this.leaks = leaks;
             this.topology = topology;
             this.gameDirectory = gameDirectory;
@@ -75,7 +81,8 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
         File dir = getLaunchesDirectory().get().getAsFile();
         File argFiles = new File(dir, "classpath");
         for (Entry entry : getEntries().get()) {
-            JsonObject primary = process(entry.primary, new File(argFiles, entry.topology + ".primary.args"));
+            JsonObject primary = process(entry.primary, new File(argFiles, entry.topology + ".primary.args"),
+                    entry.extraJvmArgs);
             JsonObject json = new JsonObject()
                     .add("topology", entry.topology)
                     .add("gameDirectory", entry.gameDirectory.getAbsolutePath());
@@ -89,7 +96,7 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
                     .add("primary", primary);
             if (entry.companion != null) {
                 json.add("companion", process(entry.companion,
-                        new File(argFiles, entry.topology + ".companion.args")));
+                        new File(argFiles, entry.topology + ".companion.args"), entry.extraJvmArgs));
             }
             File out = new File(dir, entry.topology + ".json");
             try {
@@ -124,9 +131,11 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
         return found;
     }
 
-    private static JsonObject process(CompanionLaunch launch, File classpathArgFile) {
+    private static JsonObject process(CompanionLaunch launch, File classpathArgFile, List<String> extraJvmArgs) {
         JsonArray jvmArgs = new JsonArray();
         launch.launchJvmArgs(classpathArgFile).forEach(jvmArgs::add);
+        // Last, so a -D here wins over the same one in the run's own arguments or its loader's argument file.
+        extraJvmArgs.forEach(jvmArgs::add);
         JsonArray args = new JsonArray();
         launch.programArgs().forEach(args::add);
         // Only what the run sets beyond the environment it inherited: the test worker passes that on to the game

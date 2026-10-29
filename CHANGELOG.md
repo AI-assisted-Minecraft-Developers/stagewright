@@ -72,6 +72,14 @@ components). Scripts get `t.capabilities()` (`has`, `registered`, `available`, w
 a mod (LuckPerms) that only the server had. Such a name is now passed over: the scene's `mods` report entry says which
 names matched nothing (per game, `server:` and `client:`, when there are two), and the engine prints a line saying so.
 
+### `-Pstagewright.jvmArgs` adds JVM arguments to every game the plugin starts · green in the plugin's tests
+
+Arguments that belong to one machine, such as a heap size, a temporary directory or a patched GLFW, had no place in the
+plugin: every one of four third-party builds added the same few lines reading a property of its own into the suite's
+`jvmArgs`, and those reached only the runs the plugin generates. The Gradle property `stagewright.jvmArgs`, split on
+whitespace, now goes last onto both games of every launch spec, generated or mapped, so a `-D` in it wins over the
+same one in the run. No game has been started with it yet.
+
 ## 2026-10-29
 
 ### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests

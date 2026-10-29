@@ -72,7 +72,10 @@ public abstract class StageWrightTestSuite implements Named {
      */
     public abstract Property<String> getRunSourceSet();
 
-    /** JVM arguments every generated run gets, such as {@code -Xmx2g}. */
+    /**
+     * JVM arguments every generated run gets, such as {@code -Xmx2g}. What one machine needs on every game goes in the
+     * Gradle property {@code stagewright.jvmArgs} instead, which mapped topologies get as well.
+     */
     public abstract ListProperty<String> getJvmArgs();
 
     /** System properties every generated run gets. */

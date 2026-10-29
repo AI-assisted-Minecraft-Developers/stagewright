@@ -109,6 +109,8 @@ public class StageWrightPlugin implements Plugin<Project> {
     private static final String STALE_REMAPS_SWEPT = "stagewright.staleRemapsSwept";
     static final String LAUNCHES_PROPERTY = "stagewright.launches";
     static final String TEST_ROOTS_PROPERTY = "stagewright.testRoots";
+    /** The Gradle property whose whitespace-separated arguments every game the plugin starts gets last. */
+    static final String JVM_ARGS_PROPERTY = "stagewright.jvmArgs";
 
     /**
      * Per suite: {@code stagewrightLaunchSpecs<Name>}, which writes one launch spec per topology the
@@ -258,9 +260,19 @@ public class StageWrightPlugin implements Plugin<Project> {
         return runs;
     }
 
+    /**
+     * {@value #JVM_ARGS_PROPERTY}, split on whitespace: what this machine needs on every game it starts (a heap size, a
+     * temporary directory, a patched native library) and the build should not have to carry.
+     */
+    static List<String> extraJvmArgs(Project project) {
+        String value = project.getProviders().gradleProperty(JVM_ARGS_PROPERTY).getOrElse("").trim();
+        return value.isEmpty() ? List.of() : List.of(value.split("\\s+"));
+    }
+
     private List<StageWrightLaunchSpecsTask.Entry> launchEntries(
             Project project, StageWrightTestSuite suite,
             NamedDomainObjectContainer<StageWrightTopology> topologies) {
+        List<String> extra = extraJvmArgs(project);
         List<StageWrightLaunchSpecsTask.Entry> entries = new ArrayList<>();
         for (SuiteLaunch launch : launches(project, suite, topologies)) {
             CompanionLaunch primary = CompanionLaunch.of(
@@ -269,7 +281,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                     javaExec(project, suite, launch.topology(), launch.companionRunTask(), "companionRunTask"));
             entries.add(new StageWrightLaunchSpecsTask.Entry(launch.topology(), launch.gameDirectory(),
                     launch.cleanWorld(), launch.timeoutMinutes(), launch.stallMinutes(), launch.server(),
-                    launch.leaks(), primary, companion));
+                    launch.leaks(), primary, companion, extra));
         }
         return entries;
     }

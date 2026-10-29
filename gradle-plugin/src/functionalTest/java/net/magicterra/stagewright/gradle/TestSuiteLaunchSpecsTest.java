@@ -99,6 +99,44 @@ class TestSuiteLaunchSpecsTest {
     }
 
     @Test
+    void theJvmArgsPropertyReachesThePrimaryAndTheCompanionAfterTheirOwnArguments() throws Exception {
+        consumer("classes.from(files('classes'))\n"
+                + "topologies.put('dedicatedServerWithClient', 'withClient')");
+
+        runner("stagewrightLaunchSpecsFabric", "--configuration-cache",
+                "-Pstagewright.jvmArgs= -Dextra.one=1 \t -Xmx3g  -Dserver.flag=2 ")
+                .build();
+
+        JsonObject json = JsonObject.readFrom(Files.readString(
+                dir.resolve("build/stagewright/launches/fabric/dedicatedServerWithClient.json")));
+        for (String game : new String[] {"primary", "companion"}) {
+            java.util.List<String> jvmArgs = json.get(game).asObject().get("jvmArgs").asArray().values().stream()
+                    .map(v -> v.asString()).toList();
+            assertEquals(java.util.List.of("-Dextra.one=1", "-Xmx3g", "-Dserver.flag=2"),
+                    jvmArgs.subList(jvmArgs.size() - 3, jvmArgs.size()), game + ": " + jvmArgs);
+        }
+        java.util.List<String> primary = json.get("primary").asObject().get("jvmArgs").asArray().values().stream()
+                .map(v -> v.asString()).toList();
+        assertTrue(primary.indexOf("-Dserver.flag=1") < primary.indexOf("-Dserver.flag=2"),
+                "the run's own argument comes first, so the property's wins: " + primary);
+    }
+
+    @Test
+    void withoutTheJvmArgsPropertyTheLaunchCarriesOnlyTheRunsArguments() throws Exception {
+        consumer("classes.from(files('classes'))\n"
+                + "topologies.put('dedicatedServerWithClient', 'withClient')");
+
+        // Under the configuration cache, which has to read the empty list back.
+        runner("stagewrightLaunchSpecsFabric", "--configuration-cache").build();
+
+        JsonObject json = JsonObject.readFrom(Files.readString(
+                dir.resolve("build/stagewright/launches/fabric/dedicatedServerWithClient.json")));
+        String companion = json.get("companion").asObject().get("jvmArgs").toString();
+        assertFalse(companion.contains("-Dserver.flag"), companion);
+        assertFalse(companion.contains("-Dextra"), companion);
+    }
+
+    @Test
     void theTestTaskIsRegisteredWithTheLaunchesDirectory() throws Exception {
         consumer("classes.from(files('classes'))\n"
                 + "topologies.put('dedicatedServerWithClient', 'withClient')");
