@@ -66,6 +66,12 @@ on `mc.test.loot`, `mc.test.advancements` and `mc.test.structures`; a `count` op
 components). Scripts get `t.capabilities()` (`has`, `registered`, `available`, without aborting) and
 `t.hasClass(name)`. The in-game suites have not yet been run against this.
 
+### Excluding a mod the game does not have no longer fails the scene · green in the engine's unit tests
+
+`mods.exclude` refused a name that matched no mod of a game, so a scene with a server and a client could not exclude
+a mod (LuckPerms) that only the server had. Such a name is now passed over: the scene's `mods` report entry says which
+names matched nothing (per game, `server:` and `client:`, when there are two), and the engine prints a line saying so.
+
 ## 2026-10-29
 
 ### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests

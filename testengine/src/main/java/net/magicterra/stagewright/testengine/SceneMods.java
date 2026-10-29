@@ -10,10 +10,8 @@ import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,15 +37,16 @@ final class SceneMods {
 
     private SceneMods() {}
 
-    /** The process to start instead, and what was left out, for the report. */
-    record Applied(LaunchSpec.Process process, List<String> excluded) {}
+    /** The process to start instead, what was left out, and the names that matched no mod of the game, for the report. */
+    record Applied(LaunchSpec.Process process, List<String> excluded, List<String> unmatched) {}
 
     /** A jar that is a mod, and the ids it declares. */
     record Mod(Path jar, Set<String> ids, boolean fabric) {}
 
     /**
-     * {@code process} without the mods {@code exclude} names, its scratch files under {@code scratch}. Refuses a name
-     * that matches no mod of the game, so a scene cannot think a mod is gone that it never had.
+     * {@code process} without the mods {@code exclude} names, its scratch files under {@code scratch}. A name that
+     * matches no mod of the game is not an error — one scene may start a server and a client with different mods,
+     * and exclude from both what only one has — but it is answered in {@link Applied#unmatched}, for the report.
      */
     static Applied apply(LaunchSpec.Process process, List<String> exclude, Path scratch) throws IOException {
         Path gameDir = gameDirectory(process);
@@ -59,17 +58,16 @@ final class SceneMods {
         mods.removeIf(m -> m.ids().isEmpty());
 
         List<Mod> excluded = new ArrayList<>();
+        List<String> unmatched = new ArrayList<>();
         for (String name : exclude) {
             PathMatcher glob = FileSystems.getDefault().getPathMatcher("glob:" + name);
             List<Mod> matched = mods.stream()
                     .filter(m -> m.ids().contains(name) || glob.matches(m.jar().getFileName())).toList();
-            if (matched.isEmpty()) {
-                throw new IllegalStateException("mods.exclude: '" + name + "' is no mod of this game, by id or jar"
-                        + " name; it has " + describe(mods));
-            }
+            if (matched.isEmpty()) unmatched.add(name);
             for (Mod m : matched) if (!excluded.contains(m)) excluded.add(m);
         }
         List<String> report = excluded.stream().map(m -> m.jar().getFileName() + " " + m.ids()).toList();
+        if (excluded.isEmpty()) return new Applied(process, report, unmatched);
 
         if (isFabric(process, mods)) {
             Set<String> ids = new LinkedHashSet<>();
@@ -77,7 +75,7 @@ final class SceneMods {
             List<String> jvm = new ArrayList<>(process.jvmArgs());
             // First, so it lands among the run's own properties, before any argument file.
             jvm.add(0, "-Dfabric.debug.disableModIds=" + String.join(",", ids));
-            return new Applied(with(process, jvm, process.args()), report);
+            return new Applied(with(process, jvm, process.args()), report, unmatched);
         }
 
         deleteTree(scratch);
@@ -95,7 +93,7 @@ final class SceneMods {
             Path view = gameDirectoryWithout(gameDir, excluded, scratch.resolve("game"));
             args = withGameDir(args, view);
         }
-        return new Applied(with(process, jvm, args), report);
+        return new Applied(with(process, jvm, args), report, unmatched);
     }
 
     /** Where the game keeps {@code mods/}: its {@code --gameDir}, else its working directory. */
@@ -284,12 +282,6 @@ final class SceneMods {
         try (InputStream in = zip.getInputStream(entry)) {
             return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         }
-    }
-
-    private static String describe(List<Mod> mods) {
-        Map<String, Set<String>> byJar = new LinkedHashMap<>();
-        for (Mod m : mods) byJar.put(m.jar().getFileName().toString(), m.ids());
-        return byJar.toString();
     }
 
     private static LaunchSpec.Process with(LaunchSpec.Process p, List<String> jvm, List<String> args) {

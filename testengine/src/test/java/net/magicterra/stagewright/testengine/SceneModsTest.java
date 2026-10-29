@@ -95,11 +95,23 @@ class SceneModsTest {
     }
 
     @Test
-    void aNameThatIsNoModOfTheGameIsRefused() throws IOException {
+    void aNameThatIsNoModOfTheGameIsReportedAndTheGameStartsAsItIs() throws IOException {
         neoforgeMod(game.resolve("mods/maid.jar"), "touhou_little_maid");
-        String message = assertThrows(IllegalStateException.class, () -> SceneMods.apply(
-                process(null, List.of(), List.of()), List.of("farmersdelight"), game.resolve("s"))).getMessage();
-        assertTrue(message.contains("farmersdelight") && message.contains("touhou_little_maid"), message);
+        LaunchSpec.Process process = process(null, List.of("-Xmx2G"), List.of("nogui"));
+        SceneMods.Applied applied = SceneMods.apply(process, List.of("farmersdelight"), game.resolve("s"));
+        assertEquals(List.of("farmersdelight"), applied.unmatched());
+        assertEquals(List.of(), applied.excluded());
+        assertEquals(process, applied.process());
+    }
+
+    @Test
+    void theNamesThatMatchAreExcludedBesideOnesThatDoNot() throws IOException {
+        jar(game.resolve("mods/farmers.jar"), "fabric.mod.json", "{\"schemaVersion\":1,\"id\":\"farmersdelight\"}");
+        SceneMods.Applied applied = SceneMods.apply(
+                process("net.fabricmc.loader.impl.launch.server.FabricServerLauncher", List.of(), List.of()),
+                List.of("luckperms", "farmersdelight"), game.resolve("s"));
+        assertEquals(List.of("luckperms"), applied.unmatched());
+        assertEquals("-Dfabric.debug.disableModIds=farmersdelight", applied.process().jvmArgs().get(0));
     }
 
     @Test

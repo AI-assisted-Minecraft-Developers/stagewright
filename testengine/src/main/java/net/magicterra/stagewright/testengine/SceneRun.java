@@ -136,10 +136,23 @@ final class SceneRun {
         SceneMods.Applied primary = SceneMods.apply(spec.primary(), exclude, scratch.resolve("primary"));
         SceneMods.Applied companion = spec.companion() == null ? null
                 : SceneMods.apply(spec.companion(), exclude, scratch.resolve("companion"));
-        listener.reportingEntryPublished(scene, ReportEntry.from("mods", "excluded " + primary.excluded()));
+        String report = "excluded " + primary.excluded();
+        if (companion != null) report = "server: " + report + "; client: excluded " + companion.excluded();
+        String unmatched = companion == null ? unmatched("the game", primary)
+                : unmatched("the server", primary) + unmatched("the client", companion);
+        if (!unmatched.isEmpty()) {
+            report += unmatched;
+            System.out.println("[stagewright] scene " + scene.getDisplayName() + ": mods.exclude" + unmatched);
+        }
+        listener.reportingEntryPublished(scene, ReportEntry.from("mods", report));
         return new LaunchSpec(spec.topology(), spec.gameDirectory(), spec.worldDirectory(), spec.cleanWorld(),
                 spec.timeoutMinutes(), spec.stallMinutes(), spec.server(), spec.leaks(), primary.process(),
                 companion == null ? null : companion.process());
+    }
+
+    /** "; matched no mod of {@code which}: [...]", or nothing when every name matched one. */
+    private static String unmatched(String which, SceneMods.Applied applied) {
+        return applied.unmatched().isEmpty() ? "" : "; matched no mod of " + which + ": " + applied.unmatched();
     }
 
     private TestExecutionResult supervise(LaunchSpec spec, SceneFile.World world, Relay relay, Path artifacts,

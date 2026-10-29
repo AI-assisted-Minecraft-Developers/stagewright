@@ -33,8 +33,9 @@ mods:
 ```
 
 Mods the scene's games start without, each a mod id or a pattern on its jar's file name, found in the game's `mods/`
-or on its class path (where a build's dependency mods are). A name that matches no mod of the game fails the scene,
-naming the mods it has. Neither the pack's `mods/` nor the build's files are changed: Fabric is told the ids to disable
+or on its class path (where a build's dependency mods are). A name that matches no mod of a game is not an error, so
+one scene can exclude from both its server and its client a mod only one of them has; the `mods` report entry and a
+line of the engine's output name what matched nothing. Neither the pack's `mods/` nor the build's files are changed: Fabric is told the ids to disable
 (`fabric.debug.disableModIds`); NeoForge gets copies of its argument files with the jars taken out of every path list,
 and, for a jar in `mods/`, a game directory under `stagewright/scene-mods/` whose entries all link to the real one's but
 `mods/`, which links the jars kept. The engine reports what it left out as an entry named `mods`. `only`, every mod but
