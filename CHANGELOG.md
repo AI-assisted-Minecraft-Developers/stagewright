@@ -12,15 +12,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-30
 
-### A script's call waits for a busy server instead of giving up after 8 seconds · green in the unit tests
+### A script's call waits for a busy server instead of giving up after 8 seconds · green in the self-test suite
 
 WorldDriver withdraws a task the server thread has not started within 8 seconds and answers `not_executed`. Under a
 heavy pack, with several tests leasing plots at once, a merely busy server made `t.call` (and `t.client().call` and a
-YAML test's calls) fail that way. A test's call is now made again while it is answered `not_executed`, for up to
-WorldDriver's longest call wait (ten minutes); any other answer, and `not_executed` once that runs out, is the call's
-answer as before. A stopped server is still caught by the engine's watchdog. A Java test's generated callers
-(`game.api(...)`) still give up after 8 seconds; `game.onServer` never did. The in-game suites have not yet been run
-against this.
+YAML test's calls) fail that way, and a Java test's generated callers too. `game.registry()` is now a view of
+WorldDriver's registry (`ApiRegistry.withThreadWait`) whose every call may wait up to WorldDriver's longest call wait,
+ten minutes, for the game thread to take it; `game.api(...)`, the generated callers built on it, `t.call`, YAML calls
+and the script tests' own engine (built over the same view, so `Driver.*` too) all go through it. A client on the wire
+and `t.client().call` keep the client's own limit. A stopped server is still caught by the engine's watchdog;
+`game.onServer` never had a limit. Green in worlddriver's full suite on both loaders; a really busy server has not
+been reproduced.
 
 ### A mob inside a leased plot no longer despawns · green in the unit tests
 

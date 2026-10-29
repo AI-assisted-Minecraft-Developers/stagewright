@@ -4,9 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
-import java.util.function.Supplier;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -17,10 +15,7 @@ import com.google.gson.JsonPrimitive;
 
 import net.magicterra.stagewright.test.Game;
 import net.minecraft.core.BlockPos;
-import net.magicterra.worlddriver.api.call.CallContext;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
-import net.magicterra.worlddriver.api.schema.ApiError;
-import net.magicterra.worlddriver.api.schema.ApiException;
 import net.magicterra.worlddriver.api.thread.ServerThreadGuard;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
@@ -216,40 +211,9 @@ final class ScriptContext {
         String method = string(args, 0, usage + "(method, params)");
         JsonElement params = args.length > 1 && args[1] != null ? tree(args[1]) : new JsonObject();
         if (!params.isJsonObject()) throw new IllegalArgumentException(usage + "(" + method + "): params must be an object");
-        return GSON.fromJson(untilStarted(() -> registry.route(method, params.getAsJsonObject()), SERVER_PATIENCE_MS),
-                Object.class);
+        // A Game's registry already waits as long as a test may for a busy server: see GameImpl.registry.
+        return GSON.fromJson(registry.route(method, params.getAsJsonObject()), Object.class);
     }
-
-    /** How long a test's call may wait for a busy game thread to take it: the longest WorldDriver lets a call wait. */
-    static final long SERVER_PATIENCE_MS = CallContext.SERVER_CAP_MS;
-
-    /**
-     * {@code call}, made again while it answers {@code not_executed} and {@code patienceMs} has not run out.
-     *
-     * <p>WorldDriver withdraws a task a game thread has not started within a few seconds and answers
-     * {@code not_executed}, which promises it never ran: right for an agent that would rather hear "busy" than wait,
-     * wrong for a test, which may wait as long as its own budget allows while plots generate under a heavy pack.
-     * A server that is stopped rather than busy is the engine's watchdog's to catch, not this loop's.
-     */
-    static JsonElement untilStarted(Supplier<JsonElement> call, long patienceMs) {
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(patienceMs);
-        while (true) {
-            try {
-                return call.get();
-            } catch (ApiException e) {
-                if (e.error().code() != ApiError.Code.NOT_EXECUTED || System.nanoTime() - deadline >= 0) throw e;
-                // A thread refusing outright answers at once; do not spin on it.
-                try {
-                    Thread.sleep(RETRY_PAUSE_MS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw e;
-                }
-            }
-        }
-    }
-
-    private static final long RETRY_PAUSE_MS = 50;
 
     /** {@code t.step(name, args)}: a step a script registered, given this context and the arguments. */
     private Object step(Object... args) {
