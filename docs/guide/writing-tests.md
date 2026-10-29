@@ -36,8 +36,11 @@ that enters the world inside a leased plot — summoned by a command, spawned by
 A bot joins under a made-up name unless its parameter says `@Bot.Name("steve")`. A test can hand its bot on: with
 `@Bot.Name("steve") @Bot.Keep` the bot stays when the test ends, parked where it stood with what it had, and a test
 that `@DependsOn` this one takes it as `@Bot.Name("steve") @Bot.Kept` — the same player, back on the tick list. A test
-that fails or is aborted removes its bot after all; a kept bot must stand outside the test's plots, which are put back
-when the test ends; and a restart ends every kept bot, so a test after one joins its own.
+that fails or is aborted removes its bot after all, and a kept bot must stand outside the test's plots, which are put
+back when the test ends. A kept bot also survives a restart: a test with `@DependsOn(value = …, afterRestart = true)`
+that takes it as `@Bot.Kept` gets it where the game before left it, in the same dimension, with its inventory, health
+and game mode, because the bot left that game the way a player who disconnects does and its save was kept. Only a bot
+that joins fresh is reset to the world spawn with nothing.
 
 ## Calling the game
 
@@ -171,6 +174,11 @@ dimension})`, `bot()` or `bot({name, parked, keep, kept})`, `player()`, `npc(typ
 `overrideTickRate`, and `freezeTicks()`, after which `t.wait(n)` moves the frozen world on by exactly `n` ticks (as
 `game.freezeTicks` does in Java; it needs `locks: ['tickRate']`). Positions are `{x, y, z}`; blocks and items are ids. The script also has WorldDriver's own
 `Driver.*`.
+
+`t.bot({name: 'steve', keep: true})` keeps the bot for a later test, and `t.bot({name: 'steve', kept: true})` in a test
+that `dependsOn` the keeper takes it, as `@Bot.Keep` and `@Bot.Kept` do in Java — after a restart too
+(`afterRestart: true`), where the bot comes back where the game before left it, with what it had. `parked: true` joins
+or takes the bot parked.
 
 A script runs on a test thread, so two `t.call`s may land in different ticks. `t.onServer(fn)` runs `fn` on the server
 thread as one task and answers what it returns; the `t.call`, `t.step` and `t.check` it makes run there and then, all

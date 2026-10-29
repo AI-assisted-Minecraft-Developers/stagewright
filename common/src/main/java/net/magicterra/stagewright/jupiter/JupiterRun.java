@@ -121,6 +121,7 @@ public final class JupiterRun {
             // the one in junit-jupiter-engine, and Jupiter goes missing.
             Path artifacts = server.getServerDirectory().resolve("stagewright");
             Rounds.load(artifacts);
+            Handovers.load(artifacts, Rounds.current());
             ScriptTestEngine scriptEngine = new ScriptTestEngine();
             Launcher launcher = LauncherFactory.create(LauncherConfig.builder().addTestEngines(scriptEngine).build());
             // Two plans, run side by side so a test of either kind may wait for one of the other. The scripts are
@@ -155,9 +156,10 @@ public final class JupiterRun {
                 Dependencies.javaOver();
                 scriptThread.join();
             }
-            Handovers.sweep(game);
+            boolean restarting = Rounds.latest() > Rounds.current();
+            Handovers.sweep(artifacts, restarting);
             Rounds.save(artifacts, Dependencies.outcomes());
-            if (Rounds.latest() > Rounds.current()) {
+            if (restarting) {
                 StageWrightCommon.LOG.info("[{}] round {} is over; tests remain for round {}, after a restart",
                         StageWrightCommon.MOD_ID, Rounds.current(), Rounds.current() + 1);
                 relay.restart(Rounds.current() + 1);

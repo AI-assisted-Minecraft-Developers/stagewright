@@ -5,13 +5,6 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
-## A kept bot does not survive a restart
-
-`@Bot.Keep` hands a bot to the next test within one game; a test after a restart joins its own, because a
-bot's profile is `agent-body-N` from a per-process counter and WorldDriver's join wipes what the save had.
-Keeping one across needs a stable profile per name on WorldDriver's side and a join that keeps the saved
-player data. `Npc`s are still removed when their test ends.
-
 ## The game still forces a JVM down when no agent is attached
 
 `JupiterRun.halt` arms an exit watchdog for a dedicated server started without the agent, by hand or

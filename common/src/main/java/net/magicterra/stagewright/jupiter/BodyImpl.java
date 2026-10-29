@@ -121,11 +121,13 @@ class BodyImpl implements Body {
 
         /**
          * Take over the bot a passed test kept under {@code name}, for {@code taker}: the same player, back on the
-         * tick list unless {@code parked}.
+         * tick list unless {@code parked}. One kept before a restart joins again where its save left it.
          */
         static BotImpl take(Game game, String name, boolean parked, String taker) {
             Handovers.Kept kept = Handovers.take(name);
             if (kept == null) {
+                String keeper = Handovers.takeFromBeforeRestart(name);
+                if (keeper != null) return rejoin(game, name, parked, keeper);
                 throw new IllegalStateException("no passed test kept a bot named " + name + " for " + taker
                         + ": the test it depends on keeps one as @Bot.Keep under @Bot.Name(\"" + name + "\")");
             }
@@ -134,6 +136,22 @@ class BodyImpl implements Body {
                 throw new IllegalStateException(name + ", kept by " + kept.keeper() + ", is no longer on the server");
             }
             if (!parked) bot.unpark();
+            return bot;
+        }
+
+        /**
+         * The bot {@code keeper} kept under {@code name} before the restart. It left the last game as a disconnect
+         * does, which saved it, so it joins with no position: where it stood, in that dimension, with what it had.
+         */
+        private static BotImpl rejoin(Game game, String name, boolean parked, String keeper) {
+            BotImpl bot = new BotImpl(game, name);
+            game.runOnServer(server -> {
+                if (Roster.spawn(server, null, null, name) instanceof Roster.Refusal refused) {
+                    throw new IllegalStateException(name + ", kept by " + keeper + " before the restart, could not"
+                            + " join again: " + refused.message());
+                }
+                if (parked) BotTicker.unregister(BotRegistry.get(bot.ref()));
+            });
             return bot;
         }
 

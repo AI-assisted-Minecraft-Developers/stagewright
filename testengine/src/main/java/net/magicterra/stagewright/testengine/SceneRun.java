@@ -169,6 +169,7 @@ final class SceneRun {
         // What the rounds before handed to the ones after; a scene's first round starts with neither.
         Files.deleteIfExists(artifacts.resolve("store.json"));
         Files.deleteIfExists(artifacts.resolve("rounds.json"));
+        Files.deleteIfExists(artifacts.resolve("handovers.json"));
         // One entry per round whose game had to be forced down after its run.
         List<String> forced = new ArrayList<>();
         for (int round = 0; ; round++) {

@@ -12,6 +12,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-30
 
+### A kept bot survives a restart · compiled, the file carry-over covered by JVM tests
+
+`@Bot.Keep` / `t.bot({keep: true})` handed a bot to a later test in the same game only: a test after a restart
+(`@DependsOn(afterRestart = true)`) that asked for it as `@Bot.Kept` failed, since the shelf of kept bots lived in the
+game's memory and the next game's join put a bot at the world spawn with nothing. WorldDriver now gives a named bot a
+stable identity and saves its player data when it leaves, as a disconnect does. So when a later round follows, the
+kept bots no test took leave the world and their names and keepers go to `stagewright/handovers.json`; a test of the
+next round taking one of those names joins it with no position, and it comes back from its save where it stood, in
+that dimension, with its inventory, health and game mode. A bot that is not kept still joins at the world spawn,
+emptied and healed. The engine deletes the file before a scene's first game.
+
 ### A script's call waits for a busy server instead of giving up after 8 seconds · green in the self-test suite
 
 WorldDriver withdraws a task the server thread has not started within 8 seconds and answers `not_executed`. Under a

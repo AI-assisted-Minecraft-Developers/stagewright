@@ -48,8 +48,10 @@ public interface Bot extends Body, Driven {
      * The parameter's bot stays in the world when the test ends, parked, with what it has and where it stands, for a
      * test that {@code @DependsOn} this one to take as {@link Kept} under the same {@link Name}. A test that fails or
      * is aborted removes it instead, and a kept bot no test takes leaves when the run's tests are over. It must stand
-     * outside the test's plots, which are put back when the test ends. A restart ends it: a test after one joins its
-     * own bot.
+     * outside the test's plots, which are put back when the test ends. A test that takes it after a restart
+     * ({@code @DependsOn(afterRestart = true)}) finds it where the game before left it: the bot left that game as a
+     * disconnecting player does, which saved it, and joins the next one from that save, in the same dimension, with
+     * the same inventory and state.
      */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)
@@ -59,7 +61,8 @@ public interface Bot extends Body, Driven {
     /**
      * The parameter's bot is the one a test this one {@code @DependsOn} kept under the same {@link Name}: the same
      * player, where it stood and with what it had, back on the tick list unless the parameter is also
-     * {@link Parked}. The test fails when no passed test kept a bot of that name, or another test took it first.
+     * {@link Parked}; across a restart, the same player joined again from its save. The test fails when no passed test
+     * kept a bot of that name, or another test took it first.
      */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)

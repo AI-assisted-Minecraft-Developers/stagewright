@@ -170,8 +170,13 @@ standing in one of the test's plots, since the plot is put back under it, and th
 it (`@Bot.Kept` under the same name, `t.bot({name, kept: true})`) must `@DependsOn` the keeper, so the usual ordering
 and abort reasons apply; it gets a fresh handle on the same player, unparked, and the bot then leaves with that test or
 is kept again. Taking a name nobody kept, or that another test took, fails the taker. Whatever is still on the shelf
-when the round's tests are over is removed with a warning naming the keeper. The shelf is per game: a restart ends
-every kept bot, because a bot's profile and ids are per process.
+when the round's tests are over is removed with a warning naming the keeper — unless a later round follows. Then the
+bots on the shelf leave the world, which saves each one's player data as a disconnect does, and their names and
+keepers are written to `stagewright/handovers.json`. The next game reads that file, and a test there taking one of
+those names joins the bot again without a position, so WorldDriver puts it where its save left it, in that dimension,
+with its inventory, health and game mode; nothing is reset, as it is for a bot that joins fresh. A carried bot no test
+takes is carried on while rounds remain and dropped with a warning after the last one. The engine deletes the file
+before a scene's first game, as it does `rounds.json`.
 
 ## Tests after a restart
 
