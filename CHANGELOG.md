@@ -19,6 +19,12 @@ hold another project's source set, and every project's main is named that, so on
 first (Twilight Forest's `tf-asm`) the tests joined that module and every test failed with `module main does not read
 module mc_testkit`. The mod is now the one holding the project's own `main`, by identity.
 
+### The test engine brings the JUnit Platform launcher · compiled
+
+Gradle 9 no longer puts `junit-platform-launcher` on a `Test` task's runtime by itself, so `stagewrightTest<Name>`
+there failed with "Failed to load JUnit Platform". The `stagewrightTestEngine` configuration now carries the launcher
+at the engine's JUnit version. The plugin itself is not yet usable on Gradle 9 (see `TODO.md`).
+
 ### A topology can report leaked threads instead of failing on them · green in the engine's and the plugin's own tests
 
 `leaks = 'report'` on a topology in `topologies { }`, or on a suite for its generated topologies, keeps a game the

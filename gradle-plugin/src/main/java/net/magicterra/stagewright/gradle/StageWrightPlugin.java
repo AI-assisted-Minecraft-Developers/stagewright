@@ -128,6 +128,11 @@ public class StageWrightPlugin implements Plugin<Project> {
                 c.setDescription("The StageWright test engine, at the version of this plugin.");
                 c.getDependencies().add(project.getDependencies().create(
                         "net.magicterra:stagewright-testengine:" + PluginVersion.get()));
+                // Gradle 9 no longer puts the platform launcher on a Test task's runtime by itself.
+                c.getDependencies().add(project.getDependencies().platform(
+                        "org.junit:junit-bom:" + PluginVersion.junit()));
+                c.getDependencies().add(project.getDependencies().create(
+                        "org.junit.platform:junit-platform-launcher"));
             });
         }
         Configuration engineConfiguration = engine;
