@@ -45,6 +45,8 @@ final class ScriptContext {
     private Map<String, Object> script;
     /** What turned the refusals of {@code t.call} and the handles into script errors; null until the script asks. */
     private CatchableErrors errors;
+    /** What {@code t.afterTest} registered, in the order it did. */
+    private final List<Scripting.Function> afterTest = new ArrayList<>();
     /** {@code t.plot} as Java calls it for a YAML test, its refusals left as they were thrown. */
     private Scripting.Function javaPlot;
 
@@ -68,6 +70,16 @@ final class ScriptContext {
         script.put("expect", (Scripting.Function) this::expect);
         script.put("check", (Scripting.Function) this::check);
         script.put("record", (Scripting.Function) this::record);
+        // t.afterTest(fn): cleanup run when the test ends, passed or not, last registered first.
+        script.put("afterTest", (Scripting.Function) a -> {
+            if (!(a.length == 1 && a[0] instanceof Scripting.Function fn)) {
+                throw new IllegalArgumentException("t.afterTest(fn) takes a function");
+            }
+            synchronized (afterTest) {
+                afterTest.add(fn);
+            }
+            return null;
+        });
         // t.store.put(key, value) and t.store.get(key): what the tests after a restart read.
         Map<String, Object> store = new LinkedHashMap<>();
         store.put("put", (Scripting.Function) a -> {
@@ -96,6 +108,12 @@ final class ScriptContext {
      */
     Throwable end(Throwable failure) {
         if (errors != null && failure != null) failure = errors.explain(failure);
+        // First, on this thread: a cleanup may call the game, and may still use what the test leased.
+        List<Scripting.Function> cleanups;
+        synchronized (afterTest) {
+            cleanups = List.copyOf(afterTest);
+        }
+        failure = runAfterTest(cleanups, failure, errors);
         TestScope scope = TestScope.bound();
         List<Runnable> undo = new ArrayList<>();
         if (scope != null && scope.changedAnything()) undo.add(() -> game.runOnServer(scope::restore));
@@ -132,6 +150,23 @@ final class ScriptContext {
             else failure.addSuppressed(checks);
         }
         TestScope.unbind();
+        return failure;
+    }
+
+    /**
+     * Run what {@code t.afterTest} registered, last first. Each runs whatever the others did: what one throws is added
+     * to {@code failure}, or becomes it when the test had passed. Answers the test's failure.
+     */
+    static Throwable runAfterTest(List<Scripting.Function> cleanups, Throwable failure, CatchableErrors errors) {
+        for (int i = cleanups.size() - 1; i >= 0; i--) {
+            try {
+                cleanups.get(i).call();
+            } catch (Throwable t) {
+                Throwable thrown = errors == null ? t : errors.explain(t);
+                if (failure == null) failure = thrown;
+                else if (failure != thrown) failure.addSuppressed(thrown);
+            }
+        }
         return failure;
     }
 

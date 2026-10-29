@@ -54,7 +54,9 @@ and runs the whole file, as it runs the whole class of a kept method; what the o
 In the game, the `stagewright-script` engine evaluates the file again through WorldDriver's `Scripting` (StageWright
 links no Rhino of its own: the shipped WorldDriver relocates it) and keeps the tests of the scene the game was started
 for. A test's `t` offers `call`, `step`, `wait`, `waitUntil`, `settle`, `expect` (`equals`, `contains`, `isEmpty`,
-`gt`, `lt`, `atLeast`, `atMost`), `check` (a soft assertion, as `Game.check`), `record`, `perf` and `store`; the
+`gt`, `lt`, `atLeast`, `atMost`), `check` (a soft assertion, as `Game.check`), `record`, `perf`, `store` and
+`afterTest` (cleanup run on the test thread when the test ends, last first, before its leases are given back; one that
+throws fails the test without stopping the others); the
 handles `plot({size, x, y, z, centered, dimension})`, `bot(name)` or `bot({name, parked})`, `player()`,
 `npc(type, pos, dimension)`, `client()` and `capability(name)`, as plain objects (a position is `{x, y, z}`, a block or
 item its id), and `translate(pos, from, to)`; and `override(rule, value)`, `overrideTime`, `overrideWeather` and

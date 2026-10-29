@@ -149,7 +149,7 @@ and `isolated`.
 
 `t` offers `call(method, params)` for any WorldDriver method, `wait(ticks)`, `waitUntil(fn, {within, as})`,
 `settle(fn, {ticks, within})`, `expect(value)` (`equals`, `contains`, `isEmpty`, `gt`, `lt`, `atLeast`, `atMost`),
-`check`, `record(name, value)`, `step(name, args)`, `perf`, `store`, the handles `plot({size, x, y, z, centered,
+`check`, `record(name, value)`, `step(name, args)`, `perf`, `store`, `afterTest(fn)`, the handles `plot({size, x, y, z, centered,
 dimension})`, `bot()` or `bot({name, parked, keep, kept})`, `player()`, `npc(type, pos)`, `client()`, `capability(name)`,
 `translate(pos, from, to)`, and the overrides `override`, `overrideTime`, `overrideWeather`, `overrideTickRate`.
 Positions are `{x, y, z}`; blocks and items are ids. The script also has WorldDriver's own `Driver.*`.
@@ -168,6 +168,15 @@ try {
 
 A refusal nobody catches fails the test, as before. A failed `t.expect` and a `t.waitUntil` or `t.settle` that runs
 out of ticks cannot be caught, so a test cannot swallow its own failure.
+
+What a script changes outside what it leased, it undoes with `t.afterTest(fn)`, as a Java test does with
+`game.afterTest`: `fn` runs when the test ends, passed or not, before its plots and bots are given back, so it may
+still use them. Several run last first; one that throws fails the test, and the others still run.
+
+```javascript
+t.call('mc.action.runCommand', { command: 'tick freeze' });
+t.afterTest(() => t.call('mc.action.runCommand', { command: 'tick unfreeze' }));
+```
 
 ### YAML
 

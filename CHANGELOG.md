@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### A script test can register cleanup with `t.afterTest` · green in the unit tests, against WorldDriver's script engine
+
+`t.afterTest(fn)` runs `fn` when the test ends, passed or not, as `game.afterTest` does for a Java test: on the test
+thread, before the test's plots and bots are given back, several of them last first. One that throws fails the test
+(beside the body's own failure, if it had one) and the others still run. A script had no way to undo what it changed
+through commands, such as a `tick freeze`, once a failed `t.expect` had ended it, so the change leaked into every later
+test. The in-game script suites have not yet been run against this.
+
 ### A script test can catch what `t.call` and the handles refuse · green in the unit tests, against WorldDriver's script engine
 
 A refused `t.call`, or a refusal from `t.plot`, `t.bot`, `t.player`, `t.npc`, `t.client` or a method of what they
