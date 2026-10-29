@@ -41,6 +41,18 @@ matching file when it starts that scene. Why the engine does not ask Gradle is i
 | `primary` | the game the tests run in |
 | `companion` | optional: a second game started with it and ended after it, such as the client that joins a dedicated server |
 
+A file may instead say only that this run cannot launch the topology, and why:
+
+```json
+{"topology": "integratedServer", "unavailable": "the run was given no --client, so there is no client to start"}
+```
+
+A scene of such a topology is reported skipped with that reason, its tests with it, and does not fail the run; nor
+does a test that only such a scene could have run count as one that ran nowhere. The command-line runner writes this
+for the two client topologies when it is not given `--client`. A topology with no file at all is a mistake in the run's
+configuration and fails its scenes, unless the test JVM has `-Dstagewright.launches.missing=skip`, which the
+command-line runner sets: then it is skipped the same way.
+
 A process is `java jvmArgs… mainClass args…` run in `workingDirectory` with `environment` added to the engine's own.
 `mainClass` may be left out when an argument file in `jvmArgs` names it, as a NeoForge server's `unix_args.txt` does.
 `jvmArgs` holds everything before the main class, class path included, in the order the run would have used.

@@ -199,8 +199,11 @@ scene starts afresh is never the pack's. With `--client <spec>` it also installs
 and writes the other two specs: `integratedServer`, the client alone in `saves/StageWright`, and
 `dedicatedServerWithClient`, the pack's server waiting for that client to join. The client runs in
 `stagewright/client`, never a player's directory, since the engine deletes a client's saves before each scene, and
-loads the jars of `--client-mods` (the server's `mods/` by default) linked into its own `mods/`. Java tests need a
-build.
+loads the jars of `--client-mods` (the server's `mods/` by default) linked into its own `mods/`. Without `--client` it
+writes those two specs as `unavailable`, and it runs the engine with `stagewright.launches.missing=skip`, so a scene
+whose topology it cannot launch is reported skipped with the reason instead of failing
+([launch spec](../reference/launch-spec.md)); the Gradle plugin sets neither, since there a missing topology is a
+mistake in the build. A game that starts and then fails is a failure either way. Java tests need a build.
 
 ## Not yet
 

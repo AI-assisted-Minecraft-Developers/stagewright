@@ -155,8 +155,15 @@ final class TestCommand {
             Map<String, Object> awaiting = serverProcess(gameDir, launch, systemProps, injected,
                     List.of("-Dstagewright.awaitPlayer=true"));
             write(launches, topology(WITH_CLIENT, gameDir, SERVER_WORLD, true, awaiting, joining, opts));
+        } else {
+            for (String name : List.of(INTEGRATED, WITH_CLIENT)) {
+                write(launches, unavailable(name, "the run was given no --client, so there is no client to start"));
+            }
         }
         System.setProperty("stagewright.launches", launches.toString());
+        // A scene whose topology this run cannot launch is reported skipped, not failed: what to install is the
+        // user's choice here, not a mistake in a build.
+        System.setProperty("stagewright.launches.missing", "skip");
 
         Path reports = Path.of(opts.getOrDefault("reports", source.resolve("reports").toString())).toAbsolutePath();
         return execute(root, reports, log);
@@ -223,6 +230,14 @@ final class TestCommand {
         spec.put("leaks", leaks(opts));
         spec.put("primary", primary);
         if (companion != null) spec.put("companion", companion);
+        return spec;
+    }
+
+    /** A topology this run cannot launch: its scenes are reported skipped with {@code why}. */
+    static Map<String, Object> unavailable(String name, String why) {
+        Map<String, Object> spec = new LinkedHashMap<>();
+        spec.put("topology", name);
+        spec.put("unavailable", why);
         return spec;
     }
 

@@ -53,12 +53,29 @@ final class SceneRun {
     }
 
     void run(ClassLoader loader) {
+        SceneFile declaration = null;
+        LaunchSpec spec = null;
+        Exception early = null;
+        try {
+            declaration = SceneFile.load(scene.name, loader);
+            spec = LaunchSpec.load(declaration.topology());
+        } catch (LaunchSpec.Unlaunchable e) {
+            // Skipped, not failed: the run was not given what this topology needs (the CLI without --client). Its
+            // tests do not count against coverage either, since they would have run had it been given.
+            for (TestDescriptor d : scene.getDescendants()) {
+                if (d instanceof Nodes.TestMethod m) coverage.unlaunched(m.key());
+                else if (d instanceof Nodes.ScriptTest t) coverage.unlaunched(t.key());
+            }
+            listener.executionSkipped(scene, "scene '" + scene.name + "' was not run: " + e.getMessage());
+            return;
+        } catch (Exception e) {
+            early = e;
+        }
         listener.executionStarted(scene);
         Relay relay = new Relay(scene, listener, coverage);
         TestExecutionResult result;
         try {
-            SceneFile declaration = SceneFile.load(scene.name, loader);
-            LaunchSpec spec = LaunchSpec.load(declaration.topology());
+            if (early != null) throw early;
             if (declaration.world().createsWorld() && !spec.cleanWorld()) {
                 throw new IllegalStateException("scene '" + scene.name + "' declares how its world is created, but"
                         + " topology '" + spec.topology() + "' keeps the world of the run before (cleanWorld is false),"

@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### A scene the command-line runner cannot launch is skipped, not failed · green in the engine's and the CLI's own tests
+
+Run without `--client`, `stagewright test` failed every test of every `integratedServer` scene with "topology
+'integratedServer' has no launch spec", and a test only such a scene could run failed the whole run as one that ran
+in no scene. The runner now writes the two client topologies' specs as `unavailable` with the reason, and tells the
+engine that a topology with no spec at all is to be skipped too (`-Dstagewright.launches.missing=skip`); such a scene
+is reported skipped with the reason, its tests with it, and a test it alone could have run no longer counts against
+coverage. Under the Gradle plugin a missing spec still fails its scene, as a build that names a topology it does not
+configure is a mistake. A game that starts and then fails is a failure as before.
+
 ### The command-line runner names a stale StageWright or WorldDriver jar in `mods/` · green in the CLI's own tests
 
 A StageWright jar in the pack's `mods/` loads in place of the one the runner carries, and an old one (from before

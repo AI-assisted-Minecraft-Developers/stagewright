@@ -52,6 +52,7 @@ class StageWrightTestEngineTest {
         writeSpec(specs, "clientStays", true, "companionStays");
         writeSpec(specs, "clientLeaves", true, "companionLeaves");
         writeSpec(specs, "clientCrashes", true, "companionCrashes");
+        Files.writeString(specs.resolve("unlaunchable.json"), "{\"unavailable\": \"no --client was given\"}");
     }
 
     private void writeSpec(Path specs, String topology, boolean cleanWorld) throws IOException {
@@ -374,6 +375,51 @@ class StageWrightTestEngineTest {
                 .map(e -> failure(e).getMessage()).toList().toString());
         assertEquals(0, containersFailed(r).count());
         assertEngineSuccessful(r);
+    }
+
+    /** How the scene node named {@code scene} was skipped; fails when it was not. */
+    private static String sceneSkipReason(EngineExecutionResults r, String scene) {
+        return r.containerEvents().skipped().stream()
+                .filter(e -> e.getTestDescriptor() instanceof Nodes.Scene s && s.name.equals(scene))
+                .map(e -> e.getPayload(String.class).orElse(null)).findFirst()
+                .orElseThrow(() -> new AssertionError("scene not reported skipped: " + scene));
+    }
+
+    @Test
+    void aSceneWhoseTopologyTheRunCannotLaunchIsSkippedWithTheReason() {
+        EngineExecutionResults r = run("UnlaunchableFixture");
+        assertEquals(0, r.testEvents().failed().count());
+        assertEquals(0, r.testEvents().started().count(), "no game was started for it");
+        assertEquals(0, containersFailed(r).count());
+        String reason = sceneSkipReason(r, "unlaunchable");
+        assertTrue(reason.contains("no --client was given"), reason);
+        assertEngineSuccessful(r);
+    }
+
+    @Test
+    void aTestOnlyAnUnlaunchableSceneCouldRunDoesNotFailTheRunForCoverage() {
+        EngineExecutionResults r = run("ReqSkipOrUnlaunchableFixture");
+        assertEquals(0, r.testEvents().failed().count());
+        assertEquals("@Requires: this game has no CLIENT", skipReason(r, "b()"));
+        sceneSkipReason(r, "unlaunchable");
+        assertEngineSuccessful(r);
+    }
+
+    @Test
+    void aMissingLaunchSpecFailsItsTestsUnlessTheRunSaysToSkipThem() {
+        EngineExecutionResults failed = run("MissingSpecFixture");
+        assertEquals(2, failed.testEvents().failed().count());
+        assertTrue(failureOf(failed.testEvents(), "a()").getMessage().contains("has no launch spec"));
+        System.setProperty(LaunchSpec.MISSING, "skip");
+        try {
+            EngineExecutionResults skipped = run("MissingSpecFixture");
+            assertEquals(0, skipped.testEvents().failed().count());
+            String reason = sceneSkipReason(skipped, "missingSpec");
+            assertTrue(reason.contains("noSpecWritten.json is missing"), reason);
+            assertEngineSuccessful(skipped);
+        } finally {
+            System.clearProperty(LaunchSpec.MISSING);
+        }
     }
 
     @Test

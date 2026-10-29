@@ -20,6 +20,20 @@ record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, bool
 
     static final String PROPERTY = "stagewright.launches";
 
+    /**
+     * {@code skip} when a topology without a spec is to be reported as one this run cannot launch rather than as a
+     * mistake, as the CLI does, whose user chooses what to install; {@code fail}, the default, as the Gradle plugin
+     * does, where a missing spec means the build is not configured for that topology.
+     */
+    static final String MISSING = "stagewright.launches.missing";
+
+    /** A topology this run cannot launch, by its writer's word or, under {@value #MISSING}, by having no spec. */
+    static final class Unlaunchable extends IllegalStateException {
+        Unlaunchable(String message) {
+            super(message);
+        }
+    }
+
     /** What a game the agent had to force down after its run does to its scene; reported either way. */
     enum Leaks {
         /** The scene fails. */
@@ -77,11 +91,22 @@ record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, bool
         }
         Path file = Path.of(dir).resolve(topology + ".json");
         if (!Files.isRegularFile(file)) {
-            throw new IllegalStateException("topology '" + topology + "' has no launch spec: " + file + " is missing");
+            String message = "topology '" + topology + "' has no launch spec: " + file + " is missing";
+            if ("skip".equals(System.getProperty(MISSING))) throw new Unlaunchable(message);
+            throw new IllegalStateException(message);
+        }
+        Map<?, ?> json;
+        try {
+            json = (Map<?, ?>) Json.parse(Files.readString(file));
+        } catch (IOException | RuntimeException e) {
+            throw new IllegalStateException("topology '" + topology + "': " + file + " could not be read", e);
+        }
+        if (json.get("unavailable") instanceof String why) {
+            throw new Unlaunchable("topology '" + topology + "' cannot be launched in this run: " + why);
         }
         try {
-            return parse(topology, (Map<?, ?>) Json.parse(Files.readString(file)));
-        } catch (IOException | RuntimeException e) {
+            return parse(topology, json);
+        } catch (RuntimeException e) {
             throw new IllegalStateException("topology '" + topology + "': " + file + " could not be read", e);
         }
     }

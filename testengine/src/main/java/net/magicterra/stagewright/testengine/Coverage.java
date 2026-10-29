@@ -18,6 +18,7 @@ final class Coverage {
 
     private final Set<String> ran = new HashSet<>();
     private final Map<String, List<String>> unmet = new LinkedHashMap<>();
+    private final Set<String> unlaunched = new HashSet<>();
 
     /** {@code key}: a test method's or script test's own key, the same in every scene. */
     synchronized void ran(String key) {
@@ -31,11 +32,16 @@ final class Coverage {
                 .add(scene + " (" + reason.substring(REQUIRES_PREFIX.length()) + ")");
     }
 
+    /** A test in a scene this run could not launch: whether it would have run there is unknown, so it is not judged. */
+    synchronized void unlaunched(String key) {
+        unlaunched.add(key);
+    }
+
     /** One line per test that no scene ran because none met its requirements; empty when there is none. */
     synchronized List<String> neverRan() {
         List<String> lines = new ArrayList<>();
         unmet.forEach((key, where) -> {
-            if (!ran.contains(key)) lines.add(key + ": " + String.join("; ", where));
+            if (!ran.contains(key) && !unlaunched.contains(key)) lines.add(key + ": " + String.join("; ", where));
         });
         return lines;
     }

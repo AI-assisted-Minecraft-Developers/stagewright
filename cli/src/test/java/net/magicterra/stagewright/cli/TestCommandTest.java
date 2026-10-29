@@ -61,6 +61,14 @@ class TestCommandTest {
     }
 
     @Test
+    void aTopologyWithNoClientToStartSaysWhy() {
+        Map<String, Object> spec = TestCommand.unavailable("integratedServer", "no --client");
+        assertEquals("integratedServer", spec.get("topology"));
+        assertEquals("no --client", spec.get("unavailable"));
+        assertFalse(spec.containsKey("primary"));
+    }
+
+    @Test
     void anIntegratedServerIsTheClientAloneInASaveOfItsOwn() {
         Path clientDir = PACK.resolve("stagewright/client");
         Map<String, Object> spec = TestCommand.topology("integratedServer", clientDir,

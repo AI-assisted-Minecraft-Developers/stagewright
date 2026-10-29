@@ -247,7 +247,9 @@ The exit code is `0` when every test passed, `1` when one did not, and `3` when 
 ### Scenes with a client
 
 `integratedServer` and `dedicatedServerWithClient` scenes need a real client, which the runner installs and starts
-itself when given `--client`:
+itself when given `--client`. Without it, those scenes are reported skipped, saying so, and do not fail the run; the
+same goes for a scene naming a topology the runner does not know. A client that starts and then crashes fails its
+scene.
 
 ```bash
 java -jar stagewright.jar test <server-dir> --client neoforge:1.21.1:21.1.248
