@@ -26,7 +26,7 @@ resolved at configuration time. Fabric Loom 1.19 needs Gradle 9.8, so worlddrive
 
 ## What the third-party consumers found
 
-Moving six consumers to this path (2026-10-29) left these open, by weight: scripts have no `Java` global; scene-level
-report entries (`world`, `mods`) reach no XML; a Java test's generated callers (`game.api(...)`) still give up when the
+Moving six consumers to this path (2026-10-29) left these open, by weight: scene-level report entries (`world`,
+`mods`) reach no XML; a Java test's generated callers (`game.api(...)`) still give up when the
 server thread does not take their task within WorldDriver's 8 seconds; the CLI's `--client-dir` has not been through
 a client run.

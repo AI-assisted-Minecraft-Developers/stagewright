@@ -193,6 +193,19 @@ by that name loads, which is a cheap way to tell whether a mod's code is there; 
 ([test queries](../design/test-queries.md)) list the loaded mods (`mc.test.mods`), loot tables, advancements and
 structures, and count recipes, through `t.call`.
 
+A script can also reach Java directly: `Java.type(name)` (or `Java.loadClass(name)`, the name the KubeJS-style scripts
+used) answers the class by its binary name, with its static members and constructors as the script engine exposes
+them, and a Java object a step or a call hands out is used as itself. A name that loads nothing throws an error the
+script can catch, which is what `t.hasClass` answers without throwing. Class names are the ones the running game has:
+a Minecraft class reads as its Mojang name on NeoForge and in a development run, and as `net.minecraft.class_NNNN` on a
+Fabric game outside development. A script runs on its own thread, so game state is read or changed through `Java`
+only inside `t.onServer(fn)`:
+
+```javascript
+const Math = Java.type('java.lang.Math');
+t.expect(Math.max(1, 2)).equals(2);
+```
+
 What `t.call` and the handles (`t.plot`, `t.bot`, `t.player`, `t.npc`, `t.client` and their methods) refuse can be
 caught, so a test can check that something is refused, and carry on:
 
