@@ -20,6 +20,11 @@ engine (outer)                          game
 The outer tree is engine → scene → class → method (a script file and its tests in place of a class and its methods). A class naming two scenes sits under both and runs in both,
 which is what makes "this test ran in at least one scene" a question about one tree.
 
+A build tool takes the nearest class source above a test as the test's class, and Gradle writes one JUnit XML file per
+class. So a scene's node has a class source named for the scene, and a class's node one named `<scene>/<class>`
+(`survival/com.example.FurnaceTest`): a class that runs in three scenes gets three files, each saying its scene,
+instead of `TEST-<class>-1.xml` to `-3.xml`. A test's own method source still names the real class.
+
 ## Finding tests without loading them
 
 A test class's signatures name Minecraft and the mods; loading one in the engine's JVM would fail, or worse,
@@ -44,8 +49,8 @@ its jar, with a `test()` that records the name and scenes and never runs the bod
 must not depend on the game, and a file whose top level reaches for it fails here, with the line. Both sides use the
 same Rhino, so a file that parses here parses there.
 
-A file's node has a class source named for its path (`stagewright/tests/validation/42_combat.js`) and each test's a
-method source of that path and the test's name, which is what Gradle's `--tests` filter matches: it keeps any node
+A file's node has a class source named for its scene and path (`survival/stagewright/tests/validation/42_combat.js`)
+and each test's a method source of the path and the test's name, which is what Gradle's `--tests` filter matches: it keeps any node
 with another kind of source, so script tests used to run whatever the filter said. Gradle hands the engine only the
 classes a pattern's leading segments could name, and no class has a path's, so the test task puts a `*` before a
 pattern containing `/`. The filter drops tests, not runs of a file: the game is given every file a kept test is in,

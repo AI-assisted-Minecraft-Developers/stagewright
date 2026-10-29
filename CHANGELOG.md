@@ -79,8 +79,10 @@ engine reports, and the engine reported the plain class. It now reports a class 
 `<scene>/<class>` (`TEST-survival-com.example.FurnaceTest.xml`, `testsuite` and `classname`
 `survival/com.example.FurnaceTest`), and each scene under its own name; `--tests` still matches the real class and
 method. The plugin prints `[stagewright] <scene>: N passed, M skipped` (and how many failed, when any did) as each scene
-finishes. An IDE running the suite through Gradle can no longer jump from a result to its class. Verified against a
-stand-in game, not yet in a real one.
+finishes. An IDE running the suite through Gradle can no longer jump from a result to its class. The command-line
+runner's JUnit XML takes its `classname` from the same place, so a test there now reads `survival/com.example.FurnaceTest`
+as well (not run: its build does not compile against the WorldDriver currently in the local repository). Verified
+against a stand-in game, not yet in a real one.
 
 ### `-Pstagewright.jvmArgs` adds JVM arguments to every game the plugin starts · green in the plugin's tests
 

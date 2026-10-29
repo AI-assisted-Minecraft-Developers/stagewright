@@ -195,6 +195,22 @@ Per suite `<name>` the plugin registers:
 | `stagewrightLaunchSpecs<Name>` | Writes `build/stagewright/launches/<name>/<sceneTopology>.json` from each topology's run tasks, generated or mapped ([format](../reference/launch-spec.md)). The classpath goes into an argument file beside them, referenced from `jvmArgs`. Runs the run tasks' own prerequisites first; never up to date. |
 | `stagewrightTest<Name>` | A `Test` task on the JUnit Platform with only the `stagewright` engine, passing `-Dstagewright.launches` pointing at that directory. `--tests` matches a script test as `<path>.<name>` (`stagewright/tests/validation/42_combat.js.42_combat`); a pattern containing `/` gets a leading `*` before the run, since Gradle would otherwise hand the engine no class to start from. Never up to date; not part of `check`, because it starts games. |
 
+### Reading the results
+
+The test task prints one line per scene as it finishes, passing or not:
+
+```
+[stagewright] survival: 12 passed, 1 skipped
+[stagewright] nether: 4 passed, 0 skipped, 1 failed
+```
+
+The JUnit XML under `build/test-results/stagewrightTest<Name>/` has one file per scene and test class (or
+script file), named for both: `TEST-survival-com.example.FurnaceTest.xml`. Inside it the `testsuite` name and
+each `testcase`'s `classname` are `survival/com.example.FurnaceTest`, so a class that runs in several scenes
+gives one clearly named file per scene. A test's own name is the method's, as before, and `--tests` still
+selects by the real class and method. An IDE that runs the suite through Gradle cannot jump from a result to
+its class.
+
 ### Extra JVM arguments for one machine
 
 Some arguments belong to the machine running the tests rather than to the build: a heap size, a
