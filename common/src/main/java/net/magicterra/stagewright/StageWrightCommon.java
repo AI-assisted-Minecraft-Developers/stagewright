@@ -4,9 +4,12 @@ import com.mojang.logging.LogUtils;
 import net.magicterra.stagewright.driver.DriverRuntime;
 import net.magicterra.stagewright.harness.AgentBridge;
 import net.magicterra.stagewright.jupiter.JupiterRun;
+import net.magicterra.stagewright.jupiter.LeasedPlots;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 
 /** Common core of stagewright. Loader entries forward server lifecycle + tick here. */
@@ -93,6 +96,11 @@ public final class StageWrightCommon {
             lastTickNanos = 0;
             playersOpped = false;
         }
+    }
+
+    /** Server thread, as an entity joins a server level; every loader entry forwards it. */
+    public static void onEntityJoin(Entity entity, Level level) {
+        LeasedPlots.onEntityJoin(entity, level);
     }
 
     /** The server the verbs were registered on, while it runs. */

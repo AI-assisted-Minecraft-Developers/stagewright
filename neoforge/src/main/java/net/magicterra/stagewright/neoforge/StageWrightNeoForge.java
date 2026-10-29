@@ -10,6 +10,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -52,5 +53,11 @@ public final class StageWrightNeoForge {
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
         StageWrightCommon.onServerTick(event.getServer());
+    }
+
+    /** Server levels only, as Fabric's ENTITY_LOAD is. */
+    @SubscribeEvent
+    public void onEntityJoin(EntityJoinLevelEvent event) {
+        if (!event.getLevel().isClientSide()) StageWrightCommon.onEntityJoin(event.getEntity(), event.getLevel());
     }
 }

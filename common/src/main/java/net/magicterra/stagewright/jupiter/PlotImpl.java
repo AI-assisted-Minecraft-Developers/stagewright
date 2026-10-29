@@ -112,12 +112,14 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
                         new BlockPos(plot.box.minX(), plot.box.minY(), plot.box.minZ()), size.getX(), size.getY(),
                         size.getZ(), true, true);
                 plot.empty(server);
+                LeasedPlots.add(dimension, plot.box);
             });
             return plot;
         } catch (RuntimeException | Error e) {
             // Nothing was handed out yet: put the chunks back and free the stretch.
             try {
                 game.runOnServer(server -> {
+                    LeasedPlots.remove(dimension, plot.box);
                     plot.loadChunks(server, false);
                     plot.forceChunks(server, false);
                 });
@@ -133,6 +135,8 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     @Override
     public void close() {
         game.runOnServer(server -> {
+            // First: what the box held before the lease comes back as it was, not kept.
+            LeasedPlots.remove(dimension, box);
             ServerLevel level = level(server);
             before.restore(level);
             before.restoreEntities(level);

@@ -6,6 +6,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.fabricmc.fabric.api.event.Event;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.magicterra.stagewright.StageWrightCommon;
@@ -25,6 +26,7 @@ public final class StageWrightFabric implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPING.addPhaseOrdering(BEFORE_DRIVER, Event.DEFAULT_PHASE);
         ServerLifecycleEvents.SERVER_STOPPING.register(BEFORE_DRIVER, StageWrightCommon::onServerStopping);
         ServerTickEvents.END_SERVER_TICK.register(StageWrightCommon::onServerTick);
+        ServerEntityEvents.ENTITY_LOAD.register(StageWrightCommon::onEntityJoin);
     }
 
     /** Hand the API this runtime's mod list. Here rather than in {@code :common} because the

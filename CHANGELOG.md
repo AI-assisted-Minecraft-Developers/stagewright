@@ -22,6 +22,13 @@ answer as before. A stopped server is still caught by the engine's watchdog. A J
 (`game.api(...)`) still give up after 8 seconds; `game.onServer` never did. The in-game suites have not yet been run
 against this.
 
+### A mob inside a leased plot no longer despawns · green in the unit tests
+
+Plots are at z = −200000, so no player is ever within 128 blocks of one, and the game discards a mob that is not
+persistent on its first tick there: a zombie a test summoned into its plot was gone before the test could look at it.
+A mob that enters a server level inside a plot leased at that moment is now made persistent, on both loaders. Mobs a
+test spawns with `game.npc` / `t.npc` were persistent already. The in-game suites have not yet been run against this.
+
 ## 2026-10-29
 
 ### What a test records reaches the reports, an empty value included · green in the engine's, the CLI's and the unit tests

@@ -25,6 +25,14 @@ own, `@Plot.Size(x = 120, y = 16, z = 8)` (up to 256 across and the dimension's 
 plot are relative, and `plot.at(x, y, z)` gives the world position. `plot.structure(id, x, y, z)` places a structure
 template by id, or from a structure file.
 
+Plots are far from everything else: in a row at z = −200000, with their floor at y = 200 where the dimension's height
+allows. That has three consequences. A plot is all air until the test fills it, so whatever should stand on something
+needs a floor first (`plot.fill(0, 0, 0, 15, 0, 15, Blocks.STONE)`). A bot joins at the world spawn, not in the plot,
+so a test that wants it there moves it (`bot.moveTo(plot.at(1, 1, 1))`), and a bot left unparked high above nothing
+falls. And no player is near a plot, which would make the game discard every mob there on its first tick; so a mob
+that enters the world inside a leased plot — summoned by a command, spawned by an egg or a spawner — is kept
+(made persistent) and never despawns for want of a player.
+
 A bot joins under a made-up name unless its parameter says `@Bot.Name("steve")`. A test can hand its bot on: with
 `@Bot.Name("steve") @Bot.Keep` the bot stays when the test ends, parked where it stood with what it had, and a test
 that `@DependsOn` this one takes it as `@Bot.Name("steve") @Bot.Kept` — the same player, back on the tick list. A test
