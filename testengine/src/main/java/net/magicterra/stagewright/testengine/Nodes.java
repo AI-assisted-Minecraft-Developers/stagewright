@@ -4,7 +4,6 @@ import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.UniqueId;
 import org.junit.platform.engine.support.descriptor.AbstractTestDescriptor;
 import org.junit.platform.engine.support.descriptor.ClassSource;
-import org.junit.platform.engine.support.descriptor.ClasspathResourceSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
 
 /**
@@ -75,12 +74,19 @@ final class Nodes {
         }
     }
 
-    /** A script test file within one scene, holding the tests it registered for that scene. */
+    /**
+     * A script test file within one scene, holding the tests it registered for that scene.
+     *
+     * <p>Its source is a {@link ClassSource} named for the file's path, and each test's a {@link MethodSource} of that
+     * path and the test's name, rather than the {@code ClasspathResourceSource} they are: Gradle's {@code --tests}
+     * filter matches class and method sources only and keeps every node with any other, so a resource source made
+     * every script test run whatever the filter said. An IDE can no longer open the file from the node.
+     */
     static final class ScriptFile extends AbstractTestDescriptor {
         final String resource;
 
         ScriptFile(UniqueId parent, String resource) {
-            super(parent.append("script", resource), resource, ClasspathResourceSource.from(resource));
+            super(parent.append("script", resource), resource, ClassSource.from(resource));
             this.resource = resource;
         }
 
@@ -96,7 +102,7 @@ final class Nodes {
         final String name;
 
         ScriptTest(UniqueId parent, String resource, String name) {
-            super(parent.append("test", name), name, ClasspathResourceSource.from(resource));
+            super(parent.append("test", name), name, MethodSource.from(resource, name));
             this.resource = resource;
             this.name = name;
         }
@@ -112,12 +118,15 @@ final class Nodes {
         }
     }
 
-    /** A script file that could not be read here, so it has no scene to run in; it fails, saying why. */
+    /**
+     * A script file that could not be read here, so it has no scene to run in; it fails, saying why. Its source is the
+     * file's path as a class, as for {@link ScriptFile}, so a {@code --tests} filter that leaves the file out drops it.
+     */
     static final class Unreadable extends AbstractTestDescriptor {
         final String error;
 
         Unreadable(UniqueId engine, String resource, String error) {
-            super(engine.append("script", resource), resource, ClasspathResourceSource.from(resource));
+            super(engine.append("script", resource), resource, ClassSource.from(resource));
             this.error = error;
         }
 

@@ -178,8 +178,16 @@ While writing one test class, run only that class:
 ./gradlew stagewrightTestFabric --tests com.example.mymod.test.FirstTest
 ```
 
-A `--tests` filter selects Java test classes and methods. It does not narrow script tests: every YAML and JavaScript
-test still runs, in the scenes they name.
+A `--tests` filter selects script tests too, by their file's path under the test root and their name, as the test
+report shows them:
+
+```bash
+./gradlew stagewrightTestFabric --tests 'stagewright/tests/first.js'         # every test in the file
+./gradlew stagewrightTestFabric --tests 'stagewright/tests/first.js.places'  # one of them
+./gradlew stagewrightTestFabric --tests '*first*'                            # any file or class with "first" in it
+```
+
+A pattern naming only Java classes runs no script test, and starts no game for a scene that has nothing else.
 
 ## Testing a modpack with no build tool
 

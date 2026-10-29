@@ -44,6 +44,13 @@ its jar, with a `test()` that records the name and scenes and never runs the bod
 must not depend on the game, and a file whose top level reaches for it fails here, with the line. Both sides use the
 same Rhino, so a file that parses here parses there.
 
+A file's node has a class source named for its path (`stagewright/tests/validation/42_combat.js`) and each test's a
+method source of that path and the test's name, which is what Gradle's `--tests` filter matches: it keeps any node
+with another kind of source, so script tests used to run whatever the filter said. Gradle hands the engine only the
+classes a pattern's leading segments could name, and no class has a path's, so the test task puts a `*` before a
+pattern containing `/`. The filter drops tests, not runs of a file: the game is given every file a kept test is in,
+and runs the whole file, as it runs the whole class of a kept method; what the outer tree left out is not reported.
+
 In the game, the `stagewright-script` engine evaluates the file again through WorldDriver's `Scripting` (StageWright
 links no Rhino of its own: the shipped WorldDriver relocates it) and keeps the tests of the scene the game was started
 for. A test's `t` offers `call`, `step`, `wait`, `waitUntil`, `settle`, `expect` (`equals`, `contains`, `isEmpty`,
@@ -199,6 +206,5 @@ build.
 - Scene declarations apply `topology`, `world`, `files` and `mods.exclude` ([scene file](../reference/scene-file.md));
   any other key, `clients` and `mods.only` among them, is refused rather than ignored.
 - Scenes run one after another.
-- Gradle's `--tests` filter selects Java test classes and methods only; every script test still runs.
 - `perf` counts frames only of a client in the game's own JVM, not of a joining one; `insert` and `container` reach only
   containers that are vanilla `Container`s, in the overworld.

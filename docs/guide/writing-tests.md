@@ -127,6 +127,12 @@ YAML and JavaScript tests live under `stagewright/tests/` (in a Gradle project, 
 in a pack, `<server-dir>/stagewright/tests/`). They need no build, and they run beside the Java tests of the same
 scene.
 
+The test report lists a script test under its file's path from the test root, as if that were its class, and Gradle's
+`--tests` matches it the same way: `--tests 'stagewright/tests/validation/42_combat.js'` runs that file's tests,
+`--tests 'stagewright/tests/validation/42_combat.js.42_combat'` the one named `42_combat`, `--tests '*42_combat*'` any
+file or test with that in its name, and `--tests '*JupiterBodyTest'` no script test at all. The game still runs every
+test of a file it is given; only the selected ones are reported.
+
 ### JavaScript
 
 A file registers tests at its top level; the registration must not touch the game, because the test engine reads the

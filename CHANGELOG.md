@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### `--tests` selects script tests too · green in the engine's and the plugin's own tests
+
+A Gradle `--tests` filter used to leave every script test in, so a run meant for one Java class still started every
+scene with script tests and ran them. A script test is now reported, and matched, as the method `<name>` of a class
+named for its file's path under the test root: `--tests '*JupiterBodyTest'` runs no script test, `--tests '*42_combat*'`
+or `--tests 'stagewright/tests/validation/42_combat.js'` runs that file's, and a scene left with nothing to run starts
+no game. In Gradle's test report a script test's class is now its file's path, where Gradle had none to give it; an IDE can
+no longer open the file from the test. Without a filter, nothing changes.
+
 ### A test can hand its bot to the test that depends on it · compiled
 
 `@Bot.Keep` on a named `Bot` parameter leaves the bot in the world when the test ends, parked with what it has and

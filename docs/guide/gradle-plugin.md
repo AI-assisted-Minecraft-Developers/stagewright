@@ -191,7 +191,7 @@ Per suite `<name>` the plugin registers:
 | Task | What it does |
 |---|---|
 | `stagewrightLaunchSpecs<Name>` | Writes `build/stagewright/launches/<name>/<sceneTopology>.json` from each topology's run tasks, generated or mapped ([format](../reference/launch-spec.md)). The classpath goes into an argument file beside them, referenced from `jvmArgs`. Runs the run tasks' own prerequisites first; never up to date. |
-| `stagewrightTest<Name>` | A `Test` task on the JUnit Platform with only the `stagewright` engine, passing `-Dstagewright.launches` pointing at that directory. Never up to date; not part of `check`, because it starts games. |
+| `stagewrightTest<Name>` | A `Test` task on the JUnit Platform with only the `stagewright` engine, passing `-Dstagewright.launches` pointing at that directory. `--tests` matches a script test as `<path>.<name>` (`stagewright/tests/validation/42_combat.js.42_combat`); a pattern containing `/` gets a leading `*` before the run, since Gradle would otherwise hand the engine no class to start from. Never up to date; not part of `check`, because it starts games. |
 
 The engine is resolved as `net.magicterra:stagewright-testengine` at the plugin's own version, from
 the project's repositories, through the `stagewrightTestEngine` configuration.

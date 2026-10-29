@@ -168,6 +168,8 @@ public class StageWrightPlugin implements Plugin<Project> {
                     // Gradle selects classes only; the engine finds the script tests under these itself.
                     task.getJvmArgumentProviders().add(() -> List.of("-D" + TEST_ROOTS_PROPERTY + "="
                             + suite.getClasses().getAsPath()));
+                    // Script tests are matched by --tests as `<path>.<name>`; a pattern naming a path must reach them.
+                    task.doFirst(ScriptPatterns.INSTANCE);
                     task.getOutputs().upToDateWhen(t -> false);
                     // Set here, not left to the java plugin's conventions: the suite may live on a project without it.
                     var build = project.getLayout().getBuildDirectory();

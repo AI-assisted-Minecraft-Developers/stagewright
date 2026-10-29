@@ -110,6 +110,35 @@ class TestSuiteLaunchSpecsTest {
     }
 
     @Test
+    void aTestsPatternNamingAScriptPathIsWidenedSoGradleStartsTheEngine() throws Exception {
+        consumer("classes.from(sourceSets.main.output)\n"
+                + "topologies.put('dedicatedServerWithClient', 'withClient')");
+        Files.createDirectories(dir.resolve("src/main/java"));
+        Files.writeString(dir.resolve("src/main/java/FirstTest.java"), "public class FirstTest {}\n");
+        // The engine is not resolvable here, and is not needed: the patterns are read right after the plugin's action,
+        // and the task stops there.
+        Files.writeString(dir.resolve("build.gradle"), Files.readString(dir.resolve("build.gradle")) + """
+                configurations.stagewrightTestEngine.dependencies.clear()
+                tasks.named('stagewrightTestFabric') { t ->
+                    t.filter.includeTestsMatching 'stagewright/tests/b.js'
+                    t.actions.add(1, { task ->
+                        println 'COMMAND_LINE=' + task.filter.commandLineIncludePatterns
+                        println 'BUILD_SCRIPT=' + task.filter.includePatterns
+                        throw new StopExecutionException()
+                    } as Action)
+                }
+                """);
+
+        BuildResult result = runner("stagewrightTestFabric", "--tests", "stagewright/tests/a.js.first",
+                "--tests", "*FirstTest").build();
+        String out = result.getOutput();
+        String commandLine = out.lines().filter(l -> l.startsWith("COMMAND_LINE=")).findFirst().orElse("");
+        assertTrue(commandLine.contains("*stagewright/tests/a.js.first") && commandLine.contains("*FirstTest")
+                && !commandLine.contains("**"), out);
+        assertTrue(out.contains("BUILD_SCRIPT=[*stagewright/tests/b.js]"), out);
+    }
+
+    @Test
     void anUndeclaredTopologyFailsNamingTheSuiteAndTheTopology() throws Exception {
         consumer("topologies.put('dedicatedServerWithClient', 'nowhere')");
 

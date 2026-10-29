@@ -10,13 +10,20 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.platform.engine.FilterResult;
+import org.junit.platform.engine.TestDescriptor;
 import org.junit.platform.engine.TestExecutionResult;
+import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.reporting.ReportEntry;
+import org.junit.platform.engine.support.descriptor.ClassSource;
+import org.junit.platform.engine.support.descriptor.MethodSource;
+import org.junit.platform.launcher.PostDiscoveryFilter;
 import org.junit.platform.testkit.engine.EngineExecutionResults;
 import org.junit.platform.testkit.engine.EngineTestKit;
 import org.junit.platform.testkit.engine.Event;
@@ -326,6 +333,126 @@ class StageWrightTestEngineTest {
                 .selectors(selectClasspathResource("stagewright/tests/declared.yaml")).execute();
         assertEquals(1, r.testEvents().succeeded().count());
         assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
+    }
+
+    /**
+     * A run as a Gradle {@code Test} task makes it: the fixture class selected, the script tests found under the test
+     * root, and Gradle's {@code --tests} filter applied to what the engine discovered.
+     */
+    private EngineExecutionResults runFiltered(String fixture, String pattern) {
+        String root = System.getProperty(StageWrightTestEngine.TEST_ROOTS);
+        Path resources = Path.of(java.net.URI.create(getClass().getClassLoader()
+                .getResource("stagewright/tests/arithmetic.js").toString())).getParent().getParent().getParent();
+        System.setProperty(StageWrightTestEngine.TEST_ROOTS, resources.toString());
+        try {
+            return EngineTestKit.engine("stagewright").selectors(selectClass(FIXTURES + fixture))
+                    .filters(new GradleTestsFilter(pattern)).execute();
+        } finally {
+            if (root == null) System.clearProperty(StageWrightTestEngine.TEST_ROOTS);
+            else System.setProperty(StageWrightTestEngine.TEST_ROOTS, root);
+        }
+    }
+
+    private static List<String> scenesStarted(EngineExecutionResults r) {
+        return r.containerEvents().started().stream().map(Event::getTestDescriptor)
+                .filter(d -> d instanceof Nodes.Scene).map(TestDescriptor::getDisplayName).toList();
+    }
+
+    @Test
+    void aTestsFilterNamingAJavaClassStartsNoScriptScene() {
+        EngineExecutionResults r = runFiltered("PassFixture", "*PassFixture");
+        assertEquals(List.of("pass"), scenesStarted(r));
+        assertEquals(2, r.testEvents().succeeded().count());
+        assertEquals(0, r.testEvents().failed().count(), () -> String.valueOf(r.testEvents().failed().list()));
+        assertTrue(!Files.exists(temp.resolve("game-script").resolve("stagewright")), "no game for the script scene");
+    }
+
+    @Test
+    void aTestsFilterNamingAScriptRunsThatScriptOnly() {
+        EngineExecutionResults r = runFiltered("PassFixture", "*arithmetic*");
+        assertEquals(List.of("script"), scenesStarted(r));
+        // The game was given that file alone, or it would not have reported these two under it.
+        assertEquals(List.of("adds"), r.testEvents().succeeded().stream()
+                .map(e -> e.getTestDescriptor().getDisplayName()).toList());
+        assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
+        // The unreadable file and the YAML one were left out as well.
+        assertEquals(1, r.testEvents().failed().count());
+    }
+
+    @Test
+    void aTestsFilterMatchesAScriptTestByItsPathAndName() {
+        EngineExecutionResults r = runFiltered("PassFixture", "stagewright/tests/arithmetic.js.adds");
+        assertEquals(List.of("script"), scenesStarted(r));
+        assertEquals(1, r.testEvents().succeeded().count());
+        assertEquals(0, r.testEvents().failed().count(), () -> String.valueOf(r.testEvents().failed().list()));
+    }
+
+    @Test
+    void scriptNodesNameTheirFileAsTheClassAndTheTestAsTheMethod() {
+        TestDescriptor test = EngineTestKit.engine("stagewright")
+                .selectors(selectClasspathResource("stagewright/tests/arithmetic.js")).execute()
+                .testEvents().succeeded().list().get(0).getTestDescriptor();
+        assertEquals(java.util.Optional.of(MethodSource.from("stagewright/tests/arithmetic.js", "adds")),
+                test.getSource());
+        assertEquals(java.util.Optional.of(ClassSource.from("stagewright/tests/arithmetic.js")),
+                test.getParent().orElseThrow().getSource());
+    }
+
+    /**
+     * What Gradle 8.14's JUnit Platform runner applies for {@code --tests} ({@code JUnitPlatformTestClassProcessor
+     * .ClassMethodNameFilter}), for one fully qualified pattern: a node under a matching class is kept; a method source
+     * is matched as {@code class.method}; a class source without children as the class; any other source defers to
+     * the parent, and a node without a source is kept.
+     */
+    private static final class GradleTestsFilter implements PostDiscoveryFilter {
+        private final Pattern pattern;
+
+        GradleTestsFilter(String glob) {
+            StringBuilder regex = new StringBuilder();
+            // As Gradle's TestSelectionMatcher prepares one.
+            for (String part : glob.split("\\*", -1)) {
+                if (part.isEmpty()) {
+                    regex.append(".*");
+                    continue;
+                }
+                if (!regex.isEmpty()) regex.append(".*");
+                regex.append(Pattern.quote(part));
+            }
+            this.pattern = Pattern.compile(regex.toString());
+        }
+
+        private boolean matches(String className, String method) {
+            return pattern.matcher(className).matches()
+                    || method != null && pattern.matcher(className + "." + method).matches();
+        }
+
+        @Override
+        public FilterResult apply(TestDescriptor descriptor) {
+            for (TestDescriptor d = descriptor; d.getParent().isPresent(); d = d.getParent().get()) {
+                if (d.getSource().orElse(null) instanceof ClassSource c && matches(c.getClassName(), null)) {
+                    return FilterResult.included("class match");
+                }
+            }
+            return FilterResult.includedIf(shouldRun(descriptor, false));
+        }
+
+        private boolean shouldRun(TestDescriptor d, boolean checkingParent) {
+            TestSource source = d.getSource().orElse(null);
+            if (source == null) return true;
+            if (source instanceof MethodSource m) {
+                return matches(m.getClassName(), m.getMethodName()) || d.getParent()
+                        .flatMap(p -> p.getSource().filter(ClassSource.class::isInstance).map(ClassSource.class::cast))
+                        .filter(c -> matches(c.getClassName(), m.getMethodName())).isPresent();
+            }
+            if (source instanceof ClassSource c) {
+                if (!checkingParent) {
+                    for (TestDescriptor child : d.getChildren()) if (shouldRun(child, false)) return true;
+                }
+                return !d.getChildren().isEmpty() || matches(c.getClassName(), null)
+                        || matches(c.getClassName(), d.getLegacyReportingName());
+            }
+            return d.getParent().isPresent() && shouldRun(d.getParent().get(), true);
+        }
     }
 
     @Test
