@@ -45,8 +45,15 @@ WorldDriver's: from an in-game test,
 var chunks = game.api(TestQueriesBlockingApi::of).chunks(new ChunksContracts.Unload(pos, Optional.empty(), 400));
 ```
 
+The generated `TestQueriesBlockingApi` is compiled into `mc_stagewright-api`, beside the contracts, so a project
+whose tests compile against StageWright's API (the Gradle plugin's `stagewrightTestCompile`) has it without running
+any annotation processor itself. Each method takes one of its subject's question records (`LootContracts.Roll`,
+`AdvancementsContracts.Grant`, …) and answers that subject's reply type, which several records implement — one per
+kind of answer — so a test asserts which it got: `assertInstanceOf(LootContracts.Rolled.class, queries.loot(…))`. What
+a script gets from `t.call` is the same answer as JSON.
+
 The processor is `net.magicterra:worlddriver-api-processor`, at the WorldDriver version StageWright builds against.
-While both are in development it is published to mavenLocal only.
+Only StageWright's own build runs it. While both are in development it is published to mavenLocal only.
 
 ## Answers, not failures
 

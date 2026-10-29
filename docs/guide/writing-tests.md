@@ -6,7 +6,8 @@ first, then the YAML and JavaScript forms, which offer the same things as plain 
 
 ## What a Java test receives
 
-A test class carries `@Scene("<name>")` (several names run the class once in each game) and ordinary JUnit 5 `@Test`
+A test class carries `@Scene("<name>")` (several, `@Scene({"mymod", "mymod.integrated"})`, run the class once in each
+game) and ordinary JUnit 5 `@Test`
 methods. StageWright resolves these parameters:
 
 | Parameter | What it is |
@@ -49,6 +50,17 @@ things it does.
 
 - **WorldDriver's methods** through their generated callers, answered on the test thread:
   `game.api(WorldBlockingApi::of).block(new BlockParams(at, false))`. A body is passed to them as `bot.ref()`.
+- **StageWright's own questions** — recipes, loot tables, advancements, structures, chunks and the loaded mods, the
+  `mc.test.*` methods ([test queries](../design/test-queries.md)) — the same way, through
+  `TestQueriesBlockingApi` (`net.magicterra.stagewright.test.methods`), which is already on the test classpath. Each
+  takes the question as a record and answers one of several reply records, so a test checks which one it got:
+
+  ```java
+  TestQueriesBlockingApi queries = game.api(TestQueriesBlockingApi::of);
+  var rolled = assertInstanceOf(LootContracts.Rolled.class,
+          queries.loot(new LootContracts.Roll("minecraft:chests/simple_dungeon", 100)));
+  assertFalse(rolled.items().isEmpty());
+  ```
 - **Minecraft itself** on the server thread: `game.onServer(server -> …)` runs the work between two ticks and returns
   its result; `bot.onServer(player -> …)` does the same with the bot's `ServerPlayer`. The work must not call a blocking
   `Game` method. It runs as part of the test, so `game.check` works inside it; an override, `game.afterTest` and
@@ -79,6 +91,12 @@ void aBotWalksWhereItIsSent(Game game, Plot plot, Bot bot) {
 `Body` is what a `Bot` and the `Player` share: `name()`, `ref()`, `blockPos()`, `dimension()`, `moveTo(feet)` or
 `moveTo(dimension, feet)`, `give(item, count)` and `count(item)`. `game.translate(pos, from, to)` maps a position between
 dimensions as a portal does, so a test can say where a portal should have put a body.
+
+A bot is a real player on the server: it has an inventory, hunger, effects, advancements and quest progress, opens
+menus, and mods see it as they see any player. So a test of server-side player state — a quest completing, an
+advancement granted, an item crafted into the inventory, a menu's slots — takes a `Bot` and runs on every topology,
+the dedicated server included; it needs no `@Requires(CLIENT)`. Only what exists on the client — a screen, a key
+binding, rendering, the client half of a mod — needs the real client's `Player` or `Client`.
 
 `game.npc(EntityType.PIGLIN, feet)` spawns a mob and hands it to WorldDriver as a body, `mob:<name>`, for the rest of the
 test. While WorldDriver drives it, the mob's own AI is off.
@@ -127,6 +145,15 @@ Tests in a game run concurrently by default, classes and methods alike. What two
   }
   ```
 
+  The store is one set of values per scene, shared by all its tests, Java and scripts alike: `t.store.put(key,
+  value)` and `t.store.get(key)` in JavaScript, the `store.put` and `store.get` steps in YAML. A value is plain (a
+  string, number, boolean, list or map) or a record Gson can write. Every `put` is written straight away to
+  `stagewright/store.json` in the game's directory, so it is there after a restart, and after a crash. The file is
+  deleted before the scene's first game starts, so every run of a scene begins with an empty store; it is not
+  deleted at the end, so after a run it holds what the tests put, which makes it a place to leave measurements for a
+  program that reads them afterwards. Bots a test keeps with `@Bot.Keep` cross a restart too, without the store (see
+  [Bodies](#bodies)).
+
 - `@Requires(CLIENT)`, `@Requires(DEDICATED_SERVER)`, `@Requires(INTEGRATED_SERVER)` or `@Requires(mods = "id")` runs
   the test only in a game that has it; elsewhere it is reported as disabled. A test that no scene it names can run
   fails the run, since it would otherwise never run and never fail.
@@ -139,6 +166,12 @@ Tests in a game run concurrently by default, classes and methods alike. What two
 waits, and reports each phase's median window: ticks per second, tick intervals (mean and 99th percentile), retained
 heap, CPU, and, on an integrated server, the client's frame rate. Compare a phase with the baseline taken in the same
 run (`tpsDropVs`, `heapGrowthVs`, `cpuGrowthVs`, `fpsDropVs`), never with a constant.
+
+A window's CPU is `cpu()` (it was `cpuLoad` in the old scene API): the process's CPU time over the window's wall time,
+counted in cores, so 1.0 is one core busy the whole time and the same work reads the same on any machine. It is NaN
+where the JVM does not report it. A script's `t.perf({phases: [{name, run}], warmup, sample, repeat})` answers each
+phase by name with the same values as plain numbers — `tps`, `msptMean`, `msptP99`, `heapMib`, `cpu`, `fps` with a
+client — and, for every phase after the first, `tpsDrop`, `heapGrowthMib`, `cpuGrowth` and `fpsDrop` against it.
 
 ## Script tests
 
@@ -161,7 +194,8 @@ file outside it to find the tests:
 test('name', { scene: 'mymod', requires: 'client', locks: ['weather'] }, (t) => { … });
 ```
 
-The options are `scene`, `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`), `dependsOn` (a
+The options are `scene` — one scene's name, or a list of them (`scene: ['mymod', 'mymod.integrated']`) to run the
+test once in each, as `@Scene({…})` does for a class — `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`), `dependsOn` (a
 test in the same file, `file.js#name`, or a Java test as `com.example.SomeTest#method`), `afterRestart`, `knownIssue`,
 `locks` (the `Locks` names without `stagewright.`: `worldRules`, `worldClock`, `weather`, `tickRate`, `player:<name>`)
 and `isolated`.
@@ -248,7 +282,9 @@ t.afterTest(() => t.call('mc.action.runCommand', { cmd: 'gamerule doFireTick tru
 ### YAML
 
 A file has an optional `scene` for all its tests and a `tests` list. A test takes the same options as a script, plus
-`plot: {size}`, and either `steps` or `given` / `when` / `then`. A step is one of:
+`plot: {size}`, and either `steps` or `given` / `when` / `then`. `scene`, on the file or on one test (which then
+replaces the file's), is a name or a list of names, `scene: [mymod, mymod.integrated]`, and the test runs once in each.
+A step is one of:
 
 - `call: <method>` with `params`;
 - `wait: <ticks>`, `waitUntil:` or `settle:` a `{call, params, expect}` condition, with `within` and `ticks`;
