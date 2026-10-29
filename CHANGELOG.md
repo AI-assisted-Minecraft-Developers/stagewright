@@ -12,6 +12,13 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### The tests join the project's own `main` mod under ModDevGradle · green against a third party
+
+The plugin picked the mod the tests join as the first mod, by name, holding a source set *named* `main`. A mod may
+hold another project's source set, and every project's main is named that, so on a build whose library module sorted
+first (Twilight Forest's `tf-asm`) the tests joined that module and every test failed with `module main does not read
+module mc_testkit`. The mod is now the one holding the project's own `main`, by identity.
+
 ### A topology can report leaked threads instead of failing on them · green in the engine's and the plugin's own tests
 
 `leaks = 'report'` on a topology in `topologies { }`, or on a suite for its generated topologies, keeps a game the

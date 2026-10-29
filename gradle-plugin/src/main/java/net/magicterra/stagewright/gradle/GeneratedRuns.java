@@ -187,12 +187,17 @@ final class GeneratedRuns {
         });
     }
 
-    /** The project's mod holding {@code main}, which the tests' copy stands in for. */
+    /**
+     * The project's mod holding {@code main}, which the tests' copy stands in for. The project's own {@code main},
+     * by identity: a mod may hold another project's source set, and every project's main is named {@code main}.
+     */
     private static Object host(Project loader, StageWrightTestSuite suite, Iterable<Object> mods, Object copy) {
+        SourceSet main = loader.getExtensions().getByType(JavaPluginExtension.class).getSourceSets()
+                .getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         for (Object mod : mods) {
             if (mod == copy) continue;
             for (Object set : listProperty(mod, "getModSourceSets").get()) {
-                if (((SourceSet) set).getName().equals(SourceSet.MAIN_SOURCE_SET_NAME)) return mod;
+                if (set == main) return mod;
             }
         }
         throw new GradleException("stagewright test suite '" + suite.getName() + "': " + loader.getPath()
