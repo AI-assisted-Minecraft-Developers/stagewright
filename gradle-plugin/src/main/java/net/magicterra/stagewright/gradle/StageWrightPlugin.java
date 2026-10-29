@@ -182,6 +182,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                             + suite.getClasses().getAsPath()));
                     // Script tests are matched by --tests as `<path>.<name>`; a pattern naming a path must reach them.
                     task.doFirst(ScriptPatterns.INSTANCE);
+                    task.addTestListener(new SceneSummary());
                     task.getOutputs().upToDateWhen(t -> false);
                     // Set here, not left to the java plugin's conventions: the suite may live on a project without it.
                     var build = project.getLayout().getBuildDirectory();

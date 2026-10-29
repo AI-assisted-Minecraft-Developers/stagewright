@@ -71,6 +71,16 @@ components). Scripts get `t.capabilities()` (`has`, `registered`, `available`, w
 `mods.exclude` refused a name that matched no mod of a game, so a scene with a server and a client could not exclude
 a mod (LuckPerms) that only the server had. Such a name is now passed over: the scene's `mods` report entry says which
 names matched nothing (per game, `server:` and `client:`, when there are two), and the engine prints a line saying so.
+### Gradle's results say which scene each test ran in · green in the plugin's and the engine's tests, under Gradle 8.14 and 9.3.1
+
+A test class that runs in three scenes came out of `stagewrightTest<Name>` as `TEST-<class>-1.xml` to `-3.xml`, with
+nothing in them naming the scene, and a passing run printed nothing at all. Gradle files its XML by the class the test
+engine reports, and the engine reported the plain class. It now reports a class or script file as
+`<scene>/<class>` (`TEST-survival-com.example.FurnaceTest.xml`, `testsuite` and `classname`
+`survival/com.example.FurnaceTest`), and each scene under its own name; `--tests` still matches the real class and
+method. The plugin prints `[stagewright] <scene>: N passed, M skipped` (and how many failed, when any did) as each scene
+finishes. An IDE running the suite through Gradle can no longer jump from a result to its class. Verified against a
+stand-in game, not yet in a real one.
 
 ### `-Pstagewright.jvmArgs` adds JVM arguments to every game the plugin starts · green in the plugin's tests
 

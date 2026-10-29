@@ -79,12 +79,28 @@ def versionResource = tasks.register('generateVersionResource') {
 }
 tasks.named('processResources') { from(versionResource) }
 
+// The test engine from the included engine build, for the functional test that runs a suite end to end.
+def realTestEngine = configurations.create('functionalTestEngine') {
+    canBeConsumed = false
+}
+dependencies {
+    functionalTestEngine "net.magicterra:stagewright-testengine:${stagewrightVersion}"
+    functionalTestEngine platform('org.junit:junit-bom:5.11.3')
+    functionalTestEngine 'org.junit.platform:junit-platform-launcher'
+}
+
 def functionalTest = tasks.register('functionalTest', Test) {
     description = 'Runs the Gradle TestKit functional tests.'
     group = 'verification'
     testClassesDirs = functionalTestSourceSet.output.classesDirs
     classpath = functionalTestSourceSet.runtimeClasspath
     useJUnitPlatform()
+    def engineFiles = realTestEngine
+    inputs.files(engineFiles).withNormalizer(ClasspathNormalizer)
+    jvmArgumentProviders.add({ ["-Dstagewright.functionalTest.engine=${engineFiles.asPath}".toString()] } as CommandLineArgumentProvider)
+    // Optional: a Gradle installation to run the end-to-end suite test under as well, such as a newer one.
+    def otherGradle = providers.gradleProperty('functionalTestGradleHome')
+    if (otherGradle.isPresent()) systemProperty 'stagewright.functionalTest.gradleHome', otherGradle.get()
 }
 
 tasks.named('test', Test) {
