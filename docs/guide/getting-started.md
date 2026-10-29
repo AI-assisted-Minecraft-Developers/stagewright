@@ -233,6 +233,7 @@ The exit code is `0` when every test passed, `1` when one did not, and `3` when 
 | `--java <path>` | The Java to start the games with. |
 | `--timeout <min>` | The longest one scene's games may run. |
 | `--stall-timeout <min>` | End a scene's game once its phase, server ticks and loaded classes have all stood still this long. |
+| `--leaks fail\|report` | A game that is still up after its run, because a mod's thread keeps it from ending, is forced down and fails its scene (`fail`, the default); with `report` the scene passes or fails on its tests alone. The threads that held it are named in the report and the game's log either way. |
 | `-D<key>=<value>`, `-X<option>` | Passed to the games' JVMs as given, such as `-Xmx8G`. |
 | `--reports <dir>` | Where the JUnit XML goes. |
 

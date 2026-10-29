@@ -60,7 +60,7 @@ final class TestCommand {
     /** The singleplayer world an integrated server's scene plays in. */
     static final String CLIENT_WORLD = "StageWright";
     private static final Set<String> VALUED = Set.of("launch", "java", "reports", "timeout", "stall-timeout",
-            "client", "client-mods", "install-dir", "username", "mirror");
+            "client", "client-mods", "install-dir", "username", "mirror", "leaks");
 
     private TestCommand() {}
 
@@ -89,6 +89,7 @@ final class TestCommand {
         }
         if (gameDir == null) throw new IllegalArgumentException("stagewright test needs the pack's server directory");
         if (!Files.isDirectory(gameDir)) throw new IllegalArgumentException(gameDir + " is not a directory");
+        leaks(opts);
         Path source = gameDir.resolve(RunDirectory.ARTIFACT_DIR);
         if (!Files.isDirectory(source.resolve("tests"))) {
             throw new IllegalArgumentException("no tests: " + source.resolve("tests") + " is not a directory");
@@ -217,9 +218,23 @@ final class TestCommand {
         spec.put("server", server);
         if (opts.containsKey("timeout")) spec.put("timeoutMinutes", Integer.parseInt(opts.get("timeout")));
         if (opts.containsKey("stall-timeout")) spec.put("stallMinutes", Integer.parseInt(opts.get("stall-timeout")));
+        spec.put("leaks", leaks(opts));
         spec.put("primary", primary);
         if (companion != null) spec.put("companion", companion);
         return spec;
+    }
+
+    /**
+     * {@code --leaks}: what a game that had to be forced down after its run does to its scene, {@code fail} (the
+     * default) or {@code report}. A pack whose mod keeps an idle pool thread alive past the grace period would otherwise
+     * fail every scene; the report entry is written either way.
+     */
+    static String leaks(Map<String, String> opts) {
+        String leaks = opts.getOrDefault("leaks", "fail");
+        if (!leaks.equals("fail") && !leaks.equals("report")) {
+            throw new IllegalArgumentException("--leaks is 'fail' or 'report', not '" + leaks + "'");
+        }
+        return leaks;
     }
 
     /** An installed client, started in {@code clientDir}. */

@@ -2,6 +2,7 @@ package net.magicterra.stagewright.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -44,6 +45,19 @@ class TestCommandTest {
         assertEquals(7, spec.get("timeoutMinutes"));
         assertEquals(client, spec.get("companion"));
         assertEquals("net.minecraft.client.main.Main", client.get("mainClass"));
+    }
+
+    @Test
+    void leaksFailTheSceneUnlessReportIsAskedFor() {
+        Map<String, Object> plain = TestCommand.topology("dedicatedServer", PACK, "stagewright/world", true,
+                Map.of("java", "java"), null, Map.of());
+        assertEquals("fail", plain.get("leaks"));
+        Map<String, Object> report = TestCommand.topology("dedicatedServer", PACK, "stagewright/world", true,
+                Map.of("java", "java"), null, Map.of("leaks", "report"));
+        assertEquals("report", report.get("leaks"));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> TestCommand.leaks(Map.of("leaks", "ignore")));
+        assertTrue(e.getMessage().contains("'fail' or 'report'"), e.getMessage());
     }
 
     @Test

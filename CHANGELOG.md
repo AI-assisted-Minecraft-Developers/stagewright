@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-10-29
 
+### The command-line runner takes `--leaks` · green in the CLI's own tests
+
+`stagewright test <server-dir> --leaks report` writes `leaks: report` into the launch specs it generates, as `leaks =
+'report'` does on a plugin topology: a game that had to be forced down after its run no longer fails its scene, and the
+`forcedDown` report entry and the line in the game's log are written as before. The default stays `fail`. A pack with
+a mod whose idle pool thread outlives the grace period (moonlight's cached pool, night-config on older NeoForge) failed
+every scene, with no way to say otherwise short of editing the mod's configuration in a scene file.
+
 ### The launch specs come out the same under the configuration cache · green against worlddriver
 
 `stagewrightLaunchSpecsFabric` and `…Neoforge` on worlddriver's Fabric Loom 1.13 and ModDevGradle 2.0.141 build,

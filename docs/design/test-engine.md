@@ -192,8 +192,8 @@ command-line runner writes the same file from a game directory. The engine knows
 `stagewright/worlds`. The CLI packs them into a resource-only mod
 (`fabric.mod.json` and a `lowcodefml` `neoforge.mods.toml`, so either loader takes it), hands it to the pack's server
 with StageWright's loader jar as it hands any mod — `-Dfabric.addMods`, or `--fml.mods` — and writes the
-`dedicatedServer` launch spec from the start command it detects. It then runs this engine in its own JVM and writes
-JUnit XML. The server plays in `stagewright/world` (`--universe`, and the spec's `worldDirectory`), so the world each
+`dedicatedServer` launch spec from the start command it detects, with the `leaks` its `--leaks` names (`fail` unless
+told otherwise, as in the plugin). It then runs this engine in its own JVM and writes JUnit XML. The server plays in `stagewright/world` (`--universe`, and the spec's `worldDirectory`), so the world each
 scene starts afresh is never the pack's. With `--client <spec>` it also installs that client
 and writes the other two specs: `integratedServer`, the client alone in `saves/StageWright`, and
 `dedicatedServerWithClient`, the pack's server waiting for that client to join. The client runs in

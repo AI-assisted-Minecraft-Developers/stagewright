@@ -100,7 +100,8 @@ public final class Main {
 
                   java -jar stagewright.jar test <server-dir> [--mod <jar>]... [--reports <dir>]
                                                         [--launch "<cmd>"] [--java <path>] [--timeout <min>]
-                                                        [--stall-timeout <min>] [-D…] [-X…]
+                                                        [--stall-timeout <min>] [--leaks fail|report]
+                                                        [-D…] [-X…]
                                                         [--client <spec> [--client-mods <dir>]
                                                          [--install-dir <dir>] [--username <name>]
                                                          [--mirror bmclapi]]
@@ -119,6 +120,9 @@ public final class Main {
                   --timeout <min>     the longest one scene's games may run
                   --stall-timeout <min>
                                       end a scene's game once it has stopped moving for this long
+                  --leaks fail|report a game that has to be forced down after its run, because a mod's
+                                      thread keeps it up, fails its scene (fail, the default) or is
+                                      only reported (report)
                   -D<key>=<value>, -X<option>
                                       passed to the games' JVMs as given (e.g. -Xmx8G)
 
