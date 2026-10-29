@@ -165,7 +165,7 @@ class BodyImpl implements Body {
             // One server task, so no tick falls between joining and parking.
             game.runOnServer(server -> {
                 ServerLevel level = server.overworld();
-                if (Roster.spawn(level, Vec3.atBottomCenterOf(level.getSharedSpawnPos()), chosen)
+                if (Roster.spawn(server, level, Vec3.atBottomCenterOf(level.getSharedSpawnPos()), chosen)
                         instanceof Roster.Refusal refused) {
                     throw new IllegalStateException("could not join " + chosen + ": " + refused.message());
                 }
