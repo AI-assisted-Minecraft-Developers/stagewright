@@ -6,5 +6,5 @@
   <!-- Mixin members carry a `modid$` prefix by convention, so the naming checks do not apply in a
        mixin package. Only the naming checks: everything else still judges mixins. -->
   <suppress files="[/\\]mixin[/\\]"
-            checks="^(TypeName|GoogleNonConstantFieldName|ParameterName|LambdaParameterName|CatchParameterName|RecordComponentName|LocalVariableName|LocalFinalVariableName|PatternVariableName|ClassTypeParameterName|RecordTypeParameterName|MethodTypeParameterName|InterfaceTypeParameterName|AbbreviationAsWordInName|GoogleMethodName)$"/>
+            checks="[.](TypeName|GoogleNonConstantFieldName|ParameterName|LambdaParameterName|CatchParameterName|RecordComponentName|LocalVariableName|LocalFinalVariableName|PatternVariableName|ClassTypeParameterName|RecordTypeParameterName|MethodTypeParameterName|InterfaceTypeParameterName|AbbreviationAsWordInName|GoogleMethodName)Check$"/>
 </suppressions>
