@@ -105,7 +105,7 @@ public final class CapabilityDescriptor implements CapabilityProvider {
         List<String> items = strings(json, "items", source);
         List<String> blocks = strings(json, "blocks", source);
         if (mods.isEmpty() && anyMods.isEmpty() && classes.isEmpty() && items.isEmpty() && blocks.isEmpty()) {
-            throw new IllegalStateException("capability descriptor '" + name + "' in " + source
+            throw new IllegalStateException("capability descriptor " + keyIn(name, source)
                     + " states no condition (mods / anyMods / classes / items / blocks), so it would"
                     + " report itself available in every runtime — including ones without the thing"
                     + " it names, where tests gated on it would run and fail for the wrong reason");
@@ -217,13 +217,18 @@ public final class CapabilityDescriptor implements CapabilityProvider {
         return classes;
     }
 
+    /** A key and the file it came from, as an error message names them. */
+    private static String keyIn(String key, String source) {
+        return "'" + key + "' in " + source;
+    }
+
     private static String string(JsonObject json, String key, String source) {
         JsonElement e = json.get(key);
         if (e == null || e.isJsonNull()) {
             return null;
         }
         if (!e.isJsonPrimitive()) {
-            throw new IllegalStateException("'" + key + "' in " + source + " must be a string");
+            throw new IllegalStateException(keyIn(key, source) + " must be a string");
         }
         return e.getAsString();
     }
@@ -239,11 +244,11 @@ public final class CapabilityDescriptor implements CapabilityProvider {
             return List.copyOf(out);
         }
         if (!e.isJsonArray()) {
-            throw new IllegalStateException("'" + key + "' in " + source + " must be a string or an array of strings");
+            throw new IllegalStateException(keyIn(key, source) + " must be a string or an array of strings");
         }
         for (JsonElement element : (JsonArray) e) {
             if (!element.isJsonPrimitive()) {
-                throw new IllegalStateException("'" + key + "' in " + source + " must contain only strings");
+                throw new IllegalStateException(keyIn(key, source) + " must contain only strings");
             }
             out.add(element.getAsString());
         }
