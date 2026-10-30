@@ -22,6 +22,8 @@ import net.magicterra.stagewright.cli.install.Mirror;
  */
 public final class Main {
 
+    /** Runs the command the arguments name, then exits with the code it answers. */
+    @SuppressWarnings("PMD.SystemPrintln") // the CLI's results go to stdout and stderr by design
     public static void main(String[] args) {
         try {
             System.exit(run(args));
@@ -39,6 +41,7 @@ public final class Main {
         }
     }
 
+    @SuppressWarnings("PMD.UseVarargs") // the array is main()'s argv; keep the signature
     static int run(String[] args) throws IOException {
         if (args.length == 0 || "--help".equals(args[0]) || "-h".equals(args[0])) {
             usage(System.out);

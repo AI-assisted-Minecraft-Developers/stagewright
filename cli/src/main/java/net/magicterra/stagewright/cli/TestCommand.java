@@ -64,16 +64,21 @@ final class TestCommand {
     /** The singleplayer world an integrated server's scene plays in. */
     static final String CLIENT_WORLD = "StageWright";
 
+    private static final String JAVA = "java";
+    private static final String CLIENT = "client";
+    private static final String TESTS = "tests";
+    private static final String NOT_A_DIRECTORY = " is not a directory";
+
     private static final Set<String> VALUED = Set.of(
             "launch",
-            "java",
+            JAVA,
             "reports",
             "timeout",
             "stall-timeout",
-            "client",
+            CLIENT,
             "client-mods",
             "client-dir",
-            "tests",
+            TESTS,
             "install-dir",
             "username",
             "mirror",
@@ -88,7 +93,13 @@ final class TestCommand {
 
     private TestCommand() {}
 
-    /** Exit code: 0 when every test passed, 1 when one did not. */
+    /**
+     * Exit code: 0 when every test passed, 1 when one did not.
+     *
+     * <p>One straight run of the steps, in order: each step's locals feed the next, so splitting it would only pass
+     * them on.
+     */
+    @SuppressWarnings("checkstyle:javancss") // the steps are one ordered run; a split would only pass their locals on
     static int run(List<String> args) throws IOException {
         Map<String, String> opts = new LinkedHashMap<>();
         List<String> systemProps = new ArrayList<>();
@@ -122,20 +133,22 @@ final class TestCommand {
             throw new IllegalArgumentException("stagewright test needs the pack's server directory");
         }
         if (!Files.isDirectory(gameDir)) {
-            throw new IllegalArgumentException(gameDir + " is not a directory");
+            throw new IllegalArgumentException(gameDir + NOT_A_DIRECTORY);
         }
         leaks(opts);
         // What the run writes stays under the server directory wherever the tests come from: they may be a
         // repository's.
         Path artifacts = gameDir.resolve(RunDirectory.ARTIFACT_DIR);
-        Path source = testsDir(gameDir, opts);
-        Path clientSource = clientDir(opts);
+        final Path source = testsDir(gameDir, opts);
+        final Path clientSource = clientDir(opts);
+        // The CLI's progress lines go to stdout by design, next to the JUnit summary.
+        @SuppressWarnings("PMD.SystemPrintln")
         Consumer<String> log = line -> System.out.println("[stagewright] " + line);
 
         String loader = GameLaunch.loader(gameDir);
         ModInjection.requireLoader(loader);
         String java = opts.getOrDefault(
-                "java", Path.of(System.getProperty("java.home"), "bin", "java").toString());
+                JAVA, Path.of(System.getProperty("java.home"), "bin", "java").toString());
         List<String> launch = opts.containsKey("launch")
                 ? new ArrayList<>(List.of(opts.get("launch").split("\\s+")))
                 : GameLaunch.detect(gameDir, java, log);
@@ -148,7 +161,7 @@ final class TestCommand {
         deleteTree(work);
         Path root = work.resolve("root");
         // worlds: the saves a scene's world.from names.
-        for (String dir : List.of("scenes", "tests", "worlds")) {
+        for (String dir : List.of("scenes", TESTS, "worlds")) {
             int copied =
                     copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir));
             if (Files.isDirectory(source.resolve(dir))) {
@@ -164,8 +177,8 @@ final class TestCommand {
         Files.createDirectories(launches);
         Map<String, Object> server = serverProcess(gameDir, launch, systemProps, injected, List.of());
         write(launches, topology(DEDICATED, gameDir, SERVER_WORLD, true, server, null, opts));
-        if (opts.containsKey("client")) {
-            ClientSpec client = ClientSpec.parse(opts.get("client"));
+        if (opts.containsKey(CLIENT)) {
+            ClientSpec client = ClientSpec.parse(opts.get(CLIENT));
             if (client.modLoader() == null) {
                 throw new IllegalArgumentException("StageWright is a neoforge or fabric mod, so a vanilla client cannot"
                         + " run tests — name a loader in --client");
@@ -176,7 +189,7 @@ final class TestCommand {
             }
             ClientPreflight.requireDisplay(System.getProperty("os.name", ""), System.getenv());
             // Its own directory, never a player's: the engine deletes the saves of a client it starts.
-            Path clientDir = artifacts.resolve("client");
+            Path clientDir = artifacts.resolve(CLIENT);
             Files.createDirectories(clientDir);
             linkClientDir(clientSource, clientDir, log);
             linkMods(clientMods(gameDir, clientSource, opts), clientDir.resolve("mods"), log);
@@ -238,11 +251,11 @@ final class TestCommand {
      * {@code --tests}, or {@code <server-dir>/stagewright}: the directory holding {@code tests/} and {@code scenes/}.
      */
     static Path testsDir(Path gameDir, Map<String, String> opts) {
-        Path dir = opts.containsKey("tests")
-                ? Path.of(opts.get("tests")).toAbsolutePath().normalize()
+        Path dir = opts.containsKey(TESTS)
+                ? Path.of(opts.get(TESTS)).toAbsolutePath().normalize()
                 : gameDir.resolve(RunDirectory.ARTIFACT_DIR);
-        if (!Files.isDirectory(dir.resolve("tests"))) {
-            throw new IllegalArgumentException("no tests: " + dir.resolve("tests") + " is not a directory");
+        if (!Files.isDirectory(dir.resolve(TESTS))) {
+            throw new IllegalArgumentException("no tests: " + dir.resolve(TESTS) + NOT_A_DIRECTORY);
         }
         return dir;
     }
@@ -254,7 +267,7 @@ final class TestCommand {
         }
         Path dir = Path.of(opts.get("client-dir")).toAbsolutePath().normalize();
         if (!Files.isDirectory(dir)) {
-            throw new IllegalArgumentException("--client-dir " + dir + " is not a directory");
+            throw new IllegalArgumentException("--client-dir " + dir + NOT_A_DIRECTORY);
         }
         return dir;
     }
@@ -316,8 +329,10 @@ final class TestCommand {
             try {
                 Files.createSymbolicLink(target, entry.toAbsolutePath());
             } catch (IOException | UnsupportedOperationException e) {
-                throw new EnvFailure("cannot link " + entry + " into " + clientDir + " (" + e.getMessage() + ") — on"
-                        + " Windows, symbolic links need Developer Mode or an administrator");
+                throw new EnvFailure(
+                        "cannot link " + entry + " into " + clientDir + " (" + e.getMessage() + ") — on"
+                                + " Windows, symbolic links need Developer Mode or an administrator",
+                        e);
             }
         }
         log.accept("the client reads " + entries.size() + " entries of " + from + " through links");
@@ -341,7 +356,7 @@ final class TestCommand {
      */
     static void linkMods(Path from, Path to, Consumer<String> log) throws IOException {
         if (!Files.isDirectory(from)) {
-            throw new IllegalArgumentException("--client-mods " + from + " is not a directory");
+            throw new IllegalArgumentException("--client-mods " + from + NOT_A_DIRECTORY);
         }
         deleteTree(to);
         Files.createDirectories(to);
@@ -431,7 +446,7 @@ final class TestCommand {
     /** An installed client, started in {@code clientDir}. */
     static Map<String, Object> clientProcess(String java, ClientLaunch.Parts parts, Path clientDir) {
         Map<String, Object> process = new LinkedHashMap<>();
-        process.put("java", java);
+        process.put(JAVA, java);
         process.put("jvmArgs", parts.jvm());
         process.put("mainClass", parts.mainClass());
         process.put("args", parts.args());
@@ -471,7 +486,7 @@ final class TestCommand {
         args.addAll(injected.game());
 
         Map<String, Object> primary = new LinkedHashMap<>();
-        primary.put("java", launch.get(0));
+        primary.put(JAVA, launch.get(0));
         primary.put("jvmArgs", jvmArgs);
         if (mainClass != null) {
             primary.put("mainClass", mainClass);
@@ -545,6 +560,8 @@ final class TestCommand {
                     .build();
             Launcher launcher = LauncherFactory.create();
             SummaryGeneratingListener summary = new SummaryGeneratingListener();
+            // Wraps System.out, which must stay open for the rest of the process, so it is not closed here.
+            @SuppressWarnings("PMD.CloseResource")
             PrintWriter out = new PrintWriter(System.out, true);
             RecordProperties records = new RecordProperties();
             launcher.execute(

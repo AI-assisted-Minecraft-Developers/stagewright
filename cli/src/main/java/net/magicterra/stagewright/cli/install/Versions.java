@@ -16,12 +16,17 @@ import java.util.Map;
 /** The {@code versions/} and {@code libraries/} layout every launcher shares. */
 public final class Versions {
 
+    /** Between the parts of a maven coordinate, as in {@code org.lwjgl:lwjgl:3.3.3}. */
+    private static final String COORDINATE_SEPARATOR = ":";
+
     private Versions() {}
 
+    /** The version file {@code versions/<id>/<id>.json} under {@code installDir}. */
     public static Path json(Path installDir, String id) {
         return installDir.resolve("versions").resolve(id).resolve(id + ".json");
     }
 
+    /** The game jar {@code versions/<id>/<id>.jar} under {@code installDir}. */
     public static Path jar(Path installDir, String id) {
         return installDir.resolve("versions").resolve(id).resolve(id + ".jar");
     }
@@ -77,8 +82,8 @@ public final class Versions {
     }
 
     static String identity(String name) {
-        String[] parts = stripExtension(name).split(":");
-        return parts[0] + ":" + parts[1] + (parts.length > 3 ? ":" + parts[3] : "");
+        String[] parts = stripExtension(name).split(COORDINATE_SEPARATOR);
+        return parts[0] + COORDINATE_SEPARATOR + parts[1] + (parts.length > 3 ? COORDINATE_SEPARATOR + parts[3] : "");
     }
 
     /** {@code group:artifact:version[:classifier][@ext]} as a maven path, relative to a repository root. */
@@ -88,12 +93,13 @@ public final class Versions {
         if (at >= 0) {
             extension = name.substring(at + 1);
         }
-        String[] parts = stripExtension(name).split(":");
+        String[] parts = stripExtension(name).split(COORDINATE_SEPARATOR);
         String classifier = parts.length > 3 ? "-" + parts[3] : "";
         return parts[0].replace('.', '/') + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2]
                 + classifier + "." + extension;
     }
 
+    /** The file a library named {@code name} is stored as under {@code libraries/} in {@code installDir}. */
     public static Path libraryPath(Path installDir, String name) {
         return installDir.resolve("libraries").resolve(mavenPath(name));
     }

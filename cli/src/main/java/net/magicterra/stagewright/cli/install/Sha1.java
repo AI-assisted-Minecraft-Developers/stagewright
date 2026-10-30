@@ -8,10 +8,12 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
+/** SHA-1 digests as lower-case hex: of files, and of the bytes already in memory. */
 public final class Sha1 {
 
     private Sha1() {}
 
+    /** The SHA-1 of {@code file}'s bytes, read in chunks, so a large file is never held whole. */
     public static String of(Path file) throws IOException {
         MessageDigest digest = digest();
         byte[] buffer = new byte[1 << 16];

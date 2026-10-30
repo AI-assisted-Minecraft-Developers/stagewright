@@ -15,6 +15,7 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
+import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
@@ -126,6 +127,7 @@ final class SceneResults implements TestExecutionListener {
                     case SUCCESSFUL -> c.passed++;
                     case FAILED -> c.failed++;
                     case ABORTED -> c.skipped++;
+                    default -> throw new IllegalStateException("unexpected status " + result.getStatus());
                 }
             }
         } else if (isScene(id)) {
@@ -136,7 +138,8 @@ final class SceneResults implements TestExecutionListener {
     static String summary(String scene, Counts c, TestExecutionResult result) {
         boolean passed = result.getStatus() == TestExecutionResult.Status.SUCCESSFUL && c.failed == 0;
         int tests = c.passed + c.failed + c.skipped;
-        StringBuilder line = new StringBuilder("scene ")
+        StringBuilder line = new StringBuilder(128)
+                .append("scene ")
                 .append(scene)
                 .append(passed ? " passed: " : " failed: ")
                 .append(tests)
@@ -290,7 +293,7 @@ final class SceneResults implements TestExecutionListener {
                 .toPlainString();
     }
 
-    private static void write(Document doc, Path file) throws Exception {
+    private static void write(Document doc, Path file) throws TransformerException {
         var transformer = TransformerFactory.newInstance().newTransformer();
         transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
         transformer.transform(new DOMSource(doc), new StreamResult(file.toFile()));

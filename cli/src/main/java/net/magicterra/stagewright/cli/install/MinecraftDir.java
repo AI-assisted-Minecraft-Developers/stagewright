@@ -14,6 +14,7 @@ public final class MinecraftDir {
 
     private MinecraftDir() {}
 
+    /** The install directory for this OS and user, used when no {@code --install-dir} is given. */
     public static Path defaultDir() {
         return defaultFor(System.getProperty("os.name", ""), System.getenv(), System.getProperty("user.home", "."));
     }

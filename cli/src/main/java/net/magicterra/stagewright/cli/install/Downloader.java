@@ -55,6 +55,7 @@ public final class Downloader implements AutoCloseable {
         return t;
     });
 
+    /** Downloads through {@code mirror}'s candidates into {@code installDir}, via the proxy the environment names. */
     public Downloader(Mirror mirror, Path installDir) {
         this(mirror::candidates, new HmclCache(installDir), proxy(System.getenv()));
     }
@@ -236,18 +237,28 @@ public final class Downloader implements AutoCloseable {
 
     static InetSocketAddress proxyAddress(Map<String, String> env) {
         for (String name : List.of("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy")) {
-            String value = env.get(name);
-            if (value == null || value.isBlank()) {
-                continue;
+            InetSocketAddress address = addressOf(env.get(name));
+            if (address != null) {
+                return address;
             }
-            URI uri = URI.create(value.contains("://") ? value.trim() : "http://" + value.trim());
-            if (uri.getHost() == null) {
-                continue;
-            }
-            int port = uri.getPort() != -1 ? uri.getPort() : "https".equals(uri.getScheme()) ? 443 : 80;
-            return InetSocketAddress.createUnresolved(uri.getHost(), port);
         }
         return null;
+    }
+
+    /** The address a proxy variable's value names, or null when the value is blank or has no host. */
+    private static InetSocketAddress addressOf(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        URI uri = URI.create(value.contains("://") ? value.trim() : "http://" + value.trim());
+        if (uri.getHost() == null) {
+            return null;
+        }
+        int port = uri.getPort();
+        if (port == -1) {
+            port = "https".equals(uri.getScheme()) ? 443 : 80;
+        }
+        return InetSocketAddress.createUnresolved(uri.getHost(), port);
     }
 
     @Override

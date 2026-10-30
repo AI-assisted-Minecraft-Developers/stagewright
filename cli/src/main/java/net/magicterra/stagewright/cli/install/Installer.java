@@ -35,6 +35,13 @@ public final class Installer {
     private static final String NEOFORGE_MAVEN = "https://maven.neoforged.net/releases/";
     private static final String FABRIC_META = "https://meta.fabricmc.net/v2/versions/loader/";
     private static final String STAGING_PREFIX = ".stagewright-neoforge-";
+    /** The keys the launcher's JSON files name their values by. */
+    private static final String JSON_ID = "id";
+
+    private static final String JSON_URL = "url";
+    private static final String JSON_SHA1 = "sha1";
+    private static final String JSON_SIZE = "size";
+    private static final String SLASH = "/";
 
     private final Path installDir;
     private final Downloader downloader;
@@ -42,6 +49,9 @@ public final class Installer {
     private final String javaBinary;
     private final Consumer<String> log;
 
+    /**
+     * Installs into {@code installDir} through {@code downloader}, with {@code javaBinary} for NeoForge's installer.
+     */
     public Installer(Path installDir, Downloader downloader, String javaBinary, Consumer<String> log) {
         // Absolute: NeoForge's installer runs with its own working directory, where a relative path
         // to its jar or its target resolves to nothing.
@@ -58,7 +68,7 @@ public final class Installer {
         try (FileChannel channel = FileChannel.open(
                         installDir.resolve(".stagewright.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                 FileLock ignored = lock(channel)) {
-            JsonObject vanilla = vanilla(spec.minecraft());
+            final JsonObject vanilla = vanilla(spec.minecraft());
             String id = switch (spec.loader()) {
                 case "neoforge" -> neoforge(spec);
                 case "fabric" -> fabric(spec);
@@ -66,7 +76,7 @@ public final class Installer {
             };
             List<JsonObject> chain = Versions.chain(installDir, id);
             JsonObject root = chain.get(chain.size() - 1);
-            String rootId = root.get("id").getAsString();
+            String rootId = root.get(JSON_ID).getAsString();
             if (!spec.minecraft().equals(rootId)) {
                 throw new IllegalArgumentException(spec + " is built on Minecraft " + rootId + ", not "
                         + spec.minecraft() + " — fix the Minecraft version in --client");
@@ -98,7 +108,7 @@ public final class Installer {
                     JsonParser.parseString(downloader.text(MANIFEST)).getAsJsonObject();
             for (JsonElement element : manifest.getAsJsonArray("versions")) {
                 JsonObject version = element.getAsJsonObject();
-                if (minecraft.equals(version.get("id").getAsString())) {
+                if (minecraft.equals(version.get(JSON_ID).getAsString())) {
                     entry = version;
                 }
             }
@@ -117,9 +127,9 @@ public final class Installer {
         // files in place (1.21.1's changed on 2026-09-22), and the official launcher replaces them.
         if (entry != null) {
             downloader.fetch(new Artifact(
-                    URI.create(entry.get("url").getAsString()),
+                    URI.create(entry.get(JSON_URL).getAsString()),
                     json,
-                    entry.get("sha1").getAsString(),
+                    entry.get(JSON_SHA1).getAsString(),
                     -1,
                     false,
                     false));
@@ -157,7 +167,7 @@ public final class Installer {
         try {
             sha1 = sidecar(url);
         } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("NeoForge " + version + " does not exist — no " + url);
+            throw new IllegalArgumentException("NeoForge " + version + " does not exist — no " + url, e);
         }
 
         // A failed install leaves its staging directory to be read; under the lock, nothing else is
@@ -179,7 +189,7 @@ public final class Installer {
             HmclCache.place(Versions.json(installDir, minecraft), Versions.json(staging, minecraft));
             HmclCache.place(Versions.jar(installDir, minecraft), Versions.jar(staging, minecraft));
 
-            Path installerLog = staging.resolve("installer.log");
+            final Path installerLog = staging.resolve("installer.log");
             List<String> command = new ArrayList<>(List.of(javaBinary));
             command.addAll(Downloader.proxyJvmArgs(System.getenv()));
             command.addAll(List.of("-jar", installer.toString(), "--install-client", staging.toString()));
@@ -230,15 +240,18 @@ public final class Installer {
 
     /** Fabric publishes the finished version file itself; its libraries are ordinary downloads. */
     private String fabric(ClientSpec spec) throws IOException {
-        URI url = URI.create(FABRIC_META + spec.minecraft() + "/" + spec.loaderVersion() + "/profile/json");
+        URI url = URI.create(FABRIC_META + spec.minecraft() + SLASH + spec.loaderVersion() + "/profile/json");
         String profile;
         try {
             profile = downloader.text(url);
         } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("Fabric has no loader " + spec.loaderVersion() + " for Minecraft "
-                    + spec.minecraft() + " — no " + url);
+            throw new IllegalArgumentException(
+                    "Fabric has no loader " + spec.loaderVersion() + " for Minecraft " + spec.minecraft() + " — no "
+                            + url,
+                    e);
         }
-        String id = JsonParser.parseString(profile).getAsJsonObject().get("id").getAsString();
+        String id =
+                JsonParser.parseString(profile).getAsJsonObject().get(JSON_ID).getAsString();
         Path json = Versions.json(installDir, id);
         byte[] bytes = profile.getBytes(StandardCharsets.UTF_8);
         if (!Sha1.matches(json, Sha1.of(bytes), bytes.length)) {
@@ -262,9 +275,10 @@ public final class Installer {
                 if (artifact == null) {
                     continue;
                 }
-                if (!artifact.has("url") || artifact.get("url").getAsString().isBlank()) {
+                if (!artifact.has(JSON_URL)
+                        || artifact.get(JSON_URL).getAsString().isBlank()) {
                     // Produced locally by a loader's installer; there is nowhere to fetch it from.
-                    if (!Sha1.matches(target, string(artifact, "sha1"), size(artifact))) {
+                    if (!Sha1.matches(target, string(artifact, JSON_SHA1), size(artifact))) {
                         throw new IOException(name + " should have been produced by the loader's"
                                 + " installer and is not at " + target);
                     }
@@ -274,12 +288,12 @@ public final class Installer {
             } else {
                 // Fabric's shape: a repository root and a coordinate. asm and mixin carry a sha1;
                 // fabric-loader and intermediary do not, so theirs comes from the maven sidecar.
-                String base = library.has("url") ? library.get("url").getAsString() : LIBRARIES;
-                if (!base.endsWith("/")) {
-                    base += "/";
+                String base = library.has(JSON_URL) ? library.get(JSON_URL).getAsString() : LIBRARIES;
+                if (!base.endsWith(SLASH)) {
+                    base += SLASH;
                 }
                 URI url = URI.create(base + Versions.mavenPath(name));
-                String sha1 = string(library, "sha1");
+                String sha1 = string(library, JSON_SHA1);
                 if (sha1 == null && !Files.isRegularFile(target)) {
                     sha1 = sidecarOrNull(url);
                 }
@@ -292,18 +306,19 @@ public final class Installer {
 
     private void assets(JsonObject root) throws IOException {
         JsonObject index = root.getAsJsonObject("assetIndex");
-        Path indexFile = installDir.resolve("assets/indexes/" + index.get("id").getAsString() + ".json");
+        Path indexFile =
+                installDir.resolve("assets/indexes/" + index.get(JSON_ID).getAsString() + ".json");
         downloader.fetch(artifact(index, indexFile, false, false));
         List<Artifact> objects = new ArrayList<>();
         for (var entry : Versions.read(indexFile).getAsJsonObject("objects").entrySet()) {
             JsonObject object = entry.getValue().getAsJsonObject();
             String hash = object.get("hash").getAsString();
-            String relative = hash.substring(0, 2) + "/" + hash;
+            String relative = hash.substring(0, 2) + SLASH + hash;
             objects.add(new Artifact(
                     URI.create(ASSETS + relative),
                     installDir.resolve("assets/objects/" + relative),
                     hash,
-                    object.get("size").getAsLong(),
+                    object.get(JSON_SIZE).getAsLong(),
                     true,
                     false));
         }
@@ -323,8 +338,10 @@ public final class Installer {
         JsonObject client = vanilla.getAsJsonObject("downloads").getAsJsonObject("client");
         Path target = Versions.jar(installDir, id);
         if (!Sha1.matches(
-                target, client.get("sha1").getAsString(), client.get("size").getAsLong())) {
-            HmclCache.place(Versions.jar(installDir, vanilla.get("id").getAsString()), target);
+                target,
+                client.get(JSON_SHA1).getAsString(),
+                client.get(JSON_SIZE).getAsLong())) {
+            HmclCache.place(Versions.jar(installDir, vanilla.get(JSON_ID).getAsString()), target);
         }
     }
 
@@ -342,9 +359,9 @@ public final class Installer {
 
     private static Artifact artifact(JsonObject download, Path target, boolean trustSize, boolean cacheable) {
         return new Artifact(
-                URI.create(download.get("url").getAsString()),
+                URI.create(download.get(JSON_URL).getAsString()),
                 target,
-                string(download, "sha1"),
+                string(download, JSON_SHA1),
                 size(download),
                 trustSize,
                 cacheable);
@@ -357,7 +374,7 @@ public final class Installer {
     }
 
     private static long size(JsonObject object) {
-        return object.has("size") ? object.get("size").getAsLong() : -1;
+        return object.has(JSON_SIZE) ? object.get(JSON_SIZE).getAsLong() : -1;
     }
 
     private static void deleteTree(Path root) throws IOException {

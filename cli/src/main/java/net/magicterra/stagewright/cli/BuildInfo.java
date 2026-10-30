@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.TreeMap;
 
@@ -32,7 +33,7 @@ final class BuildInfo {
         }
         List<String> out = new ArrayList<>();
         out.add("stagewright CLI " + p.getProperty("version", "?"));
-        TreeMap<String, String> parts = new TreeMap<>();
+        Map<String, String> parts = new TreeMap<>();
         p.stringPropertyNames().stream().filter(k -> !k.equals("version")).forEach(k -> parts.put(k, p.getProperty(k)));
         // Each value is "<published instant> <sha1 prefix>".
         parts.forEach((jar, value) -> out.add("  " + jar + " published " + value.replace(" ", ", sha1 ")));

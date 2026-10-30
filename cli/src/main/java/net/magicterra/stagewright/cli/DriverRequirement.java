@@ -28,6 +28,10 @@ final class DriverRequirement {
 
     private static final String FABRIC_METADATA = "fabric.mod.json";
     private static final String NEOFORGE_METADATA = "META-INF/neoforge.mods.toml";
+    /** The mod ids of StageWright's framework and of the driver it requires. */
+    private static final String FRAMEWORK_ID = "mc_testkit";
+
+    private static final String DRIVER_ID = "worlddriver";
 
     private DriverRequirement() {}
 
@@ -40,7 +44,7 @@ final class DriverRequirement {
         if (loader != null || bundledFramework) {
             ModInjection.requireLoader(loader);
         }
-        String loaderName = loader == null ? "this pack's loader" : loader;
+        final String loaderName = loader == null ? "this pack's loader" : loader;
         List<Mod> mods = new ArrayList<>();
         Path dir = gameDir.resolve("mods");
         if (Files.isDirectory(dir)) {
@@ -61,7 +65,7 @@ final class DriverRequirement {
             }
         }
         List<Mod> frameworks =
-                mods.stream().filter(m -> m.id().equals("mc_testkit")).toList();
+                mods.stream().filter(m -> m.id().equals(FRAMEWORK_ID)).toList();
         if (frameworks.isEmpty() && bundledFramework) {
             String resource = "/mods/mc_stagewright-" + loader + ".jar";
             try (InputStream in = DriverRequirement.class.getResourceAsStream(resource)) {
@@ -69,7 +73,7 @@ final class DriverRequirement {
                     throw new IllegalStateException("this CLI carries no " + resource);
                 }
                 frameworks = metadata(in, loader, resource).stream()
-                        .filter(m -> m.id().equals("mc_testkit"))
+                        .filter(m -> m.id().equals(FRAMEWORK_ID))
                         .toList();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -84,8 +88,7 @@ final class DriverRequirement {
             throw new IllegalArgumentException(framework.source()
                     + " does not declare a required WorldDriver dependency; install the current StageWright");
         }
-        List<Mod> drivers =
-                mods.stream().filter(m -> m.id().equals("worlddriver")).toList();
+        List<Mod> drivers = mods.stream().filter(m -> m.id().equals(DRIVER_ID)).toList();
         if (drivers.size() != 1) {
             throw new IllegalArgumentException("StageWright requires one compatible WorldDriver mod for "
                     + loaderName + ", found " + drivers.size()
@@ -129,7 +132,7 @@ final class DriverRequirement {
     }
 
     static boolean isFramework(Path jar, String loader) {
-        return read(jar, loader).stream().anyMatch(m -> m.id().equals("mc_testkit"));
+        return read(jar, loader).stream().anyMatch(m -> m.id().equals(FRAMEWORK_ID));
     }
 
     static List<Path> frameworkJars(Path gameDir, String loader) {
@@ -180,7 +183,7 @@ final class DriverRequirement {
         ZipFile opened;
         try {
             opened = new ZipFile(jar.toFile());
-        } catch (ZipException notAZip) {
+        } catch (ZipException notZip) {
             return List.of();
         } catch (IOException e) {
             throw new UncheckedIOException("cannot open " + jar, e);
@@ -205,10 +208,11 @@ final class DriverRequirement {
     private static List<Mod> metadata(InputStream input, String loader, String source) throws IOException {
         List<String> paths = metadataPaths(loader);
         try (ZipInputStream zip = new ZipInputStream(input)) {
-            for (ZipEntry entry; (entry = zip.getNextEntry()) != null; ) {
-                if (!paths.contains(entry.getName())) {
-                    continue;
-                }
+            ZipEntry entry = zip.getNextEntry();
+            while (entry != null && !paths.contains(entry.getName())) {
+                entry = zip.getNextEntry();
+            }
+            if (entry != null) {
                 return parse(entry.getName(), new String(zip.readAllBytes(), StandardCharsets.UTF_8), source);
             }
         }
@@ -239,10 +243,10 @@ final class DriverRequirement {
             }
             JsonObject json = root.getAsJsonObject();
             String id = string(json, "id");
-            if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) {
+            if (!DRIVER_ID.equals(id) && !FRAMEWORK_ID.equals(id)) {
                 return List.of();
             }
-            String range = json.get("depends") instanceof JsonObject deps ? string(deps, "worlddriver") : null;
+            String range = json.get("depends") instanceof JsonObject deps ? string(deps, DRIVER_ID) : null;
             return List.of(new Mod(id, string(json, "version"), range, source));
         }
         List<Mod> result = new ArrayList<>();
@@ -251,13 +255,13 @@ final class DriverRequirement {
                 continue;
             }
             String id = value(block, "modId");
-            if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) {
+            if (!DRIVER_ID.equals(id) && !FRAMEWORK_ID.equals(id)) {
                 continue;
             }
             String range = null;
             for (String dep : text.split("(?m)^\\s*\\[\\[")) {
                 if (dep.startsWith("dependencies." + id + "]]")
-                        && "worlddriver".equals(value(dep, "modId"))
+                        && DRIVER_ID.equals(value(dep, "modId"))
                         && "required".equals(value(dep, "type"))) {
                     range = value(dep, "versionRange");
                 }

@@ -36,6 +36,8 @@ final class ClientLaunch {
     record Parts(List<String> jvm, String mainClass, List<String> args) {}
 
     /**
+     * The launch of {@code versionId} from {@code installDir}, run in {@code gameDir} as {@code username}.
+     *
      * @param systemProps our own {@code -D}/{@code -X} arguments: after the version's own JVM args, so one the version
      *     also sets is ours (the JVM keeps the last)
      * @param gameArgs program arguments appended after the version's own

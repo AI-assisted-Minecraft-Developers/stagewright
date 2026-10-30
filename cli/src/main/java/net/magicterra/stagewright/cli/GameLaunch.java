@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -60,7 +61,7 @@ final class GameLaunch {
             return "forge";
         }
         try (Stream<Path> top = Files.list(gameDir)) {
-            boolean fabric = top.map(p -> p.getFileName().toString().toLowerCase())
+            boolean fabric = top.map(p -> p.getFileName().toString().toLowerCase(Locale.ROOT))
                     .anyMatch(n -> n.endsWith(".jar")
                             && !n.contains("installer")
                             && (n.contains("fabric") || n.contains("quilt")));
@@ -81,9 +82,13 @@ final class GameLaunch {
      * yields a classpath the JVM reads as a single enormous entry and a {@code ClassNotFoundException} for the
      * launcher's main class.
      */
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull") // null means unrecognised; detect() tests for it
     private static List<String> modLauncher(Path gameDir, String javaBinary, Consumer<String> log) {
         String argsName =
-                System.getProperty("os.name", "").toLowerCase().startsWith("win") ? "win_args.txt" : "unix_args.txt";
+                System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("win")
+                        ? "win_args.txt"
+                        : "unix_args.txt";
+        List<String> command = null;
         for (String vendor : new String[] {"net/neoforged/neoforge", "net/minecraftforge/forge"}) {
             Path base = gameDir.resolve("libraries").resolve(vendor);
             if (!Files.isDirectory(base)) {
@@ -93,21 +98,19 @@ final class GameLaunch {
             if (args == null) {
                 args = newestVersionFile(base, vendor, argsName, log);
             }
-            if (args == null) {
-                continue;
+            if (args != null) {
+                command = new ArrayList<>();
+                command.add(javaBinary);
+                Path jvmArgs = gameDir.resolve("user_jvm_args.txt");
+                if (Files.isRegularFile(jvmArgs)) {
+                    command.add("@" + jvmArgs);
+                }
+                command.add("@" + args);
+                command.add("nogui");
+                break;
             }
-
-            List<String> command = new ArrayList<>();
-            command.add(javaBinary);
-            Path jvmArgs = gameDir.resolve("user_jvm_args.txt");
-            if (Files.isRegularFile(jvmArgs)) {
-                command.add("@" + jvmArgs);
-            }
-            command.add("@" + args);
-            command.add("nogui");
-            return command;
         }
-        return null;
+        return command;
     }
 
     /**
@@ -117,6 +120,7 @@ final class GameLaunch {
      * — an author who upgraded loaders has both, and the old one still launches a server that loads none of the pack's
      * mods.
      */
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull") // null means unrecognised; detect() tests for it
     private static List<String> fabricOrVanilla(Path gameDir, String javaBinary, Consumer<String> log) {
         // A loader's launcher first: in Fabric's own layout the vanilla server.jar sits beside it, as the jar its
         // fabric-server-launcher.properties names, and starting that one starts a server with no mods at all.
@@ -135,7 +139,7 @@ final class GameLaunch {
     private static Path newestJar(Path gameDir, java.util.function.Predicate<String> accepts) {
         try (Stream<Path> top = Files.list(gameDir)) {
             return top.filter(p -> {
-                        String n = p.getFileName().toString().toLowerCase();
+                        String n = p.getFileName().toString().toLowerCase(Locale.ROOT);
                         return n.endsWith(".jar") && accepts.test(n) && !n.contains("installer");
                     })
                     .max(Comparator.comparingLong(p -> p.toFile().lastModified()))
@@ -159,9 +163,11 @@ final class GameLaunch {
      * for the same reason.
      */
     private static Path declaredVersionFile(Path gameDir, Path base, String vendor, String name, Consumer<String> log) {
-        boolean windows = System.getProperty("os.name", "").toLowerCase().startsWith("win");
+        boolean windows =
+                System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("win");
         List<String> scripts = windows ? List.of("run.bat", "run.sh") : List.of("run.sh", "run.bat");
         Pattern declaration = Pattern.compile(Pattern.quote(vendor) + "/([^/\\s\"']+)/");
+        Path found = null;
         for (String script : scripts) {
             Path file = gameDir.resolve(script);
             if (!Files.isRegularFile(file)) {
@@ -179,14 +185,14 @@ final class GameLaunch {
             }
             String version = matcher.group(1);
             Path args = base.resolve(version).resolve(name);
-            if (!Files.isRegularFile(args)) {
-                continue;
+            if (Files.isRegularFile(args)) {
+                log.accept(vendorName(vendor) + " " + version + " — named by " + script
+                        + ", which the installer wrote alongside the loader it installed");
+                found = args;
+                break;
             }
-            log.accept(vendorName(vendor) + " " + version + " — named by " + script
-                    + ", which the installer wrote alongside the loader it installed");
-            return args;
         }
-        return null;
+        return found;
     }
 
     /**
@@ -260,10 +266,10 @@ final class GameLaunch {
             int cmp;
             if (numeric(x) && numeric(y)) {
                 cmp = new BigInteger(x).compareTo(new BigInteger(y));
-            } else if (numeric(x) != numeric(y)) {
-                cmp = numeric(x) ? 1 : -1; // a number outranks a tag in the same position
-            } else {
+            } else if (numeric(x) == numeric(y)) {
                 cmp = x.compareToIgnoreCase(y);
+            } else {
+                cmp = numeric(x) ? 1 : -1; // a number outranks a tag in the same position
             }
             if (cmp != 0) {
                 return cmp;

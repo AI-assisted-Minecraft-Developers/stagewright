@@ -14,14 +14,25 @@ import java.util.Map;
 public enum Mirror {
     NONE(Map.of()),
     BMCLAPI(Map.of(
-            "piston-meta.mojang.com", "https://bmclapi2.bangbang93.com",
-            "launchermeta.mojang.com", "https://bmclapi2.bangbang93.com",
-            "piston-data.mojang.com", "https://bmclapi2.bangbang93.com",
-            "launcher.mojang.com", "https://bmclapi2.bangbang93.com",
-            "libraries.minecraft.net", "https://bmclapi2.bangbang93.com/maven",
-            "resources.download.minecraft.net", "https://bmclapi2.bangbang93.com/assets",
-            "maven.fabricmc.net", "https://bmclapi2.bangbang93.com/maven",
-            "meta.fabricmc.net", "https://bmclapi2.bangbang93.com/fabric-meta"));
+            "piston-meta.mojang.com",
+            Mirror.BMCLAPI_HOST,
+            "launchermeta.mojang.com",
+            Mirror.BMCLAPI_HOST,
+            "piston-data.mojang.com",
+            Mirror.BMCLAPI_HOST,
+            "launcher.mojang.com",
+            Mirror.BMCLAPI_HOST,
+            "libraries.minecraft.net",
+            "https://bmclapi2.bangbang93.com/maven",
+            "resources.download.minecraft.net",
+            "https://bmclapi2.bangbang93.com/assets",
+            "maven.fabricmc.net",
+            "https://bmclapi2.bangbang93.com/maven",
+            "meta.fabricmc.net",
+            "https://bmclapi2.bangbang93.com/fabric-meta"));
+
+    /** The host every BMCLAPI mapping points at. */
+    private static final String BMCLAPI_HOST = "https://bmclapi2.bangbang93.com";
 
     /** NeoForge's maven serves releases under a path prefix the mirror does not repeat. */
     private static final String NEOFORGED_HOST = "maven.neoforged.net";
@@ -34,6 +45,7 @@ public enum Mirror {
         this.hosts = hosts;
     }
 
+    /** The mirror a {@code --mirror} value names; any other name is refused. */
     public static Mirror parse(String name) {
         return switch (name) {
             case "bmclapi" -> BMCLAPI;

@@ -9,4 +9,8 @@ final class EnvFailure extends RuntimeException {
     EnvFailure(String message) {
         super(message);
     }
+
+    EnvFailure(String message, Throwable cause) {
+        super(message, cause);
+    }
 }
