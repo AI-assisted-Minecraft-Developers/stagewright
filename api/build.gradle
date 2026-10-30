@@ -7,18 +7,24 @@
 //                                `-- stagewright-common/-fabric/-neoforge  (+ worlddriver)
 //
 // It owns its packages outright: a package split across two modules is a ResolutionException under FML.
-architectury {
-    common rootProject.enabled_platforms.split(',')
+neoForge {
+    // Vanilla in Mojang names, the one NeoForge $neoforge_version is built on.
+    neoFormVersion = rootProject.neoform_version
+    addModdingDependenciesTo(sourceSets.test)
 }
 
 base {
     archivesName = 'mc_stagewright-api'
 }
 
-dependencies {
-    // Provides the @Environment annotation; do NOT use other Fabric Loader classes from common
-    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+// This jar is the Mojang-named one, published as `dev`; the plain artifact is :stagewright-fabric's remap of it.
+tasks.named('jar', Jar) {
+    archiveClassifier = 'dev'
+    destinationDirectory = layout.buildDirectory.dir('devlibs')
+}
+ext.devJar = tasks.named('jar')
 
+dependencies {
     // A capability that cannot work in this run aborts the test (TestAbortedException); the runtime bundles it.
     compileOnly "org.opentest4j:opentest4j:1.3.0"
 
@@ -36,8 +42,8 @@ dependencies {
 }
 
 // The one dependency the published POM keeps: Game.registry() and the callers name WorldDriver's api types, so a
-// consumer cannot compile against this jar without it. Minecraft, Gson and Fabric Loader come with the consumer's
-// own loader setup, opentest4j with its JUnit.
+// consumer cannot compile against this jar without it. Minecraft and Gson come with the consumer's own loader
+// setup, opentest4j with its JUnit.
 ext.pomKeeps = ['net.magicterra:worlddriver-api']
 
 tasks.named('test', Test) {

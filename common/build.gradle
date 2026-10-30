@@ -1,18 +1,27 @@
-architectury {
-    common rootProject.enabled_platforms.split(',')
+neoForge {
+    // Vanilla in Mojang names, the one NeoForge $neoforge_version is built on.
+    neoFormVersion = rootProject.neoform_version
+    addModdingDependenciesTo(sourceSets.test)
 }
 
 base {
     archivesName = 'mc_stagewright-common'
 }
 
+// This jar is the Mojang-named one, published as `dev`; the plain artifact is :stagewright-fabric's remap of it.
+tasks.named('jar', Jar) {
+    archiveClassifier = 'dev'
+    destinationDirectory = layout.buildDirectory.dir('devlibs')
+}
+ext.devJar = tasks.named('jar')
+
 dependencies {
-    // Provides the @Environment annotation; do NOT use other Fabric Loader classes from common
-    modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
+    // The mixin annotations; each loader brings its own Mixin at run time.
+    compileOnly "org.spongepowered:mixin:$rootProject.mixin_version"
 
     // The published API (the test API and the capability layer). Split out so the artifact graph
     // between this repo and worlddriver stays acyclic — see api/build.gradle.
-    implementation project(path: ':stagewright-api', configuration: 'namedElements')
+    implementation project(':stagewright-api')
 
     // StageWright depends on the driver it drives, so the mc.test.* methods register into its
     // API registry directly. The `dev` classifier, not the plain jar: the published jar

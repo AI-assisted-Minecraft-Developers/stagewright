@@ -2,24 +2,11 @@ plugins {
     id 'com.gradleup.shadow'
 }
 
-architectury {
-    platformSetupLoomIde()
-    fabric()
-}
-
 base {
     archivesName = 'mc_stagewright-fabric'
 }
 
 configurations {
-    common {
-        canBeResolved = true
-        canBeConsumed = false
-    }
-    compileClasspath.extendsFrom common
-    runtimeClasspath.extendsFrom common
-    developmentFabric.extendsFrom common
-
     shadowBundle {
         canBeResolved = true
         canBeConsumed = false
@@ -27,14 +14,17 @@ configurations {
 }
 
 dependencies {
+    minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
+    mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:$rootProject.fabric_loader_version"
     modImplementation "net.fabricmc.fabric-api:fabric-api:$rootProject.fabric_api_version"
 
-    common(project(path: ':stagewright-api', configuration: 'namedElements')) { transitive false }
-    shadowBundle project(path: ':stagewright-api', configuration: 'transformProductionFabric')
-
-    common(project(path: ':stagewright-common', configuration: 'namedElements')) { transitive false }
-    shadowBundle project(path: ':stagewright-common', configuration: 'transformProductionFabric')
+    // api's and common's jars, in Mojang names, go into this mod's jar whole and are remapped with it. Transitive on
+    // the classpath, so the remap sees the WorldDriver classes theirs extend.
+    implementation project(':stagewright-api')
+    implementation project(':stagewright-common')
+    shadowBundle(project(':stagewright-api')) { transitive = false }
+    shadowBundle(project(':stagewright-common')) { transitive = false }
     shadowBundle "org.yaml:snakeyaml:$rootProject.snakeyaml_version"
 
     // The JUnit Platform the in-game test runner uses, nested (Jar-in-Jar) as libraries.
@@ -92,6 +82,8 @@ shadowJar {
     // default is last-writer-wins per path, so without this the jar ships one file and every
     // provider in the other reports itself absent — which is indistinguishable from an uninstalled
     // mod, and would be found by a scene skipping for a reason that is not true.
+    // Shadow 9 hands a transformer only the duplicates the strategy lets through.
+    filesMatching('META-INF/services/**') { duplicatesStrategy = DuplicatesStrategy.INCLUDE }
     mergeServiceFiles()
     // Another mod may ship its own snakeyaml.
     relocate 'org.yaml.snakeyaml', 'net.magicterra.stagewright.shadow.snakeyaml'
@@ -100,4 +92,26 @@ shadowJar {
 
 remapJar {
     inputFile.set shadowJar.archiveFile
+}
+
+// The published artifacts: the remapped jar ships, Loom's named jar of this module's own classes is `dev`.
+ext.shippedJar = tasks.named('remapJar')
+ext.devJar = tasks.named('jar')
+ext.devShadowJar = tasks.named('shadowJar')
+ext.sourcesJarTask = tasks.named('remapSourcesJar')
+
+// api's and common's plain artifacts: their Mojang-named jars remapped to intermediary. Registered here because
+// this is the project with Loom's mappings.
+[':stagewright-api', ':stagewright-common'].each { path ->
+    evaluationDependsOn(path)
+    def module = project(path)
+    def remap = tasks.register("remap${path.split('-')[1].capitalize()}Jar", net.fabricmc.loom.task.RemapJarTask) {
+        inputFile = module.tasks.named('jar', Jar).flatMap { it.archiveFile }
+        archiveBaseName = module.base.archivesName
+        archiveClassifier = ''
+        destinationDirectory = module.layout.buildDirectory.dir('libs')
+        addNestedDependencies = false
+    }.get() // Created here: realized lazily from the other project's publication, it races this one's tasks.
+    module.tasks.named('assemble') { dependsOn remap }
+    module.publishing.publications.named('mavenJava') { artifact(remap) }
 }

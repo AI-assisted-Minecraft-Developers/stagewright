@@ -2,9 +2,9 @@ plugins {
     id 'com.gradleup.shadow'
 }
 
-architectury {
-    platformSetupLoomIde()
-    neoForge()
+neoForge {
+    version = rootProject.neoforge_version
+    addModdingDependenciesTo(sourceSets.test)
 }
 
 base {
@@ -12,39 +12,22 @@ base {
 }
 
 configurations {
-    common {
-        canBeResolved = true
-        canBeConsumed = false
-    }
-    compileClasspath.extendsFrom common
-    runtimeClasspath.extendsFrom common
-    developmentNeoForge.extendsFrom common
-
     shadowBundle {
         canBeResolved = true
         canBeConsumed = false
     }
 }
 
-repositories {
-    maven {
-        name = 'NeoForged'
-        url = 'https://maven.neoforged.net/releases'
-    }
-}
-
 dependencies {
-    neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
-
-    common(project(path: ':stagewright-api', configuration: 'namedElements')) { transitive false }
-    shadowBundle project(path: ':stagewright-api', configuration: 'transformProductionNeoForge')
-
-    common(project(path: ':stagewright-common', configuration: 'namedElements')) { transitive false }
-    shadowBundle project(path: ':stagewright-common', configuration: 'transformProductionNeoForge')
+    // api's and common's jars go into this mod's jar whole; NeoForge runs in Mojang names, so nothing is remapped.
+    implementation(project(':stagewright-api')) { transitive = false }
+    implementation(project(':stagewright-common')) { transitive = false }
+    shadowBundle(project(':stagewright-api')) { transitive = false }
+    shadowBundle(project(':stagewright-common')) { transitive = false }
     shadowBundle "org.yaml:snakeyaml:$rootProject.snakeyaml_version"
 
     // The JUnit Platform the in-game test runner uses, nested (Jar-in-Jar) as libraries.
-    rootProject.junitPlatformJars.each { include it }
+    rootProject.junitPlatformJars.each { jarJar(it) { transitive = false } }
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -77,20 +60,33 @@ processResources {
     }
 }
 
+// `jar` holds this module's own classes, published as `dev` beside the Mojang-named jars of api and common.
+tasks.named('jar', Jar) {
+    archiveClassifier = 'dev'
+    destinationDirectory = layout.buildDirectory.dir('devlibs')
+}
+
 shadowJar {
     configurations = [project.configurations.shadowBundle]
-    archiveClassifier = 'dev-shadow'
+    // The mod jar. ModDevGradle nests the jarJar output into `jar` only, so it is added here too.
+    archiveClassifier = ''
+    from(tasks.named('jarJar'))
     // Load-bearing. Capability providers arrive through META-INF/services, and that path now exists
     // in BOTH :stagewright-api (the shipped Curios/FTB Quests adapters) and this module. Shadow's
     // default is last-writer-wins per path, so without this the jar ships one file and every
     // provider in the other reports itself absent — which is indistinguishable from an uninstalled
     // mod, and would be found by a scene skipping for a reason that is not true.
+    // Shadow 9 hands a transformer only the duplicates the strategy lets through.
+    filesMatching('META-INF/services/**') { duplicatesStrategy = DuplicatesStrategy.INCLUDE }
     mergeServiceFiles()
     // Another mod may ship its own snakeyaml.
     relocate 'org.yaml.snakeyaml', 'net.magicterra.stagewright.shadow.snakeyaml'
     into('META-INF/licenses') { from rootProject.file('cli/src/main/resources/META-INF/licenses/Apache-2.0.txt') }
 }
 
-remapJar {
-    inputFile.set shadowJar.archiveFile
-}
+tasks.named('assemble') { dependsOn 'shadowJar' }
+
+// Published as the mod jar and as `dev-shadow` alike: NeoForge runs in Mojang names, so nothing is remapped.
+ext.shippedJar = tasks.named('shadowJar')
+ext.devJar = tasks.named('jar')
+ext.devShadowJar = tasks.named('shadowJar')

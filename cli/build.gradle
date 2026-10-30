@@ -32,10 +32,10 @@ dependencies {
     implementation 'org.junit.platform:junit-platform-launcher'
     implementation 'org.junit.platform:junit-platform-reporting'
 
-    // The two loader jars, as the sibling projects build them (the remapped, shadow-bundled jar a
-    // loader loads), so building this builds them and a skew between the mods and this jar cannot
-    // exist.
-    bundledMods project(path: ':stagewright-neoforge', configuration: 'runtimeElements')
+    // The two loader jars, as the sibling projects build them (the shadow-bundled jar a loader loads,
+    // remapped on Fabric), so building this builds them and a skew between the mods and this jar cannot
+    // exist. NeoForge's mod jar is its shadowJar; its runtimeElements carries the module's own classes.
+    bundledMods project(path: ':stagewright-neoforge', configuration: 'shadowRuntimeElements')
     bundledMods project(path: ':stagewright-fabric', configuration: 'runtimeElements')
 
     // The client installer and the launch specs. The supervision agent and Rhino arrive inside the

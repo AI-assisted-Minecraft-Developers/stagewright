@@ -16,19 +16,19 @@
 //   - the `dev` classifier publication is kept VERBATIM, because the dependency runs both
 //     ways: worlddriver's testmod compiles against mc_stagewright-api:dev.
 plugins {
-    id 'dev.architectury.loom' version '1.11-SNAPSHOT' apply false
-    id 'architectury-plugin' version '3.4-SNAPSHOT'
-    id 'com.gradleup.shadow' version '8.3.6' apply false
-}
-
-architectury {
-    minecraft = project.minecraft_version
+    // :stagewright-fabric builds with Fabric Loom; api, common and neoforge with ModDevGradle. The same versions
+    // as WorldDriver's build; Loom 1.13 is the newest that runs on Gradle 8. See docs/reference/publishing.md.
+    id 'fabric-loom' version '1.13.6' apply false
+    id 'net.neoforged.moddev' version '2.0.141' apply false
+    // Shadow 9: 8.x unpacks the nested jars ModDevGradle's jarJar adds to the NeoForge jar.
+    id 'com.gradleup.shadow' version '9.2.2' apply false
 }
 
 // worlddriverVersionRange, the WorldDriver line both loaders' metadata declare, is in gradle/version.gradle,
 // which the Gradle plugin's build reads too.
 
-// The JUnit Platform the in-game runner uses, each jar named: loom's `include` is not transitive.
+// The JUnit Platform the in-game runner uses, each jar named: Loom's `include` is not transitive, and the
+// NeoForge jarJar takes each one alone.
 // Jupiter 5.x ships with Platform 1.x of the same minor and patch.
 def junitPlatformVersion = rootProject.junit_version.replaceFirst(/^5\./, '1.')
 ext.junitPlatformJars = [
@@ -49,12 +49,6 @@ allprojects {
     version = rootProject.stagewrightVersion
 }
 
-// One Architectury transform at a time: they pass their classpath through JVM-wide system
-// properties. See docs/reference/publishing.md, "The Architectury transforms run one at a time".
-def architecturyTransforms = gradle.sharedServices.registerIfAbsent('architecturyTransforms', BuildService) {
-    maxParallelUsages = 1
-}
-
 subprojects {
     // Before the pure-JVM early return below: those two modules publish too.
     apply from: rootProject.file('gradle/license.gradle')
@@ -64,16 +58,13 @@ subprojects {
     }
 
     // The command-line runner is pure JVM — it carries the two loader jars as resources and runs on a
-    // machine with no Minecraft classpath — so it stays out of the loom/architectury pipeline.
+    // machine with no Minecraft classpath — so it stays out of the Loom and ModDevGradle pipeline.
     if (project.name == 'stagewright-cli') return
 
-    apply plugin: 'dev.architectury.loom'
-    apply plugin: 'architectury-plugin'
+    // java-library for the `api` configuration, which ModDevGradle does not add.
+    apply plugin: 'java-library'
+    apply plugin: project.name == 'stagewright-fabric' ? 'fabric-loom' : 'net.neoforged.moddev'
     apply plugin: 'maven-publish'
-
-    tasks.withType(dev.architectury.plugin.TransformingTask).configureEach {
-        usesService(architecturyTransforms)
-    }
 
     base {
         archivesName = "$rootProject.archives_name-$project.name"
@@ -101,19 +92,10 @@ subprojects {
         }
     }
 
-    loom {
-        silentMojangMappingsLicense()
-    }
-
-    dependencies {
-        minecraft "net.minecraft:minecraft:$rootProject.minecraft_version"
-        mappings loom.officialMojangMappings()
-    }
-
     java {
         withSourcesJar()
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        // Compiles and runs the game on 21 whatever JDK runs Gradle itself.
+        toolchain.languageVersion = JavaLanguageVersion.of(21)
     }
 
     tasks.withType(JavaCompile).configureEach {
@@ -123,29 +105,27 @@ subprojects {
     publishing {
         publications {
             mavenJava(MavenPublication) {
-                from components.java
+                // The artifacts are each module's own, attached below once its script has named them.
 
-                // The NAMED-mappings jar — see worlddriver's root build.gradle for the full
-                // reasoning. Short version: components.java publishes loom's REMAPPED artifact
-                // (intermediary, net/minecraft/class_1291), which cannot be compiled against
-                // from a dev environment. Loom already builds build/devlibs/<name>-dev.jar;
-                // this stops it being discarded. worlddriver's testmod consumes
-                // mc_stagewright-api:dev through exactly this.
-                artifact(tasks.named('jar')) { classifier = 'dev' }
-
-                // Strip <dependency> entries, because a mod jar NESTS its runtime deps via
-                // Jar-in-Jar: a consumer resolving the raw POM would end up with a second copy of
-                // something the jar already carries. The first external consumer hit exactly this.
-                // A module keeps the ones it lists in ext.pomKeeps ('group:artifact'); see
+                // No <dependency> entries, because a mod jar NESTS its runtime deps via Jar-in-Jar: a
+                // consumer resolving the raw POM would end up with a second copy of something the jar
+                // already carries. The first external consumer hit exactly this. A module keeps the
+                // `api` dependencies it lists in ext.pomKeeps ('group:artifact'); see
                 // docs/reference/publishing.md.
                 pom.withXml {
                     def keep = module.findProperty('pomKeeps') ?: []
-                    def deps = asNode().dependencies
-                    if (deps.isEmpty()) return
-                    def block = deps.first()
-                    block.children().findAll { !((it.groupId.text() + ':' + it.artifactId.text()) in keep) }
-                            .each { block.remove(it) }
-                    if (block.children().isEmpty()) asNode().remove(block)
+                    def kept = module.configurations.api.dependencies.findAll { "${it.group}:${it.name}".toString() in keep }
+                    if (kept.isEmpty()) return
+                    def block = asNode().appendNode('dependencies')
+                    kept.each { d ->
+                        def node = block.appendNode('dependency')
+                        node.appendNode('groupId', d.group)
+                        node.appendNode('artifactId', d.name)
+                        node.appendNode('version', d.version)
+                        def classifier = d instanceof ModuleDependency ? d.artifacts.find()?.classifier : null
+                        if (classifier) node.appendNode('classifier', classifier)
+                        node.appendNode('scope', 'compile')
+                    }
                 }
             }
         }
@@ -153,9 +133,20 @@ subprojects {
         // artifactId must be resolved AFTER the subproject's own build script has run: this
         // subprojects{} block executes BEFORE child scripts, so an eager archivesName.get()
         // here would capture the root default instead of each module's override.
+        //
+        // Each module's script names its jars: `shippedJar`, the plain artifact (intermediary on Fabric;
+        // api's and common's are remapped by :stagewright-fabric, which has the mappings), `devJar`, the `dev`
+        // classifier in Mojang names, which worlddriver's testmod compiles against for api, and
+        // `devShadowJar`, a loader's whole mod in Mojang names.
         afterEvaluate {
             publishing.publications.named('mavenJava') {
                 artifactId = base.archivesName.get()
+                if (project.ext.has('shippedJar')) artifact(project.ext.shippedJar)
+                artifact(project.ext.devJar) { classifier = 'dev' }
+                if (project.ext.has('devShadowJar')) artifact(project.ext.devShadowJar) { classifier = 'dev-shadow' }
+                artifact(project.ext.has('sourcesJarTask') ? project.ext.sourcesJarTask : tasks.named('sourcesJar')) {
+                    classifier = 'sources'
+                }
             }
         }
 
