@@ -5,10 +5,13 @@ plugins {
 }
 
 def configDir = new File(StageWrightRepo.ROOT, 'config')
+// The vendored minimal-json is kept verbatim (engine/.../engine/json/VENDORED.md): no tool here touches or judges it.
+def vendored = '**/engine/json/**'
 
 // What this project's formatter steps leave alone: tool output, and the files of nested projects and other builds,
 // which format their own.
 def notMine = [
+    vendored,
     '**/build/**',
     '**/.gradle/**',
     '**/node_modules/**',
@@ -42,6 +45,7 @@ def mine = { List<String> patterns ->
 spotless {
     plugins.withId('java') {
         java {
+            targetExclude vendored
             palantirJavaFormat('2.103.0').formatJavadoc(true)
         }
     }
@@ -91,4 +95,6 @@ plugins.withId('java') {
         sourceSets = [project.sourceSets.main]
         ignoreFailures = true
     }
+    tasks.withType(Checkstyle).configureEach { exclude vendored }
+    tasks.withType(Pmd).configureEach { exclude vendored }
 }
