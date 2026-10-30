@@ -24,7 +24,8 @@ import org.opentest4j.TestAbortedException;
 public final class Mods {
 
     /**
-     * id -> version, installed once by the loader entrypoint. Null until then, which is a bug and is reported as one.
+     * The mod list, mapping id to version, installed once by the loader entrypoint. Null until then, which is a bug and
+     * is reported as one.
      */
     private static volatile Map<String, String> installed;
 

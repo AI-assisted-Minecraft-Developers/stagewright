@@ -12,6 +12,7 @@ public final class PackFiles {
 
     private PackFiles() {}
 
+    /** The directory capability descriptors are read from, relative to the game's working directory. */
     public static Path capabilities() {
         return CAPABILITIES;
     }
