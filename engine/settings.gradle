@@ -1,6 +1,6 @@
 // StageWright engine — standalone build, deliberately.
 //
-// Not a subproject of the root build: that one applies loom and architectury to everything it
+// Not a subproject of the root build: that one applies Loom or ModDevGradle to everything it
 // contains, and this module must never see a Minecraft classpath. Not a subproject of the gradle
 // plugin either, because the plugin is itself an included build of the root — depending on a
 // sibling of its own includer would be circular.

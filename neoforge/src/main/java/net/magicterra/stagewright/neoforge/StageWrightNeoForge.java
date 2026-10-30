@@ -44,7 +44,7 @@ public final class StageWrightNeoForge {
         StageWrightCommon.onServerStarted(event.getServer());
     }
 
-    /** Ahead of Architectury's HIGH listener, which detaches WorldDriver: cleanups still drive it. */
+    /** Ahead of WorldDriver's NeoForgeServerEvents.stopping, at HIGH, which detaches it: cleanups still drive it. */
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public void onServerStopping(ServerStoppingEvent event) {
         StageWrightCommon.onServerStopping(event.getServer());

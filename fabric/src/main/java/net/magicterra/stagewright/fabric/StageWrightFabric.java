@@ -21,8 +21,8 @@ public final class StageWrightFabric implements ModInitializer {
     public void onInitialize() {
         installModList();
         ServerLifecycleEvents.SERVER_STARTED.register(StageWrightCommon::onServerStarted);
-        // Architectury forwards to WorldDriver's detach from the default phase and registered first,
-        // so the tests' cleanups, which still drive WorldDriver, run in a phase ahead of it.
+        // WorldDriverFabric detaches WorldDriver from SERVER_STOPPING's default phase, and its mod may
+        // register first, so the tests' cleanups, which still drive WorldDriver, run in a phase ahead of it.
         ServerLifecycleEvents.SERVER_STOPPING.addPhaseOrdering(BEFORE_DRIVER, Event.DEFAULT_PHASE);
         ServerLifecycleEvents.SERVER_STOPPING.register(BEFORE_DRIVER, StageWrightCommon::onServerStopping);
         ServerTickEvents.END_SERVER_TICK.register(StageWrightCommon::onServerTick);

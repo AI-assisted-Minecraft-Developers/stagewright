@@ -3,7 +3,7 @@
 // This build is wired into the root project via
 //   pluginManagement { includeBuild('gradle-plugin') }
 // in the repository-root settings.gradle. Being an *included build* it lives
-// entirely OUTSIDE the root build's `subprojects {}` / loom / architectury
+// entirely OUTSIDE the root build's `subprojects {}` / Loom / ModDevGradle
 // pipeline: it has its own settings, its own repositories, and its own
 // (plain java-gradle-plugin) toolchain. It carries no Minecraft classpath.
 pluginManagement {

@@ -38,7 +38,7 @@ record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, bool
     enum Leaks {
         /** The scene fails. */
         FAIL,
-        /** The scene's verdict is its tests'; for a launcher whose own threads never end, such as Architectury's in dev. */
+        /** The scene's verdict is its tests'; for a launcher whose own threads never end, such as Architectury Loom's in dev. */
         REPORT;
 
         static Leaks parse(Object value) {
