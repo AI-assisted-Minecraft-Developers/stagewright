@@ -22,6 +22,21 @@ public final class RunDirectory {
      */
     public static final String ARTIFACT_DIR = "stagewright";
 
+    /**
+     * The world seed every run gets.
+     *
+     * <p>Left empty, the server rolls a fresh seed per run. That is invisible while every arena sits in empty sky at
+     * {@code y=200}, and becomes the difference between a reproducible suite and a flaky one the moment a scene asks
+     * for generated terrain: the same arena coordinates would be a hilltop one run and a lake the next, and the scene
+     * that failed would look like a bot bug.
+     *
+     * <p>Must equal {@code WorldCreation.DEFAULT_SEED}, which pins the same thing for the topologies whose world a
+     * client creates rather than this provisioner. The value is arbitrary; that the two agree is not. The constant is
+     * written twice because the two live in builds that cannot see each other: this one has no Minecraft on its
+     * classpath, and the other cannot run outside the game.
+     */
+    private static final String FIXED_SEED = "5471";
+
     private RunDirectory() {}
 
     /**
@@ -75,21 +90,6 @@ public final class RunDirectory {
         force(properties, "level-seed", FIXED_SEED);
         force(properties, "sync-chunk-writes", "false");
     }
-
-    /**
-     * The world seed every run gets.
-     *
-     * <p>Left empty, the server rolls a fresh seed per run. That is invisible while every arena sits in empty sky at
-     * {@code y=200}, and becomes the difference between a reproducible suite and a flaky one the moment a scene asks
-     * for generated terrain: the same arena coordinates would be a hilltop one run and a lake the next, and the scene
-     * that failed would look like a bot bug.
-     *
-     * <p>Must equal {@code WorldCreation.DEFAULT_SEED}, which pins the same thing for the topologies whose world a
-     * client creates rather than this provisioner. The value is arbitrary; that the two agree is not. The constant is
-     * written twice because the two live in builds that cannot see each other: this one has no Minecraft on its
-     * classpath, and the other cannot run outside the game.
-     */
-    private static final String FIXED_SEED = "5471";
 
     /** Force one server.properties key, leaving every other line exactly as it was. */
     private static void force(Path properties, String key, String value) {

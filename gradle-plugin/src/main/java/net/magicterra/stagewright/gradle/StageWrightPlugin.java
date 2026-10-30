@@ -34,6 +34,13 @@ public class StageWrightPlugin implements Plugin<Project> {
     static final int DEFAULT_TIMEOUT_MINUTES = 20;
     static final int DEFAULT_STALL_MINUTES = 5;
 
+    static final String TEST_ENGINE_CONFIGURATION = "stagewrightTestEngine";
+    private static final String STALE_REMAPS_SWEPT = "stagewright.staleRemapsSwept";
+    static final String LAUNCHES_PROPERTY = "stagewright.launches";
+    static final String TEST_ROOTS_PROPERTY = "stagewright.testRoots";
+    /** The Gradle property whose whitespace-separated arguments every game the plugin starts gets last. */
+    static final String JVM_ARGS_PROPERTY = "stagewright.jvmArgs";
+
     @Override
     public void apply(Project project) {
         NamedDomainObjectContainer<StageWrightTopology> topologies = project.getObjects()
@@ -113,13 +120,6 @@ public class StageWrightPlugin implements Plugin<Project> {
             StaleRemaps.evict(project.getRootProject());
         }
     }
-
-    static final String TEST_ENGINE_CONFIGURATION = "stagewrightTestEngine";
-    private static final String STALE_REMAPS_SWEPT = "stagewright.staleRemapsSwept";
-    static final String LAUNCHES_PROPERTY = "stagewright.launches";
-    static final String TEST_ROOTS_PROPERTY = "stagewright.testRoots";
-    /** The Gradle property whose whitespace-separated arguments every game the plugin starts gets last. */
-    static final String JVM_ARGS_PROPERTY = "stagewright.jvmArgs";
 
     /**
      * Per suite: {@code stagewrightLaunchSpecs<Name>}, which writes one launch spec per topology the suite maps, and

@@ -49,6 +49,9 @@ final class ScriptHandles {
     private static final String FORWARD = "forward";
     private static final String HIT = "hit";
 
+    private static final List<String> PRESS_KEYS =
+            List.of(FORWARD, LEFT, JUMP, "sneak", SPRINT, ATTACK, "use", "aimAt", "toolFor", HIT, "release");
+
     private ScriptHandles() {}
 
     // One table of the script's handles, each a few lines; splitting it would scatter the names it defines.
@@ -380,9 +383,6 @@ final class ScriptHandles {
         }
         return p;
     }
-
-    private static final List<String> PRESS_KEYS =
-            List.of(FORWARD, LEFT, JUMP, "sneak", SPRINT, ATTACK, "use", "aimAt", "toolFor", HIT, "release");
 
     private static double number(Object v, String what) {
         if (v instanceof Number n) {

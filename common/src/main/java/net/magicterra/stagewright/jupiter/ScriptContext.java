@@ -30,6 +30,9 @@ final class ScriptContext {
     private static final int DEFAULT_SETTLE = 20;
     private static final String CALL = "call";
 
+    /** What waits for ticks or leases, and so cannot run inside {@code t.onServer}. */
+    private static final List<String> BLOCKING = List.of("wait", "waitUntil", "settle", "plot", "bot", "perf");
+
     private final Game game;
     private final Map<String, Scripting.Function> steps;
     private final JavaSteps javaSteps;
@@ -207,9 +210,6 @@ final class ScriptContext {
         }
         return failure;
     }
-
-    /** What waits for ticks or leases, and so cannot run inside {@code t.onServer}. */
-    private static final List<String> BLOCKING = List.of("wait", "waitUntil", "settle", "plot", "bot", "perf");
 
     /**
      * {@code t.onServer(fn)}: {@code fn} run on the server thread, as one server task, and its answer. What it calls —

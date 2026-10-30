@@ -15,13 +15,29 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 
 /** {@code mc.test.recipes}: the loaded recipe graph, who makes what out of what and whether the chain closes. */
 public final class RecipesContracts {
-    private RecipesContracts() {}
 
     /** Ceiling on how many distinct items a closure walk may touch when {@code maxNodes} is omitted. */
     public static final int DEFAULT_MAX_NODES = 5_000;
 
     /** Ceiling on how deep a closure walk may go when {@code maxDepth} is omitted. */
     public static final int DEFAULT_MAX_DEPTH = 64;
+
+    public static final UnionType<RecipesOp> RECIPES_PARAMS = ApiTypes.union(RecipesOp.class);
+
+    public static final UnionType<RecipesReply> RECIPES_REPLY = ApiTypes.union(RecipesReply.class);
+
+    public static final MethodSpec<RecipesOp, RecipesReply> RECIPES = MethodSpec.of(
+                    "mc.test.recipes",
+                    RECIPES_PARAMS,
+                    RECIPES_REPLY,
+                    "Questions about the loaded recipe graph. producing lists the recipes making an item; ingredients gives a "
+                            + "recipe's slots and result; closure walks every ingredient of an item down to raw materials "
+                            + "and says what could not be resolved or was cut short; uncraftable lists recipes with an "
+                            + "unfillable slot; audit lays each grid recipe out from its own ingredients and reports those "
+                            + "that make something other than they declare, with its totals; count says how many recipes "
+                            + "are loaded, in all and per recipe type.")
+            .hidden();
+    private RecipesContracts() {}
 
     /** The requests {@code mc.test.recipes} takes, told apart by {@code op}. */
     @Tag("op")
@@ -175,20 +191,4 @@ public final class RecipesContracts {
             @Doc("Recipes per recipe type, most first.") @Length(max = 4096)
             List<KindCount> byType)
             implements RecipesReply {}
-
-    public static final UnionType<RecipesOp> RECIPES_PARAMS = ApiTypes.union(RecipesOp.class);
-
-    public static final UnionType<RecipesReply> RECIPES_REPLY = ApiTypes.union(RecipesReply.class);
-
-    public static final MethodSpec<RecipesOp, RecipesReply> RECIPES = MethodSpec.of(
-                    "mc.test.recipes",
-                    RECIPES_PARAMS,
-                    RECIPES_REPLY,
-                    "Questions about the loaded recipe graph. producing lists the recipes making an item; ingredients gives a "
-                            + "recipe's slots and result; closure walks every ingredient of an item down to raw materials "
-                            + "and says what could not be resolved or was cut short; uncraftable lists recipes with an "
-                            + "unfillable slot; audit lays each grid recipe out from its own ingredients and reports those "
-                            + "that make something other than they declare, with its totals; count says how many recipes "
-                            + "are loaded, in all and per recipe type.")
-            .hidden();
 }

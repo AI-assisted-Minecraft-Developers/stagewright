@@ -13,6 +13,11 @@ import net.magicterra.stagewright.test.Perf;
 /** Takes a {@link Perf} measurement for {@code Game.perf}, YAML's {@code perf} step and JS's {@code t.perf}. */
 final class PerfSampler {
 
+    // Unsynchronized: a racing second resolve reaches the same answer.
+    private static boolean fpsAbsent;
+    private static Method fpsGetInstance;
+    private static Method fpsGetFps;
+
     private PerfSampler() {}
 
     /** Each phase's median window by name, in phase order. */
@@ -191,9 +196,4 @@ final class PerfSampler {
             return -1;
         }
     }
-
-    // Unsynchronized: a racing second resolve reaches the same answer.
-    private static boolean fpsAbsent;
-    private static Method fpsGetInstance;
-    private static Method fpsGetFps;
 }

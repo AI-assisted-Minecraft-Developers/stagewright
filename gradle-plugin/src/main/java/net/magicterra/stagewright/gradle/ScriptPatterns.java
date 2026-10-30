@@ -20,9 +20,9 @@ import org.gradle.api.tasks.testing.TestFilter;
  */
 final class ScriptPatterns implements Action<Task> {
 
-    private ScriptPatterns() {}
-
     static final ScriptPatterns INSTANCE = new ScriptPatterns();
+
+    private ScriptPatterns() {}
 
     /** {@code patterns} with each one that names a script path starting with {@code *}. */
     static Set<String> reachingScripts(Set<String> patterns) {

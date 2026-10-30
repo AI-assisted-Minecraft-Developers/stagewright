@@ -16,6 +16,21 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 
 /** {@code mc.test.advancements}: a server player's advancement progress, read, granted and revoked. */
 public final class AdvancementsContracts {
+
+    public static final UnionType<AdvancementsOp> ADVANCEMENTS_PARAMS = ApiTypes.union(AdvancementsOp.class);
+
+    public static final UnionType<AdvancementsReply> ADVANCEMENTS_REPLY = ApiTypes.union(AdvancementsReply.class);
+
+    public static final MethodSpec<AdvancementsOp, AdvancementsReply> ADVANCEMENTS = MethodSpec.of(
+                    "mc.test.advancements",
+                    ADVANCEMENTS_PARAMS,
+                    ADVANCEMENTS_REPLY,
+                    "grant awards every unmet criterion of an advancement to a server player, revoke takes every met "
+                            + "one back, progress reads where it stands, list names every advancement loaded. Progress is saved with the player, so a "
+                            + "test that grants should revoke what the grant reported. An unknown player is "
+                            + "invalid_params at /bot, an unknown advancement at /id.")
+            .hidden()
+            .effects(MethodSpec.Effect.WORLD_WRITE);
     private AdvancementsContracts() {}
 
     /** The requests {@code mc.test.advancements} takes, told apart by {@code op}. */
@@ -100,19 +115,4 @@ public final class AdvancementsContracts {
             @Length(max = 1024) List<@Length(max = 256) String> completed,
             @Length(max = 1024) List<@Length(max = 256) String> remaining)
             implements AdvancementsReply {}
-
-    public static final UnionType<AdvancementsOp> ADVANCEMENTS_PARAMS = ApiTypes.union(AdvancementsOp.class);
-
-    public static final UnionType<AdvancementsReply> ADVANCEMENTS_REPLY = ApiTypes.union(AdvancementsReply.class);
-
-    public static final MethodSpec<AdvancementsOp, AdvancementsReply> ADVANCEMENTS = MethodSpec.of(
-                    "mc.test.advancements",
-                    ADVANCEMENTS_PARAMS,
-                    ADVANCEMENTS_REPLY,
-                    "grant awards every unmet criterion of an advancement to a server player, revoke takes every met "
-                            + "one back, progress reads where it stands, list names every advancement loaded. Progress is saved with the player, so a "
-                            + "test that grants should revoke what the grant reported. An unknown player is "
-                            + "invalid_params at /bot, an unknown advancement at /id.")
-            .hidden()
-            .effects(MethodSpec.Effect.WORLD_WRITE);
 }

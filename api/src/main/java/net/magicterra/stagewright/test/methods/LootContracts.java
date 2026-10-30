@@ -15,6 +15,19 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 
 /** {@code mc.test.loot}: whether a loot table is registered, and what it gives over many rolls. */
 public final class LootContracts {
+
+    public static final UnionType<LootOp> LOOT_PARAMS = ApiTypes.union(LootOp.class);
+
+    public static final UnionType<LootReply> LOOT_REPLY = ApiTypes.union(LootReply.class);
+
+    public static final MethodSpec<LootOp, LootReply> LOOT = MethodSpec.of(
+                    "mc.test.loot",
+                    LOOT_PARAMS,
+                    LOOT_REPLY,
+                    "exists says whether a loot table is registered; list names every one, or a namespace's; roll rolls a chest-shaped table a counted number of times "
+                            + "at the overworld origin and counts what came out. An unknown or non-chest table is "
+                            + "invalid_params.")
+            .hidden();
     private LootContracts() {}
 
     /** The requests {@code mc.test.loot} takes, told apart by {@code op}. */
@@ -88,17 +101,4 @@ public final class LootContracts {
             @Doc("Per item id, in first-seen order.") @Length(max = 4096)
             List<ItemCount> items)
             implements LootReply {}
-
-    public static final UnionType<LootOp> LOOT_PARAMS = ApiTypes.union(LootOp.class);
-
-    public static final UnionType<LootReply> LOOT_REPLY = ApiTypes.union(LootReply.class);
-
-    public static final MethodSpec<LootOp, LootReply> LOOT = MethodSpec.of(
-                    "mc.test.loot",
-                    LOOT_PARAMS,
-                    LOOT_REPLY,
-                    "exists says whether a loot table is registered; list names every one, or a namespace's; roll rolls a chest-shaped table a counted number of times "
-                            + "at the overworld origin and counts what came out. An unknown or non-chest table is "
-                            + "invalid_params.")
-            .hidden();
 }

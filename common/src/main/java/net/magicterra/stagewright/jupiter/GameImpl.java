@@ -44,6 +44,14 @@ final class GameImpl implements Game {
 
     private static final long WALL_MARGIN_MS = 60_000;
 
+    /**
+     * WorldDriver's registry, every call through it allowed to wait this long for a busy game thread to take it. The
+     * registry's own limit is a few seconds, which suits an agent that would rather hear "busy"; a test may wait as
+     * long as WorldDriver lets any call wait, while plots generate under a heavy pack. A stopped server is the engine's
+     * watchdog's to catch.
+     */
+    static final long THREAD_WAIT_MS = CallContext.SERVER_CAP_MS;
+
     private final MinecraftServer server;
     private final StoreImpl store;
     /**
@@ -51,6 +59,9 @@ final class GameImpl implements Game {
      * test's scope is dropped when it ends, and its facets with it.
      */
     private final Map<TestScope, Map<String, Object>> facets = new WeakHashMap<>();
+
+    private volatile ApiRegistry registry;
+    private volatile Scripting scripting;
 
     GameImpl(MinecraftServer server) {
         this.server = server;
@@ -62,17 +73,6 @@ final class GameImpl implements Game {
     public Store store() {
         return store;
     }
-
-    /**
-     * WorldDriver's registry, every call through it allowed to wait this long for a busy game thread to take it. The
-     * registry's own limit is a few seconds, which suits an agent that would rather hear "busy"; a test may wait as
-     * long as WorldDriver lets any call wait, while plots generate under a heavy pack. A stopped server is the engine's
-     * watchdog's to catch.
-     */
-    static final long THREAD_WAIT_MS = CallContext.SERVER_CAP_MS;
-
-    private volatile ApiRegistry registry;
-    private volatile Scripting scripting;
 
     @Override
     public ApiRegistry registry() {

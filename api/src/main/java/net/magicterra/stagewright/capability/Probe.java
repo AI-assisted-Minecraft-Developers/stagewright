@@ -45,6 +45,11 @@ public final class Probe {
 
     private static final String SEPARATOR = ", ";
 
+    private final Class<?> type;
+    private final Object instance; // null for a static/unbound probe
+    private final Object value; // for a probe wrapping a returned value
+    private final boolean wrapsValue;
+
     /**
      * A probe on a mod's class, static calls only until {@link #on} binds an instance.
      *
@@ -79,11 +84,6 @@ public final class Probe {
             return null;
         }
     }
-
-    private final Class<?> type;
-    private final Object instance; // null for a static/unbound probe
-    private final Object value; // for a probe wrapping a returned value
-    private final boolean wrapsValue;
 
     Probe(Class<?> type, Object instance) {
         this.type = type;

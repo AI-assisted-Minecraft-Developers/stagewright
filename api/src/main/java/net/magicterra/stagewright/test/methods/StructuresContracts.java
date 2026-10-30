@@ -16,6 +16,21 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 
 /** {@code mc.test.structures}: worldgen structures, whether one is registered, covers a block, or lies nearby. */
 public final class StructuresContracts {
+
+    public static final UnionType<StructuresOp> STRUCTURES_PARAMS = ApiTypes.union(StructuresOp.class);
+
+    public static final UnionType<StructuresReply> STRUCTURES_REPLY = ApiTypes.union(StructuresReply.class);
+
+    public static final MethodSpec<StructuresOp, StructuresReply> STRUCTURES = MethodSpec.of(
+                    "mc.test.structures",
+                    STRUCTURES_PARAMS,
+                    STRUCTURES_REPLY,
+                    "registered is a registry lookup; list names every structure registered; at asks the structure manager which generated structures cover a "
+                            + "block, without generating anything; locate searches for the nearest one and can be "
+                            + "slow, so it reports its milliseconds and answers found false rather than failing "
+                            + "when nothing is near.")
+            .hidden()
+            .effects(MethodSpec.Effect.WORLD_WRITE);
     private StructuresContracts() {}
 
     /** The requests {@code mc.test.structures} takes, told apart by {@code op}. */
@@ -94,19 +109,4 @@ public final class StructuresContracts {
             @Range(min = 0)
             long ms)
             implements StructuresReply {}
-
-    public static final UnionType<StructuresOp> STRUCTURES_PARAMS = ApiTypes.union(StructuresOp.class);
-
-    public static final UnionType<StructuresReply> STRUCTURES_REPLY = ApiTypes.union(StructuresReply.class);
-
-    public static final MethodSpec<StructuresOp, StructuresReply> STRUCTURES = MethodSpec.of(
-                    "mc.test.structures",
-                    STRUCTURES_PARAMS,
-                    STRUCTURES_REPLY,
-                    "registered is a registry lookup; list names every structure registered; at asks the structure manager which generated structures cover a "
-                            + "block, without generating anything; locate searches for the nearest one and can be "
-                            + "slow, so it reports its milliseconds and answers found false rather than failing "
-                            + "when nothing is near.")
-            .hidden()
-            .effects(MethodSpec.Effect.WORLD_WRITE);
 }

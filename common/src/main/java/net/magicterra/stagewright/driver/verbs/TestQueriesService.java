@@ -65,6 +65,8 @@ import net.minecraft.world.phys.Vec3;
  */
 final class TestQueriesService implements TestQueriesApi {
 
+    private static final int LIST_MAX = 100_000;
+
     @Override
     public CompletionStage<ChunksReply> chunks(ChunksOp op, CallContext ctx) {
         return onServer(server -> switch (op) {
@@ -312,8 +314,6 @@ final class TestQueriesService implements TestQueriesApi {
     private static List<String> cut(List<String> ids) {
         return ids.subList(0, Math.min(ids.size(), LIST_MAX));
     }
-
-    private static final int LIST_MAX = 100_000;
 
     /** Expensive: it scans and generates chunks, so the milliseconds are reported found or not. */
     private static StructuresContracts.Located locate(ServerLevel level, StructuresContracts.Locate l) {

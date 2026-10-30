@@ -33,6 +33,33 @@ import net.magicterra.stagewright.engine.Json;
  */
 public final class Supervisor implements AutoCloseable {
 
+    private static final long POLL_MS = 250;
+    /** After the process is gone, how long to let its last lines be read before concluding it said nothing. */
+    private static final long DRAIN_NANOS = TimeUnit.SECONDS.toNanos(2);
+
+    private final ServerSocket server;
+    private final String token;
+    private final Object lock = new Object();
+
+    private boolean connected;
+    private boolean connectionClosed;
+    private boolean done;
+    private boolean exiting;
+    private boolean forcedDown;
+    private String crashReport;
+    private long agentPid = -1;
+    private long lastBeatNanos;
+    private long ticks;
+    private long classes = -1;
+    private long lastProgressNanos;
+    private long exitSeenNanos;
+    private final long openedNanos = System.nanoTime();
+    private List<ThreadStack> stacks = List.of();
+    private String phase = "";
+    private final List<Leak> leaks = new ArrayList<>();
+
+    private volatile Consumer<Map<String, Object>> testListener = event -> {};
+
     /** How a wait for the end of a run ended. None of them is interchangeable with another. */
     public enum Ended {
         /** The game said its results are complete. */
@@ -76,31 +103,6 @@ public final class Supervisor implements AutoCloseable {
 
     /** How a wait on a game and the companion joined to it ended, and whether it was the companion that ended it. */
     public record Ending(Ended ended, boolean companion) {}
-
-    private static final long POLL_MS = 250;
-    /** After the process is gone, how long to let its last lines be read before concluding it said nothing. */
-    private static final long DRAIN_NANOS = TimeUnit.SECONDS.toNanos(2);
-
-    private final ServerSocket server;
-    private final String token;
-    private final Object lock = new Object();
-
-    private boolean connected;
-    private boolean connectionClosed;
-    private boolean done;
-    private boolean exiting;
-    private boolean forcedDown;
-    private String crashReport;
-    private long agentPid = -1;
-    private long lastBeatNanos;
-    private long ticks;
-    private long classes = -1;
-    private long lastProgressNanos;
-    private long exitSeenNanos;
-    private final long openedNanos = System.nanoTime();
-    private List<ThreadStack> stacks = List.of();
-    private String phase = "";
-    private final List<Leak> leaks = new ArrayList<>();
 
     private Supervisor(ServerSocket server, String token) {
         this.server = server;
@@ -417,8 +419,6 @@ public final class Supervisor implements AutoCloseable {
             }
         }
     }
-
-    private volatile Consumer<Map<String, Object>> testListener = event -> {};
 
     /**
      * Receive each {@code test} event's {@code data}, in the order the game sent them, on the thread that reads the

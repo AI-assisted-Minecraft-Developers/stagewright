@@ -35,6 +35,38 @@ import org.junit.platform.launcher.TestPlan;
  */
 public final class Dependencies implements TestWatcher {
 
+    private static final String PARALLEL = "junit.jupiter.execution.parallel.enabled";
+    private static final String DEPENDS_ON = "depends on ";
+
+    private static volatile Set<Ref> planned = Set.of();
+    private static volatile TestPlan currentPlan;
+    private static final Map<Ref, Outcome> OUTCOMES = new ConcurrentHashMap<>();
+    /** Completed once a planned test has ended for good: every invocation of it, or the container it was in. */
+    private static final Map<Ref, CompletableFuture<Void>> ENDED = new ConcurrentHashMap<>();
+    /**
+     * What every test of the run depends on, by key: Java tests' from {@link #prepare}, scripts' from {@link #scripts}.
+     */
+    private static final Map<String, List<String>> EDGES = new ConcurrentHashMap<>();
+    /** How each script test of the run ended, completed as it ends. */
+    private static final Map<String, CompletableFuture<TestExecutionResult.Status>> SCRIPTS = new ConcurrentHashMap<>();
+
+    /**
+     * Marks tests ended as the launcher reports their nodes finished or skipped. The node of a test method itself, not
+     * an invocation of it; and every test under a container that ended, since a class that failed in {@code @BeforeAll}
+     * or was disabled reports nothing for its methods.
+     */
+    static final TestExecutionListener ENDINGS = new TestExecutionListener() {
+        @Override
+        public void executionFinished(TestIdentifier id, TestExecutionResult result) {
+            ended(id, false);
+        }
+
+        @Override
+        public void executionSkipped(TestIdentifier id, String reason) {
+            ended(id, true);
+        }
+    };
+
     /** A test method by class and name. */
     record Ref(String className, String method) {
         @Override
@@ -58,21 +90,6 @@ public final class Dependencies implements TestWatcher {
         ABORTED,
         DISABLED
     }
-
-    private static final String PARALLEL = "junit.jupiter.execution.parallel.enabled";
-    private static final String DEPENDS_ON = "depends on ";
-
-    private static volatile Set<Ref> planned = Set.of();
-    private static volatile TestPlan currentPlan;
-    private static final Map<Ref, Outcome> OUTCOMES = new ConcurrentHashMap<>();
-    /** Completed once a planned test has ended for good: every invocation of it, or the container it was in. */
-    private static final Map<Ref, CompletableFuture<Void>> ENDED = new ConcurrentHashMap<>();
-    /**
-     * What every test of the run depends on, by key: Java tests' from {@link #prepare}, scripts' from {@link #scripts}.
-     */
-    private static final Map<String, List<String>> EDGES = new ConcurrentHashMap<>();
-    /** How each script test of the run ended, completed as it ends. */
-    private static final Map<String, CompletableFuture<TestExecutionResult.Status>> SCRIPTS = new ConcurrentHashMap<>();
 
     /** The Java tests {@code method}, a test of {@code testClass}, depends on. */
     static List<Ref> upstream(Class<?> testClass, Method method) {
@@ -395,23 +412,6 @@ public final class Dependencies implements TestWatcher {
             }
         });
     }
-
-    /**
-     * Marks tests ended as the launcher reports their nodes finished or skipped. The node of a test method itself, not
-     * an invocation of it; and every test under a container that ended, since a class that failed in {@code @BeforeAll}
-     * or was disabled reports nothing for its methods.
-     */
-    static final TestExecutionListener ENDINGS = new TestExecutionListener() {
-        @Override
-        public void executionFinished(TestIdentifier id, TestExecutionResult result) {
-            ended(id, false);
-        }
-
-        @Override
-        public void executionSkipped(TestIdentifier id, String reason) {
-            ended(id, true);
-        }
-    };
 
     private static void ended(TestIdentifier id, boolean skipped) {
         TestPlan plan = currentPlan;

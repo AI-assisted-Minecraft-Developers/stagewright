@@ -24,6 +24,9 @@ final class Expectations {
     private static final String AT_LEAST = "atLeast";
     private static final String AT_MOST = "atMost";
 
+    static final Set<String> OPERATORS =
+            Set.of("equals", "contains", "empty", GT, LT, AT_LEAST, AT_MOST, "anyOf", "allOf");
+
     private Expectations() {}
 
     // The name is the YAML operator's, and the operator is what the assertion is named after.
@@ -93,9 +96,6 @@ final class Expectations {
             fail("expected at most " + show(bound) + BUT_WAS + show(actual));
         }
     }
-
-    static final Set<String> OPERATORS =
-            Set.of("equals", "contains", "empty", GT, LT, AT_LEAST, AT_MOST, "anyOf", "allOf");
 
     /**
      * A YAML test's {@code expect}: an operator's name alone ({@code empty}), or a map whose keys are operators,

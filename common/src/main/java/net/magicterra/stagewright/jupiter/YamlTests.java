@@ -55,6 +55,8 @@ final class YamlTests {
 
     private static final Pattern REFERENCE = Pattern.compile("\\$\\{([A-Za-z_][\\w.]*)}");
 
+    private static final Set<String> PLOT_KEYS = Set.of("size", "x", "y", "z", "centered", "dimension");
+
     private YamlTests() {}
 
     /** One test: its name, the options {@code test()} takes, and what running it does. */
@@ -111,8 +113,6 @@ final class YamlTests {
         }
         throw new IllegalArgumentException(where + ": plot is {size, x, y, z, centered, dimension}, each optional");
     }
-
-    private static final Set<String> PLOT_KEYS = Set.of("size", "x", "y", "z", "centered", "dimension");
 
     /** {@code given}, {@code when} and {@code then} in that order, or {@code steps}; never both. */
     private static List<Map<?, ?>> steps(Map<?, ?> test, String where) {

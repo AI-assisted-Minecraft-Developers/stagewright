@@ -62,6 +62,20 @@ public final class JupiterRun {
 
     private static volatile boolean started;
 
+    /** Grace between the server halting and forcing the JVM down: long enough for the save {@code halt} triggers. */
+    private static final long EXIT_GRACE_MS = 30_000;
+
+    /** Keeps the Java tests of the round this game runs ({@link Rounds}); script tests are kept by their engine. */
+    private static final PostDiscoveryFilter THIS_ROUND = descriptor -> {
+        if (!(descriptor.getSource().orElse(null) instanceof MethodSource m)) {
+            return FilterResult.included("not a test");
+        }
+        int round = Rounds.of(m.getClassName() + "#" + m.getMethodName());
+        return round == Rounds.current()
+                ? FilterResult.included("this round")
+                : FilterResult.excluded("runs in round " + round + " of the scene's restarts");
+    };
+
     private JupiterRun() {}
 
     /**
@@ -222,9 +236,6 @@ public final class JupiterRun {
         }
     }
 
-    /** Grace between the server halting and forcing the JVM down: long enough for the save {@code halt} triggers. */
-    private static final long EXIT_GRACE_MS = 30_000;
-
     /**
      * End the game once its results are sent: halt the server, and make sure the JVM goes with it. A mod's leftover
      * non-daemon thread keeps a JVM up after its world has saved; the supervision agent ends such a JVM and says which
@@ -258,17 +269,6 @@ public final class JupiterRun {
         watchdog.setDaemon(true);
         watchdog.start();
     }
-
-    /** Keeps the Java tests of the round this game runs ({@link Rounds}); script tests are kept by their engine. */
-    private static final PostDiscoveryFilter THIS_ROUND = descriptor -> {
-        if (!(descriptor.getSource().orElse(null) instanceof MethodSource m)) {
-            return FilterResult.included("not a test");
-        }
-        int round = Rounds.of(m.getClassName() + "#" + m.getMethodName());
-        return round == Rounds.current()
-                ? FilterResult.included("this round")
-                : FilterResult.excluded("runs in round " + round + " of the scene's restarts");
-    };
 
     /** What one engine discovers from {@code selectors}, configured as every in-game run is. */
     private static LauncherDiscoveryRequest request(List<? extends DiscoverySelector> selectors, String engine) {

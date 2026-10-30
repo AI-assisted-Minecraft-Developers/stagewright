@@ -14,6 +14,17 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 
 /** {@code mc.test.mods}: the mods this game loaded, as its loader lists them. */
 public final class ModsContracts {
+
+    public static final UnionType<ModsOp> MODS_PARAMS = ApiTypes.union(ModsOp.class);
+
+    public static final UnionType<ModsReply> MODS_REPLY = ApiTypes.union(ModsReply.class);
+
+    public static final MethodSpec<ModsOp, ModsReply> MODS = MethodSpec.of(
+                    "mc.test.mods",
+                    MODS_PARAMS,
+                    MODS_REPLY,
+                    "list names every mod this game loaded, with its version; has says whether one mod id is loaded.")
+            .hidden();
     private ModsContracts() {}
 
     /** The requests {@code mc.test.mods} takes, told apart by {@code op}. */
@@ -61,15 +72,4 @@ public final class ModsContracts {
 
             @Doc("Its version; absent when it is not loaded.")
             Optional<@Length(max = 256) String> version) implements ModsReply {}
-
-    public static final UnionType<ModsOp> MODS_PARAMS = ApiTypes.union(ModsOp.class);
-
-    public static final UnionType<ModsReply> MODS_REPLY = ApiTypes.union(ModsReply.class);
-
-    public static final MethodSpec<ModsOp, ModsReply> MODS = MethodSpec.of(
-                    "mc.test.mods",
-                    MODS_PARAMS,
-                    MODS_REPLY,
-                    "list names every mod this game loaded, with its version; has says whether one mod id is loaded.")
-            .hidden();
 }

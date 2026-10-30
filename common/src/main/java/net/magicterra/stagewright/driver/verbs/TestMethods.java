@@ -37,17 +37,6 @@ import net.magicterra.worlddriver.bot.BotHooks;
  * {@code net.minecraft.client.*} type, so publishing it on a server loads none.
  */
 public final class TestMethods {
-    private TestMethods() {}
-
-    /** The {@code mc.test.reset} result: one token per effect the reset undid. */
-    @Named("TestReset")
-    public record Reset(
-            @Doc("One token per effect the reset undid.") @Length(max = 64)
-            List<String> reset) {}
-
-    /** The {@code mc.test.input.heldKeys} result: which of the inputs a key release clears are down. */
-    @Named("TestHeldKeys")
-    public record Keys(TestInputContracts.HeldKeys keys) {}
 
     private static final RecordType<Reset> RESET = ApiTypes.record(Reset.class);
 
@@ -94,6 +83,22 @@ public final class TestMethods {
         return t;
     });
 
+    private static final List<ApiMethod<?, ?>> METHODS = methods();
+
+    /** One batch object, so publishing it again on the same API is the no-op the registry makes of a retry. */
+    private static final ApiBatch BATCH = new ApiBatch(ApiRegistry.TEST_OWNER, "test", METHODS);
+    private TestMethods() {}
+
+    /** The {@code mc.test.reset} result: one token per effect the reset undid. */
+    @Named("TestReset")
+    public record Reset(
+            @Doc("One token per effect the reset undid.") @Length(max = 64)
+            List<String> reset) {}
+
+    /** The {@code mc.test.input.heldKeys} result: which of the inputs a key release clears are down. */
+    @Named("TestHeldKeys")
+    public record Keys(TestInputContracts.HeldKeys keys) {}
+
     private static <P, R> ApiHandler<P, R> onClient(MethodSpec<P, R> spec, BiFunction<BotApi, P, R> body) {
         return (p, ctx) -> {
             BotApi bot;
@@ -106,8 +111,6 @@ public final class TestMethods {
         };
     }
 
-    private static final List<ApiMethod<?, ?>> METHODS = methods();
-
     private static List<ApiMethod<?, ?>> methods() {
         List<ApiMethod<?, ?>> all = new ArrayList<>(List.of(
                 new ApiMethod<>(RESET_ENTRY, onClient(RESET_ENTRY, (bot, p) -> new Reset(bot.resetClientEntry()))),
@@ -117,9 +120,6 @@ public final class TestMethods {
         all.addAll(TestQueriesApiBinding.methods(new TestQueriesService()));
         return all;
     }
-
-    /** One batch object, so publishing it again on the same API is the no-op the registry makes of a retry. */
-    private static final ApiBatch BATCH = new ApiBatch(ApiRegistry.TEST_OWNER, "test", METHODS);
 
     /** Publishes the test methods on the given API; publishing the same batch again changes nothing. */
     public static void register(ApiRegistry api) {

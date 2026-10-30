@@ -16,6 +16,21 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 
 /** {@code mc.test.chunks}: take a chunk out of memory and bring it back, as a player walking away and back would. */
 public final class ChunksContracts {
+
+    public static final UnionType<ChunksOp> CHUNKS_PARAMS = ApiTypes.union(ChunksOp.class);
+
+    public static final UnionType<ChunksReply> CHUNKS_REPLY = ApiTypes.union(ChunksReply.class);
+
+    public static final MethodSpec<ChunksOp, ChunksReply> CHUNKS = MethodSpec.of(
+                    "mc.test.chunks",
+                    CHUNKS_PARAMS,
+                    CHUNKS_REPLY,
+                    "unload drops the chunk's forced loading and waits until neither it nor its entities are in memory, "
+                            + "saved as the game saves a chunk it unloads; reload forces it loaded and waits until its "
+                            + "entities are back. done false says the wait ran out, and for unload what held the chunk.")
+            .hidden()
+            .effects(MethodSpec.Effect.WORLD_WRITE)
+            .mayWait();
     private ChunksContracts() {}
 
     /** The requests {@code mc.test.chunks} takes, told apart by {@code op}. */
@@ -79,19 +94,4 @@ public final class ChunksContracts {
             @Doc("Entities in the chunk once done; 0 when not.") @Range(min = 0)
             int entities)
             implements ChunksReply {}
-
-    public static final UnionType<ChunksOp> CHUNKS_PARAMS = ApiTypes.union(ChunksOp.class);
-
-    public static final UnionType<ChunksReply> CHUNKS_REPLY = ApiTypes.union(ChunksReply.class);
-
-    public static final MethodSpec<ChunksOp, ChunksReply> CHUNKS = MethodSpec.of(
-                    "mc.test.chunks",
-                    CHUNKS_PARAMS,
-                    CHUNKS_REPLY,
-                    "unload drops the chunk's forced loading and waits until neither it nor its entities are in memory, "
-                            + "saved as the game saves a chunk it unloads; reload forces it loaded and waits until its "
-                            + "entities are back. done false says the wait ran out, and for unload what held the chunk.")
-            .hidden()
-            .effects(MethodSpec.Effect.WORLD_WRITE)
-            .mayWait();
 }

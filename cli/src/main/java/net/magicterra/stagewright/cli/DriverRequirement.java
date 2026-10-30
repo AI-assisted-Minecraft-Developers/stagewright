@@ -24,7 +24,6 @@ import java.util.zip.ZipInputStream;
 
 /** Checks the required driver in the effective mod set before changing a world or downloading. */
 final class DriverRequirement {
-    private record Mod(String id, String version, String driverRange, String source) {}
 
     private static final String FABRIC_METADATA = "fabric.mod.json";
     private static final String NEOFORGE_METADATA = "META-INF/neoforge.mods.toml";
@@ -32,6 +31,9 @@ final class DriverRequirement {
     private static final String FRAMEWORK_ID = "mc_testkit";
 
     private static final String DRIVER_ID = "worlddriver";
+
+    private static final Map<Read, List<Mod>> READS = new ConcurrentHashMap<>();
+    private record Mod(String id, String version, String driverRange, String source) {}
 
     private DriverRequirement() {}
 
@@ -176,8 +178,6 @@ final class DriverRequirement {
     }
 
     private record Read(Path jar, long size, long modified, String loader) {}
-
-    private static final Map<Read, List<Mod>> READS = new ConcurrentHashMap<>();
 
     private static List<Mod> open(Path jar, String loader) {
         ZipFile opened;
