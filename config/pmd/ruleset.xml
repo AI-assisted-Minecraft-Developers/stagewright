@@ -28,6 +28,15 @@
         <!-- Configured below. -->
         <exclude name="CloseResource"/>
         <exclude name="AvoidDollarSigns"/>
+        <exclude name="GuardLogStatement"/>
+    </rule>
+
+    <!-- Only the levels that are off by default are worth a guard. -->
+    <rule ref="category/java/bestpractices.xml/GuardLogStatement">
+        <properties>
+            <property name="logLevels" value="trace,debug"/>
+            <property name="guardsMethods" value="isTraceEnabled,isDebugEnabled"/>
+        </properties>
     </rule>
 
     <!-- The game owns its levels, its server and its client: code that is handed one must not close it. -->
