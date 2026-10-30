@@ -41,7 +41,7 @@ final class NpcImpl implements Npc {
         game.runOnServer(server -> {
             ServerLevel level = GameImpl.level(server, dimension);
             // As Entity: a script names its type by id, and only the spawned entity says whether it is a mob.
-            Entity spawned = ((EntityType<?>) type).spawn(level, feet, MobSpawnType.COMMAND);
+            Entity spawned = type.spawn(level, feet, MobSpawnType.COMMAND);
             if (spawned == null) {
                 throw new IllegalStateException("could not spawn a " + EntityType.getKey(type) + " at "
                         + feet.toShortString() + " in " + dimension.location());
