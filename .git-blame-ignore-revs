@@ -5,3 +5,5 @@
 fe70f36fcfc02a2868097d4255b712ffec63ed05
 # JavaScript tests, Prettier
 cec00ee132d5cfd8350feac96507d6788005247c
+# Java sources, a blank line between members
+83d65f90cca609b575314100ded48cb226fc140a
