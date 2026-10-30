@@ -49,6 +49,8 @@ dependencies {
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+    // ArchitectureTest: what the plugin may depend on.
+    testImplementation 'com.tngtech.archunit:archunit:1.5.1'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine'
     // Gradle 8.x no longer bundles the platform launcher on the test runtime.
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
