@@ -13,6 +13,8 @@
         <exclude name="AvoidUsingVolatile"/>
         <exclude name="AvoidCatchingGenericException"/>
         <exclude name="AssignmentInOperand"/>
+        <!-- Comparing by identity is how the game's singletons, entities and menus are told apart. -->
+        <exclude name="CompareObjectsWithEquals"/>
         <!-- Checkstyle or the formatter already judges these. -->
         <exclude name="ControlStatementBraces"/>
         <exclude name="OneDeclarationPerLine"/>
