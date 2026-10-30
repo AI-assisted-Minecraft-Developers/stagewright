@@ -56,6 +56,8 @@ final class Handovers {
      * test's plots is released and the test fails, since the plot is put back under it. The exception to throw, or
      * null.
      */
+    // The first plot that holds the bot settles it: a bot standing in two plots must not be released or reported twice.
+    @SuppressWarnings("PMD.AvoidBranchingStatementAsLastInLoop")
     static IllegalStateException endOfTest(
             Collection<BodyImpl.BotImpl> bots, Collection<PlotImpl> plots, boolean failed) {
         IllegalStateException misplaced = null;
@@ -102,18 +104,22 @@ final class Handovers {
         Map<String, String> carried = new LinkedHashMap<>();
         for (Kept kept : KEPT.values()) {
             if (restarting) {
-                StageWrightCommon.LOG.info(
-                        "[{}] {} kept {}; it leaves for the restart and joins again where it" + " stood",
-                        StageWrightCommon.MOD_ID,
-                        kept.keeper(),
-                        kept.bot().name());
+                if (StageWrightCommon.LOG.isInfoEnabled()) {
+                    StageWrightCommon.LOG.info(
+                            "[{}] {} kept {}; it leaves for the restart and joins again where it" + " stood",
+                            StageWrightCommon.MOD_ID,
+                            kept.keeper(),
+                            kept.bot().name());
+                }
                 carried.put(kept.bot().name(), kept.keeper());
             } else {
-                StageWrightCommon.LOG.warn(
-                        "[{}] {} kept {} for a later test, and none took it",
-                        StageWrightCommon.MOD_ID,
-                        kept.keeper(),
-                        kept.bot().name());
+                if (StageWrightCommon.LOG.isWarnEnabled()) {
+                    StageWrightCommon.LOG.warn(
+                            "[{}] {} kept {} for a later test, and none took it",
+                            StageWrightCommon.MOD_ID,
+                            kept.keeper(),
+                            kept.bot().name());
+                }
             }
             // Leaving saves its player data, which is what a later round's join reads.
             kept.bot().remove();

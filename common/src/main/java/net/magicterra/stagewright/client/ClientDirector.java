@@ -174,11 +174,13 @@ public final class ClientDirector {
                             "[{}] client is in world after {} ticks", StageWrightCommon.MOD_ID, driveTicks);
                     enter(Phase.IN_WORLD);
                 } else if (++driveTicks > DRIVE_TIMEOUT_TICKS) {
-                    StageWrightCommon.LOG.error(
-                            "[{}] client never reached a world within {} ticks ({})",
-                            StageWrightCommon.MOD_ID,
-                            DRIVE_TIMEOUT_TICKS,
-                            directive());
+                    if (StageWrightCommon.LOG.isErrorEnabled()) {
+                        StageWrightCommon.LOG.error(
+                                "[{}] client never reached a world within {} ticks ({})",
+                                StageWrightCommon.MOD_ID,
+                                DRIVE_TIMEOUT_TICKS,
+                                directive());
+                    }
                     finish();
                 } else if (shouldRedial(mc)) {
                     // Keep dialling. The E2E pair is two processes with no handshake between them,
@@ -205,6 +207,7 @@ public final class ClientDirector {
                     mc.stop();
                 }
             }
+            default -> throw new IllegalStateException("unhandled director phase " + phase);
         }
     }
 
@@ -320,13 +323,15 @@ public final class ClientDirector {
         }
 
         WorldCreation creation = WorldCreation.of(world, mc.gameDirectory.toPath());
-        StageWrightCommon.LOG.info(
-                "[{}] creating world '{}': {}, {}, seed {}",
-                StageWrightCommon.MOD_ID,
-                world,
-                creation.settings().gameType().getName(),
-                creation.settings().difficulty().getKey(),
-                creation.options().seed());
+        if (StageWrightCommon.LOG.isInfoEnabled()) {
+            StageWrightCommon.LOG.info(
+                    "[{}] creating world '{}': {}, {}, seed {}",
+                    StageWrightCommon.MOD_ID,
+                    world,
+                    creation.settings().gameType().getName(),
+                    creation.settings().difficulty().getKey(),
+                    creation.options().seed());
+        }
         flows.createFreshLevel(world, creation.settings(), creation.options(), creation.dimensions(), mc.screen);
     }
 

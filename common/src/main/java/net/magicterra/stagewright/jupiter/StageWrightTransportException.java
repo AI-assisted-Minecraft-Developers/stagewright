@@ -9,6 +9,7 @@ public class StageWrightTransportException extends RuntimeException {
     private final String method;
     private final String error;
 
+    /** The call to {@code method} that the socket could not carry, with what went wrong. */
     public StageWrightTransportException(String method, String error) {
         super(method + " -> error: " + error);
         this.method = method;

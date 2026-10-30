@@ -28,6 +28,8 @@ final class AgentEvents implements TestExecutionListener {
     /** Causes followed below a failure; a cycle of causes stops here too. */
     private static final int MAX_CAUSES = 4;
 
+    private static final String ID = "id";
+
     private final AgentBridge agent;
 
     AgentEvents(AgentBridge agent) {
@@ -65,14 +67,14 @@ final class AgentEvents implements TestExecutionListener {
     @Override
     public void executionStarted(TestIdentifier id) {
         JsonObject o = event("started");
-        o.addProperty("id", id.getUniqueId());
+        o.addProperty(ID, id.getUniqueId());
         send(o);
     }
 
     @Override
     public void executionSkipped(TestIdentifier id, String reason) {
         JsonObject o = event("skipped");
-        o.addProperty("id", id.getUniqueId());
+        o.addProperty(ID, id.getUniqueId());
         o.addProperty("reason", reason);
         send(o);
     }
@@ -80,7 +82,7 @@ final class AgentEvents implements TestExecutionListener {
     @Override
     public void executionFinished(TestIdentifier id, TestExecutionResult result) {
         JsonObject o = event("finished");
-        o.addProperty("id", id.getUniqueId());
+        o.addProperty(ID, id.getUniqueId());
         o.addProperty("status", result.getStatus().name());
         result.getThrowable().ifPresent(t -> o.add("failure", failure(t)));
         send(o);
@@ -110,7 +112,7 @@ final class AgentEvents implements TestExecutionListener {
 
     private JsonObject node(TestIdentifier id) {
         JsonObject n = new JsonObject();
-        n.addProperty("id", id.getUniqueId());
+        n.addProperty(ID, id.getUniqueId());
         id.getParentId().ifPresent(p -> n.addProperty("parent", p));
         n.addProperty("name", id.getDisplayName());
         n.addProperty("test", id.isTest());
@@ -133,6 +135,8 @@ final class AgentEvents implements TestExecutionListener {
         return failure(t, 0);
     }
 
+    // A self-cause is the one cycle to stop on, and that test is identity by definition.
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     private static JsonObject failure(Throwable t, int depth) {
         JsonObject f = new JsonObject();
         f.addProperty("class", t.getClass().getName());

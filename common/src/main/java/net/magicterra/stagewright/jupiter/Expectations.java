@@ -18,11 +18,19 @@ final class Expectations {
 
     static final int SHOWN = 10;
 
+    private static final String BUT_WAS = " but was ";
+    private static final String GT = "gt";
+    private static final String LT = "lt";
+    private static final String AT_LEAST = "atLeast";
+    private static final String AT_MOST = "atMost";
+
     private Expectations() {}
 
+    // The name is the YAML operator's, and the operator is what the assertion is named after.
+    @SuppressWarnings("PMD.SuspiciousEqualsMethodName")
     static void equals(Object actual, Object expected) {
         if (!same(actual, expected)) {
-            fail("expected " + show(expected) + " but was " + show(actual));
+            fail("expected " + show(expected) + BUT_WAS + show(actual));
         }
     }
 
@@ -57,32 +65,37 @@ final class Expectations {
         }
     }
 
+    // Negated on purpose: a NaN bound or actual must fail, and the plain inverse operator would let it pass.
+    @SuppressWarnings("PMD.LogicInversion")
     static void gt(Object actual, Object bound) {
-        if (!(number(actual, "gt") > number(bound, "gt"))) {
-            fail("expected more than " + show(bound) + " but was " + show(actual));
+        if (!(number(actual, GT) > number(bound, GT))) {
+            fail("expected more than " + show(bound) + BUT_WAS + show(actual));
         }
     }
 
+    @SuppressWarnings("PMD.LogicInversion")
     static void lt(Object actual, Object bound) {
-        if (!(number(actual, "lt") < number(bound, "lt"))) {
-            fail("expected less than " + show(bound) + " but was " + show(actual));
+        if (!(number(actual, LT) < number(bound, LT))) {
+            fail("expected less than " + show(bound) + BUT_WAS + show(actual));
         }
     }
 
+    @SuppressWarnings("PMD.LogicInversion")
     static void atLeast(Object actual, Object bound) {
-        if (!(number(actual, "atLeast") >= number(bound, "atLeast"))) {
-            fail("expected at least " + show(bound) + " but was " + show(actual));
+        if (!(number(actual, AT_LEAST) >= number(bound, AT_LEAST))) {
+            fail("expected at least " + show(bound) + BUT_WAS + show(actual));
         }
     }
 
+    @SuppressWarnings("PMD.LogicInversion")
     static void atMost(Object actual, Object bound) {
-        if (!(number(actual, "atMost") <= number(bound, "atMost"))) {
-            fail("expected at most " + show(bound) + " but was " + show(actual));
+        if (!(number(actual, AT_MOST) <= number(bound, AT_MOST))) {
+            fail("expected at most " + show(bound) + BUT_WAS + show(actual));
         }
     }
 
     static final Set<String> OPERATORS =
-            Set.of("equals", "contains", "empty", "gt", "lt", "atLeast", "atMost", "anyOf", "allOf");
+            Set.of("equals", "contains", "empty", GT, LT, AT_LEAST, AT_MOST, "anyOf", "allOf");
 
     /**
      * A YAML test's {@code expect}: an operator's name alone ({@code empty}), or a map whose keys are operators,
@@ -112,6 +125,8 @@ final class Expectations {
         }
     }
 
+    // The rethrow keeps the original assertion's cause and folds the field path into its message, as before.
+    @SuppressWarnings("PMD.PreserveStackTrace")
     private static void apply(String op, Object actual, Object arg, String where) {
         try {
             switch (op) {
@@ -129,10 +144,10 @@ final class Expectations {
                         isEmpty(actual);
                     }
                 }
-                case "gt" -> gt(actual, arg);
-                case "lt" -> lt(actual, arg);
-                case "atLeast" -> atLeast(actual, arg);
-                case "atMost" -> atMost(actual, arg);
+                case GT -> gt(actual, arg);
+                case LT -> lt(actual, arg);
+                case AT_LEAST -> atLeast(actual, arg);
+                case AT_MOST -> atMost(actual, arg);
                 case "anyOf" -> {
                     List<String> misses = new ArrayList<>();
                     for (Object each : alternatives(arg, op)) {

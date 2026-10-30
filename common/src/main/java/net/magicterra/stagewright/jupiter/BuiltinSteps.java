@@ -21,6 +21,9 @@ import net.minecraft.world.level.block.entity.HopperBlockEntity;
  */
 final class BuiltinSteps {
 
+    private static final String AT_KEY = "at";
+    private static final String OF_KEY = "of";
+
     static final Set<String> NAMES =
             Set.of("place", "insert", "container", "chunk.unload", "chunk.reload", "store.put", "store.get");
 
@@ -51,7 +54,7 @@ final class BuiltinSteps {
 
     /** {@code place: {at, block, as}}: set one block, and name its position when {@code as} is given. */
     private static Object place(ScriptContext context, Map<?, ?> args) {
-        BlockPos at = position(context, args.get("at"));
+        BlockPos at = position(context, args.get(AT_KEY));
         if (!(args.get("block") instanceof String block)) {
             throw new IllegalArgumentException("place: block is an id");
         }
@@ -98,10 +101,10 @@ final class BuiltinSteps {
      * are an expectation of that, as {@code expect} is.
      */
     private static Object container(ScriptContext context, Object args) {
-        Map<?, ?> map = args instanceof Map<?, ?> m && m.containsKey("of") ? m : Map.of("of", args);
-        Map<String, Integer> contents = contents(context, position(context, map.get("of")));
+        Map<?, ?> map = args instanceof Map<?, ?> m && m.containsKey(OF_KEY) ? m : Map.of(OF_KEY, args);
+        Map<String, Integer> contents = contents(context, position(context, map.get(OF_KEY)));
         Map<Object, Object> expected = new LinkedHashMap<>(map);
-        expected.remove("of");
+        expected.remove(OF_KEY);
         if (!expected.isEmpty()) {
             Expectations.expect(contents, expected);
         }
@@ -110,10 +113,10 @@ final class BuiltinSteps {
 
     /** {@code chunk.unload: at} or {@code {at, within}}: the chunk holding that position, out of memory or back. */
     private static Object chunk(ScriptContext context, String op, Object args) {
-        Map<?, ?> map = args instanceof Map<?, ?> m && m.containsKey("at") ? m : Map.of("at", args);
+        Map<?, ?> map = args instanceof Map<?, ?> m && m.containsKey(AT_KEY) ? m : Map.of(AT_KEY, args);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("op", op);
-        params.put("pos", ScriptHandles.position(position(context, map.get("at"))));
+        params.put("pos", ScriptHandles.position(position(context, map.get(AT_KEY))));
         if (map.containsKey("within")) {
             params.put("withinTicks", map.get("within"));
         }

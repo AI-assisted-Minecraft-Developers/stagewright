@@ -83,6 +83,8 @@ final class PerfSampler {
         return out;
     }
 
+    // Retained memory is read after a collection on purpose; the pause falls between sample windows.
+    @SuppressWarnings("PMD.DoNotCallGarbageCollectionExplicitly")
     private static Perf.Window window(Game game, int sample) {
         long[] at = new long[sample + 1];
         long[] cpu = new long[2];
@@ -170,6 +172,8 @@ final class PerfSampler {
      * of {@code Minecraft} on every sample of a dedicated server's window and logged each attempt. Any throwable means
      * no client: Fabric refuses the class with a plain {@code RuntimeException}.
      */
+    // Called only from the server thread's sampling, so the lazily cached reflective handles have one writer.
+    @SuppressWarnings("PMD.NonThreadSafeSingleton")
     private static int clientFps() {
         if (fpsAbsent) {
             return -1;

@@ -46,6 +46,8 @@ public final class ScriptTestEngine implements TestEngine {
     private static final Set<String> OPTIONS =
             Set.of("scene", "requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart");
 
+    private static final String TEST_LABEL = "test '";
+
     private volatile TestDescriptor discovered;
 
     @Override
@@ -245,7 +247,7 @@ public final class ScriptTestEngine implements TestEngine {
             for (Object key : options.keySet()) {
                 if (!OPTIONS.contains(String.valueOf(key))) {
                     throw new IllegalArgumentException(
-                            "test '" + name + "': unknown option '" + key + "'; known: " + OPTIONS);
+                            TEST_LABEL + name + "': unknown option '" + key + "'; known: " + OPTIONS);
                 }
             }
             if (!inThisScene(options.get("scene"))) {
@@ -253,19 +255,19 @@ public final class ScriptTestEngine implements TestEngine {
             }
             UniqueId id = getUniqueId().append("test", name);
             if (getChildren().stream().anyMatch(c -> c.getUniqueId().equals(id))) {
-                throw new IllegalArgumentException("test '" + name + "' is registered twice in " + resource);
+                throw new IllegalArgumentException(TEST_LABEL + name + "' is registered twice in " + resource);
             }
             Object known = options.get("knownIssue");
             if (known != null && !(known instanceof String)) {
-                throw new IllegalArgumentException("test '" + name + "': knownIssue is the reason, a string");
+                throw new IllegalArgumentException(TEST_LABEL + name + "': knownIssue is the reason, a string");
             }
             Object isolated = options.get("isolated");
             if (isolated != null && !(isolated instanceof Boolean)) {
-                throw new IllegalArgumentException("test '" + name + "': isolated is true or false");
+                throw new IllegalArgumentException(TEST_LABEL + name + "': isolated is true or false");
             }
             Object afterRestart = options.get("afterRestart");
             if (afterRestart != null && !(afterRestart instanceof Boolean)) {
-                throw new IllegalArgumentException("test '" + name + "': afterRestart is true or false");
+                throw new IllegalArgumentException(TEST_LABEL + name + "': afterRestart is true or false");
             }
             addChild(new Test(
                     id,
@@ -334,7 +336,7 @@ public final class ScriptTestEngine implements TestEngine {
                         case "dedicatedServer" -> Requires.Capability.DEDICATED_SERVER;
                         case "integratedServer" -> Requires.Capability.INTEGRATED_SERVER;
                         default ->
-                            throw new IllegalArgumentException("test '" + test + "': requires '" + s + "' is none of"
+                            throw new IllegalArgumentException(TEST_LABEL + test + "': requires '" + s + "' is none of"
                                     + " client, dedicatedServer, integratedServer, mod:<id>");
                     });
         }
@@ -358,7 +360,7 @@ public final class ScriptTestEngine implements TestEngine {
         for (Object item : items) {
             if (!(item instanceof String s) || s.isBlank()) {
                 throw new IllegalArgumentException(
-                        "test '" + test + "': dependsOn names tests, but has " + Expectations.show(item));
+                        TEST_LABEL + test + "': dependsOn names tests, but has " + Expectations.show(item));
             }
             keys.add(s.contains("#") ? s : resource + "#" + s);
         }
@@ -377,7 +379,7 @@ public final class ScriptTestEngine implements TestEngine {
         for (Object item : items) {
             if (!(item instanceof String s) || s.isBlank()) {
                 throw new IllegalArgumentException(
-                        "test '" + test + "': locks are names, but has " + Expectations.show(item));
+                        TEST_LABEL + test + "': locks are names, but has " + Expectations.show(item));
             }
             locks.add(TestScope.LOCK_PREFIX + s);
         }
@@ -434,6 +436,8 @@ public final class ScriptTestEngine implements TestEngine {
         }
 
         /** Run, or skip, this test and report it; answers how it ended. */
+        // The hold is a try-with-resources handle: it is used by the block and released when the block ends.
+        @SuppressWarnings("PMD.UnusedLocalVariable")
         TestExecutionResult.Status execute(EngineExecutionListener listener, ScriptScheduler scheduler) {
             if (requirement.any()) {
                 List<String> missing = RequiresCondition.missing(requirement.capabilities(), requirement.mods());
@@ -461,14 +465,16 @@ public final class ScriptTestEngine implements TestEngine {
         private TestExecutionResult upstream(ScriptScheduler scheduler) {
             for (String dependency : dependsOn) {
                 String why = null;
-                if (!Dependencies.isScript(dependency)) {
+                if (Dependencies.isScript(dependency)) {
+                    if (!scheduler.has(dependency)) {
+                        why = Dependencies.earlierRound(dependency);
+                        if (why != null && why.startsWith("is not")) {
+                            why += ": not in this scene, or its file did not load";
+                        }
+                    }
+                } else {
                     int hash = dependency.indexOf('#');
                     why = Dependencies.blockerFor(dependency.substring(0, hash), dependency.substring(hash + 1));
-                } else if (!scheduler.has(dependency)) {
-                    why = Dependencies.earlierRound(dependency);
-                    if (why != null && why.startsWith("is not")) {
-                        why += ": not in this scene, or its file did not load";
-                    }
                 }
                 if (why != null) {
                     return TestExecutionResult.aborted(

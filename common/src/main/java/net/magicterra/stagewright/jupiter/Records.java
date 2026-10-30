@@ -31,7 +31,9 @@ final class Records {
     /** As {@link #publish(String, String, String, String)}, the event handed to {@code send}. */
     static void publish(Consumer<String> send, String uniqueId, String label, String name, String value) {
         String text = value == null || value.isBlank() ? "" : value;
-        StageWrightCommon.LOG.info("[{}] record {}: {} = {}", StageWrightCommon.MOD_ID, label, name, oneLine(text));
+        if (StageWrightCommon.LOG.isInfoEnabled()) {
+            StageWrightCommon.LOG.info("[{}] record {}: {} = {}", StageWrightCommon.MOD_ID, label, name, oneLine(text));
+        }
         JsonObject o = new JsonObject();
         o.addProperty("type", "record");
         o.addProperty("id", uniqueId);

@@ -62,6 +62,8 @@ final class NpcImpl implements Npc {
     }
 
     /** Server thread: let the mob go and take it out of the world. */
+    // The server is part of the scope's end-callback signature; the body reaches the world through the bot.
+    @SuppressWarnings("PMD.UnusedFormalParameter")
     private void remove(MinecraftServer server) {
         Bot bot = BotRegistry.get(ref());
         if (bot == null) {

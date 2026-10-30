@@ -24,11 +24,15 @@ public abstract class OptionsMixin {
      * runs.
      */
     @Inject(method = "load", at = @At("RETURN"))
+    // Mixin calls this handler by its annotation, and the callback info is the signature Mixin requires.
+    @SuppressWarnings({"PMD.UnusedPrivateMethod", "PMD.UnusedFormalParameter"})
     private void stagewright$applyRunSettings(CallbackInfo ci) {
         RunOptions.apply((Options) (Object) this, optionsFile);
     }
 
     @Inject(method = "save", at = @At("RETURN"))
+    // Mixin calls this handler by its annotation, and the callback info is the signature Mixin requires.
+    @SuppressWarnings({"PMD.UnusedPrivateMethod", "PMD.UnusedFormalParameter"})
     private void stagewright$restorePlayersSettings(CallbackInfo ci) {
         RunOptions.restoreFile(optionsFile);
     }

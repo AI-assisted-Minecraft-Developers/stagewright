@@ -67,9 +67,13 @@ import net.minecraft.world.entity.Entity;
  * exception is a press on self, which runs on the client thread and answers once it has.
  */
 final class HarnessService implements TestHarnessApi {
+    private static final String BOT_POINTER = "/bot";
+
     private final Map<Integer, Map<String, Object>> pins = new ConcurrentHashMap<>();
     private final AtomicInteger nextPin = new AtomicInteger();
 
+    // One arm per operation, each a few lines; the switch is dense by its nature and reads better whole.
+    @SuppressWarnings("PMD.SwitchDensity")
     @Override
     public CompletionStage<SettingsReply> settings(SettingsOp op, CallContext ctx) {
         return now(() -> switch (op) {
@@ -79,6 +83,7 @@ final class HarnessService implements TestHarnessApi {
                     case TEST -> BotConfig.applyGameTestBaseline();
                     case COMPILED -> BotConfig.applyCompiledDefaults();
                     case CURRENT -> {}
+                    default -> throw new IllegalStateException("unhandled baseline " + p.baseline());
                 }
                 if (p.untimed()) {
                     PlanningConfig.pathfinderMaxMs = Long.MAX_VALUE / 2;
@@ -127,8 +132,8 @@ final class HarnessService implements TestHarnessApi {
             onServerThread("mc.test.bots");
             return switch (op) {
                 case Tick t -> new Ticked(tick(t), BotTicker.activeCount());
-                case Count c -> new Counted(BotTicker.size(), BotTicker.activeCount());
-                case Clear c -> {
+                case Count() -> new Counted(BotTicker.size(), BotTicker.activeCount());
+                case Clear() -> {
                     Set<Bot> gone = new HashSet<>();
                     for (Bot b : BotRegistry.all()) {
                         if (BotRegistry.isSelf(b.id())) {
@@ -145,11 +150,11 @@ final class HarnessService implements TestHarnessApi {
                     yield new Cleared(gone.size());
                 }
                 case Park p -> {
-                    BotTicker.unregister(named(p.bot(), "/bot"));
+                    BotTicker.unregister(named(p.bot(), BOT_POINTER));
                     yield new Parked(p.bot(), true);
                 }
                 case Unpark u -> {
-                    BotTicker.register(named(u.bot(), "/bot"));
+                    BotTicker.register(named(u.bot(), BOT_POINTER));
                     yield new Parked(u.bot(), false);
                 }
             };
@@ -171,10 +176,10 @@ final class HarnessService implements TestHarnessApi {
             }
             return n;
         }
-        Bot bot = named(t.bot().get(), "/bot");
+        Bot bot = named(t.bot().get(), BOT_POINTER);
         if (!(bot instanceof ServerBot server)) {
             throw ApiException.invalidParam(
-                    "/bot", ApiIssue.Code.INVALID_VALUE, t.bot().get() + " is not ticked by the server");
+                    BOT_POINTER, ApiIssue.Code.INVALID_VALUE, t.bot().get() + " is not ticked by the server");
         }
         int n = 0;
         for (; n < t.ticks(); n++) {
@@ -185,6 +190,7 @@ final class HarnessService implements TestHarnessApi {
                 case ALL -> server.tick();
                 case BODY -> server.stepBody();
                 case BRAIN -> server.think();
+                default -> throw new IllegalStateException("unhandled part " + t.part());
             }
         }
         return n;
@@ -214,7 +220,7 @@ final class HarnessService implements TestHarnessApi {
         }
         return now(() -> {
             onServerThread("mc.test.input.press");
-            return press(press, named(press.bot(), "/bot").body());
+            return press(press, named(press.bot(), BOT_POINTER).body());
         });
     }
 

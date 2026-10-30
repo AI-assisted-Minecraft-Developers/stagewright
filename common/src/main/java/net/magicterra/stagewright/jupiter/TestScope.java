@@ -79,15 +79,17 @@ final class TestScope {
      * Take this Java test's locks in {@link RunLocks}, which keep it from the script tests running beside it; alone
      * when it is isolated or the Java tests run one at a time, as each of them then runs alone.
      */
-    void hold(boolean oneAtATime) {
+    void hold(boolean sequential) {
         Map<String, Boolean> named = RunLocks.exclusive(locks);
         for (String read : readLocks) {
             named.put(read, false);
         }
-        held = RunLocks.hold(named, isolated || oneAtATime);
+        held = RunLocks.hold(named, isolated || sequential);
     }
 
     /** Give back what {@link #hold} took, if it took anything. */
+    // The AutoCloseable hold is the one this scope took, and close() is what its owner expects to throw.
+    @SuppressWarnings({"PMD.SignatureDeclareThrowsException", "PMD.CloseResource"})
     void release() throws Exception {
         AutoCloseable h = held;
         held = null;

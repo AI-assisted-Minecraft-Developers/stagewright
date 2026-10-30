@@ -60,6 +60,7 @@ public final class Dependencies implements TestWatcher {
     }
 
     private static final String PARALLEL = "junit.jupiter.execution.parallel.enabled";
+    private static final String DEPENDS_ON = "depends on ";
 
     private static volatile Set<Ref> planned = Set.of();
     private static volatile TestPlan currentPlan;
@@ -181,7 +182,7 @@ public final class Dependencies implements TestWatcher {
         return cycles;
     }
 
-    private static void findCycle(String at, LinkedHashSet<String> path, Set<String> done, List<String> cycles) {
+    private static void findCycle(String at, Set<String> path, Set<String> done, List<String> cycles) {
         if (done.contains(at)) {
             return;
         }
@@ -305,7 +306,7 @@ public final class Dependencies implements TestWatcher {
             if (!planned.contains(ref)) {
                 String why = earlierRound(ref.key());
                 if (why != null) {
-                    Assumptions.abort("depends on " + ref + ", which " + why);
+                    Assumptions.abort(DEPENDS_ON + ref + ", which " + why);
                 }
                 continue;
             }
@@ -315,17 +316,18 @@ public final class Dependencies implements TestWatcher {
             Outcome outcome = OUTCOMES.get(ref);
             if (outcome == null) {
                 if (!parallel) {
-                    Assumptions.abort("depends on " + ref + ", which has not run yet: a @TestMethodOrder or"
+                    Assumptions.abort(DEPENDS_ON + ref + ", which has not run yet: a @TestMethodOrder or"
                             + " @TestClassOrder puts this test first");
                 }
-                Assumptions.abort("depends on " + ref + ", which ended without running: its class failed or was"
-                        + " skipped first");
+                Assumptions.abort(
+                        DEPENDS_ON + ref + ", which ended without running: its class failed or was" + " skipped first");
             }
             switch (outcome) {
                 case SUCCEEDED -> {}
-                case FAILED -> Assumptions.abort("depends on " + ref + ", which failed");
-                case ABORTED -> Assumptions.abort("depends on " + ref + ", which was aborted");
-                case DISABLED -> Assumptions.abort("depends on " + ref + ", which is disabled");
+                case FAILED -> Assumptions.abort(DEPENDS_ON + ref + ", which failed");
+                case ABORTED -> Assumptions.abort(DEPENDS_ON + ref + ", which was aborted");
+                case DISABLED -> Assumptions.abort(DEPENDS_ON + ref + ", which is disabled");
+                default -> throw new IllegalStateException("unhandled outcome " + outcome);
             }
         }
         for (String key : scriptUpstream(context.getRequiredTestMethod())) {
@@ -335,13 +337,13 @@ public final class Dependencies implements TestWatcher {
                 if (why == null) {
                     continue;
                 }
-                Assumptions.abort("depends on " + key + ", which " + why
+                Assumptions.abort(DEPENDS_ON + key + ", which " + why
                         + (why.startsWith("is not") ? ": not in this scene, or its file did not load" : ""));
             }
             await(ended);
             TestExecutionResult.Status status = ended.getNow(TestExecutionResult.Status.ABORTED);
             if (status != TestExecutionResult.Status.SUCCESSFUL) {
-                Assumptions.abort("depends on " + key + ", which did not pass (" + status + ")");
+                Assumptions.abort(DEPENDS_ON + key + ", which did not pass (" + status + ")");
             }
         }
     }

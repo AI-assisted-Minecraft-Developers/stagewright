@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,10 +41,12 @@ public final class StageWrightRpc implements AutoCloseable {
     /** How long {@link #close} lets the close handshake and anything in flight finish. */
     private static final Duration CLOSE_GRACE = Duration.ofSeconds(2);
 
+    private static final String CODE = "code";
+
     private final HttpClient httpClient;
     private final WebSocket webSocket;
     private final AtomicLong ids = new AtomicLong(0);
-    private final ConcurrentHashMap<Long, CompletableFuture<JsonObject>> pending = new ConcurrentHashMap<>();
+    private final Map<Long, CompletableFuture<JsonObject>> pending = new ConcurrentHashMap<>();
     private final Reader reader;
     private CompletableFuture<?> lastSend = CompletableFuture.completedFuture(null);
 
@@ -59,6 +62,9 @@ public final class StageWrightRpc implements AutoCloseable {
      * returning. Throws {@link StageWrightTransportException} if the connection cannot be established within
      * {@code connectTimeoutMs}.
      */
+    // The client is shut down here on any failed attempt and otherwise owned by the returned rpc; the handshake's
+    // failure text is folded into the transport error's message, which is the shape callers rely on.
+    @SuppressWarnings({"PMD.CloseResource", "PMD.PreserveStackTrace"})
     public static StageWrightRpc connect(String wsUri, long connectTimeoutMs) {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
@@ -105,6 +111,8 @@ public final class StageWrightRpc implements AutoCloseable {
      * {@link #call}, answering the reply envelope as it came, {@code error} or {@code result}, for a caller that
      * rebuilds the error itself. Throws as {@link #call} does for everything but a refusal.
      */
+    // Transport errors carry the failure's text, not the exception, so callers see one error shape for every failure.
+    @SuppressWarnings("PMD.PreserveStackTrace")
     public JsonObject envelope(String method, JsonObject params, long timeoutMs) {
         long id = ids.incrementAndGet();
         CompletableFuture<JsonObject> fut = new CompletableFuture<>();
@@ -209,7 +217,6 @@ public final class StageWrightRpc implements AutoCloseable {
     // Pure functions, split from transport so SelfTest can round-trip the wire
     // format without opening a socket.
 
-    /** Build a request envelope {@code {"id":id,"method":method,"params":params}}. */
     /**
      * The three helpers below are the hand-rolled envelope itself — {@code {id, method, params}} out, {@code {id,
      * result|error}} back, with notifications distinguished by the ABSENCE of an "id" key rather than by its value.
@@ -270,11 +277,11 @@ public final class StageWrightRpc implements AutoCloseable {
         StringBuilder out = new StringBuilder(stringOr(e.get("message"), e.toString()));
         JsonElement dataEl = e.get("data");
         JsonObject data = dataEl != null && dataEl.isJsonObject() ? dataEl.getAsJsonObject() : null;
-        String apiCode = data == null ? null : stringOr(data.get("code"), null);
+        String apiCode = data == null ? null : stringOr(data.get(CODE), null);
         if (apiCode != null) {
             out.append(" [").append(apiCode).append(']');
-        } else if (e.get("code") != null && e.get("code").isJsonPrimitive()) {
-            out.append(" [").append(e.get("code").getAsString()).append(']');
+        } else if (e.get(CODE) != null && e.get(CODE).isJsonPrimitive()) {
+            out.append(" [").append(e.get(CODE).getAsString()).append(']');
         }
         JsonElement issues = data == null ? null : data.get("issues");
         if (issues != null && issues.isJsonArray() && !issues.getAsJsonArray().isEmpty()) {
@@ -289,7 +296,7 @@ public final class StageWrightRpc implements AutoCloseable {
                 }
                 JsonObject issue = i.getAsJsonObject();
                 String path = stringOr(issue.get("path"), "");
-                out.append(path.isEmpty() ? "/" : path).append(' ').append(stringOr(issue.get("code"), "?"));
+                out.append(path.isEmpty() ? "/" : path).append(' ').append(stringOr(issue.get(CODE), "?"));
                 String msg = stringOr(issue.get("message"), "");
                 if (!msg.isEmpty()) {
                     out.append(" (").append(msg).append(')');
@@ -307,11 +314,14 @@ public final class StageWrightRpc implements AutoCloseable {
 
     /** Accumulates (possibly fragmented) text frames and completes pending futures. */
     static final class Reader implements WebSocket.Listener {
+        // Accumulates fragments across frames, so it has to outlive any single onText callback.
+        @SuppressWarnings("PMD.AvoidStringBufferField")
         private final StringBuilder buf = new StringBuilder();
-        private volatile ConcurrentHashMap<Long, CompletableFuture<JsonObject>> pending;
+
+        private volatile Map<Long, CompletableFuture<JsonObject>> pending;
         private volatile Throwable closedBy;
 
-        void bind(ConcurrentHashMap<Long, CompletableFuture<JsonObject>> pending) {
+        void bind(Map<Long, CompletableFuture<JsonObject>> pending) {
             this.pending = pending;
         }
 

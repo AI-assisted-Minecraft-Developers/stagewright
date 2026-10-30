@@ -97,6 +97,8 @@ final class GameImpl implements Game {
         return game instanceof GameImpl impl ? impl.scripting() : WorldDriver.scripting();
     }
 
+    // rethrow hands the server's own cause up unchanged, so the original trace survives the hop.
+    @SuppressWarnings("PMD.PreserveStackTrace")
     @Override
     public <T> T onServer(Function<MinecraftServer, T> work) {
         // Already there, as an await condition is: nothing to wait for, so run it now.
@@ -305,6 +307,8 @@ final class GameImpl implements Game {
     }
 
     /** Whether {@code condition} held within {@code budget} ticks. */
+    // A timeout is reported as an assertion with no cause on purpose: the message names the stall, not the future.
+    @SuppressWarnings("PMD.PreserveStackTrace")
     private boolean waitFor(BooleanSupplier condition, int budget) {
         if (server.isSameThread()) {
             throw new IllegalStateException(

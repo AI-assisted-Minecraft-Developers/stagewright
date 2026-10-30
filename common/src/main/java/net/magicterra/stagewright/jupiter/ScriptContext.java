@@ -28,6 +28,7 @@ final class ScriptContext {
     private static final Gson GSON = new Gson();
     private static final int DEFAULT_WITHIN = 200;
     private static final int DEFAULT_SETTLE = 20;
+    private static final String CALL = "call";
 
     private final Game game;
     private final Map<String, Scripting.Function> steps;
@@ -58,7 +59,7 @@ final class ScriptContext {
             return script;
         }
         script = new LinkedHashMap<>();
-        script.put("call", (Scripting.Function) this::call);
+        script.put(CALL, (Scripting.Function) this::call);
         script.put("step", (Scripting.Function) this::step);
         script.put("wait", (Scripting.Function) this::await);
         script.put("waitUntil", (Scripting.Function) this::waitUntil);
@@ -101,7 +102,7 @@ final class ScriptContext {
         Scripting scripting = GameImpl.scripting(game);
         if (scripting != null) {
             errors = new CatchableErrors(scripting);
-            script.put("call", errors.wrap((Scripting.Function) script.get("call"), false));
+            script.put(CALL, errors.wrap((Scripting.Function) script.get(CALL), false));
             for (String handle : List.of("plot", "bot", "player", "npc", "client")) {
                 script.put(handle, errors.wrap((Scripting.Function) script.get(handle), true));
             }
@@ -186,6 +187,8 @@ final class ScriptContext {
      * Run what {@code t.afterTest} registered, last first. Each runs whatever the others did: what one throws is added
      * to {@code failure}, or becomes it when the test had passed. Answers the test's failure.
      */
+    // A cleanup that throws the very throwable already recorded is one failure, so the identity check is intended.
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     static Throwable runAfterTest(List<Scripting.Function> cleanups, Throwable failure, CatchableErrors errors) {
         for (int i = cleanups.size() - 1; i >= 0; i--) {
             try {
@@ -233,8 +236,13 @@ final class ScriptContext {
         return route(game.registry(), "t.call", args);
     }
 
+    /** {@code method} with {@code params}, as {@code t.call} makes it. */
+    Object call(String method, Object params) {
+        return route(game.registry(), CALL, method, params);
+    }
+
     /** {@code method} of {@code registry} with {@code args[1]} as its parameters, answered as plain values. */
-    static Object route(ApiRegistry registry, String usage, Object[] args) {
+    static Object route(ApiRegistry registry, String usage, Object... args) {
         String method = string(args, 0, usage + "(method, params)");
         JsonElement params = args.length > 1 && args[1] != null ? tree(args[1]) : new JsonObject();
         if (!params.isJsonObject()) {
@@ -362,13 +370,15 @@ final class ScriptContext {
         }
     }
 
-    /** {@code method} with {@code params}, as {@code t.call} makes it. */
-    Object call(String method, Object params) {
-        return route(game.registry(), "call", new Object[] {method, params});
-    }
-
     void ticks(int n) {
         game.ticks(n);
+    }
+
+    static int ticks(Object v, String what) {
+        if (v instanceof Number n && n.doubleValue() >= 0 && n.doubleValue() == Math.rint(n.doubleValue())) {
+            return n.intValue();
+        }
+        throw new IllegalArgumentException(what + " is a whole number of ticks, but was " + Expectations.show(v));
     }
 
     /** A plot leased for the test, as {@code t.plot(options)} answers it. */
@@ -376,10 +386,6 @@ final class ScriptContext {
     Map<String, Object> plot(Map<String, Object> options) {
         asScript();
         return (Map<String, Object>) javaPlot.call(options);
-    }
-
-    void record(String name, Object value) {
-        record(new Object[] {name, value});
     }
 
     /** {@code t.expect(actual)}: the operators, each failing the test when it does not hold. */
@@ -442,6 +448,12 @@ final class ScriptContext {
         return null;
     }
 
+    // The array selects the varargs overload below; a two-argument call here would recurse into this method.
+    @SuppressWarnings("PMD.UnnecessaryVarargsArrayCreation")
+    void record(String name, Object value) {
+        record(new Object[] {name, value});
+    }
+
     /**
      * {@code t.record(name, value)}: a value kept in the report beside the test's result, and in the game's log. A
      * string is kept as it is, an empty one included; anything else as JSON.
@@ -488,7 +500,7 @@ final class ScriptContext {
         };
     }
 
-    private static Object arg(Object[] args) {
+    private static Object arg(Object... args) {
         return args.length > 0 ? args[0] : null;
     }
 
@@ -506,14 +518,7 @@ final class ScriptContext {
         throw new IllegalArgumentException(usage + ": the condition must be a function");
     }
 
-    private static Map<?, ?> options(Object[] args) {
+    private static Map<?, ?> options(Object... args) {
         return args.length > 1 && args[1] instanceof Map<?, ?> m ? m : Map.of();
-    }
-
-    static int ticks(Object v, String what) {
-        if (v instanceof Number n && n.doubleValue() >= 0 && n.doubleValue() == Math.rint(n.doubleValue())) {
-            return n.intValue();
-        }
-        throw new IllegalArgumentException(what + " is a whole number of ticks, but was " + Expectations.show(v));
     }
 }

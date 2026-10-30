@@ -9,6 +9,7 @@ public class StageWrightRpcException extends RuntimeException {
     private final String method;
     private final String error;
 
+    /** The refusal of {@code method}, with the readable {@code error} it came back with. */
     public StageWrightRpcException(String method, String error) {
         super(method + " -> error: " + error);
         this.method = method;

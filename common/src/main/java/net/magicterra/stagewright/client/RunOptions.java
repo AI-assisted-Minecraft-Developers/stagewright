@@ -58,6 +58,8 @@ public final class RunOptions {
      * dialog that waits for a click forever. The game is not yet running here, so {@code OptionInstance.set} stores the
      * value without firing its callbacks.
      */
+    // Client setup runs on the game thread before any tick, so the check-then-set on original cannot race.
+    @SuppressWarnings("PMD.NonThreadSafeSingleton")
     public static void apply(Options options, File file) {
         if (!ClientDirector.directed()) {
             return;
@@ -94,11 +96,13 @@ public final class RunOptions {
             }
             Files.write(path, out, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            StageWrightCommon.LOG.warn(
-                    "[{}] could not restore the player's settings in {}: {}",
-                    StageWrightCommon.MOD_ID,
-                    path,
-                    e.toString());
+            if (StageWrightCommon.LOG.isWarnEnabled()) {
+                StageWrightCommon.LOG.warn(
+                        "[{}] could not restore the player's settings in {}: {}",
+                        StageWrightCommon.MOD_ID,
+                        path,
+                        e.toString());
+            }
         }
     }
 
@@ -115,7 +119,9 @@ public final class RunOptions {
                 }
             }
         } catch (IOException e) {
-            StageWrightCommon.LOG.warn("[{}] could not read {}: {}", StageWrightCommon.MOD_ID, file, e.toString());
+            if (StageWrightCommon.LOG.isWarnEnabled()) {
+                StageWrightCommon.LOG.warn("[{}] could not read {}: {}", StageWrightCommon.MOD_ID, file, e.toString());
+            }
         }
         return out;
     }

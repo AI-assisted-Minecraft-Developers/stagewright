@@ -102,6 +102,8 @@ public final class JupiterRun {
         ClientConnection.close();
     }
 
+    // One ordered sequence (discover, prepare, run both plans, record outcomes); splitting it would scatter that order.
+    @SuppressWarnings("checkstyle:javancss")
     private static void run(MinecraftServer server, ClassLoader loader) {
         Path reports = server.getServerDirectory().resolve("stagewright/junit");
         AgentEvents relay = new AgentEvents(AgentBridge.system());
@@ -112,19 +114,20 @@ public final class JupiterRun {
                     : indexed(loader);
             List<String> classes = entries.stream().filter(e -> !isScript(e)).toList();
             List<String> scripts = entries.stream().filter(JupiterRun::isScript).toList();
-            StageWrightCommon.LOG.info(
-                    "[{}] running {} JUnit test classes and {} test scripts in the game",
-                    StageWrightCommon.MOD_ID,
-                    classes.size(),
-                    scripts.size());
+            if (StageWrightCommon.LOG.isInfoEnabled()) {
+                StageWrightCommon.LOG.info(
+                        "[{}] running {} JUnit test classes and {} test scripts in the game",
+                        StageWrightCommon.MOD_ID,
+                        classes.size(),
+                        scripts.size());
+            }
             GameImpl game = new GameImpl(server);
             String world = System.getProperty(SceneWorld.PROPERTY);
             if (world != null) {
                 JsonObject declared = JsonParser.parseString(world).getAsJsonObject();
-                StageWrightCommon.LOG.info(
-                        "[{}] scene world: {}",
-                        StageWrightCommon.MOD_ID,
-                        game.onServer(s -> SceneWorld.apply(s, declared)));
+                // Applied whether or not the line is logged: the world change is the point, the log is not.
+                Object applied = game.onServer(s -> SceneWorld.apply(s, declared));
+                StageWrightCommon.LOG.info("[{}] scene world: {}", StageWrightCommon.MOD_ID, applied);
             }
             GameExtension.bind(game);
             // Handed over, not listed in META-INF/services: under Fabric's Knot a services file in this jar hides
@@ -150,7 +153,6 @@ public final class JupiterRun {
             if (!cycles.isEmpty()) {
                 throw new IllegalStateException("@DependsOn cycles, so no test can go first: " + cycles);
             }
-            SummaryGeneratingListener javaSummary = new SummaryGeneratingListener();
             SummaryGeneratingListener scriptSummary = new SummaryGeneratingListener();
             StringWriter xmlLog = new StringWriter();
             Thread scriptThread = new Thread(
@@ -169,6 +171,7 @@ public final class JupiterRun {
             scriptThread.setDaemon(true);
             scriptThread.setContextClassLoader(loader);
             scriptThread.start();
+            SummaryGeneratingListener javaSummary = new SummaryGeneratingListener();
             try {
                 launcher.execute(
                         javaPlan,
@@ -184,11 +187,13 @@ public final class JupiterRun {
             Handovers.sweep(artifacts, restarting);
             Rounds.save(artifacts, Dependencies.outcomes());
             if (restarting) {
-                StageWrightCommon.LOG.info(
-                        "[{}] round {} is over; tests remain for round {}, after a restart",
-                        StageWrightCommon.MOD_ID,
-                        Rounds.current(),
-                        Rounds.current() + 1);
+                if (StageWrightCommon.LOG.isInfoEnabled()) {
+                    StageWrightCommon.LOG.info(
+                            "[{}] round {} is over; tests remain for round {}, after a restart",
+                            StageWrightCommon.MOD_ID,
+                            Rounds.current(),
+                            Rounds.current() + 1);
+                }
                 relay.restart(Rounds.current() + 1);
             }
             relay.ended();

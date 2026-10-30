@@ -39,11 +39,13 @@ import net.magicterra.worlddriver.bot.BotHooks;
 public final class TestMethods {
     private TestMethods() {}
 
+    /** The {@code mc.test.reset} result: one token per effect the reset undid. */
     @Named("TestReset")
     public record Reset(
             @Doc("One token per effect the reset undid.") @Length(max = 64)
             List<String> reset) {}
 
+    /** The {@code mc.test.input.heldKeys} result: which of the inputs a key release clears are down. */
     @Named("TestHeldKeys")
     public record Keys(TestInputContracts.HeldKeys keys) {}
 
@@ -119,6 +121,7 @@ public final class TestMethods {
     /** One batch object, so publishing it again on the same API is the no-op the registry makes of a retry. */
     private static final ApiBatch BATCH = new ApiBatch(ApiRegistry.TEST_OWNER, "test", METHODS);
 
+    /** Publishes the test methods on the given API; publishing the same batch again changes nothing. */
     public static void register(ApiRegistry api) {
         api.registerBatch(BATCH);
     }

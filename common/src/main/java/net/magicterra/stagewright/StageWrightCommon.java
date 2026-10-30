@@ -72,6 +72,8 @@ public final class StageWrightCommon {
      * {@link #onServerTick} once the tick cadence has settled. Server thread; called by every loader entry after
      * worlddriver has wired its route sink at SERVER_STARTING.
      */
+    @SuppressWarnings(
+            "PMD.CompareObjectsWithEquals") // The armed server is the one instance this run owns, by identity.
     public static synchronized void onServerStarted(MinecraftServer server) {
         if (armedServer == server) {
             LOG.warn("[{}] already armed; ignoring duplicate onServerStarted", MOD_ID);
@@ -87,6 +89,7 @@ public final class StageWrightCommon {
     }
 
     /** Called on the server thread while the world is still available for cleanup. */
+    @SuppressWarnings("PMD.CompareObjectsWithEquals") // Only the instance this run armed is torn down, by identity.
     public static synchronized void onServerStopping(MinecraftServer server) {
         if (server != armedServer) {
             return;
@@ -166,10 +169,12 @@ public final class StageWrightCommon {
                 continue;
             }
             server.getPlayerList().op(player.getGameProfile());
-            LOG.info(
-                    "[{}] op'd the test client '{}'",
-                    MOD_ID,
-                    player.getGameProfile().getName());
+            if (LOG.isInfoEnabled()) {
+                LOG.info(
+                        "[{}] op'd the test client '{}'",
+                        MOD_ID,
+                        player.getGameProfile().getName());
+            }
         }
     }
 }

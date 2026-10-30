@@ -8,6 +8,7 @@ package net.magicterra.stagewright.jupiter;
  * out / the condition never held" from an ordinary failed assertion.
  */
 public class StageWrightTimeoutException extends RuntimeException {
+    /** A bounded wait that ran out, described by {@code message}. */
     public StageWrightTimeoutException(String message) {
         super(message);
     }

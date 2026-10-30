@@ -62,7 +62,7 @@ final class ClientConnection {
             try {
                 port = Files.readString(portFile).trim();
             } catch (IOException e) {
-                throw new ParameterResolutionException("the client wrote no " + portFile + ": " + e);
+                throw new ParameterResolutionException("the client wrote no " + portFile + ": " + e, e);
             }
             rpc = StageWrightRpc.connect("ws://127.0.0.1:" + port + "/rpc", CONNECT_MS);
             remote = forwarding(rpc, game.registry());

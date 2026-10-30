@@ -37,31 +37,44 @@ import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
  */
 final class ScriptHandles {
 
+    private static final String AXIS_X = "x";
+    private static final String AXIS_Y = "y";
+    private static final String AXIS_Z = "z";
+    private static final String DIMENSION = "dimension";
+    private static final String NAME = "name";
+    private static final String LEFT = "left";
+    private static final String JUMP = "jump";
+    private static final String SPRINT = "sprint";
+    private static final String ATTACK = "attack";
+    private static final String FORWARD = "forward";
+    private static final String HIT = "hit";
+
     private ScriptHandles() {}
 
+    // One table of the script's handles, each a few lines; splitting it would scatter the names it defines.
+    @SuppressWarnings("checkstyle:javancss")
     static void install(Map<String, Object> t, Game game, List<CloseableResource> leases, String test) {
         // t.plot({size, x, y, z, centered, dimension}), every option optional; x, y and z override size on their axis.
         t.put("plot", (Scripting.Function) args -> {
             Map<?, ?> options = args.length > 0 && args[0] instanceof Map<?, ?> m ? m : Map.of();
             int side = options.containsKey("size") ? whole(options.get("size"), "plot size") : PlotImpl.DEFAULT_SIZE;
             Vec3i size = new Vec3i(
-                    options.containsKey("x") ? whole(options.get("x"), "plot x") : side,
-                    options.containsKey("y") ? whole(options.get("y"), "plot y") : side,
-                    options.containsKey("z") ? whole(options.get("z"), "plot z") : side);
+                    options.containsKey(AXIS_X) ? whole(options.get(AXIS_X), "plot x") : side,
+                    options.containsKey(AXIS_Y) ? whole(options.get(AXIS_Y), "plot y") : side,
+                    options.containsKey(AXIS_Z) ? whole(options.get(AXIS_Z), "plot z") : side);
             PlotImpl plot = PlotImpl.lease(
                     game,
                     size,
                     Expectations.truthy(options.get("centered")),
-                    options.containsKey("dimension") ? dimension(options.get("dimension")) : Level.OVERWORLD);
+                    options.containsKey(DIMENSION) ? dimension(options.get(DIMENSION)) : Level.OVERWORLD);
             leases.add(plot);
             return plot(plot);
         });
         // t.bot(), t.bot(name) or t.bot({name, parked, keep, kept}).
         t.put("bot", (Scripting.Function) args -> {
             Object a = arg(args, 0);
-            String name = a instanceof String n
-                    ? n
-                    : a instanceof Map<?, ?> m && m.get("name") instanceof String n ? n : null;
+            String name =
+                    a instanceof String n ? n : a instanceof Map<?, ?> m && m.get(NAME) instanceof String n ? n : null;
             boolean parked = a instanceof Map<?, ?> m && Expectations.truthy(m.get("parked"));
             boolean keep = a instanceof Map<?, ?> m && Expectations.truthy(m.get("keep"));
             boolean kept = a instanceof Map<?, ?> m && Expectations.truthy(m.get("kept"));
@@ -88,10 +101,10 @@ final class ScriptHandles {
                     (EntityType<? extends Mob>) lookup(BuiltInRegistries.ENTITY_TYPE, arg(args, 0), "entity type");
             Npc npc = game.npc(type, args.length > 2 ? dimension(args[2]) : Level.OVERWORLD, blockPos(arg(args, 1)));
             Map<String, Object> out = new LinkedHashMap<>();
-            out.put("name", npc.name());
+            out.put(NAME, npc.name());
             out.put("ref", npc.ref());
             out.put("pos", (Scripting.Function) a -> position(npc.blockPos()));
-            out.put("dimension", (Scripting.Function)
+            out.put(DIMENSION, (Scripting.Function)
                     a -> npc.dimension().location().toString());
             out.put("moveTo", (Scripting.Function) a -> {
                 npc.moveTo(blockPos(arg(a, 0)));
@@ -154,7 +167,7 @@ final class ScriptHandles {
             }
             Perf measurement = Perf.phases();
             for (Object p : list) {
-                if (!(p instanceof Map<?, ?> phase) || !(phase.get("name") instanceof String name)) {
+                if (!(p instanceof Map<?, ?> phase) || !(phase.get(NAME) instanceof String name)) {
                     throw new IllegalArgumentException("t.perf: a phase is {name, run}");
                 }
                 Scripting.Function run = phase.get("run") instanceof Scripting.Function f ? f : null;
@@ -210,26 +223,26 @@ final class ScriptHandles {
         out.put("size", position(new BlockPos(plot.size())));
         out.put("min", position(new BlockPos(plot.min())));
         out.put("max", position(new BlockPos(plot.max())));
-        out.put("dimension", plot.dimension().location().toString());
+        out.put(DIMENSION, plot.dimension().location().toString());
         out.put("origin", position(plot.origin()));
         out.put("structure", (Scripting.Function) a -> {
             ResourceLocation id = arg(a, 0) instanceof String s ? ResourceLocation.tryParse(s) : null;
             if (id == null) {
                 throw new IllegalArgumentException("structure(id, x, y, z): id is a structure template's id");
             }
-            plot.structure(id, whole(arg(a, 1), "x"), whole(arg(a, 2), "y"), whole(arg(a, 3), "z"));
+            plot.structure(id, whole(arg(a, 1), AXIS_X), whole(arg(a, 2), AXIS_Y), whole(arg(a, 3), AXIS_Z));
             return null;
         });
         out.put("structureFile", (Scripting.Function) a -> {
             plot.structure(
                     Path.of(ScriptContext.string(a, 0, "structureFile(path, x, y, z)")),
-                    whole(arg(a, 1), "x"),
-                    whole(arg(a, 2), "y"),
-                    whole(arg(a, 3), "z"));
+                    whole(arg(a, 1), AXIS_X),
+                    whole(arg(a, 2), AXIS_Y),
+                    whole(arg(a, 3), AXIS_Z));
             return null;
         });
         out.put("at", (Scripting.Function) a ->
-                position(plot.at(whole(arg(a, 0), "x"), whole(arg(a, 1), "y"), whole(arg(a, 2), "z"))));
+                position(plot.at(whole(arg(a, 0), AXIS_X), whole(arg(a, 1), AXIS_Y), whole(arg(a, 2), AXIS_Z))));
         out.put("fill", (Scripting.Function) a -> {
             plot.fill(
                     whole(arg(a, 0), "x1"),
@@ -243,9 +256,9 @@ final class ScriptHandles {
         });
         out.put("place", (Scripting.Function) a -> {
             plot.place(
-                    whole(arg(a, 0), "x"),
-                    whole(arg(a, 1), "y"),
-                    whole(arg(a, 2), "z"),
+                    whole(arg(a, 0), AXIS_X),
+                    whole(arg(a, 1), AXIS_Y),
+                    whole(arg(a, 2), AXIS_Z),
                     lookup(BuiltInRegistries.BLOCK, arg(a, 3), "block"));
             return null;
         });
@@ -254,11 +267,10 @@ final class ScriptHandles {
 
     private static Map<String, Object> body(Body body) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("name", body.name());
+        out.put(NAME, body.name());
         out.put("ref", body.ref());
         out.put("pos", (Scripting.Function) a -> position(body.blockPos()));
-        out.put("dimension", (Scripting.Function)
-                a -> body.dimension().location().toString());
+        out.put(DIMENSION, (Scripting.Function) a -> body.dimension().location().toString());
         // moveTo(pos) in the overworld, or moveTo(pos, dimension).
         out.put("moveTo", (Scripting.Function) a -> {
             body.moveTo(a.length > 1 ? dimension(a[1]) : Level.OVERWORLD, blockPos(arg(a, 0)));
@@ -308,11 +320,11 @@ final class ScriptHandles {
             Map<String, Object> answer = new LinkedHashMap<>();
             answer.put("up", held.up());
             answer.put("down", held.down());
-            answer.put("left", held.left());
+            answer.put(LEFT, held.left());
             answer.put("right", held.right());
-            answer.put("jump", held.jump());
-            answer.put("sprint", held.sprint());
-            answer.put("attack", held.attack());
+            answer.put(JUMP, held.jump());
+            answer.put(SPRINT, held.sprint());
+            answer.put(ATTACK, held.attack());
             answer.put("shift", held.shift());
             return answer;
         });
@@ -328,11 +340,11 @@ final class ScriptHandles {
             p = p.release();
         }
         // Each axis alone, so a press naming only forward leaves left as it was held.
-        if (keys.containsKey("forward") || keys.containsKey("left")) {
+        if (keys.containsKey(FORWARD) || keys.containsKey(LEFT)) {
             p = new Press(
                     p.bot(),
-                    keys.containsKey("forward") ? Optional.of(number(keys.get("forward"), "forward")) : p.forward(),
-                    keys.containsKey("left") ? Optional.of(number(keys.get("left"), "left")) : p.left(),
+                    keys.containsKey(FORWARD) ? Optional.of(number(keys.get(FORWARD), FORWARD)) : p.forward(),
+                    keys.containsKey(LEFT) ? Optional.of(number(keys.get(LEFT), LEFT)) : p.left(),
                     p.jump(),
                     p.sneak(),
                     p.sprint(),
@@ -342,17 +354,17 @@ final class ScriptHandles {
                     p.toolFor(),
                     p.hit());
         }
-        if (keys.containsKey("jump")) {
-            p = p.jump(Expectations.truthy(keys.get("jump")));
+        if (keys.containsKey(JUMP)) {
+            p = p.jump(Expectations.truthy(keys.get(JUMP)));
         }
         if (keys.containsKey("sneak")) {
             p = p.sneak(Expectations.truthy(keys.get("sneak")));
         }
-        if (keys.containsKey("sprint")) {
-            p = p.sprint(Expectations.truthy(keys.get("sprint")));
+        if (keys.containsKey(SPRINT)) {
+            p = p.sprint(Expectations.truthy(keys.get(SPRINT)));
         }
-        if (keys.containsKey("attack")) {
-            p = p.attack(Expectations.truthy(keys.get("attack")));
+        if (keys.containsKey(ATTACK)) {
+            p = p.attack(Expectations.truthy(keys.get(ATTACK)));
         }
         if (keys.containsKey("use")) {
             p = p.use(Expectations.truthy(keys.get("use")));
@@ -363,14 +375,14 @@ final class ScriptHandles {
         if (keys.containsKey("toolFor")) {
             p = p.toolFor(cell(keys.get("toolFor")));
         }
-        if (keys.containsKey("hit")) {
-            p = p.hit(whole(keys.get("hit"), "hit"));
+        if (keys.containsKey(HIT)) {
+            p = p.hit(whole(keys.get(HIT), HIT));
         }
         return p;
     }
 
-    private static final List<String> PRESS_KEYS = List.of(
-            "forward", "left", "jump", "sneak", "sprint", "attack", "use", "aimAt", "toolFor", "hit", "release");
+    private static final List<String> PRESS_KEYS =
+            List.of(FORWARD, LEFT, JUMP, "sneak", SPRINT, ATTACK, "use", "aimAt", "toolFor", HIT, "release");
 
     private static double number(Object v, String what) {
         if (v instanceof Number n) {
@@ -386,9 +398,9 @@ final class ScriptHandles {
 
     static Map<String, Object> position(BlockPos pos) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("x", pos.getX());
-        out.put("y", pos.getY());
-        out.put("z", pos.getZ());
+        out.put(AXIS_X, pos.getX());
+        out.put(AXIS_Y, pos.getY());
+        out.put(AXIS_Z, pos.getZ());
         return out;
     }
 
@@ -402,7 +414,8 @@ final class ScriptHandles {
 
     private static BlockPos blockPos(Object v) {
         if (v instanceof Map<?, ?> m) {
-            return new BlockPos(whole(m.get("x"), "x"), whole(m.get("y"), "y"), whole(m.get("z"), "z"));
+            return new BlockPos(
+                    whole(m.get(AXIS_X), AXIS_X), whole(m.get(AXIS_Y), AXIS_Y), whole(m.get(AXIS_Z), AXIS_Z));
         }
         throw new IllegalArgumentException("a position is {x, y, z}, but was " + Expectations.show(v));
     }

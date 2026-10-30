@@ -24,14 +24,20 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  */
 final class YamlTests {
 
-    private static final Set<String> FILE_KEYS = Set.of("scene", "tests");
+    private static final String SCENE = "scene";
+    private static final String STEPS = "steps";
+    private static final String PARAMS = "params";
+    private static final String EXPECT = "expect";
+    private static final String TICKS = "ticks";
+
+    private static final Set<String> FILE_KEYS = Set.of(SCENE, "tests");
     /** The options {@code test()} takes, passed on as they are. */
     private static final List<String> OPTIONS =
             List.of("requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart");
 
     private static final Set<String> TEST_KEYS = Set.of(
             "name",
-            "scene",
+            SCENE,
             "requires",
             "dependsOn",
             "knownIssue",
@@ -42,10 +48,10 @@ final class YamlTests {
             "given",
             "when",
             "then",
-            "steps");
+            STEPS);
     /** The keys a step may carry beside the one that says what it does. */
     private static final Set<String> MODIFIERS =
-            Set.of("params", "expect", "check", "knownIssues", "save", "within", "ticks", "as");
+            Set.of(PARAMS, EXPECT, "check", "knownIssues", "save", "within", TICKS, "as");
 
     private static final Pattern REFERENCE = Pattern.compile("\\$\\{([A-Za-z_][\\w.]*)}");
 
@@ -71,9 +77,9 @@ final class YamlTests {
             String where = resource + ", test '" + name + "'";
             unknownKeys(test, TEST_KEYS, where);
             Map<String, Object> options = new LinkedHashMap<>();
-            Object scene = test.containsKey("scene") ? test.get("scene") : file.get("scene");
+            Object scene = test.containsKey(SCENE) ? test.get(SCENE) : file.get(SCENE);
             if (scene != null) {
-                options.put("scene", scene);
+                options.put(SCENE, scene);
             }
             for (String key : OPTIONS) {
                 if (test.containsKey(key)) {
@@ -88,6 +94,8 @@ final class YamlTests {
     }
 
     /** A test's {@code plot}, the options {@code t.plot} takes; null when it leases none. */
+    // Null is the documented answer for a test that leases no plot, and the caller tests for it.
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
     private static Map<String, Object> plotOptions(Object plot, String where) {
         if (plot == null) {
             return null;
@@ -109,11 +117,11 @@ final class YamlTests {
     /** {@code given}, {@code when} and {@code then} in that order, or {@code steps}; never both. */
     private static List<Map<?, ?>> steps(Map<?, ?> test, String where) {
         boolean phased = test.containsKey("given") || test.containsKey("when") || test.containsKey("then");
-        if (phased && test.containsKey("steps")) {
+        if (phased && test.containsKey(STEPS)) {
             throw new IllegalArgumentException(where + ": given/when/then or steps, not both");
         }
         List<Map<?, ?>> out = new ArrayList<>();
-        for (String phase : phased ? List.of("given", "when", "then") : List.of("steps")) {
+        for (String phase : phased ? List.of("given", "when", "then") : List.of(STEPS)) {
             Object list = test.get(phase);
             if (list == null) {
                 continue;
@@ -169,8 +177,8 @@ final class YamlTests {
                 if (known != null) {
                     result = known.subtract(result);
                 }
-                if (step.containsKey("expect")) {
-                    Expectations.expect(result, substitute(step.get("expect"), saved));
+                if (step.containsKey(EXPECT)) {
+                    Expectations.expect(result, substitute(step.get(EXPECT), saved));
                 }
                 if (step.containsKey("check")) {
                     Object spec = substitute(step.get("check"), saved);
@@ -214,7 +222,7 @@ final class YamlTests {
             if (!(p instanceof Map<?, ?> phase) || !(phase.get("name") instanceof String name)) {
                 throw new IllegalArgumentException("perf: a phase is {name, steps}");
             }
-            List<?> steps = phase.get("steps") instanceof List<?> s ? s : List.of();
+            List<?> steps = phase.get(STEPS) instanceof List<?> s ? s : List.of();
             measurement.phase(name, () -> run(context, steps, saved, "phase " + name + ", step "));
         }
         measurement
@@ -233,7 +241,7 @@ final class YamlTests {
     private static Object step(ScriptContext context, String verb, Map<?, ?> step, Map<String, Object> saved) {
         Object value = verb.equals("perf") ? null : substitute(step.get(verb), saved);
         Map<String, Object> options = new HashMap<>();
-        for (String key : List.of("within", "ticks", "as")) {
+        for (String key : List.of("within", TICKS, "as")) {
             if (step.containsKey(key)) {
                 options.put(key, step.get(key));
             }
@@ -243,7 +251,7 @@ final class YamlTests {
                 if (!(value instanceof String method)) {
                     throw new IllegalArgumentException("call names a method");
                 }
-                yield context.call(method, substitute(step.get("params"), saved));
+                yield context.call(method, substitute(step.get(PARAMS), saved));
             }
             case "wait" -> {
                 context.ticks(ScriptContext.ticks(value, "wait"));
@@ -251,14 +259,14 @@ final class YamlTests {
             }
             // Its phases' steps are read raw: a ${name} in them means the value when the phase runs.
             case "perf" -> perf(context, step.get(verb), saved);
-            case "java" -> java(context, value, substitute(step.get("params"), saved));
+            case "java" -> java(context, value, substitute(step.get(PARAMS), saved));
             case "waitUntil", "settle" -> {
                 int run = verb.equals("settle")
-                        ? (options.containsKey("ticks") ? ScriptContext.ticks(options.get("ticks"), "ticks") : 20)
+                        ? (options.containsKey(TICKS) ? ScriptContext.ticks(options.get(TICKS), TICKS) : 20)
                         : 1;
                 Object[] last = {null};
                 context.poll(
-                        () -> holds(context, value, saved, last),
+                        () -> holds(context, value, last),
                         ScriptContext.within(options),
                         run,
                         ScriptContext.as(options));
@@ -290,15 +298,15 @@ final class YamlTests {
     }
 
     /** A {@code waitUntil}/{@code settle} condition: {@code {call, params, expect}}, its call made once per check. */
-    private static boolean holds(ScriptContext context, Object condition, Map<String, Object> saved, Object[] last) {
+    private static boolean holds(ScriptContext context, Object condition, Object... last) {
         if (!(condition instanceof Map<?, ?> c)
                 || !(c.get("call") instanceof String method)
-                || !c.containsKey("expect")) {
+                || !c.containsKey(EXPECT)) {
             throw new IllegalArgumentException("a condition is {call: method, params: …, expect: …}");
         }
-        last[0] = context.call(method, c.get("params"));
+        last[0] = context.call(method, c.get(PARAMS));
         try {
-            Expectations.expect(last[0], c.get("expect"));
+            Expectations.expect(last[0], c.get(EXPECT));
             return true;
         } catch (AssertionError notYet) {
             return false;

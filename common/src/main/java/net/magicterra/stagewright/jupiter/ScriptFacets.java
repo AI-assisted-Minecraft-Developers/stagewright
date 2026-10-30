@@ -29,6 +29,9 @@ final class ScriptFacets {
 
     private ScriptFacets() {}
 
+    // The first overload that takes the arguments answers the call, so the loop ends on its return; a method
+    // answering its own receiver is handed back as the facet itself, which is an identity test by definition.
+    @SuppressWarnings({"PMD.AvoidBranchingStatementAsLastInLoop", "PMD.CompareObjectsWithEquals"})
     static Map<String, Object> wrap(Game game, Object target) {
         if (target.getClass().getName().startsWith("net.minecraft.")) {
             throw new IllegalArgumentException(
@@ -85,7 +88,9 @@ final class ScriptFacets {
         return null;
     }
 
-    private static Object invoke(Method m, Object target, Object[] args) {
+    // Rethrows the target's own RuntimeException or Error unchanged, so the original trace is what reaches the script.
+    @SuppressWarnings("PMD.PreserveStackTrace")
+    private static Object invoke(Method m, Object target, Object... args) {
         try {
             return m.invoke(target, args);
         } catch (InvocationTargetException e) {
@@ -103,7 +108,9 @@ final class ScriptFacets {
     }
 
     /** The arguments {@code m} takes made from {@code args}, or null when they do not fit it. */
-    private static Object[] arguments(Game game, Method m, Object[] args) {
+    // Null is the answer for arguments that do not fit the overload, and the caller tests for it.
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
+    private static Object[] arguments(Game game, Method m, Object... args) {
         Class<?>[] params = m.getParameterTypes();
         int fixed = m.isVarArgs() ? params.length - 1 : params.length;
         if (m.isVarArgs() ? args.length < fixed : args.length != fixed) {

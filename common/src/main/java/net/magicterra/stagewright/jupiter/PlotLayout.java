@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.TreeMap;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
@@ -19,11 +20,11 @@ final class PlotLayout {
     static final int MARGIN = 32;
 
     /** Per dimension, each leased stretch of the row: its first x to the x after its gap. */
-    private final Map<ResourceKey<Level>, TreeMap<Integer, Integer>> leased = new HashMap<>();
+    private final Map<ResourceKey<Level>, NavigableMap<Integer, Integer>> leased = new HashMap<>();
 
     /** Lease a stretch for a plot {@code sizeX} wide; answers its first x. */
     synchronized int lease(ResourceKey<Level> dimension, int sizeX) {
-        TreeMap<Integer, Integer> row = leased.computeIfAbsent(dimension, d -> new TreeMap<>());
+        NavigableMap<Integer, Integer> row = leased.computeIfAbsent(dimension, d -> new TreeMap<>());
         int width = width(sizeX);
         int start = firstFree(row, width);
         row.put(start, start + width);
@@ -31,7 +32,7 @@ final class PlotLayout {
     }
 
     synchronized void release(ResourceKey<Level> dimension, int start) {
-        TreeMap<Integer, Integer> row = leased.get(dimension);
+        NavigableMap<Integer, Integer> row = leased.get(dimension);
         if (row != null) {
             row.remove(start);
         }
@@ -43,7 +44,7 @@ final class PlotLayout {
     }
 
     /** The lowest x from 0 where {@code width} blocks are free of every stretch in {@code row}. */
-    static int firstFree(TreeMap<Integer, Integer> row, int width) {
+    static int firstFree(NavigableMap<Integer, Integer> row, int width) {
         int candidate = 0;
         for (Map.Entry<Integer, Integer> taken : row.entrySet()) {
             if (candidate + width <= taken.getKey()) {

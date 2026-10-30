@@ -55,6 +55,8 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     /** Generating fresh chunks is the slow case; a minute of ticks covers it while the whole suite starts at once. */
     private static final int CHUNK_LOAD_TICKS = 1200;
 
+    private static final String LIST_SEPARATOR = ", ";
+
     private static final AtomicInteger LEASES = new AtomicInteger();
 
     private final Game game;
@@ -242,7 +244,8 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
             if (!box.isInside(corner) || !box.isInside(corner.offset(far))) {
                 throw new IllegalArgumentException("the structure " + what + " is "
                         + t.getSize().toShortString()
-                        + " and does not fit in the plot at (" + x + ", " + y + ", " + z + "); the plot's cells run"
+                        + " and does not fit in the plot at (" + x + LIST_SEPARATOR + y + LIST_SEPARATOR + z
+                        + "); the plot's cells run"
                         + " from " + min().toShortString() + " to " + max().toShortString());
             }
             t.placeInWorld(
@@ -259,15 +262,16 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     @Override
     public String toString() {
         return "Plot[" + size.getX() + "×" + size.getY() + "×" + size.getZ() + " in " + dimension.location() + " at "
-                + box.minX() + ", " + box.minY() + ", " + box.minZ() + "]";
+                + box.minX() + LIST_SEPARATOR + box.minY() + LIST_SEPARATOR + box.minZ() + "]";
     }
 
     private void check(int x, int y, int z) {
         Vec3i min = min();
         Vec3i max = max();
         if (x < min.getX() || y < min.getY() || z < min.getZ() || x > max.getX() || y > max.getY() || z > max.getZ()) {
-            throw new IllegalArgumentException("(" + x + ", " + y + ", " + z + ") is outside the plot, whose cells run"
-                    + " from " + min.toShortString() + " to " + max.toShortString());
+            throw new IllegalArgumentException(
+                    "(" + x + LIST_SEPARATOR + y + LIST_SEPARATOR + z + ") is outside the plot, whose cells run"
+                            + " from " + min.toShortString() + " to " + max.toShortString());
         }
     }
 

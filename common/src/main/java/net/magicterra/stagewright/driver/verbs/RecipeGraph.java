@@ -174,6 +174,8 @@ final class RecipeGraph {
      * Walk every ingredient of an item down to raw materials. A walk that hits a bound stops and says so
      * ({@code truncated}), because a cut-off closure looks exactly like a healthy one otherwise.
      */
+    // One breadth-first walk sharing its frontier and result sets; splitting it would pass them all around.
+    @SuppressWarnings("checkstyle:javancss")
     Closure closure(String itemId, int maxNodes, int maxDepth) {
         String root = item(itemId);
         Set<String> seen = new LinkedHashSet<>();
@@ -306,7 +308,7 @@ final class RecipeGraph {
         }
     }
 
-    private static NonNullList<Ingredient> ingredientsIn(Recipe<?> recipe) {
+    private static List<Ingredient> ingredientsIn(Recipe<?> recipe) {
         try {
             return recipe.getIngredients();
         } catch (RuntimeException e) {

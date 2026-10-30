@@ -109,6 +109,8 @@ final class JavaSteps {
         return named.get(0);
     }
 
+    // The unwrapped cause is what the step failed with; the reflective wrapper adds nothing a reader needs.
+    @SuppressWarnings("PMD.PreserveStackTrace")
     static Object invoke(Method method, Game game, Object args) {
         Class<?>[] types = method.getParameterTypes();
         Object[] values = new Object[types.length];

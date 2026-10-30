@@ -38,7 +38,7 @@ public final class RequiresCondition implements ExecutionCondition {
     /**
      * What of {@code capabilities} and {@code mods} this game lacks; also what a script test's {@code requires} asks.
      */
-    static List<String> missing(Requires.Capability[] capabilities, String[] mods) {
+    static List<String> missing(Requires.Capability[] capabilities, String... mods) {
         List<String> missing = new ArrayList<>();
         if (capabilities.length > 0) {
             boolean dedicated = GameExtension.game().onServer(MinecraftServer::isDedicatedServer);

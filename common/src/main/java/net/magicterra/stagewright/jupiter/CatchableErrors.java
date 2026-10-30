@@ -123,6 +123,8 @@ final class CatchableErrors {
     }
 
     /** Nothing thrown on an interrupted thread, which is the test being stopped. */
+    // The exception stays in the signature to mirror the catch it guards; only the thread state decides.
+    @SuppressWarnings("PMD.UnusedFormalParameter")
     private static boolean catchable(RuntimeException e) {
         return !Thread.currentThread().isInterrupted();
     }
@@ -143,6 +145,8 @@ final class CatchableErrors {
      * Java function throws, and only an {@link Error} passes through untouched, as a failed {@code t.expect} does; so
      * an abort travels as this and {@link #unwrapAbort} gives the test its abort back.
      */
+    // Extends Error on purpose: the script engine passes only Errors through its catch untouched.
+    @SuppressWarnings("PMD.DoNotExtendJavaLangError")
     static final class Abort extends Error {
         Abort(RuntimeException abort) {
             super(abort.getMessage(), abort, false, false);
@@ -164,6 +168,8 @@ final class CatchableErrors {
     }
 
     /** The abort {@code failure} carries, wherever in its causes, or {@code failure} as it is. */
+    // A self-cause is the one cycle to stop on, and that test is identity by definition.
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     static Throwable unwrapAbort(Throwable failure) {
         for (Throwable t = failure; t != null; t = t.getCause()) {
             if (t instanceof Abort) {

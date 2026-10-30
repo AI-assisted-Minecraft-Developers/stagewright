@@ -44,6 +44,8 @@ final class ScriptScheduler {
     }
 
     /** Run {@code tests}, each reporting itself through {@code run}, and return when every one has ended. */
+    // The pool is shut down in the finally block below, after every submitted test has been joined.
+    @SuppressWarnings("PMD.CloseResource")
     static void run(List<ScriptTestEngine.Test> tests, ConfigurationParameters config, Runner run) {
         boolean parallel = config.getBoolean(PARALLEL)
                 .orElseGet(() -> config.getBoolean("junit.jupiter.execution.parallel.enabled")

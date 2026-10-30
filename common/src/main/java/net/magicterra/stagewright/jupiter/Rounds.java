@@ -37,7 +37,7 @@ final class Rounds {
     record Upstream(List<String> keys, boolean afterRestart) {}
 
     private static final Map<String, Upstream> SCRIPTS = new ConcurrentHashMap<>();
-    private static final Map<String, Integer> ROUNDS = new ConcurrentHashMap<>();
+    private static final Map<String, Integer> ROUND_OF = new ConcurrentHashMap<>();
     private static volatile Map<String, String> before = Map.of();
     private static volatile int latest;
 
@@ -52,7 +52,7 @@ final class Rounds {
     static void scripts(Map<String, Upstream> scripts) {
         SCRIPTS.clear();
         SCRIPTS.putAll(scripts);
-        ROUNDS.clear();
+        ROUND_OF.clear();
     }
 
     /**
@@ -91,6 +91,11 @@ final class Rounds {
         Files.writeString(dir.resolve(FILE), new Gson().toJson(all), StandardCharsets.UTF_8);
     }
 
+    /** The latest round a test asked about needs; another game is wanted while it is past {@link #current()}. */
+    static int latest() {
+        return latest;
+    }
+
     /** The round {@code key} runs in, remembering the latest round any test of the scene needs. */
     static int of(String key) {
         int round = of(key, new HashSet<>());
@@ -98,13 +103,8 @@ final class Rounds {
         return round;
     }
 
-    /** The latest round a test asked about needs; another game is wanted while it is past {@link #current()}. */
-    static int latest() {
-        return latest;
-    }
-
     private static int of(String key, Set<String> visiting) {
-        Integer known = ROUNDS.get(key);
+        Integer known = ROUND_OF.get(key);
         if (known != null) {
             return known;
         }
@@ -121,7 +121,7 @@ final class Rounds {
             round++;
         }
         visiting.remove(key);
-        ROUNDS.put(key, round);
+        ROUND_OF.put(key, round);
         return round;
     }
 

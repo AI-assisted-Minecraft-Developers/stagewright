@@ -85,9 +85,9 @@ final class TestQueriesService implements TestQueriesApi {
                             c.item(),
                             c.maxNodes().orElse(RecipesContracts.DEFAULT_MAX_NODES),
                             c.maxDepth().orElse(RecipesContracts.DEFAULT_MAX_DEPTH));
-                case RecipesContracts.Uncraftable u -> graph.uncraftable();
-                case RecipesContracts.Audit a -> graph.audit();
-                case RecipesContracts.Count c -> graph.count();
+                case RecipesContracts.Uncraftable() -> graph.uncraftable();
+                case RecipesContracts.Audit() -> graph.audit();
+                case RecipesContracts.Count() -> graph.count();
             };
             return CompletableFuture.completedFuture(reply);
         });
@@ -281,7 +281,7 @@ final class TestQueriesService implements TestQueriesApi {
         }
         return CompletableFuture.completedFuture(
                 switch (op) {
-                    case ModsContracts.ListMods l -> {
+                    case ModsContracts.ListMods() -> {
                         List<ModsContracts.Mod> mods = new ArrayList<>();
                         for (String id : Mods.ids()) {
                             mods.add(new ModsContracts.Mod(id, clip(Mods.version(id), 256)));
