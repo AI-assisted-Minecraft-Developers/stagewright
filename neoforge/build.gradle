@@ -94,16 +94,3 @@ shadowJar {
 remapJar {
     inputFile.set shadowJar.archiveFile
 }
-
-loom {
-    runs {
-        stagewrightServer {
-            server()
-            property 'stagewright.autorun', 'true'
-            runDir 'run-stagewright'
-        }
-    }
-    runConfigs.configureEach {
-        vmArg '-Xmx1g'
-    }
-}

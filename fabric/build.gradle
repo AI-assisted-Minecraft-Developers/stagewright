@@ -101,19 +101,3 @@ shadowJar {
 remapJar {
     inputFile.set shadowJar.archiveFile
 }
-
-loom {
-    runs {
-        // Headless shell: a PLAIN dedicated server (no GameTestServer — its
-        // scheduler is what this harness exists to replace). The
-        // testkit harness arms on -Dstagewright.autorun and halts the server when done.
-        stagewrightServer {
-            server()
-            property 'stagewright.autorun', 'true'
-            runDir 'run-stagewright'
-        }
-    }
-    runConfigs.configureEach {
-        vmArg '-Xmx1g'
-    }
-}
