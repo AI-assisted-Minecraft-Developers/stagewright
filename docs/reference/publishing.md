@@ -100,8 +100,10 @@ checks the built jars and POMs.
 
 The three builds (the root, `engine/` and `gradle-plugin/`) share their build logic through `build-logic/`, a build
 each of them includes in its `pluginManagement`. Each file `build-logic/src/main/groovy/<id>.gradle` is the plugin
-with that id: `stagewright.version` (the version every artifact carries), `stagewright.license` (the terms above) and
-`stagewright.nexus` (the repository CI publishes to).
+with that id: `stagewright.version` (the version every artifact carries), `stagewright.license` (the terms above),
+`stagewright.nexus` (the repository CI publishes to) and `stagewright.lint` (formatting and static checks). The root
+build's modules each apply `stagewright.module` (version, license, lint, Nexus), and the four Minecraft-side ones also
+`stagewright.mod` after their loader plugin (archive names, repositories, Java 21 and the publication described below).
 
 ### Why the Minecraft-facing POMs declare (almost) nothing
 
