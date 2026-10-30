@@ -7,6 +7,9 @@
 // pipeline: it has its own settings, its own repositories, and its own
 // (plain java-gradle-plugin) toolchain. It carries no Minecraft classpath.
 pluginManagement {
+    // The convention plugins all three builds share.
+    includeBuild('../build-logic')
+
     repositories {
         gradlePluginPortal()
         mavenCentral()

@@ -14,7 +14,7 @@ def prerelease = buildNumber != null ? "alpha.${buildNumber}" : 'snapshot'
 
 // The base version and the Minecraft line are the root gradle.properties' own.
 def rootProperties = new Properties()
-new File(buildscript.sourceFile.parentFile.parentFile, 'gradle.properties').withInputStream { rootProperties.load(it) }
+new File(StageWrightRepo.ROOT, 'gradle.properties').withInputStream { rootProperties.load(it) }
 ext.stagewrightVersion = "${rootProperties.mod_base_version}-${prerelease}+${rootProperties.minecraft_version}".toString()
 ext.junitVersion = rootProperties.junit_version
 // The WorldDriver StageWright builds against, not a version of its own; -Pworlddriver_version as the root

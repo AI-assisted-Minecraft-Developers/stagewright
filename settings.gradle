@@ -6,6 +6,8 @@ pluginManagement {
     // The gradle plugin is its own build. worlddriver, its first consumer, resolves a published
     // build of it by version instead.
     includeBuild('gradle-plugin')
+    // The convention plugins all three builds share.
+    includeBuild('build-logic')
 
     repositories {
         maven { url "https://maven.fabricmc.net/" }

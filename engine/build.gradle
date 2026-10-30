@@ -20,15 +20,13 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'stagewright.version'
+    id 'stagewright.license'
+    id 'stagewright.nexus'
 }
-
-apply from: '../gradle/version.gradle'
 
 group = 'net.magicterra'
 version = stagewrightVersion
-
-apply from: '../gradle/license.gradle'
-apply from: '../gradle/nexus.gradle'
 
 java {
     toolchain {

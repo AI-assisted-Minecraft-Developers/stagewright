@@ -1,0 +1,3 @@
+// The build logic all three StageWright builds share (root, engine/, gradle-plugin/), as convention plugins.
+// Each of them includes this one directory through pluginManagement; see docs/reference/publishing.md.
+rootProject.name = 'build-logic'

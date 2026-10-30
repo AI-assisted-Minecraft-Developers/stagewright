@@ -163,7 +163,7 @@ final class SuiteDependencies {
 
     /**
      * Refuses a WorldDriver outside the line StageWright links against, which would otherwise fail only once a game
-     * starts. The range's bounds are versions Gradle orders as the loaders do (gradle/version.gradle).
+     * starts. The range's bounds are versions Gradle orders as the loaders do (the stagewright.version plugin in build-logic).
      */
     private static void constrainWorldDriver(Project project, String configuration, String... modules) {
         for (String module : modules) {

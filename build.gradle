@@ -22,10 +22,14 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.141' apply false
     // Shadow 9: 8.x unpacks the nested jars ModDevGradle's jarJar adds to the NeoForge jar.
     id 'com.gradleup.shadow' version '9.2.2' apply false
+    // build-logic's convention plugins; license and nexus go on each subproject below.
+    id 'stagewright.version'
+    id 'stagewright.license' apply false
+    id 'stagewright.nexus' apply false
 }
 
-// worlddriverVersionRange, the WorldDriver line both loaders' metadata declare, is in gradle/version.gradle,
-// which the Gradle plugin's build reads too.
+// worlddriverVersionRange, the WorldDriver line both loaders' metadata declare, is in the stagewright.version
+// convention plugin (build-logic), which the engine and Gradle plugin builds apply too.
 
 // The JUnit Platform the in-game runner uses, each jar named: Loom's `include` is not transitive, and the
 // NeoForge jarJar takes each one alone.
@@ -42,8 +46,6 @@ ext.junitPlatformJars = [
         'org.apiguardian:apiguardian-api:1.1.2',
 ]
 
-apply from: 'gradle/version.gradle'
-
 allprojects {
     group = rootProject.maven_group
     version = rootProject.stagewrightVersion
@@ -51,10 +53,10 @@ allprojects {
 
 subprojects {
     // Before the pure-JVM early return below: those two modules publish too.
-    apply from: rootProject.file('gradle/license.gradle')
+    apply plugin: 'stagewright.license'
     def module = project
     plugins.withId('maven-publish') {
-        module.apply from: rootProject.file('gradle/nexus.gradle')
+        module.apply plugin: 'stagewright.nexus'
     }
 
     // The command-line runner is pure JVM — it carries the two loader jars as resources and runs on a

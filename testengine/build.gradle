@@ -3,13 +3,12 @@ plugins {
     id 'java-library'
     id 'maven-publish'
     id 'com.gradleup.shadow' version '8.3.6'
+    id 'stagewright.license'
+    id 'stagewright.nexus'
 }
 
 group = 'net.magicterra'
 version = rootProject.stagewrightVersion
-
-apply from: '../gradle/license.gradle'
-apply from: '../gradle/nexus.gradle'
 
 java {
     toolchain {

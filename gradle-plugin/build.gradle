@@ -13,15 +13,13 @@ plugins {
     // docs/reference/publishing.md shows:
     //   plugins { id 'net.magicterra.stagewright' version '0.1.0-alpha.<n>+1.21.1' }
     id 'maven-publish'
+    id 'stagewright.version'
+    id 'stagewright.license'
+    id 'stagewright.nexus'
 }
-
-apply from: '../gradle/version.gradle'
 
 group = 'net.magicterra'
 version = stagewrightVersion
-
-apply from: '../gradle/license.gradle'
-apply from: '../gradle/nexus.gradle'
 
 java {
     toolchain {

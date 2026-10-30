@@ -18,7 +18,7 @@ repositories {
 // downloaded. A pack author gets one file; making them also fetch a matching loader build for a
 // matching Minecraft version is the step that fails, and it fails looking exactly like the mod not
 // working. Publishing the mods and rebuilding this are one release, not two, which
-// gradle/version.gradle holds to one version.
+// the stagewright.version plugin holds to one version.
 configurations {
     bundledMods { transitive = false }
 }

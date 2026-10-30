@@ -1,0 +1,12 @@
+// Convention plugins: each src/main/groovy/<id>.gradle is the plugin with that id.
+plugins {
+    id 'groovy-gradle-plugin'
+}
+
+// The repository these plugins belong to, for the files they read from its root (gradle.properties, COPYING).
+// A plugin cannot find its own source file once compiled, and the builds applying it have three different roots.
+def repoRootResource = tasks.register('repoRootResource', WriteProperties) {
+    destinationFile = layout.buildDirectory.file('generated/repo-root/stagewright-build-logic.properties')
+    property('repoRoot', rootDir.parentFile.absolutePath)
+}
+tasks.named('processResources', ProcessResources) { from(repoRootResource) }

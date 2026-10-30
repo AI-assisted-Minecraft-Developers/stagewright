@@ -21,13 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The repository's own gradle/version.gradle and gradle/nexus.gradle, applied to a throwaway
- * project whose Nexus repository is a local server recording each upload, so no case here can
+ * The repository's own stagewright.version and stagewright.nexus convention plugins (build-logic), applied to a
+ * throwaway project whose Nexus repository is a local server recording each upload, so no case here can
  * reach the real one.
  */
 class ReleaseVersionTest {
 
-    private static final Path SCRIPTS = Path.of("..", "gradle").toAbsolutePath().normalize();
+    private static final Path BUILD_LOGIC = Path.of("..", "build-logic").toAbsolutePath().normalize();
 
     @TempDir
     Path dir;
@@ -53,14 +53,20 @@ class ReleaseVersionTest {
     }
 
     private GradleRunner project(String buildNumber) throws IOException {
-        assertTrue(Files.isRegularFile(SCRIPTS.resolve("version.gradle")), SCRIPTS.toString());
-        Files.writeString(dir.resolve("settings.gradle"), "rootProject.name = 'consumer'\n");
+        assertTrue(Files.isRegularFile(BUILD_LOGIC.resolve("settings.gradle")), BUILD_LOGIC.toString());
+        Files.writeString(dir.resolve("settings.gradle"), """
+                pluginManagement { includeBuild('%s') }
+                rootProject.name = 'consumer'
+                """.formatted(BUILD_LOGIC));
         Files.writeString(dir.resolve("build.gradle"), """
-                plugins { id 'java'; id 'maven-publish' }
+                plugins {
+                    id 'java'
+                    id 'maven-publish'
+                    id 'stagewright.version'
+                    id 'stagewright.nexus'
+                }
                 group = 'net.magicterra.test'
-                apply from: '%s'
                 version = stagewrightVersion
-                apply from: '%s'
                 publishing {
                     publications { lib(MavenPublication) { from components.java } }
                     repositories.getByName('gardelNexus') {
@@ -72,8 +78,7 @@ class ReleaseVersionTest {
                     def v = version
                     doLast { println "VERSION=" + v }
                 }
-                """.formatted(SCRIPTS.resolve("version.gradle"), SCRIPTS.resolve("nexus.gradle"),
-                "http://127.0.0.1:" + nexus.getAddress().getPort() + "/"));
+                """.formatted("http://127.0.0.1:" + nexus.getAddress().getPort() + "/"));
         Map<String, String> env = new HashMap<>(System.getenv());
         env.remove("BUILD_NUMBER");
         if (buildNumber != null) env.put("BUILD_NUMBER", buildNumber);
