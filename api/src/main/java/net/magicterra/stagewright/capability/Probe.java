@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import org.opentest4j.TestAbortedException;
 
@@ -41,6 +42,8 @@ import org.opentest4j.TestAbortedException;
  * This is a hatch, not an API.
  */
 public final class Probe {
+
+    private static final String SEPARATOR = ", ";
 
     /**
      * A probe on a mod's class, static calls only until {@link #on} binds an instance.
@@ -173,14 +176,17 @@ public final class Probe {
         return v == null ? "" : String.valueOf(v);
     }
 
+    /** The probed value as an int; a fractional number is truncated, and anything that is not a number fails. */
     public int asInt() {
         return (int) number("asInt");
     }
 
+    /** The probed value as a double; anything that is not a number fails. */
     public double asDouble() {
         return number("asDouble");
     }
 
+    /** The probed value as a boolean; anything that is not a Boolean fails. */
     public boolean asBoolean() {
         Object v = required("asBoolean");
         if (v instanceof Boolean b) {
@@ -225,7 +231,7 @@ public final class Probe {
 
     @Override
     public String toString() {
-        return "Probe[" + type.getName() + (isNull() ? ", null]" : ", " + asString() + "]");
+        return "Probe[" + type.getName() + (isNull() ? ", null]" : SEPARATOR + asString() + "]");
     }
 
     // ---- internals ----
@@ -248,7 +254,9 @@ public final class Probe {
         return v;
     }
 
-    private Probe invoke(Object target, String name, Object[] args) {
+    // Mod classes are often not public, so the reflective call has to open the method.
+    @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
+    private Probe invoke(Object target, String name, Object... args) {
         Object[] actual = unwrapAll(args);
         Method method = find(name, actual, target == null);
         try {
@@ -257,9 +265,10 @@ public final class Probe {
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause() == null ? e : e.getCause();
             throw new IllegalStateException(
-                    type.getName() + "." + name + " threw " + cause.getClass().getName() + ": " + cause.getMessage());
+                    type.getName() + "." + name + " threw " + cause.getClass().getName() + ": " + cause.getMessage(),
+                    e);
         } catch (IllegalAccessException e) {
-            throw new IllegalStateException("cannot call " + type.getName() + "." + name + ": " + e);
+            throw new IllegalStateException("cannot call " + type.getName() + "." + name + ": " + e, e);
         }
     }
 
@@ -293,7 +302,7 @@ public final class Probe {
             }
             throw new IllegalStateException(type.getName() + " has " + matches.size() + " methods called '"
                     + name + "' taking " + args.length + " argument(s) and this cannot tell them"
-                    + " apart: " + String.join(", ", shapes) + ". A capability adapter can; that is"
+                    + " apart: " + String.join(SEPARATOR, shapes) + ". A capability adapter can; that is"
                     + " the point at which to write one.");
         }
         throw new IllegalStateException("no " + (wantStatic ? "static " : "") + "method '" + name + "' taking "
@@ -305,8 +314,8 @@ public final class Probe {
      * fails without naming the alternatives is a lookup the author has to go elsewhere to answer.
      */
     private String candidates(String name) {
-        TreeSet<String> sameName = new TreeSet<>();
-        TreeSet<String> allNames = new TreeSet<>();
+        SortedSet<String> sameName = new TreeSet<>();
+        SortedSet<String> allNames = new TreeSet<>();
         for (Method m : allMethods()) {
             if (m.getDeclaringClass() == Object.class) {
                 continue;
@@ -317,14 +326,14 @@ public final class Probe {
             }
         }
         if (!sameName.isEmpty()) {
-            return " — it does declare " + String.join(", ", sameName)
+            return " — it does declare " + String.join(SEPARATOR, sameName)
                     + ", so the name is right and the argument count is not";
         }
         if (allNames.isEmpty()) {
             return " — and it declares no methods of its own at all";
         }
         List<String> shown = new ArrayList<>(allNames).subList(0, Math.min(allNames.size(), 12));
-        return " — what it does declare: " + String.join(", ", shown)
+        return " — what it does declare: " + String.join(SEPARATOR, shown)
                 + (allNames.size() > shown.size() ? " (+" + (allNames.size() - shown.size()) + " more)" : "");
     }
 
@@ -348,9 +357,11 @@ public final class Probe {
         for (Class<?> p : m.getParameterTypes()) {
             params.add(p.getSimpleName());
         }
-        return m.getName() + "(" + String.join(", ", params) + ")";
+        return m.getName() + "(" + String.join(SEPARATOR, params) + ")";
     }
 
+    // Mod classes are often not public, so the reflective read has to open the field.
+    @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
     private Probe read(String name, Object target) {
         for (Class<?> c = type; c != null; c = c.getSuperclass()) {
             try {
@@ -360,24 +371,24 @@ public final class Probe {
             } catch (NoSuchFieldException ignored) {
                 // keep walking up
             } catch (IllegalAccessException e) {
-                throw new IllegalStateException("cannot read " + type.getName() + "." + name + ": " + e);
+                throw new IllegalStateException("cannot read " + type.getName() + "." + name + ": " + e, e);
             }
         }
-        TreeSet<String> names = new TreeSet<>();
+        SortedSet<String> names = new TreeSet<>();
         for (Class<?> c = type; c != null; c = c.getSuperclass()) {
             for (Field f : c.getDeclaredFields()) {
                 names.add(f.getName());
             }
         }
         throw new IllegalStateException("no field '" + name + "' on " + type.getName()
-                + (names.isEmpty() ? "" : " — it declares " + String.join(", ", names)));
+                + (names.isEmpty() ? "" : " — it declares " + String.join(SEPARATOR, names)));
     }
 
     /**
      * Arguments arriving as probes are passed on as what they wrap, so a chain reads naturally instead of making the
      * author call unwrapped() at every hop.
      */
-    private static Object[] unwrapAll(Object[] args) {
+    private static Object[] unwrapAll(Object... args) {
         Object[] out = new Object[args.length];
         for (int i = 0; i < args.length; i++) {
             out[i] = unwrap(args[i]);

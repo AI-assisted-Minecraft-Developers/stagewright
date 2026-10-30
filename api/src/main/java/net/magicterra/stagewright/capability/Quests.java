@@ -17,13 +17,13 @@ import org.opentest4j.TestAbortedException;
  *
  * <h2>Test the graph, not the playthrough</h2>
  *
- * Nobody can play a hundred hours in a gate, but what breaks when a quest is edited is a property of the graph: does
+ * <p>Nobody can play a hundred hours in a gate, but what breaks when a quest is edited is a property of the graph: does
  * every dependency still exist, is the endgame chapter reachable, did a rename leave a dangling reference. Those are
  * answerable in seconds from the loaded quest file.
  *
  * <h2>Reached by name</h2>
  *
- * FTB Quests is not a dependency of {@code :stagewright-api}, so the whole facet is reflection over
+ * <p>FTB Quests is not a dependency of {@code :stagewright-api}, so the whole facet is reflection over
  * {@code dev.ftb.mods.ftbquests}. Quests are identified by their <b>code string</b>, the hex id the book shows, e.g.
  * {@code "1A2B3C4D5E6F7080"}. Every call runs on the server thread.
  */
@@ -72,14 +72,9 @@ public final class Quests {
     public List<String> questsInChapter(String filename) {
         return game.onServer(server -> {
             for (Object chapter : allChapters()) {
-                if (!filename.equals(String.valueOf(call(chapter, "getFilename")))) {
-                    continue;
+                if (filename.equals(String.valueOf(call(chapter, "getFilename")))) {
+                    return codesIn(chapter);
                 }
-                List<String> out = new ArrayList<>();
-                for (Object quest : questsIn(chapter)) {
-                    out.add(codeOf(quest));
-                }
-                return out;
             }
             throw new IllegalStateException(
                     "no chapter is named '" + filename + "' — this book has " + String.join(", ", chapterNames()));
@@ -118,6 +113,8 @@ public final class Quests {
      * that also unwinds rewards and the quests it unlocked, so a test that completes quests should run in a world
      * provisioned for it.
      */
+    // FTB Quests' setCompleted takes java.util.Date in its signature, so the reflective lookup needs that type.
+    @SuppressWarnings("PMD.ReplaceJavaUtilDate")
     public Quests complete(Body body, String questCode) {
         body.runOnServer(player -> call(
                 teamData(player),
@@ -221,7 +218,17 @@ public final class Quests {
         return String.valueOf(call(questObject, "getCodeString"));
     }
 
+    private static List<String> codesIn(Object chapter) {
+        List<String> out = new ArrayList<>();
+        for (Object quest : questsIn(chapter)) {
+            out.add(codeOf(quest));
+        }
+        return out;
+    }
+
     /** The internal long id, read from the field FTB Quests exposes on every quest object. */
+    // The fallback's parse failure is described in the message; only the field read's cause is worth chaining.
+    @SuppressWarnings("PMD.PreserveStackTrace")
     private static long idOf(Object questObject) {
         try {
             return questObject.getClass().getField("id").getLong(questObject);
@@ -230,7 +237,7 @@ public final class Quests {
             try {
                 return Long.parseUnsignedLong(codeOf(questObject), 16);
             } catch (NumberFormatException nfe) {
-                throw new IllegalStateException("cannot read this quest's id: " + e);
+                throw new IllegalStateException("cannot read this quest's id: " + e, e);
             }
         }
     }
@@ -247,8 +254,10 @@ public final class Quests {
         try {
             return Class.forName(name, false, Quests.class.getClassLoader());
         } catch (ClassNotFoundException e) {
-            throw new IllegalStateException("FTB Quests is present but " + name + " is not — the version on"
-                    + " this classpath has a different API than this facet knows");
+            throw new IllegalStateException(
+                    "FTB Quests is present but " + name + " is not — the version on"
+                            + " this classpath has a different API than this facet knows",
+                    e);
         }
     }
 
@@ -256,6 +265,8 @@ public final class Quests {
         return call(target, method, new Class<?>[0]);
     }
 
+    // FTB Quests' classes are not public, so the reflective call has to open the method.
+    @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
     private static Object call(Object target, String method, Class<?>[] signature, Object... args) {
         Class<?> type = target.getClass();
         while (type != null) {
@@ -267,7 +278,7 @@ public final class Quests {
                 type = type.getSuperclass();
             } catch (ReflectiveOperationException e) {
                 Throwable cause = e.getCause() != null ? e.getCause() : e;
-                throw new IllegalStateException("FTB Quests call " + method + " failed: " + cause);
+                throw new IllegalStateException("FTB Quests call " + method + " failed: " + cause, e);
             }
         }
         throw new IllegalStateException("FTB Quests has no method " + method + " on "

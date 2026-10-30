@@ -205,8 +205,10 @@ public final class Equip {
             Method m = api.getMethod("getCuriosInventory", LivingEntity.class);
             result = m.invoke(null, player);
         } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("cannot reach CuriosApi.getCuriosInventory — the Curios on this"
-                    + " classpath has a different API than this facet knows (" + e + ")");
+            throw new IllegalStateException(
+                    "cannot reach CuriosApi.getCuriosInventory — the Curios on this"
+                            + " classpath has a different API than this facet knows (" + e + ")",
+                    e);
         }
         if (!(result instanceof Optional<?> optional) || optional.isEmpty()) {
             throw new TestAbortedException("Curios is present but this player has no curios inventory — the"
@@ -243,6 +245,8 @@ public final class Equip {
         return call(target, method, new Class<?>[0]);
     }
 
+    // Curios handler classes are not public, so the reflective call has to open the method.
+    @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
     private static Object call(Object target, String method, Class<?>[] signature, Object... args) {
         try {
             Method m = target.getClass().getMethod(method, signature);
@@ -250,7 +254,7 @@ public final class Equip {
             return m.invoke(target, args);
         } catch (ReflectiveOperationException e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
-            throw new IllegalStateException("Curios call " + method + " failed: " + cause);
+            throw new IllegalStateException("Curios call " + method + " failed: " + cause, e);
         }
     }
 }
