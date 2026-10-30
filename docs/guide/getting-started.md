@@ -9,9 +9,8 @@ StageWright runs tests inside a live Minecraft game. There are two ways in:
   [Testing a modpack with no build tool](#testing-a-modpack-with-no-build-tool).
 
 Either way you need Minecraft 1.21.1, Java 21, and Fabric Loader 0.16 or newer with Fabric API or NeoForge 21. Every
-game process also needs [WorldDriver](https://github.com/AI-assisted-Minecraft-Developers/worlddriver) and the
-Architectury API it depends on: StageWright's tests reach the game through WorldDriver's methods, and its loader jars
-refuse to start without it.
+game process also needs [WorldDriver](https://github.com/AI-assisted-Minecraft-Developers/worlddriver):
+StageWright's tests reach the game through WorldDriver's methods, and its loader jars refuse to start without it.
 
 ## What a test is made of
 
@@ -144,7 +143,6 @@ plugins {
 repositories {
     mavenLocal()
     maven { url 'https://nexus.gardel.top/repository/maven-releases'; content { includeGroup 'net.magicterra' } }
-    maven { url 'https://maven.architectury.dev/'; content { includeGroup 'dev.architectury' } }
 }
 
 stagewright { tests { fabric { } } }   // the suite's name is yours; `neoforge { }` reads better there

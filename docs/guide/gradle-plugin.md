@@ -57,7 +57,6 @@ plugins { id 'net.magicterra.stagewright' version '0.1.0-alpha.0+1.21.1' }
 
 repositories {
     maven { url 'https://nexus.gardel.top/repository/maven-releases'; content { includeGroup 'net.magicterra' } }
-    maven { url 'https://maven.architectury.dev/'; content { includeGroup 'dev.architectury' } }
 }
 
 stagewright { tests { fabric { } } }   // the suite's name is yours: `neoforge { }` reads better there
@@ -66,9 +65,8 @@ stagewright { tests { fabric { } } }   // the suite's name is yours: `neoforge {
 Tests go in `src/testmod/java` and `src/testmod/resources`, and `./gradlew stagewrightTestFabric` runs
 them. A Fabric Loom project in Mojang names with Fabric API, and a ModDevGradle project with one mod,
 have each passed this way with no other change.
-The two repositories are where StageWright and WorldDriver, and the Architectury API WorldDriver needs,
-come from; the plugin adds none. A build that keeps repositories in `dependencyResolutionManagement`
-lists the same two there.
+The repository is where StageWright and WorldDriver come from; the plugin adds none. A build that keeps
+repositories in `dependencyResolutionManagement` lists the same one there.
 
 The rest is conventions, each of which a suite may set:
 
@@ -197,7 +195,7 @@ A topology declares no task of its own; it only names the runs a suite's launch 
 | `timeoutMinutes` | `int` | `20` | The longest one scene's games may run. |
 | `stallMinutes` | `int` | `5` | How long a game may go without its phase, ticks delivered or loaded classes changing before the scene is ended. See [supervision](../reference/supervision-protocol.md). |
 | `client` | `boolean` | `false` | The run task is a game client rather than a dedicated server. The plugin never starts a display. |
-| `leaks` | `String` | `'fail'` | What a game the supervision agent had to force down after its run does to its scene. `'fail'` fails it; `'report'` leaves the verdict to the tests, for a launcher whose own threads never end, such as Architectury's transformer in a dev run. The held-up threads are reported either way. A generated topology takes the suite's `leaks`. |
+| `leaks` | `String` | `'fail'` | What a game the supervision agent had to force down after its run does to its scene. `'fail'` fails it; `'report'` leaves the verdict to the tests, for a launcher whose own threads never end, such as Architectury Loom's transformer in a dev run. The held-up threads are reported either way. A generated topology takes the suite's `leaks`. |
 
 Per suite `<name>` the plugin registers:
 

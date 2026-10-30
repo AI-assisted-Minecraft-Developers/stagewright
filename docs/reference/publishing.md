@@ -9,23 +9,27 @@ StageWright is not one Gradle build. It is three, and the split is structural ra
 
 | Build | Root | Contains | Why separate |
 |---|---|---|---|
-| root | `settings.gradle` | `:stagewright-api`, `:stagewright-common`, `:stagewright-fabric`, `:stagewright-neoforge`, `:stagewright-cli`; includes `engine` | Applies loom and Architectury. |
+| root | `settings.gradle` | `:stagewright-api`, `:stagewright-common`, `:stagewright-fabric`, `:stagewright-neoforge`, `:stagewright-cli`; includes `engine` | Applies Fabric Loom to `:stagewright-fabric` and ModDevGradle to api, common and neoforge. |
 | engine | `engine/settings.gradle` | `stagewright-engine`, `stagewright-agent` (`agent/`), `stagewright-testengine` (`testengine/`) | Must never see a Minecraft classpath, and cannot be a subproject of the plugin, which is itself an included build of the root. |
 | Gradle plugin | `gradle-plugin/settings.gradle` | the plugin | Included by the root's `pluginManagement`; includes `engine`. |
 
-`stagewright-cli` is the one module of the root build kept out of the loom pipeline: it is plain JVM, runs on a
+`stagewright-cli` is the one module of the root build kept out of the Loom and ModDevGradle pipeline: it is plain JVM, runs on a
 machine with no Minecraft classpath, and carries the two loader jars as resources, taken from the sibling modules, so
 building it builds them.
 
-### The Architectury transforms run one at a time
+### How the loader jars are made
 
-The root build runs its projects in parallel, but its `transformProduction*` tasks share one build service that admits
-a single task at a time. The Architectury plugin hands each transform its configuration, the classpath among it,
-through JVM system properties, and the Gradle daemon has one set of those for every task it runs. Two transforms that
-overlap can each read the other's: on CI, `:stagewright-common:transformProductionFabric` read the classpath of
-`:stagewright-api:transformProductionNeoForge`, which lists what api depends on but not api itself, and failed with a
-`Type … not present` error for one of api's own classes. Whether two transforms overlap depends on how long the tasks
-before them take, so the failure comes and goes with unrelated changes.
+The plugin versions are WorldDriver's: Fabric Loom 1.13, the newest that runs on Gradle 8, and ModDevGradle 2.0.
+
+- `:stagewright-api` and `:stagewright-common` compile against vanilla Minecraft in Mojang names, the NeoForm build
+  NeoForge `neoforge_version` is made from (`neoform_version` in `gradle.properties`). Their own jars, in Mojang names,
+  are the `dev` artifacts.
+- Each loader puts those two jars, and a relocated SnakeYAML, into its own jar with Shadow, merging the
+  `META-INF/services` files. On Fabric, Loom then remaps the whole jar to intermediary names and nests the JUnit
+  Platform jars (`META-INF/jars/`); the Mixin names are rewritten as the jar is remapped, so it carries no refmap. On
+  NeoForge nothing is remapped, and the JUnit Platform jars are nested with `jarJar` (`META-INF/jarjar/`).
+- The plain `mc_stagewright-api` and `mc_stagewright-common` artifacts are the `dev` jars remapped to intermediary by
+  `:stagewright-fabric`, the project that has Loom's mappings.
 
 ## Where builds are published
 
@@ -81,8 +85,8 @@ Group is `net.magicterra` throughout.
 |---|---|---|---|
 | `mc_stagewright-api` | The test API (`net.magicterra.stagewright.test`: `Game`, `Plot`, `Bot`, `Scene`, …) and the capability layer (`net.magicterra.stagewright.capability`). What a test author compiles against. | plain, `sources`, `dev` | `worlddriver-api:dev`, compile scope |
 | `mc_stagewright-common` | The runtime: the in-game JUnit run, the script and YAML tests, the `mc.test.*` methods. Not consumed directly. | plain, `sources`, `dev` | none |
-| `mc_stagewright-fabric` | The loader mod jar, bundling api and common, and nesting the JUnit Platform the game runs. | plain, `sources`, `dev` | none |
-| `mc_stagewright-neoforge` | The same for NeoForge. | plain, `sources`, `dev` | none |
+| `mc_stagewright-fabric` | The loader mod jar, bundling api and common, and nesting the JUnit Platform the game runs. `dev` is this module's own classes in Mojang names; `dev-shadow`, the bundled jar before it is remapped. | plain, `sources`, `dev`, `dev-shadow` | none |
+| `mc_stagewright-neoforge` | The same for NeoForge. Nothing is remapped, so `dev-shadow` is the plain jar again. | plain, `sources`, `dev`, `dev-shadow` | none |
 | `stagewright-engine` | Run-directory rules, display checks and the supervisor, shared by the plugin, the test engine and the CLI. No Minecraft, no Gradle API, no third-party dependencies. | plain, `sources` | none |
 | `stagewright-agent` | The `-javaagent` a supervised game is started with. JDK only. See [the protocol](supervision-protocol.md). | plain, `sources` | none |
 | `stagewright-testengine` | The JUnit Platform engine `stagewright` a `stagewrightTest<Name>` task runs ([design](../design/test-engine.md)). Carries the agent and a relocated Rhino. | plain, `sources` | `stagewright-engine`, `junit-platform-engine`, ASM, SnakeYAML |
@@ -188,7 +192,7 @@ remapped StageWright and WorldDriver jars older than the jar last published, as 
 | | |
 |---|---|
 | Minecraft | 1.21.1 (range `[1.21.1,1.22)`) |
-| Loaders | Fabric and NeoForge, through Architectury |
+| Loaders | Fabric and NeoForge; neither needs the Architectury API |
 | Fabric Loader | the version in `gradle.properties`, range `[0.16,)` |
 | NeoForge | the version in `gradle.properties`, range `[21,)` |
 | Java | 21 |

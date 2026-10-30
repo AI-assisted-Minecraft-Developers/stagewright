@@ -10,6 +10,31 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-10-31
+
+### The build uses Fabric Loom and ModDevGradle instead of Architectury's Gradle plugin · green in the self-test suite (WorldDriver's whole suite on NeoForge, a part of it on Fabric)
+
+`:stagewright-fabric` builds with Fabric Loom 1.13 and the other modules with ModDevGradle 2.0, the versions WorldDriver
+uses. What gets installed is the same mod on both loaders, with the same metadata and the same classes, and every
+coordinate and classifier is still published. The visible differences in the jars:
+
+- Neither loader jar carries a mixin refmap file any more: on Fabric the newer Loom writes the remapped names into the
+  mixin classes, and NeoForge runs in Mojang names and never needed one. The Fabric jar's mixin config no longer names
+  a refmap.
+- The classes Architectury's plugin added to every jar it transformed (`architectury_inject_…/PlatformMethods` and
+  `architectury.common.marker`) are gone; nothing called them.
+- The NeoForge jar nests the JUnit Platform under `META-INF/jarjar/` instead of `META-INF/jars/`, listed in
+  `META-INF/jarjar/metadata.json` as before.
+- NeoForge's `dev` jar, this module's own classes, now carries those nested jars too, and its `dev-shadow` artifact is
+  the same file as the plain jar, since nothing is remapped there.
+- The POM of `mc_stagewright-common` no longer imports the JUnit BOM, which constrained nothing as it lists no
+  dependencies.
+
+A consumer no longer needs `maven.architectury.dev` among its repositories: neither StageWright nor WorldDriver needs
+the Architectury API. The Gradle plugin still supports a consumer built with Architectury Loom; it no longer moves an
+Architectury API that WorldDriver's POM brings to the project's version, since no WorldDriver build on the Nexus brings
+one. See `docs/reference/publishing.md`, "How the loader jars are made".
+
 ## 2026-10-30
 
 ### `--client-dir` no longer deletes a real directory in the client's place · green in the CLI's own tests

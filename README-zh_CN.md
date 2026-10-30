@@ -54,7 +54,6 @@ plugins {
 repositories {
     mavenLocal()
     maven { url 'https://nexus.gardel.top/repository/maven-releases'; content { includeGroup 'net.magicterra' } }
-    maven { url 'https://maven.architectury.dev/'; content { includeGroup 'dev.architectury' } }
 }
 
 stagewright { tests { fabric { } } }
