@@ -95,8 +95,13 @@ Group is `net.magicterra` throughout.
 
 Every jar above, `sources` and `dev` included, and the CLI's `stagewright.jar` carry `META-INF/COPYING` and
 `META-INF/COPYING.LESSER`, and every POM, the plugin marker's included, declares `LGPL-3.0-only` with its URL, plus the
-project and SCM URL. All three builds take both from `gradle/license.gradle`; `scripts/check_packaging.py` checks the
-built jars and POMs.
+project and SCM URL. All three builds take both from the `stagewright.license` plugin; `scripts/check_packaging.py`
+checks the built jars and POMs.
+
+The three builds (the root, `engine/` and `gradle-plugin/`) share their build logic through `build-logic/`, a build
+each of them includes in its `pluginManagement`. Each file `build-logic/src/main/groovy/<id>.gradle` is the plugin
+with that id: `stagewright.version` (the version every artifact carries), `stagewright.license` (the terms above) and
+`stagewright.nexus` (the repository CI publishes to).
 
 ### Why the Minecraft-facing POMs declare (almost) nothing
 
