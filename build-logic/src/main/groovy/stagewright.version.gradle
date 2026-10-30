@@ -36,7 +36,9 @@ ext.worlddriverVersionRange = {
     int minor = m.group(2) as int
     def numbered = worlddriverDependency =~ /^\d+\.\d+\.\d+-alpha\.\d+(?=\+|$)/
     def floor = numbered.find() ? numbered.group() : "${m.group()}-alpha.0"
-    "[${floor},${major == 0 ? "0.${minor + 1}.0" : "${major + 1}.0.0"}-alpha.0)".toString()
+    // Its own variable: the Groovy-Eclipse formatter cannot parse a quoted string nested in a ${} expression.
+    def ceiling = major == 0 ? "0.${minor + 1}.0" : "${major + 1}.0.0"
+    "[${floor},${ceiling}-alpha.0)".toString()
 }()
 ext.rhinoVersion = rootProperties.rhino_version
 ext.snakeyamlVersion = rootProperties.snakeyaml_version
