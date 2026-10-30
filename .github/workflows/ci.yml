@@ -77,19 +77,15 @@ jobs:
         if: steps.companion.outputs.sha == ''
         run: ./gradlew -p gradle-plugin check publishToMavenLocal
 
-      - name: Architecture boundaries
-        run: python3 scripts/check_architecture.py
-
-      # Includes the command-line runner, which is a module of this build.
+      # Includes the command-line runner, which is a module of this build. Each build's tests include its
+      # ArchitectureTest; the CLI's also checks the loader jars it carries.
       - name: Framework
         if: steps.companion.outputs.sha == ''
         run: ./gradlew build publishToMavenLocal
 
       - name: Packaging
         if: steps.companion.outputs.sha == ''
-        run: |
-          python3 scripts/check_packaging.py --build
-          python3 scripts/check_architecture.py --jars
+        run: python3 scripts/check_packaging.py --build
 
       - uses: actions/upload-artifact@v4
         with:

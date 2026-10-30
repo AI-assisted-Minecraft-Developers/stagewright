@@ -53,7 +53,6 @@ run_step "$worlddriver_root" driver-bootstrap ./gradlew :api:publishToMavenLocal
 run_step "$stagewright_root" framework ./gradlew build publishToMavenLocal "-Pworlddriver_version=$worlddriver_candidate"
 run_step "$worlddriver_root" driver ./gradlew build :api:generatePomFileForMavenJavaPublication :common:generatePomFileForMavenJavaPublication :fabric:generatePomFileForMavenJavaPublication :neoforge:generatePomFileForMavenJavaPublication "-Pstagewright_version=$stagewright_candidate"
 run_step "$stagewright_root" framework-packaging python3 scripts/check_packaging.py --build "--gradle-arg=-Pworlddriver_version=$worlddriver_candidate"
-run_step "$stagewright_root" framework-boundaries python3 scripts/check_architecture.py --jars
 run_step "$worlddriver_root" driver-packaging python3 scripts/check_packaging.py
 run_step "$worlddriver_root" driver-budget python3 scripts/check_source_budget.py
 run_step "$worlddriver_root" driver-remap python3 scripts/check_remap_safety.py
