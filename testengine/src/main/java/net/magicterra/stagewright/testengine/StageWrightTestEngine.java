@@ -59,14 +59,13 @@ public final class StageWrightTestEngine implements TestEngine {
         return Optional.of("stagewright-testengine");
     }
 
+    // Discovery reads as one pass over the selectors and the classes they name; splitting it per selector kind
+    // would spread the single ordering of scenes across helpers.
     @Override
+    @SuppressWarnings("checkstyle:javancss")
     public TestDescriptor discover(EngineDiscoveryRequest request, UniqueId uniqueId) {
-        EngineDescriptor engine = new EngineDescriptor(uniqueId, "StageWright");
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-
         // What was asked for: whole classes, or particular methods of a class, optionally in one scene only.
         Map<String, Predicate<ClassScan.Method>> wanted = new LinkedHashMap<>();
-        Map<String, Set<String>> scenesOf = new LinkedHashMap<>();
         for (ClassSelector s : request.getSelectorsByType(ClassSelector.class)) {
             wanted.put(s.getClassName(), m -> true);
         }
@@ -105,10 +104,12 @@ public final class StageWrightTestEngine implements TestEngine {
                 wantedScripts.put(s.getClasspathResourceName(), t -> true);
             }
         }
+        Map<String, Set<String>> scenesOf = new LinkedHashMap<>();
         for (UniqueIdSelector s : request.getSelectorsByType(UniqueIdSelector.class)) {
             selectById(s.getUniqueId(), uniqueId, wanted, scenesOf, wantedScripts);
         }
 
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
         Map<String, Nodes.Scene> scenes = new LinkedHashMap<>();
         for (Map.Entry<String, Predicate<ClassScan.Method>> entry : wanted.entrySet()) {
             Optional<ClassScan.Scanned> scanned;
@@ -138,6 +139,7 @@ public final class StageWrightTestEngine implements TestEngine {
                 }
             }
         }
+        EngineDescriptor engine = new EngineDescriptor(uniqueId, "StageWright");
         for (Map.Entry<String, Predicate<String>> entry : wantedScripts.entrySet()) {
             ScriptScan.Scanned scanned = ScriptScan.scan(entry.getKey(), loader);
             if (scanned.error() != null) {

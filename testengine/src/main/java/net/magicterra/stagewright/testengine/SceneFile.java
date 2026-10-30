@@ -23,6 +23,9 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  * @param files {@code files}: text written into the game's directory before it starts, by path relative to it
  * @param excludedMods {@code mods.exclude}: mods the game starts without, each a mod id or a jar file name pattern
  */
+// One validator for the whole file: keys are checked in one fixed order and the first bad one is reported, so the
+// checks stay together. The messages share the "scene '…': " shape by design.
+@SuppressWarnings({"checkstyle:javancss", "checkstyle:multiplestringliterals"})
 record SceneFile(
         String name, String topology, World world, String from, Map<String, String> files, List<String> excludedMods) {
 
@@ -122,7 +125,8 @@ record SceneFile(
 
         /** What the game applies once its world is loaded, as JSON for {@code -Dstagewright.scene.world}. */
         String runtimeJson() {
-            StringBuilder out = new StringBuilder("{\"gamerules\":{");
+            StringBuilder out = new StringBuilder(256);
+            out.append("{\"gamerules\":{");
             boolean first = true;
             for (Map.Entry<String, Object> rule : gamerules.entrySet()) {
                 if (!first) {
@@ -262,6 +266,9 @@ record SceneFile(
         }
     }
 
+    // gamemode and difficulty are checked here, ahead of the game rules, so a file with two bad keys reports them
+    // in document order; moving them later would change which error is shown.
+    @SuppressWarnings({"checkstyle:variabledeclarationusagedistance", "checkstyle:javancss"})
     private static World world(String name, String at, Object raw) {
         Map<?, ?> w = mapping(name, at, raw);
         only(name, at, w, WORLD);
@@ -325,7 +332,6 @@ record SceneFile(
             throw new IllegalStateException("scene '" + name + "': " + at + ".tickRate is not a number");
         }
 
-        Object seed = w.get("seed");
         Object structures = w.get("structures");
         if (structures != null && !(structures instanceof Boolean)) {
             throw new IllegalStateException("scene '" + name + "': " + at + ".structures is true or false");
@@ -334,6 +340,7 @@ record SceneFile(
         if (preset != null && !(preset instanceof String)) {
             throw new IllegalStateException("scene '" + name + "': " + at + ".preset is a world preset id");
         }
+        Object seed = w.get("seed");
         return new World(
                 (String) preset,
                 seed == null ? null : String.valueOf(seed),

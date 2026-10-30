@@ -31,6 +31,9 @@ import java.util.zip.ZipFile;
  */
 final class SceneMods {
 
+    /** The folder of mod jars inside a game directory. */
+    private static final String MODS = "mods";
+
     private static final Pattern PATH_LIST = Pattern.compile("[^\\s\"']+");
     private static final Pattern MOD_ID_TOML = Pattern.compile("(?m)^\\s*modId\\s*=\\s*\"([^\"]+)\"");
     private static final Pattern MOD_ID_JSON = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
@@ -52,7 +55,7 @@ final class SceneMods {
      */
     static Applied apply(LaunchSpec.Process process, List<String> exclude, Path scratch) throws IOException {
         Path gameDir = gameDirectory(process);
-        List<Path> modsFolder = jars(gameDir.resolve("mods"));
+        List<Path> modsFolder = jars(gameDir.resolve(MODS));
         Set<Path> classPath = classPathJars(process);
         List<Mod> mods = new ArrayList<>();
         for (Path jar : modsFolder) {
@@ -262,11 +265,11 @@ final class SceneMods {
      * game reads and writes there is the real directory's, and {@code mods/} links only the jars kept.
      */
     private static Path gameDirectoryWithout(Path real, List<Mod> excluded, Path view) throws IOException {
-        Files.createDirectories(view.resolve("mods"));
+        Files.createDirectories(view.resolve(MODS));
         try (Stream<Path> entries = Files.list(real)) {
             for (Path entry : entries.toList()) {
                 String name = entry.getFileName().toString();
-                if (name.equals("mods") || name.equals("stagewright")) {
+                if (name.equals(MODS) || name.equals("stagewright")) {
                     continue;
                 }
                 Files.createSymbolicLink(view.resolve(name), entry.toAbsolutePath());
@@ -274,9 +277,9 @@ final class SceneMods {
         }
         Set<Path> gone = new LinkedHashSet<>();
         excluded.forEach(m -> gone.add(m.jar()));
-        for (Path jar : jars(real.resolve("mods"))) {
+        for (Path jar : jars(real.resolve(MODS))) {
             if (!gone.contains(jar)) {
-                Files.createSymbolicLink(view.resolve("mods").resolve(jar.getFileName()), jar.toAbsolutePath());
+                Files.createSymbolicLink(view.resolve(MODS).resolve(jar.getFileName()), jar.toAbsolutePath());
             }
         }
         return view;

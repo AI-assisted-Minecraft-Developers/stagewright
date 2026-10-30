@@ -30,6 +30,8 @@ import org.yaml.snakeyaml.error.YAMLException;
  * saying so. The game evaluates the same file again and runs the bodies. A YAML test file is read for its test names
  * and scenes only.
  */
+// The ": " between a resource and its failure is the shape every scan message takes; one constant would hide it.
+@SuppressWarnings("checkstyle:multiplestringliterals")
 final class ScriptScan {
 
     /** Where script tests live under a test root. */

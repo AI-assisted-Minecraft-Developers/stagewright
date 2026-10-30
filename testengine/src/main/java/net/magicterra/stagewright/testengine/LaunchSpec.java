@@ -35,6 +35,9 @@ record LaunchSpec(
      */
     static final String MISSING = "stagewright.launches.missing";
 
+    /** Opens every message about a topology, so the name reads the same wherever the failure is reported. */
+    private static final String TOPOLOGY = "topology '";
+
     /** A topology this run cannot launch, by its writer's word or, under {@value #MISSING}, by having no spec. */
     static final class Unlaunchable extends IllegalStateException {
         Unlaunchable(String message) {
@@ -111,7 +114,7 @@ record LaunchSpec(
         }
         Path file = Path.of(dir).resolve(topology + ".json");
         if (!Files.isRegularFile(file)) {
-            String message = "topology '" + topology + "' has no launch spec: " + file + " is missing";
+            String message = TOPOLOGY + topology + "' has no launch spec: " + file + " is missing";
             if ("skip".equals(System.getProperty(MISSING))) {
                 throw new Unlaunchable(message);
             }
@@ -121,15 +124,15 @@ record LaunchSpec(
         try {
             json = (Map<?, ?>) Json.parse(Files.readString(file));
         } catch (IOException | RuntimeException e) {
-            throw new IllegalStateException("topology '" + topology + "': " + file + " could not be read", e);
+            throw new IllegalStateException(TOPOLOGY + topology + "': " + file + " could not be read", e);
         }
         if (json.get("unavailable") instanceof String why) {
-            throw new Unlaunchable("topology '" + topology + "' cannot be launched in this run: " + why);
+            throw new Unlaunchable(TOPOLOGY + topology + "' cannot be launched in this run: " + why);
         }
         try {
             return parse(topology, json);
         } catch (RuntimeException e) {
-            throw new IllegalStateException("topology '" + topology + "': " + file + " could not be read", e);
+            throw new IllegalStateException(TOPOLOGY + topology + "': " + file + " could not be read", e);
         }
     }
 

@@ -19,6 +19,8 @@ import org.junit.platform.engine.support.descriptor.MethodSource;
  * {@link MethodSource} still names the real class or file, which is what Gradle's {@code --tests} filter matches it on.
  * An IDE cannot open a class from a Gradle run's node any more.
  */
+// A namespace for the nested descriptor types; it is never instantiated and has no behaviour of its own.
+@SuppressWarnings("PMD.MissingStaticMethodInNonInstantiatableClass")
 final class Nodes {
 
     private Nodes() {}

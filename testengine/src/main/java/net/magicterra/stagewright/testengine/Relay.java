@@ -21,6 +21,9 @@ import org.junit.platform.engine.support.descriptor.MethodSource;
  */
 final class Relay implements Consumer<Map<String, Object>> {
 
+    /** The key every game node carries its id under. */
+    private static final String ID = "id";
+
     private final EngineExecutionListener listener;
     private final String sceneName;
     private final Coverage coverage;
@@ -61,7 +64,9 @@ final class Relay implements Consumer<Map<String, Object>> {
         }
     }
 
+    // One case per message the game sends; each is a few lines, and the switch is the protocol's table.
     @Override
+    @SuppressWarnings("checkstyle:javancss")
     public synchronized void accept(Map<String, Object> event) {
         switch (String.valueOf(event.get("type"))) {
             case "planned" -> {
@@ -80,7 +85,7 @@ final class Relay implements Consumer<Map<String, Object>> {
                 }
             }
             case "started" -> {
-                TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
+                TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
                 String key = key(d);
                 if (key != null) {
                     coverage.ran(key);
@@ -88,7 +93,7 @@ final class Relay implements Consumer<Map<String, Object>> {
                 start(d);
             }
             case "skipped" -> {
-                TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
+                TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
                 String reason = String.valueOf(event.get("reason"));
                 if (d != null && !started.contains(d) && finished.add(d)) {
                     listener.executionSkipped(d, reason);
@@ -106,7 +111,7 @@ final class Relay implements Consumer<Map<String, Object>> {
                 }
             }
             case "finished" -> {
-                TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
+                TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
                 if (d == null || finished.contains(d)) {
                     return;
                 }
@@ -139,14 +144,14 @@ final class Relay implements Consumer<Map<String, Object>> {
                 finish(d, result);
             }
             case "record" -> {
-                TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
+                TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
                 if (d != null && event.get("name") instanceof String name) {
                     record(d, name, event.get("value") instanceof String v ? v : "");
                 }
             }
             case "report" -> {
                 // An older game's records.
-                TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
+                TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
                 if (d != null && event.get("entries") instanceof Map<?, ?> entries) {
                     entries.forEach((k, v) -> record(d, String.valueOf(k), String.valueOf(v)));
                 }
@@ -242,6 +247,8 @@ final class Relay implements Consumer<Map<String, Object>> {
      * naming it. Also printed, one line each, since Gradle's own test report reads no report entries at all: in its
      * test report the line is the output of whichever test was running then, and says which test it belongs to.
      */
+    // Standard output is the build's log, where a recorded value is read beside the test that wrote it.
+    @SuppressWarnings("PMD.SystemPrintln")
     private void record(TestDescriptor d, String name, String value) {
         if (name.isBlank()) {
             return;
@@ -275,7 +282,7 @@ final class Relay implements Consumer<Map<String, Object>> {
             if (d == null) {
                 return;
             }
-            byGameId.put(String.valueOf(node.get("id")), d);
+            byGameId.put(String.valueOf(node.get(ID)), d);
             planned.add(d);
             return;
         }
@@ -289,7 +296,7 @@ final class Relay implements Consumer<Map<String, Object>> {
         if (d == null) {
             return;
         }
-        byGameId.put(String.valueOf(node.get("id")), d);
+        byGameId.put(String.valueOf(node.get(ID)), d);
         planned.add(d);
     }
 
@@ -298,7 +305,7 @@ final class Relay implements Consumer<Map<String, Object>> {
         if (parent == null) {
             return;
         }
-        String gameId = String.valueOf(node.get("id"));
+        String gameId = String.valueOf(node.get(ID));
         UniqueId.Segment last = UniqueId.parse(gameId).getLastSegment();
         Nodes.Dynamic d = new Nodes.Dynamic(
                 parent.getUniqueId().append(last.getType(), last.getValue()),

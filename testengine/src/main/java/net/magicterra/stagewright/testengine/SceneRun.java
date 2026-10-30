@@ -31,6 +31,8 @@ import org.junit.platform.engine.reporting.ReportEntry;
  * to be forced down after its run fails the scene itself, naming what held it up, and so does a joined client that
  * crashes, goes silent or leaves before the run is over.
  */
+// Separators (",", "\n") and the message wording repeat by nature; a constant per separator would only rename them.
+@SuppressWarnings("checkstyle:multiplestringliterals")
 final class SceneRun {
 
     private static final Duration CONNECT_LIMIT = Duration.ofMinutes(2);
@@ -105,7 +107,6 @@ final class SceneRun {
 
     private TestExecutionResult launch(LaunchSpec spec, SceneFile declaration, Relay relay, ClassLoader loader)
             throws IOException, InterruptedException {
-        SceneFile.World world = declaration.world();
         Path artifacts = spec.gameDirectory().resolve("stagewright");
         Path logs = artifacts.resolve("logs");
         Files.createDirectories(logs);
@@ -125,6 +126,7 @@ final class SceneRun {
         byte[] original = Files.isRegularFile(serverProperties) ? Files.readAllBytes(serverProperties) : null;
         SceneSetup.Restore files = SceneSetup.writeFiles(spec.primary().workingDirectory(), declaration.files());
         Path modsScratch = artifacts.resolve("scene-mods");
+        SceneFile.World world = declaration.world();
         try {
             if (!declaration.excludedMods().isEmpty()) {
                 spec = withoutMods(spec, declaration.excludedMods(), modsScratch);
@@ -149,6 +151,8 @@ final class SceneRun {
     }
 
     /** {@code spec} with both its games started without {@code exclude}, and a report entry saying which jars went. */
+    // The console line is how a build's log shows which mods a scene dropped, beside the scene's own output.
+    @SuppressWarnings("PMD.SystemPrintln")
     private LaunchSpec withoutMods(LaunchSpec spec, List<String> exclude, Path scratch) throws IOException {
         SceneMods.Applied primary = SceneMods.apply(spec.primary(), exclude, scratch.resolve("primary"));
         SceneMods.Applied companion = spec.companion() == null
@@ -184,11 +188,11 @@ final class SceneRun {
         return applied.unmatched().isEmpty() ? "" : "; matched no mod of " + which + ": " + applied.unmatched();
     }
 
+    // The round loop below is long because each round is one game, its companion and their supervision in turn.
+    @SuppressWarnings("checkstyle:javancss")
     private TestExecutionResult supervise(
             LaunchSpec spec, SceneFile.World world, Relay relay, Path artifacts, Path logs)
             throws IOException, InterruptedException {
-        Path agentJar = AgentJar.stage(SceneRun.class, artifacts);
-
         List<String> classes = new ArrayList<>();
         List<String> scripts = new ArrayList<>();
         for (TestDescriptor c : scene.getChildren()) {
@@ -205,6 +209,8 @@ final class SceneRun {
         Files.deleteIfExists(artifacts.resolve("handovers.json"));
         // One entry per round whose game had to be forced down after its run.
         List<String> forced = new ArrayList<>();
+        // Staged once for every round: each round's game loads the same agent.
+        Path agentJar = AgentJar.stage(SceneRun.class, artifacts);
         for (int round = 0; ; round++) {
             String suffix = round == 0 ? "" : "-round" + round;
             File gameLog = logs.resolve(scene.name + suffix + "-game.log").toFile();
@@ -345,7 +351,8 @@ final class SceneRun {
             case NEVER_CONNECTED -> "without ever reaching its supervision agent";
             case PROCESS_DIED -> "by exiting without finishing its run";
         };
-        StringBuilder out = new StringBuilder("(")
+        StringBuilder out = new StringBuilder(128)
+                .append('(')
                 .append(ended)
                 .append(") ")
                 .append(detail)
@@ -387,12 +394,12 @@ final class SceneRun {
      */
     static String forcedDown(int round, List<Supervisor.Leak> leaks, boolean exited, int graceSeconds) {
         StringBuilder out = new StringBuilder(round == 0 ? "the game" : "round " + round + "'s game");
-        if (!exited) {
-            out.append(" was still up ").append(graceSeconds + 10).append("s after its run and was killed");
-        } else {
+        if (exited) {
             out.append(" had to be forced down: its JVM was still up ")
                     .append(graceSeconds)
                     .append("s after its run");
+        } else {
+            out.append(" was still up ").append(graceSeconds + 10).append("s after its run and was killed");
         }
         if (leaks.isEmpty()) {
             return out.append(exited ? ", held by no thread the agent could name" : "")
