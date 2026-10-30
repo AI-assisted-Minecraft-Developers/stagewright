@@ -9,7 +9,6 @@ mkdir -p "$log_root"
 candidate_version() {
     python3 - "$1" <<'VERSION'
 import os
-import re
 import sys
 from pathlib import Path
 props = {}
@@ -17,10 +16,7 @@ for line in (Path(sys.argv[1]) / 'gradle.properties').read_text().splitlines():
     if '=' in line and not line.lstrip().startswith('#'):
         key, value = line.split('=', 1)
         props[key.strip()] = value.strip()
-base = props.get('mod_base_version')
-if base is None:
-    version_script = (Path(sys.argv[1]) / 'gradle/version.gradle').read_text()
-    base = re.search(r"def base = '([^']+)'", version_script).group(1)
+base = props['mod_base_version']
 number = os.environ.get('BUILD_NUMBER')
 print(f"{base}-{f'alpha.{number}' if number else 'snapshot'}+{props['minecraft_version']}")
 VERSION
