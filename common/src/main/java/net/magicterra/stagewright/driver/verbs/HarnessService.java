@@ -54,6 +54,7 @@ import net.magicterra.worlddriver.bot.SettingsCommand;
 import net.magicterra.worlddriver.config.BotConfig;
 import net.magicterra.worlddriver.config.ControlConfig;
 import net.magicterra.worlddriver.config.PlanningConfig;
+import net.magicterra.worlddriver.game.body.BlockInteraction;
 import net.magicterra.worlddriver.game.body.Body;
 import net.magicterra.worlddriver.game.body.ServerPlayerBody;
 import net.minecraft.core.BlockPos;
@@ -256,7 +257,8 @@ final class HarnessService implements TestHarnessApi {
     private static HeldKeys held(Body body) {
         float forward = forward(body);
         float left = left(body);
-        boolean attack = body.blockInteraction().map(b -> b.breakHeld()).orElse(false);
+        boolean attack =
+                body.blockInteraction().map(BlockInteraction::breakHeld).orElse(false);
         boolean sprint = body.entity() != null && body.entity().isSprinting();
         return new HeldKeys(
                 forward > 0, forward < 0, left > 0, left < 0, body.dbgJumping(), sprint, attack, body.dbgSneak());

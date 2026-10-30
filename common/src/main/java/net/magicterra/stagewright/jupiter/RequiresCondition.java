@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 import net.magicterra.stagewright.capability.Mods;
 import net.magicterra.stagewright.test.Requires;
+import net.minecraft.server.MinecraftServer;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -40,7 +41,7 @@ public final class RequiresCondition implements ExecutionCondition {
     static List<String> missing(Requires.Capability[] capabilities, String[] mods) {
         List<String> missing = new ArrayList<>();
         if (capabilities.length > 0) {
-            boolean dedicated = GameExtension.game().onServer(s -> s.isDedicatedServer());
+            boolean dedicated = GameExtension.game().onServer(MinecraftServer::isDedicatedServer);
             for (Requires.Capability c : capabilities) {
                 boolean has = switch (c) {
                     // A dedicated server has a real client only when its topology joins one, and the run waits
