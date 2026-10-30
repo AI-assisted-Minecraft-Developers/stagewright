@@ -30,9 +30,9 @@ import net.minecraft.world.item.ItemStack;
  *
  * <h2>Nothing here outlives the test</h2>
  *
- * The first write to a body's inventory snapshots the whole inventory, and {@link Game#afterTest} puts it back when the
- * test ends, passed or not; hunger likewise. A player shared by several tests would otherwise carry one test's items
- * into the next.
+ * <p>The first write to a body's inventory snapshots the whole inventory, and {@link Game#afterTest} puts it back when
+ * the test ends, passed or not; hunger likewise. A player shared by several tests would otherwise carry one test's
+ * items into the next.
  */
 public final class Items {
 
@@ -182,7 +182,7 @@ public final class Items {
         return body.onServer(player -> {
             MobEffect effect = Ids.require(BuiltInRegistries.MOB_EFFECT, effectId, "mob effect");
             for (MobEffectInstance instance : player.getActiveEffects()) {
-                if (instance.getEffect().value() == effect) {
+                if (effect.equals(instance.getEffect().value())) {
                     return true;
                 }
             }

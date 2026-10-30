@@ -55,16 +55,24 @@ public final class Menus {
     private static final ContainerSynchronizer SILENT = new ContainerSynchronizer() {
         @Override
         public void sendInitialData(
-                AbstractContainerMenu menu, NonNullList<ItemStack> items, ItemStack carried, int[] data) {}
+                AbstractContainerMenu menu, NonNullList<ItemStack> items, ItemStack carried, int[] data) {
+            // Silent by design: no client is listening for this menu.
+        }
 
         @Override
-        public void sendSlotChange(AbstractContainerMenu menu, int slot, ItemStack stack) {}
+        public void sendSlotChange(AbstractContainerMenu menu, int slot, ItemStack stack) {
+            // Silent by design: no client is listening for this menu.
+        }
 
         @Override
-        public void sendCarriedChange(AbstractContainerMenu menu, ItemStack carried) {}
+        public void sendCarriedChange(AbstractContainerMenu menu, ItemStack carried) {
+            // Silent by design: no client is listening for this menu.
+        }
 
         @Override
-        public void sendDataChange(AbstractContainerMenu menu, int id, int value) {}
+        public void sendDataChange(AbstractContainerMenu menu, int id, int value) {
+            // Silent by design: no client is listening for this menu.
+        }
     };
 
     /** What this facet opened for one body. */
@@ -133,7 +141,7 @@ public final class Menus {
     public boolean isOpen(Body body) {
         return body.onServer(player -> {
             Open o = open.get(body.name());
-            return o != null && player.containerMenu == o.menu();
+            return o != null && o.menu().equals(player.containerMenu);
         });
     }
 
@@ -212,11 +220,6 @@ public final class Menus {
         return click(body, slot, 0, "pickup");
     }
 
-    /** Shift-click ({@code quick_move}) a slot. */
-    public Menus shiftClick(Body body, int slot) {
-        return click(body, slot, 0, "quick_move");
-    }
-
     /** Click a slot with an explicit button and click type, a vanilla {@link ClickType} name in lower case. */
     public Menus click(Body body, int slot, int button, String clickType) {
         ClickType type = clickTypeOf(clickType);
@@ -229,11 +232,16 @@ public final class Menus {
         return this;
     }
 
+    /** Shift-click ({@code quick_move}) a slot. */
+    public Menus shiftClick(Body body, int slot) {
+        return click(body, slot, 0, "quick_move");
+    }
+
     /** Close the menu. Safe to call when nothing is open. */
     public Menus close(Body body) {
         body.runOnServer(player -> {
             Open o = open.remove(body.name());
-            if (o != null && player.containerMenu == o.menu()) {
+            if (o != null && o.menu().equals(player.containerMenu)) {
                 player.closeContainer();
             }
         });
@@ -276,7 +284,7 @@ public final class Menus {
         if (o == null) {
             throw new IllegalStateException("no menu is open for " + body.name() + " — call openAt first");
         }
-        if (player.containerMenu != o.menu()) {
+        if (!o.menu().equals(player.containerMenu)) {
             throw new IllegalStateException("the menu this test opened ('" + o.title() + "') is no longer "
                     + body.name() + "'s current one — something closed or replaced it");
         }
@@ -296,7 +304,7 @@ public final class Menus {
 
     /** Close whatever is open before opening something else. */
     private void closeQuietly(Body body, ServerPlayer player) {
-        if (player.containerMenu != player.inventoryMenu) {
+        if (!player.inventoryMenu.equals(player.containerMenu)) {
             player.closeContainer();
         }
         open.remove(body.name());
@@ -315,7 +323,7 @@ public final class Menus {
         ServerPlayer player = body.onServer(p -> p);
         game.afterTest(server -> {
             open.remove(body.name());
-            if (player.containerMenu != player.inventoryMenu) {
+            if (!player.inventoryMenu.equals(player.containerMenu)) {
                 player.closeContainer();
             }
         });
