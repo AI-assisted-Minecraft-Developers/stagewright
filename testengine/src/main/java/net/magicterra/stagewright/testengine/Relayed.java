@@ -36,6 +36,8 @@ final class Relayed {
 
     /** A non-assertion throwable from the game, under its own class's name. */
     static final class GameException extends RuntimeException {
+private static final long serialVersionUID = 1L;
+
         GameException(String message, Throwable cause) {
             super(message, cause);
         }

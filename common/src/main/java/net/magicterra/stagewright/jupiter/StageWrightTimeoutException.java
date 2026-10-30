@@ -8,6 +8,8 @@ package net.magicterra.stagewright.jupiter;
  * out / the condition never held" from an ordinary failed assertion.
  */
 public class StageWrightTimeoutException extends RuntimeException {
+private static final long serialVersionUID = 1L;
+
     /** A bounded wait that ran out, described by {@code message}. */
     public StageWrightTimeoutException(String message) {
         super(message);

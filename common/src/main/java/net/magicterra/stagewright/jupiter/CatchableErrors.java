@@ -148,6 +148,8 @@ final class CatchableErrors {
     // Extends Error on purpose: the script engine passes only Errors through its catch untouched.
     @SuppressWarnings("PMD.DoNotExtendJavaLangError")
     static final class Abort extends Error {
+private static final long serialVersionUID = 1L;
+
         Abort(RuntimeException abort) {
             super(abort.getMessage(), abort, false, false);
         }
