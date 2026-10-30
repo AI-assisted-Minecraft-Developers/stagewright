@@ -42,7 +42,9 @@ import net.minecraft.world.level.storage.LevelStorageSource;
 public final class ClientDirector {
 
     private static final String P_WORLD = "stagewright.client.world";
+
     private static final String P_CONNECT = "stagewright.client.connect";
+
     private static final String P_EXIT = "stagewright.client.exitWhenDone";
 
     /**
@@ -72,16 +74,21 @@ public final class ClientDirector {
     }
 
     private static Phase phase = Phase.WAITING_FOR_TITLE;
+
     private static int settleTicks;
+
     /** The screen last reported while waiting for the title screen. */
     private static String waitingOn;
 
     private static int driveTicks;
+
     private static int exitCountdown = -1;
+
     /** Client ticks seen, which the supervision agent reads as this JVM's progress. */
     private static long clientTicks;
 
     private static final int AGENT_TICK_INTERVAL = 20;
+
     /** Set once the loading window has closed, so the log says so exactly once. */
     private static boolean loadReported;
 

@@ -26,7 +26,9 @@ import java.util.zip.ZipInputStream;
 final class DriverRequirement {
 
     private static final String FABRIC_METADATA = "fabric.mod.json";
+
     private static final String NEOFORGE_METADATA = "META-INF/neoforge.mods.toml";
+
     /** The mod ids of StageWright's framework and of the driver it requires. */
     private static final String FRAMEWORK_ID = "mc_testkit";
 

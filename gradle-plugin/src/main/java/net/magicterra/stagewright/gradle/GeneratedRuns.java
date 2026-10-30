@@ -34,14 +34,19 @@ final class GeneratedRuns {
     static final String MOD_DEV = "neoForge";
 
     static final String DEDICATED_SERVER = "dedicatedServer";
+
     static final String DEDICATED_SERVER_WITH_CLIENT = "dedicatedServerWithClient";
+
     static final String INTEGRATED_SERVER = "integratedServer";
+
     /** Under ModDevGradle, the mod the run source set becomes. */
     static final String TESTS_MOD = "stagewright_tests";
+
     /** The singleplayer world the integrated server's client creates; the test engine deletes it before each scene. */
     static final String INTEGRATED_WORLD = "StageWright";
 
     static final int DEFAULT_SERVER_PORT = 25_621;
+
     static final String TESTMOD = "testmod";
 
     private GeneratedRuns() {}

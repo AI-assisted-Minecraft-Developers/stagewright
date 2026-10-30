@@ -38,15 +38,25 @@ import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
 final class ScriptHandles {
 
     private static final String AXIS_X = "x";
+
     private static final String AXIS_Y = "y";
+
     private static final String AXIS_Z = "z";
+
     private static final String DIMENSION = "dimension";
+
     private static final String NAME = "name";
+
     private static final String LEFT = "left";
+
     private static final String JUMP = "jump";
+
     private static final String SPRINT = "sprint";
+
     private static final String ATTACK = "attack";
+
     private static final String FORWARD = "forward";
+
     private static final String HIT = "hit";
 
     private static final List<String> PRESS_KEYS =

@@ -20,6 +20,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 final class RunLocks {
 
     private static final ReentrantReadWriteLock ISOLATION = new ReentrantReadWriteLock();
+
     private static final Map<String, ReentrantReadWriteLock> NAMED = new ConcurrentHashMap<>();
 
     private RunLocks() {}

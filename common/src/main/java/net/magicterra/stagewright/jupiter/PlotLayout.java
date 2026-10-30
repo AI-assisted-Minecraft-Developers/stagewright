@@ -17,6 +17,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 final class PlotLayout {
 
     static final int MAX_SIDE = 256;
+
     static final int MARGIN = 32;
 
     /** Per dimension, each leased stretch of the row: its first x to the x after its gap. */

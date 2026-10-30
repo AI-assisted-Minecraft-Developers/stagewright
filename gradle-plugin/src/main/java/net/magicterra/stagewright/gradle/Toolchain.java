@@ -192,7 +192,9 @@ interface Toolchain {
      */
     final class WorkingDirectory {
         private final DirectoryProperty gameDirectory;
+
         private final Property<?> runDir;
+
         private final Property<?> projectDir;
 
         WorkingDirectory(DirectoryProperty gameDirectory, Property<?> runDir, Property<?> projectDir) {

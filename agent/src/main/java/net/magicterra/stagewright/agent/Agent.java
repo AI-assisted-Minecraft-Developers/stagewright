@@ -31,16 +31,23 @@ import java.util.Set;
 public final class Agent {
 
     static final String AGENT_VERSION = "1";
+
     private static final long HEARTBEAT_MS = 1_000;
+
     private static final int CONNECT_ATTEMPTS = 40;
+
     private static final long CONNECT_RETRY_MS = 250;
+
     private static final int STACK_FRAMES = 12;
+
     private static final int IDLE_FRAMES = 8;
 
     private static volatile Agent running;
 
     private final Config config;
+
     private final Instrumentation instrumentation;
+
     private final Object wake = new Object();
 
     // Never read again: holding it keeps the connection reachable for the life of the agent.
@@ -48,14 +55,21 @@ public final class Agent {
     private volatile Socket socket;
 
     private volatile BufferedWriter out;
+
     private volatile String phase = "starting";
+
     private volatile long ticks;
+
     private volatile long doneAtNanos;
+
     private volatile ThreadOrigins origins;
+
     /** Listed in premain: what is already there then is a previous run's, and must not read as a crash. */
     private final CrashReports crashes = CrashReports.beside(Path.of(System.getProperty("user.dir", ".")));
+
     // Only the agent's own thread touches these.
     private String lastSignature = "";
+
     private long lastChangeNanos = System.nanoTime();
 
     private Agent(Config config, Instrumentation instrumentation) {

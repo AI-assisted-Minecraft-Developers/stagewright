@@ -56,13 +56,21 @@ import net.minecraft.core.registries.BuiltInRegistries;
 public final class CapabilityDescriptor implements CapabilityProvider {
 
     private final String name;
+
     private final List<String> mods;
+
     private final List<String> anyMods;
+
     private final List<String> classes;
+
     private final List<String> items;
+
     private final List<String> blocks;
+
     private final String probeClass;
+
     private final String absent;
+
     private final String source;
 
     private CapabilityDescriptor(

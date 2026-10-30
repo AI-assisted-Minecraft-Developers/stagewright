@@ -37,6 +37,7 @@ import net.minecraft.world.item.ItemStack;
 public final class Items {
 
     private final Game game;
+
     /** Bodies whose inventory, and whose hunger, this test has pinned for restoring. Touched on the test thread. */
     private final Set<String> pinned = new HashSet<>();
 

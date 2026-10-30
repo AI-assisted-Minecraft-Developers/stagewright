@@ -9,6 +9,7 @@ public class StageWrightTransportException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     private final String method;
+
     private final String error;
 
     /** The call to {@code method} that the socket could not carry, with what went wrong. */

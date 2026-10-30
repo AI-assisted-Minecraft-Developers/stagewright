@@ -17,6 +17,7 @@ import java.nio.file.StandardCopyOption;
 public final class AgentJar {
 
     private static final String RESOURCE = "/agent/stagewright-agent.jar";
+
     public static final String FILE = "stagewright-agent.jar";
 
     private AgentJar() {}

@@ -46,8 +46,11 @@ public final class Probe {
     private static final String SEPARATOR = ", ";
 
     private final Class<?> type;
+
     private final Object instance; // null for a static/unbound probe
+
     private final Object value; // for a probe wrapping a returned value
+
     private final boolean wrapsValue;
 
     /**

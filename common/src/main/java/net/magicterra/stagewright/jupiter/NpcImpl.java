@@ -27,6 +27,7 @@ final class NpcImpl implements Npc {
     private static final AtomicInteger NEXT = new AtomicInteger(1);
 
     private final Game game;
+
     private final String name;
 
     private NpcImpl(Game game, String name) {

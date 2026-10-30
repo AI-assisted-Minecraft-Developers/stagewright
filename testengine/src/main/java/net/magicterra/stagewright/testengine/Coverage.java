@@ -17,7 +17,9 @@ final class Coverage {
     static final String REQUIRES_PREFIX = "@Requires: ";
 
     private final Set<String> ran = new HashSet<>();
+
     private final Map<String, List<String>> unmet = new LinkedHashMap<>();
+
     private final Set<String> unlaunched = new HashSet<>();
 
     /** {@code key}: a test method's or script test's own key, the same in every scene. */

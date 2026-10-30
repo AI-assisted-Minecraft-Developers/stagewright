@@ -37,7 +37,9 @@ final class CatchableErrors {
     private record Raised(String message, RuntimeException exception) {}
 
     private final Scripting scripting;
+
     private final List<Raised> raised = new ArrayList<>();
+
     private Scripting.Function factory;
 
     CatchableErrors(Scripting scripting) {

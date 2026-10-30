@@ -70,6 +70,7 @@ final class HarnessService implements TestHarnessApi {
     private static final String BOT_POINTER = "/bot";
 
     private final Map<Integer, Map<String, Object>> pins = new ConcurrentHashMap<>();
+
     private final AtomicInteger nextPin = new AtomicInteger();
 
     // One arm per operation, each a few lines; the switch is dense by its nature and reads better whole.

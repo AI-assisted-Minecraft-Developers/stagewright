@@ -33,6 +33,7 @@ import org.junit.jupiter.api.extension.ParameterResolutionException;
 class BodyImpl implements Body {
 
     final Game game;
+
     private final String name;
 
     BodyImpl(Game game, String name) {

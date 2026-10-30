@@ -45,11 +45,17 @@ public final class Display {
     private static final Pattern LOCAL = Pattern.compile("^(unix)?:(\\d+)(?:\\.\\d+)?$");
 
     private static final Path SOCKETS = Path.of("/tmp/.X11-unix");
+
     private static final int TCP_PORT = 6000;
+
     private static final BigInteger ULONG_MAX = BigInteger.TWO.pow(64).subtract(BigInteger.ONE);
+
     private static final String COOKIE = "MIT-MAGIC-COOKIE-1";
+
     private static final int FAMILY_LOCAL = 256;
+
     private static final int FAMILY_WILD = 65_535;
+
     private static final long HANDSHAKE_MILLIS = 3000;
 
     private Display() {}
@@ -67,7 +73,9 @@ public final class Display {
         }
 
         static final Answer ACCEPTED = new Answer(Kind.ACCEPTED, null);
+
         static final Answer NOT_LISTENING = new Answer(Kind.NOT_LISTENING, null);
+
         static final Answer NOT_ASKED = new Answer(Kind.NOT_ASKED, null);
     }
 

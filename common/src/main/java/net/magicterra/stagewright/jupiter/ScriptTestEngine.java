@@ -181,7 +181,9 @@ public final class ScriptTestEngine implements TestEngine {
     /** One script file: what it registered, or why it registered nothing. */
     static final class File extends AbstractTestDescriptor {
         final String resource;
+
         final Steps steps;
+
         private RuntimeException loadError;
 
         private File(UniqueId id, String resource, Steps steps) {
@@ -389,13 +391,21 @@ public final class ScriptTestEngine implements TestEngine {
     /** One test a script registered. */
     static final class Test extends AbstractTestDescriptor {
         private final File file;
+
         private final String name;
+
         private final Requirement requirement;
+
         private final List<String> dependsOn;
+
         private final Set<String> locks;
+
         private final boolean isolated;
+
         private final boolean afterRestart;
+
         private final String knownIssue;
+
         private final Body body;
 
         private Test(

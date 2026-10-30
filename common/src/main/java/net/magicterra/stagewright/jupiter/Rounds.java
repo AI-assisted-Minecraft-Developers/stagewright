@@ -37,8 +37,11 @@ final class Rounds {
     record Upstream(List<String> keys, boolean afterRestart) {}
 
     private static final Map<String, Upstream> SCRIPTS = new ConcurrentHashMap<>();
+
     private static final Map<String, Integer> ROUND_OF = new ConcurrentHashMap<>();
+
     private static volatile Map<String, String> before = Map.of();
+
     private static volatile int latest;
 
     private Rounds() {}

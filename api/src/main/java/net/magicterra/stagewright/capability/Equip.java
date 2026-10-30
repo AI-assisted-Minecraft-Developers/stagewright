@@ -45,6 +45,7 @@ public final class Equip {
     private static final String CURIOS_API = "top.theillusivec4.curios.api.CuriosApi";
 
     private final Game game;
+
     /** Bodies whose armour this test has pinned for restoring. Touched on the test thread. */
     private final Set<String> pinned = new HashSet<>();
 

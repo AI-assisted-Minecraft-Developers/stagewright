@@ -30,23 +30,36 @@ import net.magicterra.stagewright.cli.install.Downloader.Artifact;
 public final class Installer {
 
     private static final URI MANIFEST = URI.create("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json");
+
     private static final String LIBRARIES = "https://libraries.minecraft.net/";
+
     private static final String ASSETS = "https://resources.download.minecraft.net/";
+
     private static final String NEOFORGE_MAVEN = "https://maven.neoforged.net/releases/";
+
     private static final String FABRIC_META = "https://meta.fabricmc.net/v2/versions/loader/";
+
     private static final String STAGING_PREFIX = ".stagewright-neoforge-";
+
     /** The keys the launcher's JSON files name their values by. */
     private static final String JSON_ID = "id";
 
     private static final String JSON_URL = "url";
+
     private static final String JSON_SHA1 = "sha1";
+
     private static final String JSON_SIZE = "size";
+
     private static final String SLASH = "/";
 
     private final Path installDir;
+
     private final Downloader downloader;
+
     private final HmclCache cache;
+
     private final String javaBinary;
+
     private final Consumer<String> log;
 
     /**

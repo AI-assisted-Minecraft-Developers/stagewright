@@ -79,8 +79,10 @@ public final class Menus {
     private record Open(AbstractContainerMenu menu, String title) {}
 
     private final Game game;
+
     /** By body name; written on the server thread, read on either. */
     private final Map<String, Open> open = new ConcurrentHashMap<>();
+
     /** Bodies whose close is registered. Touched on the test thread. */
     private final Set<String> closing = new HashSet<>();
 

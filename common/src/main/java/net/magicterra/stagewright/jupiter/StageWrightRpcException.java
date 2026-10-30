@@ -9,6 +9,7 @@ public class StageWrightRpcException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     private final String method;
+
     private final String error;
 
     /** The refusal of {@code method}, with the readable {@code error} it came back with. */

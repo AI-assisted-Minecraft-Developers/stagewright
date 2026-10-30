@@ -36,7 +36,9 @@ final class ScriptScheduler {
     static final String THREADS = "stagewright.script.parallel.threads";
 
     private final Map<String, CompletableFuture<TestExecutionResult.Status>> results = new HashMap<>();
+
     private final Map<ScriptTestEngine.Test, String> cycles = new HashMap<>();
+
     private final boolean parallel;
 
     private ScriptScheduler(boolean parallel) {

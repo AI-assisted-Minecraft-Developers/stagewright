@@ -52,6 +52,7 @@ final class RecipeGraph {
     private final Map<String, List<String>> byResult = new LinkedHashMap<>();
 
     private final Map<String, RecipeHolder<?>> byId = new LinkedHashMap<>();
+
     private final ServerLevel level;
 
     RecipeGraph(ServerLevel level) {

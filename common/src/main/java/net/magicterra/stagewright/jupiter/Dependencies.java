@@ -36,17 +36,23 @@ import org.junit.platform.launcher.TestPlan;
 public final class Dependencies implements TestWatcher {
 
     private static final String PARALLEL = "junit.jupiter.execution.parallel.enabled";
+
     private static final String DEPENDS_ON = "depends on ";
 
     private static volatile Set<Ref> planned = Set.of();
+
     private static volatile TestPlan currentPlan;
+
     private static final Map<Ref, Outcome> OUTCOMES = new ConcurrentHashMap<>();
+
     /** Completed once a planned test has ended for good: every invocation of it, or the container it was in. */
     private static final Map<Ref, CompletableFuture<Void>> ENDED = new ConcurrentHashMap<>();
+
     /**
      * What every test of the run depends on, by key: Java tests' from {@link #prepare}, scripts' from {@link #scripts}.
      */
     private static final Map<String, List<String>> EDGES = new ConcurrentHashMap<>();
+
     /** How each script test of the run ended, completed as it ends. */
     private static final Map<String, CompletableFuture<TestExecutionResult.Status>> SCRIPTS = new ConcurrentHashMap<>();
 

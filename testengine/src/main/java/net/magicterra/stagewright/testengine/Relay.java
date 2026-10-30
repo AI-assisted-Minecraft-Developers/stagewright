@@ -25,22 +25,36 @@ final class Relay implements Consumer<Map<String, Object>> {
     private static final String ID = "id";
 
     private final EngineExecutionListener listener;
+
     private final String sceneName;
+
     private final Coverage coverage;
+
     private final Map<String, Nodes.TestClass> classes = new HashMap<>();
+
     private final Map<String, Nodes.TestMethod> methods = new HashMap<>();
+
     private final Map<String, TestDescriptor> scriptFiles = new HashMap<>();
+
     private final Map<String, TestDescriptor> scriptTests = new HashMap<>();
+
     private final Map<String, TestDescriptor> byGameId = new HashMap<>();
+
     private final Set<TestDescriptor> planned = new HashSet<>();
+
     private final Set<TestDescriptor> started = new HashSet<>();
+
     private final Set<TestDescriptor> finished = new HashSet<>();
+
     /** Classes and script files a round finished unsuccessfully, held until close-out. */
     private final Map<TestDescriptor, TestExecutionResult> containers = new HashMap<>();
 
     private boolean plan;
+
     private boolean ended;
+
     private int restart = -1;
+
     private Throwable error;
 
     Relay(Nodes.Scene scene, EngineExecutionListener listener, Coverage coverage) {

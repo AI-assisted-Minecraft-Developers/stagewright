@@ -31,7 +31,9 @@ import org.junit.jupiter.api.extension.ParameterResolutionException;
 final class ClientConnection {
 
     static final String COMPANION_DIR = "stagewright.companion.dir";
+
     private static final long CONNECT_MS = 10_000;
+
     /** Longer than any blocking caller waits, so the caller's own limit is the one that answers. */
     private static final long CALL_MS = 10 * 60_000;
 
@@ -42,6 +44,7 @@ final class ClientConnection {
     });
 
     private static StageWrightRpc rpc;
+
     private static ApiRegistry remote;
 
     private ClientConnection() {}

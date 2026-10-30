@@ -25,12 +25,17 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 final class YamlTests {
 
     private static final String SCENE = "scene";
+
     private static final String STEPS = "steps";
+
     private static final String PARAMS = "params";
+
     private static final String EXPECT = "expect";
+
     private static final String TICKS = "ticks";
 
     private static final Set<String> FILE_KEYS = Set.of(SCENE, "tests");
+
     /** The options {@code test()} takes, passed on as they are. */
     private static final List<String> OPTIONS =
             List.of("requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart");
@@ -49,6 +54,7 @@ final class YamlTests {
             "when",
             "then",
             STEPS);
+
     /** The keys a step may carry beside the one that says what it does. */
     private static final Set<String> MODIFIERS =
             Set.of(PARAMS, EXPECT, "check", "knownIssues", "save", "within", TICKS, "as");

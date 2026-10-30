@@ -31,13 +31,19 @@ import org.gradle.api.tasks.testing.Test;
 public class StageWrightPlugin implements Plugin<Project> {
 
     static final String TASK_GROUP = "verification";
+
     static final int DEFAULT_TIMEOUT_MINUTES = 20;
+
     static final int DEFAULT_STALL_MINUTES = 5;
 
     static final String TEST_ENGINE_CONFIGURATION = "stagewrightTestEngine";
+
     private static final String STALE_REMAPS_SWEPT = "stagewright.staleRemapsSwept";
+
     static final String LAUNCHES_PROPERTY = "stagewright.launches";
+
     static final String TEST_ROOTS_PROPERTY = "stagewright.testRoots";
+
     /** The Gradle property whose whitespace-separated arguments every game the plugin starts gets last. */
     static final String JVM_ARGS_PROPERTY = "stagewright.jvmArgs";
 

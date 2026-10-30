@@ -37,7 +37,9 @@ import org.gradle.api.tasks.SourceSet;
 public abstract class StageWrightExtension {
 
     private final NamedDomainObjectContainer<StageWrightTopology> topologies;
+
     private final NamedDomainObjectContainer<StageWrightTestSuite> tests;
+
     private SourceSet testmodSourceSetRef;
 
     /** Called by Gradle with the containers it creates for this extension. */

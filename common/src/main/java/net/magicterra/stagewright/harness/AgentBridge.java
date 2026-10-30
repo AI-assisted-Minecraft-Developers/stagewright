@@ -17,8 +17,11 @@ public final class AgentBridge {
     private static final AgentBridge SYSTEM = bind(ClassLoader.getSystemClassLoader(), CONTROL);
 
     private final Method phase;
+
     private final Method ticks;
+
     private final Method done;
+
     private final Method test;
 
     private AgentBridge(Method phase, Method ticks, Method done, Method test) {

@@ -38,16 +38,22 @@ import java.util.function.BooleanSupplier;
  */
 public final class StageWrightRpc implements AutoCloseable {
     private static final Gson GSON = new Gson();
+
     /** How long {@link #close} lets the close handshake and anything in flight finish. */
     private static final Duration CLOSE_GRACE = Duration.ofSeconds(2);
 
     private static final String CODE = "code";
 
     private final HttpClient httpClient;
+
     private final WebSocket webSocket;
+
     private final AtomicLong ids = new AtomicLong(0);
+
     private final Map<Long, CompletableFuture<JsonObject>> pending = new ConcurrentHashMap<>();
+
     private final Reader reader;
+
     private CompletableFuture<?> lastSend = CompletableFuture.completedFuture(null);
 
     StageWrightRpc(HttpClient httpClient, WebSocket webSocket, Reader reader) {
@@ -319,6 +325,7 @@ public final class StageWrightRpc implements AutoCloseable {
         private final StringBuilder buf = new StringBuilder();
 
         private volatile Map<Long, CompletableFuture<JsonObject>> pending;
+
         private volatile Throwable closedBy;
 
         void bind(Map<Long, CompletableFuture<JsonObject>> pending) {

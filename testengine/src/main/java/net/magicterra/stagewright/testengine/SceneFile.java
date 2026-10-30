@@ -30,10 +30,12 @@ record SceneFile(
         String name, String topology, World world, String from, Map<String, String> files, List<String> excludedMods) {
 
     static final String DIRECTORY = "stagewright/scenes/";
+
     /** What {@code world.from} is relative to on the test class path. */
     static final String ROOT = "stagewright/";
 
     private static final Set<String> TOP = Set.of("topology", "world", "files", "mods");
+
     private static final Set<String> WORLD = Set.of(
             "preset",
             "seed",
@@ -47,8 +49,11 @@ record SceneFile(
             "tickRate",
             "mobSpawning",
             "from");
+
     private static final Set<String> GAMEMODES = Set.of("survival", "creative", "adventure", "spectator");
+
     private static final Set<String> DIFFICULTIES = Set.of("peaceful", "easy", "normal", "hard");
+
     private static final Map<String, Long> NAMED_TIMES =
             Map.of("day", 1000L, "noon", 6000L, "night", 13_000L, "midnight", 18_000L);
 

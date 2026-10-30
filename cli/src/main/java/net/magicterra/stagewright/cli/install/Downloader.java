@@ -44,11 +44,15 @@ public final class Downloader implements AutoCloseable {
     public record Artifact(URI url, Path target, String sha1, long size, boolean trustSize, boolean cacheable) {}
 
     private static final int ATTEMPTS = 3;
+
     private static final int PARALLELISM = 16;
 
     private final HttpClient http;
+
     private final Function<URI, List<URI>> candidates;
+
     private final HmclCache cache;
+
     private final ExecutorService pool = Executors.newFixedThreadPool(PARALLELISM, r -> {
         Thread t = new Thread(r, "stagewright-download");
         t.setDaemon(true);

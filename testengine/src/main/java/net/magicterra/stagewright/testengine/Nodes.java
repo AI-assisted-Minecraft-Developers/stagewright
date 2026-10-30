@@ -61,6 +61,7 @@ final class Nodes {
     /** A test method within one class within one scene. */
     static final class TestMethod extends AbstractTestDescriptor {
         final String className;
+
         final ClassScan.Method method;
 
         TestMethod(UniqueId parent, String className, ClassScan.Method method) {
@@ -117,6 +118,7 @@ final class Nodes {
     /** One test a script registered, within one scene. */
     static final class ScriptTest extends AbstractTestDescriptor {
         final String resource;
+
         final String name;
 
         ScriptTest(UniqueId parent, String resource, String name) {

@@ -24,6 +24,7 @@ record SuiteLaunch(
         String leaks) {
 
     static final String LEAKS_FAIL = "fail";
+
     static final String LEAKS_REPORT = "report";
 
     /** {@code value}, refused unless it is one the engine reads, naming {@code owner}, the topology or suite set on. */

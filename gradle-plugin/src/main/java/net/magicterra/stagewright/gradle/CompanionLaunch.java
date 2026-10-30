@@ -34,17 +34,29 @@ import org.gradle.process.CommandLineArgumentProvider;
 final class CompanionLaunch {
 
     private final Provider<JavaLauncher> launcher;
+
     private final String executable;
+
     private final Provider<String> mainClass;
+
     private final List<String> eagerJvmArgs;
+
     private final Provider<List<String>> jvmArguments;
+
     private final List<CommandLineArgumentProvider> jvmArgumentProviders;
+
     private final List<String> args;
+
     private final List<CommandLineArgumentProvider> argumentProviders;
+
     private final FileCollection classpath;
+
     private final Map<String, String> environment;
+
     private final List<MapProperty<?, ?>> lateEnvironment;
+
     private final List<Toolchain.WorkingDirectory> workingDirectories;
+
     private final File fallbackDirectory;
 
     private CompanionLaunch(JavaExec spec, List<Toolchain> toolchains) {

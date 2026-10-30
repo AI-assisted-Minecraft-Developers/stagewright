@@ -22,6 +22,7 @@ import net.minecraft.world.level.block.entity.HopperBlockEntity;
 final class BuiltinSteps {
 
     private static final String AT_KEY = "at";
+
     private static final String OF_KEY = "of";
 
     static final Set<String> NAMES =

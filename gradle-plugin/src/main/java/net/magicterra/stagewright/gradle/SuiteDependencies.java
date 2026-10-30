@@ -32,12 +32,16 @@ import org.gradle.api.tasks.SourceSet;
 final class SuiteDependencies {
 
     static final String RUNTIME = "modStagewrightTestRuntime";
+
     /** {@value #RUNTIME}'s counterpart under ModDevGradle, which needs no remapping: NeoForge runs in Mojang names. */
     static final String MOD_DEV_RUNTIME = "stagewrightTestRuntime";
 
     static final String COMPILE = "stagewrightTestCompile";
+
     private static final String[] LOOM_PLUGINS = {"dev.architectury.loom", "fabric-loom", "net.fabricmc.fabric-loom"};
+
     private static final String MOD_DEV_PLUGIN = "net.neoforged.moddev";
+
     // The loader and its api, which the project brings itself: a second Fabric Loader stops the game at once.
     private static final String[] PROJECT_GROUPS = {"net.fabricmc", "net.fabricmc.fabric-api", "net.neoforged"};
 

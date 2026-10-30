@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 /** Common core of stagewright. Loader entries forward server lifecycle + tick here. */
 public final class StageWrightCommon {
     public static final String MOD_ID = "mc_testkit";
+
     public static final Logger LOG = LogUtils.getLogger();
 
     /** Set when a dedicated server should wait for a real client to join before its tests start. */
@@ -31,17 +32,24 @@ public final class StageWrightCommon {
     // ~50 ms rhythm — 10 consecutive server ticks spaced >=40 ms apart — or after 1200 ticks with
     // no settle, so a pathological host can never hang the run. Server thread only.
     private static final long CADENCE_NANOS = 40_000_000L; // 40 ms — floor of a real ~50 ms tick
+
     private static final int CADENCE_STREAK = 10; // consecutive on-cadence ticks to settle
+
     private static final int SETTLE_SAFETY_TICKS = 1200; // never hang: start anyway after this many
+
     private static boolean settled;
+
     private static int settleTickCount;
+
     private static int consecutiveCadenceTicks;
+
     private static long lastTickNanos;
 
     /** Server ticks seen, which the supervision agent reads as this JVM's progress. */
     private static long serverTicks;
 
     private static final int AGENT_TICK_INTERVAL = 20;
+
     private static boolean playersOpped;
 
     /** Why the client's verbs last failed to register, so a tick-by-tick retry logs each reason once. */

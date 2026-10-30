@@ -26,27 +26,38 @@ import org.junit.platform.engine.TestDescriptor;
 final class ScriptContext {
 
     private static final Gson GSON = new Gson();
+
     private static final int DEFAULT_WITHIN = 200;
+
     private static final int DEFAULT_SETTLE = 20;
+
     private static final String CALL = "call";
 
     /** What waits for ticks or leases, and so cannot run inside {@code t.onServer}. */
     private static final List<String> BLOCKING = List.of("wait", "waitUntil", "settle", "plot", "bot", "perf");
 
     private final Game game;
+
     private final Map<String, Scripting.Function> steps;
+
     private final JavaSteps javaSteps;
+
     private final TestDescriptor test;
+
     /** What the body leased — plots, bots — in the order it did. */
     private final List<CloseableResource> leases = new ArrayList<>();
+
     /** Positions the test's steps named with {@code as}. */
     private final Map<String, BlockPos> handles = new LinkedHashMap<>();
 
     private Map<String, Object> script;
+
     /** What turned the refusals of {@code t.call} and the handles into script errors; null until the script asks. */
     private CatchableErrors errors;
+
     /** What {@code t.afterTest} registered, in the order it did. */
     private final List<Scripting.Function> afterTest = new ArrayList<>();
+
     /** {@code t.plot} as Java calls it for a YAML test, its refusals left as they were thrown. */
     private Scripting.Function javaPlot;
 

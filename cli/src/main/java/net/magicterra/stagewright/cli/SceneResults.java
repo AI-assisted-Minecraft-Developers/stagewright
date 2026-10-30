@@ -45,13 +45,18 @@ final class SceneResults implements TestExecutionListener {
 
     static final class Counts {
         int passed;
+
         int failed;
+
         int skipped;
+
         long startedAt = System.nanoTime();
     }
 
     private final Consumer<String> log;
+
     private final Map<String, Counts> byScene = new ConcurrentHashMap<>();
+
     private volatile TestPlan plan;
 
     SceneResults(Consumer<String> log) {

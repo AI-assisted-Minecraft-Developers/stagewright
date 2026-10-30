@@ -22,9 +22,13 @@ import org.objectweb.asm.Type;
 final class ClassScan {
 
     static final String SCENE = "Lnet/magicterra/stagewright/test/Scene;";
+
     private static final String DISPLAY_NAME = "Lorg/junit/jupiter/api/DisplayName;";
+
     private static final String NESTED = "Lorg/junit/jupiter/api/Nested;";
+
     private static final String TEST = "Lorg/junit/jupiter/api/Test;";
+
     /** The annotations that make a method a test or a source of tests in Jupiter. */
     private static final List<String> TESTABLE = List.of(
             TEST,
@@ -99,9 +103,13 @@ final class ClassScan {
 
     private static final class Reading extends ClassVisitor {
         final List<String> scenes = new ArrayList<>();
+
         final Map<String, Method> methods = new LinkedHashMap<>();
+
         String superName;
+
         String displayName;
+
         boolean skip;
 
         Reading() {

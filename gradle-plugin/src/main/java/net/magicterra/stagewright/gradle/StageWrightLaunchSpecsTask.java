@@ -32,17 +32,25 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
     /** One file to write: the topology as the scene spells it, and the launches behind it. */
     static final class Entry {
         final String topology;
+
         final File gameDirectory;
+
         final boolean cleanWorld;
+
         final int timeoutMinutes;
+
         final int stallMinutes;
+
         /** The primary is a dedicated server, so the engine prepares its directory as one. */
         final boolean server;
+
         /** {@code fail} or {@code report}: what a game forced down after its run does to its scene. */
         final String leaks;
 
         final CompanionLaunch primary;
+
         final CompanionLaunch companion;
+
         /** Appended to both games' JVM arguments, after the run's own: {@value StageWrightPlugin#JVM_ARGS_PROPERTY}. */
         final List<String> extraJvmArgs;
 

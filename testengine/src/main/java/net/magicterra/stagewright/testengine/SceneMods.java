@@ -35,7 +35,9 @@ final class SceneMods {
     private static final String MODS = "mods";
 
     private static final Pattern PATH_LIST = Pattern.compile("[^\\s\"']+");
+
     private static final Pattern MOD_ID_TOML = Pattern.compile("(?m)^\\s*modId\\s*=\\s*\"([^\"]+)\"");
+
     private static final Pattern MOD_ID_JSON = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
 
     private SceneMods() {}

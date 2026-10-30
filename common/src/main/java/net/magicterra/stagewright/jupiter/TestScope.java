@@ -25,6 +25,7 @@ import org.opentest4j.MultipleFailuresError;
 final class TestScope {
 
     private static final ThreadLocal<TestScope> CURRENT = new ThreadLocal<>();
+
     /** The test whose server task this thread is running; see {@link #lending}. */
     private static final ThreadLocal<TestScope> LENT = new ThreadLocal<>();
 
@@ -32,14 +33,22 @@ final class TestScope {
     static final String LOCK_PREFIX = "stagewright.";
 
     private final String name;
+
     private final Set<String> locks;
+
     private final Set<String> readLocks;
+
     private final boolean isolated;
+
     private final boolean script;
+
     // Pushed and run on the server thread; read in reverse so a value overridden twice ends as it started.
     private final Deque<Consumer<MinecraftServer>> undo = new ArrayDeque<>();
+
     private final List<AssertionError> failedChecks = new ArrayList<>();
+
     private AutoCloseable held;
+
     /** Whether the test froze the server's ticks, so its waits step them; see {@code Game.freezeTicks}. */
     private volatile boolean frozeTicks;
 

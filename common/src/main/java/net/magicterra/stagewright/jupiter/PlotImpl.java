@@ -44,14 +44,17 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     static final int DEFAULT_SIZE = 16;
 
     private static final int ROW_Z = -200_000;
+
     private static final int BASE_Y = 200;
 
     private static final PlotLayout LAYOUT = new PlotLayout();
 
     /** Loads a plot's chunks until the lease forces them, keyed by lease. */
     private static final TicketType<Integer> TICKET = TicketType.create("stagewright_plot", Integer::compare);
+
     /** Distance 2 from full is the level {@code setChunkForced} gives: entity-ticking. */
     private static final int TICKET_DISTANCE = 2;
+
     /** Generating fresh chunks is the slow case; a minute of ticks covers it while the whole suite starts at once. */
     private static final int CHUNK_LOAD_TICKS = 1200;
 
@@ -60,13 +63,20 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     private static final AtomicInteger LEASES = new AtomicInteger();
 
     private final Game game;
+
     private final int lease = LEASES.incrementAndGet();
+
     private final ResourceKey<Level> dimension;
+
     private final int start;
+
     private final Vec3i size;
+
     private final Vec3i anchor;
+
     /** The world box the plot covers. */
     private final BoundingBox box;
+
     /** What the box held before the lease; set once the lease has kept it. */
     private RegionSnapshot before;
 

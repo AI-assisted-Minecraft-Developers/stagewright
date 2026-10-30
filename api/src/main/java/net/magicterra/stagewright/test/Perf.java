@@ -75,8 +75,11 @@ public final class Perf {
     }
 
     private final List<Phase> phases = new ArrayList<>();
+
     private int warmup = 200;
+
     private int sample = 600;
+
     private int repeat = 3;
 
     private Perf() {}

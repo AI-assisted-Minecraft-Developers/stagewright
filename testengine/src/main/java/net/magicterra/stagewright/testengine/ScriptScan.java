@@ -160,6 +160,7 @@ final class ScriptScan {
     /** {@code test(name, options, body)}: the name and {@code options.scene}, one name or a list of them. */
     private static final class Recorder extends BaseFunction {
         private final String resource;
+
         private final Map<String, Test> tests;
 
         Recorder(String resource, Map<String, Test> tests) {

@@ -18,8 +18,11 @@ public final class ServerTicks {
 
     private static final class Waiter {
         final BooleanSupplier condition;
+
         final int budget;
+
         final CompletableFuture<Boolean> done = new CompletableFuture<>();
+
         int elapsed;
 
         Waiter(BooleanSupplier condition, int budget) {

@@ -40,6 +40,7 @@ final class ModInjection {
     private static final String RESOURCE_DIR = "/mods/";
 
     private static final String FRAMEWORK = "mc_stagewright-";
+
     /** Any version will do: FML only needs a coordinate that resolves to the file. */
     private static final String VERSION = "0";
 

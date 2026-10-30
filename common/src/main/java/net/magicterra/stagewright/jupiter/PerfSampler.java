@@ -15,7 +15,9 @@ final class PerfSampler {
 
     // Unsynchronized: a racing second resolve reaches the same answer.
     private static boolean fpsAbsent;
+
     private static Method fpsGetInstance;
+
     private static Method fpsGetFps;
 
     private PerfSampler() {}

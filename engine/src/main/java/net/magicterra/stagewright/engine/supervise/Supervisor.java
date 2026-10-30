@@ -34,28 +34,46 @@ import net.magicterra.stagewright.engine.Json;
 public final class Supervisor implements AutoCloseable {
 
     private static final long POLL_MS = 250;
+
     /** After the process is gone, how long to let its last lines be read before concluding it said nothing. */
     private static final long DRAIN_NANOS = TimeUnit.SECONDS.toNanos(2);
 
     private final ServerSocket server;
+
     private final String token;
+
     private final Object lock = new Object();
 
     private boolean connected;
+
     private boolean connectionClosed;
+
     private boolean done;
+
     private boolean exiting;
+
     private boolean forcedDown;
+
     private String crashReport;
+
     private long agentPid = -1;
+
     private long lastBeatNanos;
+
     private long ticks;
+
     private long classes = -1;
+
     private long lastProgressNanos;
+
     private long exitSeenNanos;
+
     private final long openedNanos = System.nanoTime();
+
     private List<ThreadStack> stacks = List.of();
+
     private String phase = "";
+
     private final List<Leak> leaks = new ArrayList<>();
 
     private volatile Consumer<Map<String, Object>> testListener = event -> {};

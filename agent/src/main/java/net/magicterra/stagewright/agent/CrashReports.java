@@ -23,6 +23,7 @@ import java.util.stream.Stream;
 final class CrashReports {
 
     private final Path directory;
+
     private final Set<String> seen;
 
     private CrashReports(Path directory, Set<String> seen) {

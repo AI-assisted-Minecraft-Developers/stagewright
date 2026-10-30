@@ -53,7 +53,9 @@ final class GameImpl implements Game {
     static final long THREAD_WAIT_MS = CallContext.SERVER_CAP_MS;
 
     private final MinecraftServer server;
+
     private final StoreImpl store;
+
     /**
      * Each running test's capability facets, so a facet that registers an undo registers it once per test. Weak: a
      * test's scope is dropped when it ends, and its facets with it.
@@ -61,6 +63,7 @@ final class GameImpl implements Game {
     private final Map<TestScope, Map<String, Object>> facets = new WeakHashMap<>();
 
     private volatile ApiRegistry registry;
+
     private volatile Scripting scripting;
 
     GameImpl(MinecraftServer server) {
@@ -367,6 +370,7 @@ final class GameImpl implements Game {
 
     private final class AwaitImpl implements Await {
         private int within = 200;
+
         private String description = "the condition";
 
         @Override

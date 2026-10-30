@@ -23,10 +23,13 @@ import jdk.jfr.consumer.RecordingStream;
 final class ThreadOrigins {
 
     private static final int FRAMES = 8;
+
     private static final int CAP = 20_000;
+
     private static final String[] JDK = {"java.", "javax.", "jdk.", "sun.", "com.sun."};
 
     private final Map<Long, List<String>> origins = new ConcurrentHashMap<>();
+
     private final RecordingStream stream;
 
     private ThreadOrigins(RecordingStream stream) {

@@ -14,6 +14,7 @@ import java.util.Map;
 final class KnownIssues {
 
     private final List<Map<String, Object>> issues = new ArrayList<>();
+
     private final boolean[] used;
 
     KnownIssues(Object spec) {

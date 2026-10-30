@@ -25,6 +25,7 @@ final class StoreImpl implements Store {
     private static final Gson GSON = new GsonBuilder().serializeNulls().create();
 
     private final Path file;
+
     private JsonObject values;
 
     StoreImpl(Path file) {

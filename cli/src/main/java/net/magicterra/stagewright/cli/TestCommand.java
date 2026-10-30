@@ -57,16 +57,23 @@ final class TestCommand {
     static final String MOD_ID = "stagewright_pack_tests";
 
     private static final String DEDICATED = "dedicatedServer";
+
     private static final String INTEGRATED = "integratedServer";
+
     private static final String WITH_CLIENT = "dedicatedServerWithClient";
+
     /** Where the server plays, relative to its directory: never the pack's own world. */
     private static final String SERVER_WORLD = RunDirectory.ARTIFACT_DIR + "/world";
+
     /** The singleplayer world an integrated server's scene plays in. */
     static final String CLIENT_WORLD = "StageWright";
 
     private static final String JAVA = "java";
+
     private static final String CLIENT = "client";
+
     private static final String TESTS = "tests";
+
     private static final String NOT_A_DIRECTORY = " is not a directory";
 
     private static final Set<String> VALUED = Set.of(
@@ -83,6 +90,7 @@ final class TestCommand {
             "username",
             "mirror",
             "leaks");
+
     /**
      * What a client directory named by {@code --client-dir} keeps to itself: {@code mods/} comes from
      * {@code --client-mods}, the engine deletes the scene's save under {@code saves/}, and logs, crash reports and the

@@ -54,10 +54,15 @@ import org.junit.platform.reporting.legacy.xml.LegacyXmlReportGeneratingListener
 public final class JupiterRun {
 
     static final String ENABLED = "stagewright.junit";
+
     static final String CLASSES = "stagewright.junit.classes";
+
     static final String SCRIPTS = "stagewright.junit.scripts";
+
     static final String EXIT = "stagewright.junit.exitWhenDone";
+
     static final String INDEX = "META-INF/stagewright/tests";
+
     static final String AWAIT_PLAYER = "stagewright.awaitPlayer";
 
     private static volatile boolean started;

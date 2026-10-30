@@ -19,9 +19,13 @@ final class Expectations {
     static final int SHOWN = 10;
 
     private static final String BUT_WAS = " but was ";
+
     private static final String GT = "gt";
+
     private static final String LT = "lt";
+
     private static final String AT_LEAST = "atLeast";
+
     private static final String AT_MOST = "atMost";
 
     static final Set<String> OPERATORS =

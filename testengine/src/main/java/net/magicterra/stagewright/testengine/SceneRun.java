@@ -36,15 +36,21 @@ import org.junit.platform.engine.reporting.ReportEntry;
 final class SceneRun {
 
     private static final Duration CONNECT_LIMIT = Duration.ofMinutes(2);
+
     private static final Duration HEARTBEAT_LIMIT = Duration.ofSeconds(60);
+
     private static final int AGENT_IDLE_SECONDS = 20;
+
     /** How long a game may take to end after its run before the agent ends it. Shortened by the engine's own tests. */
     static volatile int agentGraceSeconds = 30;
+
     /** Frames of each leaked thread's stack a forced-down report names: enough to tell whose pool it is. */
     private static final int LEAK_FRAMES = 4;
 
     private final Nodes.Scene scene;
+
     private final EngineExecutionListener listener;
+
     private final Coverage coverage;
 
     SceneRun(Nodes.Scene scene, EngineExecutionListener listener, Coverage coverage) {
