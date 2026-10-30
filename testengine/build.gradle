@@ -5,6 +5,7 @@ plugins {
     id 'com.gradleup.shadow' version '8.3.6'
     id 'stagewright.license'
     id 'stagewright.nexus'
+    id 'stagewright.lint'
 }
 
 group = 'net.magicterra'

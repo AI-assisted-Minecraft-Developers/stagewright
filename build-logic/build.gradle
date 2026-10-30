@@ -3,6 +3,15 @@ plugins {
     id 'groovy-gradle-plugin'
 }
 
+repositories {
+    gradlePluginPortal()
+}
+
+dependencies {
+    // The plugins the convention plugins apply.
+    implementation 'com.diffplug.spotless:spotless-plugin-gradle:8.10.4'
+}
+
 // The repository these plugins belong to, for the files they read from its root (gradle.properties, COPYING).
 // A plugin cannot find its own source file once compiled, and the builds applying it have three different roots.
 def repoRootResource = tasks.register('repoRootResource', WriteProperties) {

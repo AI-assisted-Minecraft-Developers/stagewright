@@ -1,0 +1,50 @@
+// Layout, for every project of all three builds: Spotless alone owns it. See docs/reference/code-style.md.
+plugins {
+    id 'com.diffplug.spotless'
+}
+
+def configDir = new File(StageWrightRepo.ROOT, 'config')
+
+// What this project's formatter steps leave alone: tool output, and the files of nested projects and other builds,
+// which format their own.
+def notMine = ['**/build/**', '**/.gradle/**', '**/node_modules/**', '.idea/**', 'run/**', 'run-*/**', 'gradle/wrapper/**']
+def here = projectDir.toPath()
+rootProject.allprojects.findAll { it != project && it.projectDir.toPath().startsWith(here) }.each {
+    notMine << here.relativize(it.projectDir.toPath()).toString() + '/**'
+}
+if (projectDir == StageWrightRepo.ROOT) {
+    // The engine build (engine, agent, testengine) and the Gradle plugin's build.
+    notMine += ['engine/**', 'agent/**', 'testengine/**', 'gradle-plugin/**']
+}
+def mine = { List<String> patterns ->
+    fileTree(projectDir) {
+        include patterns
+        exclude notMine
+    }
+}
+
+spotless {
+    plugins.withId('java') {
+        java {
+            palantirJavaFormat('2.103.0').formatJavadoc(true)
+        }
+    }
+    groovyGradle {
+        target mine(['**/*.gradle'])
+        greclipse().configFile(new File(configDir, 'spotless/greclipse.properties'))
+    }
+    def scripts = mine(['src/**/*.js'])
+    if (!scripts.isEmpty()) {
+        javascript {
+            target scripts
+            prettier('3.6.2').config([printWidth: 120, tabWidth: 4])
+        }
+    }
+    format 'misc', {
+        target mine(['**/*.md', '**/*.properties', '**/*.yml', '**/*.yaml', '**/*.json', '**/*.toml', '**/*.mcmeta',
+                     '**/*.cfg', 'config/**/*.xml'])
+        trimTrailingWhitespace()
+        leadingTabsToSpaces(4)
+        endWithNewline()
+    }
+}

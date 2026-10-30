@@ -9,10 +9,16 @@ plugins {
     id 'maven-publish'
     id 'stagewright.license'
     id 'stagewright.nexus'
+    id 'stagewright.lint'
 }
 
 group = 'net.magicterra'
 version = rootProject.stagewrightVersion
+
+// For the lint tools only; the agent itself has no dependencies.
+repositories {
+    mavenCentral()
+}
 
 java {
     toolchain {

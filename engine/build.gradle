@@ -23,6 +23,7 @@ plugins {
     id 'stagewright.version'
     id 'stagewright.license'
     id 'stagewright.nexus'
+    id 'stagewright.lint'
 }
 
 group = 'net.magicterra'

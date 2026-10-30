@@ -22,10 +22,11 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.141' apply false
     // Shadow 9: 8.x unpacks the nested jars ModDevGradle's jarJar adds to the NeoForge jar.
     id 'com.gradleup.shadow' version '9.2.2' apply false
-    // build-logic's convention plugins; license and nexus go on each subproject below.
+    // build-logic's convention plugins; license, nexus and lint go on each subproject below.
     id 'stagewright.version'
     id 'stagewright.license' apply false
     id 'stagewright.nexus' apply false
+    id 'stagewright.lint'
 }
 
 // worlddriverVersionRange, the WorldDriver line both loaders' metadata declare, is in the stagewright.version
@@ -54,6 +55,7 @@ allprojects {
 subprojects {
     // Before the pure-JVM early return below: those two modules publish too.
     apply plugin: 'stagewright.license'
+    apply plugin: 'stagewright.lint'
     def module = project
     plugins.withId('maven-publish') {
         module.apply plugin: 'stagewright.nexus'
