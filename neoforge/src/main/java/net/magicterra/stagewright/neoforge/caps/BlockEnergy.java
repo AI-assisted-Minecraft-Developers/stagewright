@@ -64,6 +64,17 @@ public final class BlockEnergy implements Energy {
         return at(pos, handlers -> receive(pos, handlers, amount));
     }
 
+    private static int receive(BlockPos pos, List<IEnergyStorage> handlers, int amount) {
+        require(pos, handlers);
+        for (IEnergyStorage storage : handlers) {
+            int took = storage.receiveEnergy(amount, false);
+            if (took > 0) {
+                return took;
+            }
+        }
+        return 0;
+    }
+
     @Override
     public int extract(BlockPos pos, int amount) {
         return at(pos, handlers -> {
@@ -81,17 +92,6 @@ public final class BlockEnergy implements Energy {
     @Override
     public int fill(BlockPos pos) {
         return at(pos, handlers -> receive(pos, handlers, require(pos, handlers).getMaxEnergyStored()));
-    }
-
-    private static int receive(BlockPos pos, List<IEnergyStorage> handlers, int amount) {
-        require(pos, handlers);
-        for (IEnergyStorage storage : handlers) {
-            int took = storage.receiveEnergy(amount, false);
-            if (took > 0) {
-                return took;
-            }
-        }
-        return 0;
     }
 
     private <T> T required(BlockPos pos, Function<IEnergyStorage, T> read) {
@@ -112,6 +112,7 @@ public final class BlockEnergy implements Energy {
      * true} through the no-side handler and took 0 of every 1000 offered. A write therefore tries each handler until
      * one accepts, and stops there.
      */
+    @SuppressWarnings("PMD.CompareObjectsWithEquals") // identity on purpose: equals() may compare contents
     static List<IEnergyStorage> handlers(ServerLevel level, BlockPos pos) {
         List<IEnergyStorage> out = new ArrayList<>();
         IEnergyStorage noSide = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, null);

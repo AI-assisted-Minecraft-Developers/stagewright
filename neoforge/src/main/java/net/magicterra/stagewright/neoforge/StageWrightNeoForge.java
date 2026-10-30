@@ -15,8 +15,10 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
+/** NeoForge entry point: connects {@code StageWrightCommon}'s server and entity hooks to the NeoForge event bus. */
 @Mod("mc_testkit")
 public final class StageWrightNeoForge {
+    /** Registers this entry point on the event bus and, on a client, the client director. */
     public StageWrightNeoForge() {
         installModList();
         NeoForge.EVENT_BUS.register(this);
@@ -42,6 +44,7 @@ public final class StageWrightNeoForge {
         Mods.install(byId);
     }
 
+    /** Forwards the server start to {@code StageWrightCommon}. */
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
         StageWrightCommon.onServerStarted(event.getServer());
@@ -53,6 +56,7 @@ public final class StageWrightNeoForge {
         StageWrightCommon.onServerStopping(event.getServer());
     }
 
+    /** Forwards each server tick, after the tick has run, to {@code StageWrightCommon}. */
     @SubscribeEvent
     public void onServerTick(ServerTickEvent.Post event) {
         StageWrightCommon.onServerTick(event.getServer());

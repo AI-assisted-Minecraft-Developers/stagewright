@@ -55,6 +55,14 @@ public final class BlockFluids implements Fluids {
                         .toString());
     }
 
+    private static Fluid fluid(String fluidId) {
+        ResourceLocation id = ResourceLocation.tryParse(fluidId);
+        if (id == null || !BuiltInRegistries.FLUID.containsKey(id)) {
+            throw new IllegalStateException("no fluid is registered as '" + fluidId + "'");
+        }
+        return BuiltInRegistries.FLUID.get(id);
+    }
+
     @Override
     public int amount(BlockPos pos, int tank) {
         return at(pos, handlers -> require(pos, handlers).getFluidInTank(tank).getAmount());
@@ -131,6 +139,7 @@ public final class BlockFluids implements Fluids {
     }
 
     /** The no-side view first, then the six faces, deduplicated. See {@link BlockEnergy#handlers}. */
+    @SuppressWarnings("PMD.CompareObjectsWithEquals") // identity on purpose: equals() may compare contents
     private static List<IFluidHandler> handlers(ServerLevel level, BlockPos pos) {
         List<IFluidHandler> out = new ArrayList<>();
         IFluidHandler noSide = level.getCapability(Capabilities.FluidHandler.BLOCK, pos, null);
@@ -144,14 +153,6 @@ public final class BlockFluids implements Fluids {
             }
         }
         return out;
-    }
-
-    private static Fluid fluid(String fluidId) {
-        ResourceLocation id = ResourceLocation.tryParse(fluidId);
-        if (id == null || !BuiltInRegistries.FLUID.containsKey(id)) {
-            throw new IllegalStateException("no fluid is registered as '" + fluidId + "'");
-        }
-        return BuiltInRegistries.FLUID.get(id);
     }
 
     private static IFluidHandler require(BlockPos pos, List<IFluidHandler> handlers) {

@@ -52,6 +52,14 @@ public final class BlockItems implements BlockInventory {
         return at(pos, handlers -> idOf(require(pos, handlers).getStackInSlot(slot)));
     }
 
+    private static Item item(String itemId) {
+        ResourceLocation id = ResourceLocation.tryParse(itemId);
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
+            throw new IllegalStateException("no item is registered as '" + itemId + "'");
+        }
+        return BuiltInRegistries.ITEM.get(id);
+    }
+
     @Override
     public int count(BlockPos pos, int slot) {
         return at(pos, handlers -> require(pos, handlers).getStackInSlot(slot).getCount());
@@ -130,6 +138,7 @@ public final class BlockItems implements BlockInventory {
     }
 
     /** The no-side view first, then the six faces, deduplicated. See {@link BlockEnergy#handlers}. */
+    @SuppressWarnings("PMD.CompareObjectsWithEquals") // identity on purpose: equals() may compare contents
     private static List<IItemHandler> handlers(ServerLevel level, BlockPos pos) {
         List<IItemHandler> out = new ArrayList<>();
         IItemHandler noSide = level.getCapability(Capabilities.ItemHandler.BLOCK, pos, null);
@@ -147,14 +156,6 @@ public final class BlockItems implements BlockInventory {
 
     private static String idOf(ItemStack stack) {
         return BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-    }
-
-    private static Item item(String itemId) {
-        ResourceLocation id = ResourceLocation.tryParse(itemId);
-        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
-            throw new IllegalStateException("no item is registered as '" + itemId + "'");
-        }
-        return BuiltInRegistries.ITEM.get(id);
     }
 
     private static IItemHandler require(BlockPos pos, List<IItemHandler> handlers) {
