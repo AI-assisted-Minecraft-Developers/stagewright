@@ -73,8 +73,10 @@ def buildInfo = tasks.register('buildInfo') {
     outputs.file(out)
     doLast {
         def lines = ["version=${version}"]
-        parts.files.findAll { it.name.startsWith('stagewright-') || it.name.startsWith('mc_stagewright-') }
-                .sort { it.name }.each { f ->
+        parts.files.findAll {
+            it.name.startsWith('stagewright-') || it.name.startsWith('mc_stagewright-')
+        }
+        .sort { it.name }.each { f ->
             def sha1 = java.security.MessageDigest.getInstance('SHA-1').digest(f.bytes).encodeHex().toString()
             lines << "${f.name}=${java.time.Instant.ofEpochMilli(f.lastModified())} ${sha1.take(8)}"
         }
@@ -101,7 +103,11 @@ tasks.named('jar', Jar) {
     manifest {
         attributes 'Main-Class': 'net.magicterra.stagewright.cli.Main'
     }
-    from({ configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }) {
+    from({
+        configurations.runtimeClasspath.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }) {
         // Rhino is itself a mod jar. Its loader metadata at this jar's root would make a copy
         // dropped into mods/ by mistake load as a second `rhino` mod on either loader.
         exclude 'fabric.mod.json', 'quilt.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml',

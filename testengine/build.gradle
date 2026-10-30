@@ -77,26 +77,35 @@ def relocated = tasks.named('shadowJar') {
     archiveClassifier = 'relocated'
     // An input to engineJar, never handed out, so kept out of build/libs.
     destinationDirectory = layout.buildDirectory.dir('relocated')
-    configurations = [project.configurations.bundledRhino]
+    configurations = [
+        project.configurations.bundledRhino
+    ]
     relocate 'dev.latvian.mods.rhino', 'net.magicterra.stagewright.testengine.shadow.rhino'
     exclude 'agent/**'
 }
 def engineJar = tasks.register('engineJar', Jar) {
     from(zipTree(relocated.flatMap { it.archiveFile }))
     into('agent') { from stageBundledAgent }
-    into('META-INF/licenses') { from '../cli/src/main/resources/META-INF/licenses/MPL-2.0.txt' }
+    into('META-INF/licenses') {
+        from '../cli/src/main/resources/META-INF/licenses/MPL-2.0.txt'
+    }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 tasks.named('jar') { archiveClassifier = 'plain' }
 tasks.named('assemble') { dependsOn engineJar }
-['apiElements', 'runtimeElements'].each { name ->
+[
+    'apiElements',
+    'runtimeElements'
+].each { name ->
     configurations.named(name) {
         outgoing.artifacts.clear()
         outgoing.artifact(engineJar)
     }
 }
 // Shadow's own variant would be a second, identical choice for consumers to trip over.
-components.java.withVariantsFromConfiguration(configurations.shadowRuntimeElements) { skip() }
+components.java.withVariantsFromConfiguration(configurations.shadowRuntimeElements) {
+    skip()
+}
 
 publishing {
     publications {

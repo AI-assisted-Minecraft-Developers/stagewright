@@ -44,7 +44,9 @@ dependencies {
 // The one dependency the published POM keeps: Game.registry() and the callers name WorldDriver's api types, so a
 // consumer cannot compile against this jar without it. Minecraft and Gson come with the consumer's own loader
 // setup, opentest4j with its JUnit.
-ext.pomKeeps = ['net.magicterra:worlddriver-api']
+ext.pomKeeps = [
+    'net.magicterra:worlddriver-api'
+]
 
 tasks.named('test', Test) {
     useJUnitPlatform()

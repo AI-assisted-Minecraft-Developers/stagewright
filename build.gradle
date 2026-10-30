@@ -37,14 +37,14 @@ plugins {
 // Jupiter 5.x ships with Platform 1.x of the same minor and patch.
 def junitPlatformVersion = rootProject.junit_version.replaceFirst(/^5\./, '1.')
 ext.junitPlatformJars = [
-        "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}",
-        "org.junit.platform:junit-platform-engine:${junitPlatformVersion}",
-        "org.junit.platform:junit-platform-commons:${junitPlatformVersion}",
-        "org.junit.platform:junit-platform-reporting:${junitPlatformVersion}",
-        "org.junit.jupiter:junit-jupiter-engine:${rootProject.junit_version}",
-        "org.junit.jupiter:junit-jupiter-api:${rootProject.junit_version}",
-        'org.opentest4j:opentest4j:1.3.0',
-        'org.apiguardian:apiguardian-api:1.1.2',
+    "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}",
+    "org.junit.platform:junit-platform-engine:${junitPlatformVersion}",
+    "org.junit.platform:junit-platform-commons:${junitPlatformVersion}",
+    "org.junit.platform:junit-platform-reporting:${junitPlatformVersion}",
+    "org.junit.jupiter:junit-jupiter-engine:${rootProject.junit_version}",
+    "org.junit.jupiter:junit-jupiter-api:${rootProject.junit_version}",
+    'org.opentest4j:opentest4j:1.3.0',
+    'org.apiguardian:apiguardian-api:1.1.2',
 ]
 
 allprojects {
@@ -65,8 +65,8 @@ subprojects {
     // machine with no Minecraft classpath — so it stays out of the Loom and ModDevGradle pipeline.
     if (project.name == 'stagewright-cli') return
 
-    // java-library for the `api` configuration, which ModDevGradle does not add.
-    apply plugin: 'java-library'
+        // java-library for the `api` configuration, which ModDevGradle does not add.
+        apply plugin: 'java-library'
     apply plugin: project.name == 'stagewright-fabric' ? 'fabric-loom' : 'net.neoforged.moddev'
     apply plugin: 'maven-publish'
 
@@ -118,9 +118,11 @@ subprojects {
                 // docs/reference/publishing.md.
                 pom.withXml {
                     def keep = module.findProperty('pomKeeps') ?: []
-                    def kept = module.configurations.api.dependencies.findAll { "${it.group}:${it.name}".toString() in keep }
+                    def kept = module.configurations.api.dependencies.findAll {
+                        "${it.group}:${it.name}".toString() in keep
+                    }
                     if (kept.isEmpty()) return
-                    def block = asNode().appendNode('dependencies')
+                        def block = asNode().appendNode('dependencies')
                     kept.each { d ->
                         def node = block.appendNode('dependency')
                         node.appendNode('groupId', d.group)
@@ -147,7 +149,9 @@ subprojects {
                 artifactId = base.archivesName.get()
                 if (project.ext.has('shippedJar')) artifact(project.ext.shippedJar)
                 artifact(project.ext.devJar) { classifier = 'dev' }
-                if (project.ext.has('devShadowJar')) artifact(project.ext.devShadowJar) { classifier = 'dev-shadow' }
+                if (project.ext.has('devShadowJar')) artifact(project.ext.devShadowJar) {
+                    classifier = 'dev-shadow'
+                }
                 artifact(project.ext.has('sourcesJarTask') ? project.ext.sourcesJarTask : tasks.named('sourcesJar')) {
                     classifier = 'sources'
                 }

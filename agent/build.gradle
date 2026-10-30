@@ -31,8 +31,8 @@ tasks.named('jar', Jar) {
     archiveBaseName = 'stagewright-agent'
     manifest {
         attributes 'Premain-Class': 'net.magicterra.stagewright.agent.Agent',
-                'Can-Redefine-Classes': 'false',
-                'Can-Retransform-Classes': 'false'
+        'Can-Redefine-Classes': 'false',
+        'Can-Retransform-Classes': 'false'
     }
 }
 

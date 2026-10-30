@@ -42,16 +42,16 @@ tasks.named('test', Test) {
 
 processResources {
     def metadata = [
-            version                  : project.version,
-            mod_id                   : rootProject.mod_id,
-            mod_name                 : rootProject.mod_name,
-            mod_license              : rootProject.mod_license,
-            mod_authors              : rootProject.mod_authors,
-            mod_description          : rootProject.mod_description,
-            loader_version_range     : rootProject.loader_version_range,
-            neoforge_version_range   : rootProject.neoforge_version_range,
-            minecraft_version_range  : rootProject.minecraft_version_range,
-            worlddriver_version_range: rootProject.worlddriverVersionRange,
+        version                  : project.version,
+        mod_id                   : rootProject.mod_id,
+        mod_name                 : rootProject.mod_name,
+        mod_license              : rootProject.mod_license,
+        mod_authors              : rootProject.mod_authors,
+        mod_description          : rootProject.mod_description,
+        loader_version_range     : rootProject.loader_version_range,
+        neoforge_version_range   : rootProject.neoforge_version_range,
+        minecraft_version_range  : rootProject.minecraft_version_range,
+        worlddriver_version_range: rootProject.worlddriverVersionRange,
     ]
     inputs.properties metadata
 
@@ -67,7 +67,9 @@ tasks.named('jar', Jar) {
 }
 
 shadowJar {
-    configurations = [project.configurations.shadowBundle]
+    configurations = [
+        project.configurations.shadowBundle
+    ]
     // The mod jar. ModDevGradle nests the jarJar output into `jar` only, so it is added here too.
     archiveClassifier = ''
     from(tasks.named('jarJar'))
@@ -77,11 +79,15 @@ shadowJar {
     // provider in the other reports itself absent — which is indistinguishable from an uninstalled
     // mod, and would be found by a scene skipping for a reason that is not true.
     // Shadow 9 hands a transformer only the duplicates the strategy lets through.
-    filesMatching('META-INF/services/**') { duplicatesStrategy = DuplicatesStrategy.INCLUDE }
+    filesMatching('META-INF/services/**') {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
     mergeServiceFiles()
     // Another mod may ship its own snakeyaml.
     relocate 'org.yaml.snakeyaml', 'net.magicterra.stagewright.shadow.snakeyaml'
-    into('META-INF/licenses') { from rootProject.file('cli/src/main/resources/META-INF/licenses/Apache-2.0.txt') }
+    into('META-INF/licenses') {
+        from rootProject.file('cli/src/main/resources/META-INF/licenses/Apache-2.0.txt')
+    }
 }
 
 tasks.named('assemble') { dependsOn 'shadowJar' }

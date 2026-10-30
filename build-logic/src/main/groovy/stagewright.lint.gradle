@@ -7,14 +7,29 @@ def configDir = new File(StageWrightRepo.ROOT, 'config')
 
 // What this project's formatter steps leave alone: tool output, and the files of nested projects and other builds,
 // which format their own.
-def notMine = ['**/build/**', '**/.gradle/**', '**/node_modules/**', '.idea/**', 'run/**', 'run-*/**', 'gradle/wrapper/**']
+def notMine = [
+    '**/build/**',
+    '**/.gradle/**',
+    '**/node_modules/**',
+    '.idea/**',
+    'run/**',
+    'run-*/**',
+    'gradle/wrapper/**'
+]
 def here = projectDir.toPath()
-rootProject.allprojects.findAll { it != project && it.projectDir.toPath().startsWith(here) }.each {
+rootProject.allprojects.findAll {
+    it != project && it.projectDir.toPath().startsWith(here)
+}.each {
     notMine << here.relativize(it.projectDir.toPath()).toString() + '/**'
 }
 if (projectDir == StageWrightRepo.ROOT) {
     // The engine build (engine, agent, testengine) and the Gradle plugin's build.
-    notMine += ['engine/**', 'agent/**', 'testengine/**', 'gradle-plugin/**']
+    notMine += [
+        'engine/**',
+        'agent/**',
+        'testengine/**',
+        'gradle-plugin/**'
+    ]
 }
 def mine = { List<String> patterns ->
     fileTree(projectDir) {
@@ -41,8 +56,17 @@ spotless {
         }
     }
     format 'misc', {
-        target mine(['**/*.md', '**/*.properties', '**/*.yml', '**/*.yaml', '**/*.json', '**/*.toml', '**/*.mcmeta',
-                     '**/*.cfg', 'config/**/*.xml'])
+        target mine([
+            '**/*.md',
+            '**/*.properties',
+            '**/*.yml',
+            '**/*.yaml',
+            '**/*.json',
+            '**/*.toml',
+            '**/*.mcmeta',
+            '**/*.cfg',
+            'config/**/*.xml'
+        ])
         trimTrailingWhitespace()
         leadingTabsToSpaces(4)
         endWithNewline()

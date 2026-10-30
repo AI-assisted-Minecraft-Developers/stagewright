@@ -96,7 +96,11 @@ def functionalTest = tasks.register('functionalTest', Test) {
     useJUnitPlatform()
     def engineFiles = realTestEngine
     inputs.files(engineFiles).withNormalizer(ClasspathNormalizer)
-    jvmArgumentProviders.add({ ["-Dstagewright.functionalTest.engine=${engineFiles.asPath}".toString()] } as CommandLineArgumentProvider)
+    jvmArgumentProviders.add({
+        [
+            "-Dstagewright.functionalTest.engine=${engineFiles.asPath}".toString()
+        ]
+    } as CommandLineArgumentProvider)
     // Optional: a Gradle installation to run the end-to-end suite test under as well, such as a newer one.
     def otherGradle = providers.gradleProperty('functionalTestGradleHome')
     if (otherGradle.isPresent()) systemProperty 'stagewright.functionalTest.gradleHome', otherGradle.get()

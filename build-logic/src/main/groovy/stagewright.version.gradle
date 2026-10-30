@@ -8,13 +8,15 @@ def buildNumber = providers.environmentVariable('BUILD_NUMBER').orNull
 // leading zero, for the version to be valid SemVer and order by run number.
 if (buildNumber != null && !(buildNumber ==~ /0|[1-9][0-9]*/)) {
     throw new GradleException("BUILD_NUMBER is '${buildNumber}', but it must be a whole number"
-            + " without leading zeros; unset it for a local build")
+    + " without leading zeros; unset it for a local build")
 }
 def prerelease = buildNumber != null ? "alpha.${buildNumber}" : 'snapshot'
 
 // The base version and the Minecraft line are the root gradle.properties' own.
 def rootProperties = new Properties()
-new File(StageWrightRepo.ROOT, 'gradle.properties').withInputStream { rootProperties.load(it) }
+new File(StageWrightRepo.ROOT, 'gradle.properties').withInputStream {
+    rootProperties.load(it)
+}
 ext.stagewrightVersion = "${rootProperties.mod_base_version}-${prerelease}+${rootProperties.minecraft_version}".toString()
 ext.junitVersion = rootProperties.junit_version
 // The WorldDriver StageWright builds against, not a version of its own; -Pworlddriver_version as the root

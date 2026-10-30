@@ -22,14 +22,16 @@ publishing {
 // Read lazily: a plugins {} block applies this before the build script sets the version.
 def publishedVersion = provider { project.version.toString() }
 tasks.withType(PublishToMavenRepository)
-        .matching { it.name.endsWith('ToGardelNexusRepository') }.configureEach {
-    def versionToCheck = publishedVersion
-    doFirst {
-        def published = versionToCheck.get()
-        if (!(published ==~ /.*-alpha\.[0-9]+\+.*/)) {
-            throw new GradleException("${published} is not published to the Nexus: only a build"
+        .matching {
+            it.name.endsWith('ToGardelNexusRepository')
+        }.configureEach {
+            def versionToCheck = publishedVersion
+            doFirst {
+                def published = versionToCheck.get()
+                if (!(published ==~ /.*-alpha\.[0-9]+\+.*/)) {
+                    throw new GradleException("${published} is not published to the Nexus: only a build"
                     + " numbered by BUILD_NUMBER goes there."
                     + " Use publishToMavenLocal for a local build.")
+                }
+            }
         }
-    }
-}

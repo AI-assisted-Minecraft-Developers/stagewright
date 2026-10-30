@@ -57,15 +57,15 @@ def fabricPredicate = { String range ->
 }
 processResources {
     def metadata = [
-            version                    : project.version,
-            mod_id                     : rootProject.mod_id,
-            mod_name                   : rootProject.mod_name,
-            mod_license                : rootProject.mod_license,
-            mod_authors                : rootProject.mod_authors,
-            mod_description            : rootProject.mod_description,
-            minecraft_version_range    : fabricPredicate(rootProject.minecraft_version_range),
-            fabric_loader_version_range: fabricPredicate(rootProject.fabric_loader_version_range),
-            worlddriver_version_range  : fabricPredicate(rootProject.worlddriverVersionRange),
+        version                    : project.version,
+        mod_id                     : rootProject.mod_id,
+        mod_name                   : rootProject.mod_name,
+        mod_license                : rootProject.mod_license,
+        mod_authors                : rootProject.mod_authors,
+        mod_description            : rootProject.mod_description,
+        minecraft_version_range    : fabricPredicate(rootProject.minecraft_version_range),
+        fabric_loader_version_range: fabricPredicate(rootProject.fabric_loader_version_range),
+        worlddriver_version_range  : fabricPredicate(rootProject.worlddriverVersionRange),
     ]
     inputs.properties metadata
 
@@ -75,7 +75,9 @@ processResources {
 }
 
 shadowJar {
-    configurations = [project.configurations.shadowBundle]
+    configurations = [
+        project.configurations.shadowBundle
+    ]
     archiveClassifier = 'dev-shadow'
     // Load-bearing. Capability providers arrive through META-INF/services, and that path now exists
     // in BOTH :stagewright-api (the shipped Curios/FTB Quests adapters) and this module. Shadow's
@@ -83,11 +85,15 @@ shadowJar {
     // provider in the other reports itself absent — which is indistinguishable from an uninstalled
     // mod, and would be found by a scene skipping for a reason that is not true.
     // Shadow 9 hands a transformer only the duplicates the strategy lets through.
-    filesMatching('META-INF/services/**') { duplicatesStrategy = DuplicatesStrategy.INCLUDE }
+    filesMatching('META-INF/services/**') {
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
     mergeServiceFiles()
     // Another mod may ship its own snakeyaml.
     relocate 'org.yaml.snakeyaml', 'net.magicterra.stagewright.shadow.snakeyaml'
-    into('META-INF/licenses') { from rootProject.file('cli/src/main/resources/META-INF/licenses/Apache-2.0.txt') }
+    into('META-INF/licenses') {
+        from rootProject.file('cli/src/main/resources/META-INF/licenses/Apache-2.0.txt')
+    }
 }
 
 remapJar {
@@ -102,7 +108,10 @@ ext.sourcesJarTask = tasks.named('remapSourcesJar')
 
 // api's and common's plain artifacts: their Mojang-named jars remapped to intermediary. Registered here because
 // this is the project with Loom's mappings.
-[':stagewright-api', ':stagewright-common'].each { path ->
+[
+    ':stagewright-api',
+    ':stagewright-common'
+].each { path ->
     evaluationDependsOn(path)
     def module = project(path)
     def remap = tasks.register("remap${path.split('-')[1].capitalize()}Jar", net.fabricmc.loom.task.RemapJarTask) {
