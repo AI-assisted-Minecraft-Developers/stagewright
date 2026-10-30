@@ -1,4 +1,5 @@
-// Layout, for every project of all three builds: Spotless alone owns it. See docs/reference/code-style.md.
+// Layout, for every project of all three builds: Spotless alone owns it. Checkstyle and PMD judge the rest.
+// See docs/reference/code-style.md.
 plugins {
     id 'com.diffplug.spotless'
 }
@@ -70,5 +71,24 @@ spotless {
         trimTrailingWhitespace()
         leadingTabsToSpaces(4)
         endWithNewline()
+    }
+}
+
+// Checkstyle and PMD, on main sources only. They report without failing until today's findings are fixed.
+plugins.withId('java') {
+    pluginManager.apply('checkstyle')
+    pluginManager.apply('pmd')
+    project.checkstyle {
+        toolVersion = '14.3.0'
+        configDirectory = new File(configDir, 'checkstyle')
+        sourceSets = [project.sourceSets.main]
+        ignoreFailures = true
+    }
+    project.pmd {
+        toolVersion = '7.29.0'
+        ruleSets = []
+        ruleSetFiles = project.files(new File(configDir, 'pmd/ruleset.xml'))
+        sourceSets = [project.sourceSets.main]
+        ignoreFailures = true
     }
 }
