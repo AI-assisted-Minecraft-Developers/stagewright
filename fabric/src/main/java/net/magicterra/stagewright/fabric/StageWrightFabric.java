@@ -13,6 +13,7 @@ import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.capability.Mods;
 import net.minecraft.resources.ResourceLocation;
 
+/** Fabric entry point: connects {@code StageWrightCommon}'s server hooks to Fabric's lifecycle events. */
 public final class StageWrightFabric implements ModInitializer {
     private static final ResourceLocation BEFORE_DRIVER =
             ResourceLocation.fromNamespaceAndPath("mc_testkit", "before_driver");
