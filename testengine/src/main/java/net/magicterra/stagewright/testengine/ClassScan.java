@@ -59,7 +59,7 @@ final class ClassScan {
         }
         Map<String, Method> methods = new LinkedHashMap<>(top.methods);
         // Inherited tests run in the subclass too; an override with the same signature is the subclass's.
-        for (String parent = top.superName; parent != null && !parent.equals("java.lang.Object"); ) {
+        for (String parent = top.superName; parent != null && !"java.lang.Object".equals(parent); ) {
             Reading up = read(parent, loader);
             if (up == null) {
                 break;
@@ -117,13 +117,13 @@ final class ClassScan {
 
         @Override
         public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
-            if (descriptor.equals(NESTED)) {
+            if (NESTED.equals(descriptor)) {
                 skip = true;
             }
-            if (descriptor.equals(SCENE)) {
+            if (SCENE.equals(descriptor)) {
                 return values(scenes);
             }
-            if (descriptor.equals(DISPLAY_NAME)) {
+            if (DISPLAY_NAME.equals(descriptor)) {
                 return value(v -> displayName = v);
             }
             return null;
@@ -145,9 +145,9 @@ final class ClassScan {
                 public AnnotationVisitor visitAnnotation(String annotation, boolean visible) {
                     if (TESTABLE.contains(annotation)) {
                         testable = true;
-                        container = !annotation.equals(TEST);
+                        container = !TEST.equals(annotation);
                     }
-                    if (annotation.equals(DISPLAY_NAME)) {
+                    if (DISPLAY_NAME.equals(annotation)) {
                         return value(v -> display = v);
                     }
                     return null;

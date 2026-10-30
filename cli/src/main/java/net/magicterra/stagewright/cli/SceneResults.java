@@ -62,7 +62,7 @@ final class SceneResults implements TestExecutionListener {
     static String sceneOf(String uniqueId) {
         try {
             for (UniqueId.Segment s : UniqueId.parse(uniqueId).getSegments()) {
-                if (s.getType().equals(SCENE)) {
+                if (SCENE.equals(s.getType())) {
                     return s.getValue();
                 }
             }
@@ -73,7 +73,7 @@ final class SceneResults implements TestExecutionListener {
     }
 
     private static boolean isScene(TestIdentifier id) {
-        return UniqueId.parse(id.getUniqueId()).getLastSegment().getType().equals(SCENE);
+        return SCENE.equals(UniqueId.parse(id.getUniqueId()).getLastSegment().getType());
     }
 
     private Counts counts(String scene) {
@@ -194,13 +194,13 @@ final class SceneResults implements TestExecutionListener {
             Document doc =
                     DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file.toFile());
             Element suite = doc.getDocumentElement();
-            if (!suite.getTagName().equals("testsuite")) {
+            if (!"testsuite".equals(suite.getTagName())) {
                 return;
             }
             Map<String, List<Element>> scenes = new LinkedHashMap<>();
             List<Element> unplaced = new ArrayList<>();
             for (Node child = suite.getFirstChild(); child != null; child = child.getNextSibling()) {
-                if (!(child instanceof Element e) || !e.getTagName().equals("testcase")) {
+                if (!(child instanceof Element e) || !"testcase".equals(e.getTagName())) {
                     continue;
                 }
                 String scene = sceneOf(RecordProperties.uniqueId(e));
@@ -216,7 +216,7 @@ final class SceneResults implements TestExecutionListener {
 
             Element suiteProperties = null;
             for (Node child = suite.getFirstChild(); child != null; child = child.getNextSibling()) {
-                if (child instanceof Element e && e.getTagName().equals("properties")) {
+                if (child instanceof Element e && "properties".equals(e.getTagName())) {
                     suiteProperties = e;
                 }
             }

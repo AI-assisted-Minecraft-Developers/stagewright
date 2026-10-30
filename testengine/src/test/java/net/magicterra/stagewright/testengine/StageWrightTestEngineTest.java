@@ -80,8 +80,8 @@ class StageWrightTestEngineTest {
                 """.formatted(
                         q(game.toString()),
                         cleanWorld,
-                        topology.equals("world"),
-                        topology.equals("leakReport") ? " \"leaks\": \"report\"," : "",
+                        "world".equals(topology),
+                        "leakReport".equals(topology) ? " \"leaks\": \"report\"," : "",
                         process(topology, game),
                         companion == null ? "" : ", \"companion\": " + process(companion, game.resolve("client"))));
     }
@@ -156,7 +156,7 @@ class StageWrightTestEngineTest {
         assertEquals(2, r.testEvents().succeeded().count());
         assertEquals(0, r.testEvents().failed().count());
         Event scene = containersFailed(r).stream()
-                .filter(e -> e.getTestDescriptor().getDisplayName().equals("leak"))
+                .filter(e -> "leak".equals(e.getTestDescriptor().getDisplayName()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("the scene should fail"));
         String message = failure(scene).getMessage();
@@ -235,7 +235,7 @@ class StageWrightTestEngineTest {
         assertTrue(message.contains("the joined client ended (PROCESS_DIED)"), message);
         assertTrue(message.contains("clientLeaves-companion.log"), message);
         Event scene = containersFailed(r).stream()
-                .filter(e -> e.getTestDescriptor().getDisplayName().equals("clientLeaves"))
+                .filter(e -> "clientLeaves".equals(e.getTestDescriptor().getDisplayName()))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("the scene should fail"));
         assertTrue(
@@ -267,7 +267,7 @@ class StageWrightTestEngineTest {
         assertEquals(
                 1,
                 r.testEvents().succeeded().stream()
-                        .filter(e -> e.getTestDescriptor().getDisplayName().equals("a()"))
+                        .filter(e -> "a()".equals(e.getTestDescriptor().getDisplayName()))
                         .count());
     }
 
@@ -282,7 +282,7 @@ class StageWrightTestEngineTest {
         }
         assertTrue(containersFailed(r).count() >= 1, "the scene container should fail");
         assertTrue(containersFailed(r).stream()
-                .anyMatch(e -> e.getTestDescriptor().getDisplayName().equals("crash")));
+                .anyMatch(e -> "crash".equals(e.getTestDescriptor().getDisplayName())));
     }
 
     @Test
@@ -364,7 +364,7 @@ class StageWrightTestEngineTest {
     void theSceneNodePublishesItsWorldAsAReportEntry() {
         EngineExecutionResults r = run("WorldBlockFixture");
         List<Event> published = r.allEvents().reportingEntryPublished().stream()
-                .filter(e -> e.getTestDescriptor().getDisplayName().equals("worldBlock"))
+                .filter(e -> "worldBlock".equals(e.getTestDescriptor().getDisplayName()))
                 .toList();
         String world = published.stream()
                 .flatMap(e -> e.getPayload(org.junit.platform.engine.reporting.ReportEntry.class).stream())

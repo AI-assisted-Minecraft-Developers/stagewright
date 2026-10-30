@@ -55,7 +55,7 @@ final class GeneratedRuns {
     /** The topologies the generated runs give the suite. */
     static List<SuiteLaunch> launches(Project plugin, StageWrightTestSuite suite) {
         Project loader = loader(plugin, suite);
-        String path = loader.getPath().equals(":") ? "" : loader.getPath();
+        String path = ":".equals(loader.getPath()) ? "" : loader.getPath();
         int timeout = suite.getTimeoutMinutes().getOrElse(StageWrightPlugin.DEFAULT_TIMEOUT_MINUTES);
         String leaks = SuiteLaunch.leaks(suite.getLeaks().getOrNull(), suiteLabel(suite));
         List<SuiteLaunch> launches = new ArrayList<>();
@@ -239,7 +239,7 @@ final class GeneratedRuns {
             StageWrightTestSuite suite,
             SourceSet source,
             NamedDomainObjectContainer<Object> runs) {
-        if (source.getName().equals(SourceSet.MAIN_SOURCE_SET_NAME)) {
+        if (SourceSet.MAIN_SOURCE_SET_NAME.equals(source.getName())) {
             return;
         }
         @SuppressWarnings("unchecked")

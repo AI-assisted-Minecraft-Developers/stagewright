@@ -31,6 +31,7 @@ public final class ChunksContracts {
             .hidden()
             .effects(MethodSpec.Effect.WORLD_WRITE)
             .mayWait();
+
     private ChunksContracts() {}
 
     /** The requests {@code mc.test.chunks} takes, told apart by {@code op}. */

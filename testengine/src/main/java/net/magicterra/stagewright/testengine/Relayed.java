@@ -36,7 +36,7 @@ final class Relayed {
 
     /** A non-assertion throwable from the game, under its own class's name. */
     static final class GameException extends RuntimeException {
-private static final long serialVersionUID = 1L;
+        private static final long serialVersionUID = 1L;
 
         GameException(String message, Throwable cause) {
             super(message, cause);
@@ -49,7 +49,7 @@ private static final long serialVersionUID = 1L;
     }
 
     private static boolean isAssertion(String className) {
-        return className.equals("java.lang.AssertionError")
+        return "java.lang.AssertionError".equals(className)
                 || className.startsWith("org.opentest4j.")
                 || className.startsWith("org.assertj.")
                 || className.endsWith("AssertionFailedError");

@@ -34,7 +34,7 @@ final class BuildInfo {
         List<String> out = new ArrayList<>();
         out.add("stagewright CLI " + p.getProperty("version", "?"));
         Map<String, String> parts = new TreeMap<>();
-        p.stringPropertyNames().stream().filter(k -> !k.equals("version")).forEach(k -> parts.put(k, p.getProperty(k)));
+        p.stringPropertyNames().stream().filter(k -> !"version".equals(k)).forEach(k -> parts.put(k, p.getProperty(k)));
         // Each value is "<published instant> <sha1 prefix>".
         parts.forEach((jar, value) -> out.add("  " + jar + " published " + value.replace(" ", ", sha1 ")));
         return out;

@@ -249,7 +249,7 @@ final class CompanionLaunch {
             if (arg == null) {
                 continue;
             }
-            if (arg.equals("-cp") || arg.equals("-classpath") || arg.equals("--class-path")) {
+            if ("-cp".equals(arg) || "-classpath".equals(arg) || "--class-path".equals(arg)) {
                 return true;
             }
             if (arg.startsWith("@")) {

@@ -507,7 +507,8 @@ public final class ScriptTestEngine implements TestEngine {
                 return TestExecutionResult.successful();
             }
             // Matched by name: in a Fabric development game the class may come from another loader.
-            return failure.getClass().getName().equals("org.opentest4j.TestAbortedException")
+            return "org.opentest4j.TestAbortedException"
+                            .equals(failure.getClass().getName())
                     ? TestExecutionResult.aborted(failure)
                     : TestExecutionResult.failed(failure);
         }

@@ -87,6 +87,7 @@ public final class TestMethods {
 
     /** One batch object, so publishing it again on the same API is the no-op the registry makes of a retry. */
     private static final ApiBatch BATCH = new ApiBatch(ApiRegistry.TEST_OWNER, "test", METHODS);
+
     private TestMethods() {}
 
     /** The {@code mc.test.reset} result: one token per effect the reset undid. */

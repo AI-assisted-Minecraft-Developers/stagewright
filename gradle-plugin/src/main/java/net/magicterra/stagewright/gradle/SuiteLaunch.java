@@ -31,7 +31,7 @@ record SuiteLaunch(
         if (value == null) {
             return LEAKS_FAIL;
         }
-        if (!value.equals(LEAKS_FAIL) && !value.equals(LEAKS_REPORT)) {
+        if (!LEAKS_FAIL.equals(value) && !LEAKS_REPORT.equals(value)) {
             throw new org.gradle.api.GradleException(owner + ": leaks is '" + value + "'; it is 'fail' or 'report'");
         }
         return value;

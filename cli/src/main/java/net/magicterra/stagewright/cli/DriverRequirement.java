@@ -33,6 +33,7 @@ final class DriverRequirement {
     private static final String DRIVER_ID = "worlddriver";
 
     private static final Map<Read, List<Mod>> READS = new ConcurrentHashMap<>();
+
     private record Mod(String id, String version, String driverRange, String source) {}
 
     private DriverRequirement() {}
@@ -67,7 +68,7 @@ final class DriverRequirement {
             }
         }
         List<Mod> frameworks =
-                mods.stream().filter(m -> m.id().equals(FRAMEWORK_ID)).toList();
+                mods.stream().filter(m -> FRAMEWORK_ID.equals(m.id())).toList();
         if (frameworks.isEmpty() && bundledFramework) {
             String resource = "/mods/mc_stagewright-" + loader + ".jar";
             try (InputStream in = DriverRequirement.class.getResourceAsStream(resource)) {
@@ -75,7 +76,7 @@ final class DriverRequirement {
                     throw new IllegalStateException("this CLI carries no " + resource);
                 }
                 frameworks = metadata(in, loader, resource).stream()
-                        .filter(m -> m.id().equals(FRAMEWORK_ID))
+                        .filter(m -> FRAMEWORK_ID.equals(m.id()))
                         .toList();
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -90,7 +91,7 @@ final class DriverRequirement {
             throw new IllegalArgumentException(framework.source()
                     + " does not declare a required WorldDriver dependency; install the current StageWright");
         }
-        List<Mod> drivers = mods.stream().filter(m -> m.id().equals(DRIVER_ID)).toList();
+        List<Mod> drivers = mods.stream().filter(m -> DRIVER_ID.equals(m.id())).toList();
         if (drivers.size() != 1) {
             throw new IllegalArgumentException("StageWright requires one compatible WorldDriver mod for "
                     + loaderName + ", found " + drivers.size()
@@ -134,7 +135,7 @@ final class DriverRequirement {
     }
 
     static boolean isFramework(Path jar, String loader) {
-        return read(jar, loader).stream().anyMatch(m -> m.id().equals(FRAMEWORK_ID));
+        return read(jar, loader).stream().anyMatch(m -> FRAMEWORK_ID.equals(m.id()));
     }
 
     static List<Path> frameworkJars(Path gameDir, String loader) {
@@ -223,7 +224,7 @@ final class DriverRequirement {
         if (loader == null) {
             return List.of(FABRIC_METADATA, NEOFORGE_METADATA);
         }
-        return List.of(loader.equals("fabric") ? FABRIC_METADATA : NEOFORGE_METADATA);
+        return List.of("fabric".equals(loader) ? FABRIC_METADATA : NEOFORGE_METADATA);
     }
 
     /**
@@ -231,7 +232,7 @@ final class DriverRequirement {
      * business. A missing field of ours reads as null and is refused by name.
      */
     private static List<Mod> parse(String path, String text, String source) {
-        if (path.equals(FABRIC_METADATA)) {
+        if (FABRIC_METADATA.equals(path)) {
             JsonElement root;
             try {
                 root = JsonParser.parseString(text.startsWith("﻿") ? text.substring(1) : text);
@@ -299,7 +300,7 @@ final class DriverRequirement {
         String prerelease = actual.group(2);
         Matcher n = Pattern.compile("alpha\\.([0-9]+)").matcher(prerelease == null ? "" : prerelease);
         boolean numbered = n.matches();
-        if (prerelease != null && !numbered && !prerelease.equals("snapshot")) {
+        if (prerelease != null && !numbered && !"snapshot".equals(prerelease)) {
             return false;
         }
         int base = compare(actual.group(1), bounds.group(1));

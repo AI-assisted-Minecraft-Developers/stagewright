@@ -6,7 +6,7 @@ package net.magicterra.stagewright.jupiter;
  * time {@link StageWrightTimeoutException}.
  */
 public class StageWrightRpcException extends RuntimeException {
-private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     private final String method;
     private final String error;

@@ -57,7 +57,7 @@ public final class KnownIssueExtension implements InvocationInterceptor {
 
     private static boolean isAbort(Throwable t) {
         for (Class<?> c = t.getClass(); c != null; c = c.getSuperclass()) {
-            if (c.getName().equals(ABORTED)) {
+            if (ABORTED.equals(c.getName())) {
                 return true;
             }
         }

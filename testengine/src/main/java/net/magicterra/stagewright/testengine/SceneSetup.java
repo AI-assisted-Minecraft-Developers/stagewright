@@ -60,7 +60,7 @@ final class SceneSetup {
         try (ZipInputStream zip = new ZipInputStream(url.openStream())) {
             for (ZipEntry e = zip.getNextEntry(); e != null; e = zip.getNextEntry()) {
                 String name = e.getName();
-                if (!e.isDirectory() && (name.equals("level.dat") || name.endsWith("/level.dat"))) {
+                if (!e.isDirectory() && ("level.dat".equals(name) || name.endsWith("/level.dat"))) {
                     String folder = name.substring(0, name.length() - "level.dat".length());
                     if (prefix == null || folder.length() < prefix.length()) {
                         prefix = folder;

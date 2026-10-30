@@ -31,6 +31,7 @@ public final class StructuresContracts {
                             + "when nothing is near.")
             .hidden()
             .effects(MethodSpec.Effect.WORLD_WRITE);
+
     private StructuresContracts() {}
 
     /** The requests {@code mc.test.structures} takes, told apart by {@code op}. */

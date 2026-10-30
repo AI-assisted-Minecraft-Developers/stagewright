@@ -28,6 +28,7 @@ public final class LootContracts {
                             + "at the overworld origin and counts what came out. An unknown or non-chest table is "
                             + "invalid_params.")
             .hidden();
+
     private LootContracts() {}
 
     /** The requests {@code mc.test.loot} takes, told apart by {@code op}. */

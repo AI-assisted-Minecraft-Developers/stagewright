@@ -133,7 +133,7 @@ final class CatchableErrors {
     static boolean isAbort(Throwable e) {
         for (Class<?> c = e.getClass(); c != null; c = c.getSuperclass()) {
             // By name: in a Fabric development game the class may come from another loader.
-            if (c.getName().equals("org.opentest4j.TestAbortedException")) {
+            if ("org.opentest4j.TestAbortedException".equals(c.getName())) {
                 return true;
             }
         }
@@ -148,7 +148,7 @@ final class CatchableErrors {
     // Extends Error on purpose: the script engine passes only Errors through its catch untouched.
     @SuppressWarnings("PMD.DoNotExtendJavaLangError")
     static final class Abort extends Error {
-private static final long serialVersionUID = 1L;
+        private static final long serialVersionUID = 1L;
 
         Abort(RuntimeException abort) {
             super(abort.getMessage(), abort, false, false);

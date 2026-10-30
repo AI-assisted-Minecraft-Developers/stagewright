@@ -25,6 +25,7 @@ public final class ModsContracts {
                     MODS_REPLY,
                     "list names every mod this game loaded, with its version; has says whether one mod id is loaded.")
             .hidden();
+
     private ModsContracts() {}
 
     /** The requests {@code mc.test.mods} takes, told apart by {@code op}. */

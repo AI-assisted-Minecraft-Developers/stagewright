@@ -37,6 +37,7 @@ public final class RecipesContracts {
                             + "that make something other than they declare, with its totals; count says how many recipes "
                             + "are loaded, in all and per recipe type.")
             .hidden();
+
     private RecipesContracts() {}
 
     /** The requests {@code mc.test.recipes} takes, told apart by {@code op}. */

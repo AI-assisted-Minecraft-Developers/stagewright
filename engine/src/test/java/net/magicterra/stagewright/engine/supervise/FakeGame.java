@@ -10,19 +10,19 @@ public final class FakeGame {
 
     public static void main(String[] args) throws Exception {
         String mode = args.length > 0 ? args[0] : "clean";
-        if (mode.equals("bare")) {
+        if ("bare".equals(mode)) {
             // Started without the agent: it has nothing to report and is only here to be alive.
             Thread.sleep(60_000);
             return;
         }
         call("phase", String.class, "harness-ready");
         call("ticks", long.class, 7L);
-        if (mode.equals("silent")) {
+        if ("silent".equals(mode)) {
             // Reports once and then moves nothing: longer than any stall limit a test or a run applies.
             Thread.sleep(300_000);
             return;
         }
-        if (mode.equals("crash")) {
+        if ("crash".equals(mode)) {
             // A crash report appears and the JVM stays up, as a mod's thread pool lets it.
             Thread.sleep(1_500);
             java.nio.file.Path report = java.nio.file.Path.of("crash-reports", "crash-new.txt");
@@ -31,7 +31,7 @@ public final class FakeGame {
             Thread.sleep(60_000);
             return;
         }
-        if (mode.equals("leak")) {
+        if ("leak".equals(mode)) {
             // A mod's threads start seconds into a run, long after the agent has begun recording who
             // starts threads; a thread started in the JVM's first instant would be missed.
             Thread.sleep(1_500);

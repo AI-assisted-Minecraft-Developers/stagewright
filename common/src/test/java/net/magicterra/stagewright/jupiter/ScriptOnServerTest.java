@@ -38,7 +38,7 @@ class ScriptOnServerTest {
 
     @BeforeEach
     void setUp() {
-        ServerThreadGuard.install(() -> Thread.currentThread().getName().equals("server"));
+        ServerThreadGuard.install(() -> "server".equals(Thread.currentThread().getName()));
         t = new ScriptContext(game(), steps, JavaSteps.none(), descriptor());
     }
 

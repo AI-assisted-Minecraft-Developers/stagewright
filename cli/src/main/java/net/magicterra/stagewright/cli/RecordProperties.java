@@ -48,7 +48,7 @@ final class RecordProperties implements TestExecutionListener {
         synchronized (properties) {
             entry.getKeyValuePairs()
                     .forEach((key, value) -> properties.add(
-                            key.equals(StageWrightTestEngine.BLANK_RECORD)
+                            StageWrightTestEngine.BLANK_RECORD.equals(key)
                                     ? new Property(value, "")
                                     : new Property(key, value)));
         }
@@ -108,7 +108,7 @@ final class RecordProperties implements TestExecutionListener {
     /** The unique id JUnit wrote into the testcase's {@code <system-out>}, or the empty string. */
     static String uniqueId(Element testcase) {
         for (Node child = testcase.getFirstChild(); child != null; child = child.getNextSibling()) {
-            if (child instanceof Element e && e.getTagName().equals("system-out")) {
+            if (child instanceof Element e && "system-out".equals(e.getTagName())) {
                 Matcher m = UNIQUE_ID.matcher(e.getTextContent());
                 if (m.find()) {
                     return m.group(1).trim();

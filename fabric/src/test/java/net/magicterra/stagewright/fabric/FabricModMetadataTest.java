@@ -70,10 +70,10 @@ class FabricModMetadataTest {
         assertEquals(min.isEmpty() ? null : Version.parse(min), got.getMin(), key + " lower bound");
         assertEquals(max.isEmpty() ? null : Version.parse(max), got.getMax(), key + " upper bound");
         if (!min.isEmpty()) {
-            assertEquals(m.group(1).equals("["), got.isMinInclusive(), key + " lower inclusivity");
+            assertEquals("[".equals(m.group(1)), got.isMinInclusive(), key + " lower inclusivity");
         }
         if (!max.isEmpty()) {
-            assertEquals(m.group(4).equals("]"), got.isMaxInclusive(), key + " upper inclusivity");
+            assertEquals("]".equals(m.group(4)), got.isMaxInclusive(), key + " upper inclusivity");
         }
     }
 

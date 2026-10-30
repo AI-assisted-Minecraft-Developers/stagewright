@@ -16,7 +16,7 @@ class GameTest {
     @SuppressWarnings("unchecked")
     private static Game game(AtomicInteger tasks) {
         InvocationHandler handler = (proxy, method, args) -> {
-            if (method.getName().equals("onServer")) {
+            if ("onServer".equals(method.getName())) {
                 tasks.incrementAndGet();
                 return ((Function<Object, ?>) args[0]).apply(null);
             }

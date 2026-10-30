@@ -19,16 +19,16 @@ public final class FakeGame {
         // The agent connects on its own thread and drops what the game sends before that; a real game takes seconds
         // to reach its first event, this one has to wait the connection out.
         Thread.sleep(1500);
-        if (scenario.equals("companionStays")) {
+        if ("companionStays".equals(scenario)) {
             // A joined client: it reports nothing and stays until the engine ends it.
             Thread.sleep(120_000);
             return;
         }
-        if (scenario.equals("companionLeaves")) {
+        if ("companionLeaves".equals(scenario)) {
             // A joined client that is gone while the server is still running its tests.
             System.exit(3);
         }
-        if (scenario.equals("companionCrashes")) {
+        if ("companionCrashes".equals(scenario)) {
             // A joined client that crashes and stays up, as one whose mod holds a thread does.
             java.nio.file.Path report = java.nio.file.Path.of("crash-reports", "crash-client.txt");
             java.nio.file.Files.createDirectories(report.getParent());
@@ -36,7 +36,7 @@ public final class FakeGame {
             Thread.sleep(120_000);
             return;
         }
-        if (scenario.equals("clientLeaves") || scenario.equals("clientCrashes")) {
+        if ("clientLeaves".equals(scenario) || "clientCrashes".equals(scenario)) {
             // A server whose run waits on its player; it would never end by itself.
             plan(classes(), List.of("a", "b"));
             start(classId(classes().get(0)));
@@ -46,26 +46,26 @@ public final class FakeGame {
         }
         List<String> classes =
                 List.of(System.getProperty("stagewright.junit.classes", "").split(","));
-        if (scenario.equals("dynamic")) {
+        if ("dynamic".equals(scenario)) {
             dynamic(classes);
             return;
         }
-        if (scenario.equals("restart")) {
+        if ("restart".equals(scenario)) {
             restart(classes.get(0), Integer.getInteger("stagewright.junit.round", -1));
             return;
         }
-        if (scenario.equals("script")) {
+        if ("script".equals(scenario)) {
             script(System.getProperty("stagewright.junit.scripts", ""));
             return;
         }
-        List<String> methods = scenario.equals("undiscovered") ? List.of("a") : List.of("a", "b");
+        List<String> methods = "undiscovered".equals(scenario) ? List.of("a") : List.of("a", "b");
         plan(classes, methods);
-        if (scenario.equals("crash")) {
+        if ("crash".equals(scenario)) {
             start(classId(classes.get(0)));
             start(methodId(classes.get(0), "a"));
             System.exit(1);
         }
-        String worldProblem = scenario.equals("world") ? worldProblem() : null;
+        String worldProblem = "world".equals(scenario) ? worldProblem() : null;
         String skipReason = switch (scenario) {
             case "reqSkip", "classSkip" -> "@Requires: this game has no CLIENT";
             case "otherSkip", "classSkipOther" -> "@Disabled";
@@ -79,7 +79,7 @@ public final class FakeGame {
             }
             start(classId(c));
             for (String m : methods) {
-                if (skipReason != null && m.equals("b")) {
+                if (skipReason != null && "b".equals(m)) {
                     skip(methodId(c, m), skipReason);
                     continue;
                 }
@@ -90,7 +90,7 @@ public final class FakeGame {
                             "FAILED",
                             "{\"class\":\"org.opentest4j.AssertionFailedError\"," + "\"message\":" + q(worldProblem)
                                     + ",\"trace\":[]}");
-                } else if (scenario.equals("assertFail") && m.equals("b")) {
+                } else if ("assertFail".equals(scenario) && "b".equals(m)) {
                     finish(
                             methodId(c, m),
                             "FAILED",

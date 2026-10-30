@@ -31,6 +31,7 @@ public final class AdvancementsContracts {
                             + "invalid_params at /bot, an unknown advancement at /id.")
             .hidden()
             .effects(MethodSpec.Effect.WORLD_WRITE);
+
     private AdvancementsContracts() {}
 
     /** The requests {@code mc.test.advancements} takes, told apart by {@code op}. */

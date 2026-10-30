@@ -126,7 +126,7 @@ final class ThreadOrigins {
         if (thread == null || thread.isDaemon() || !thread.isAlive()) {
             return false;
         }
-        return !thread.getName().equals("DestroyJavaVM") && !Agent.isRecorderThread(thread.getName());
+        return !"DestroyJavaVM".equals(thread.getName()) && !Agent.isRecorderThread(thread.getName());
     }
 
     /** The frames that started the thread with this id, or empty when it was not seen starting. */

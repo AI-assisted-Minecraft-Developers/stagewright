@@ -40,7 +40,7 @@ record LaunchSpec(
 
     /** A topology this run cannot launch, by its writer's word or, under {@value #MISSING}, by having no spec. */
     static final class Unlaunchable extends IllegalStateException {
-private static final long serialVersionUID = 1L;
+        private static final long serialVersionUID = 1L;
 
         Unlaunchable(String message) {
             super(message);
@@ -91,7 +91,7 @@ private static final long serialVersionUID = 1L;
             int at = jvmArgs.size();
             for (int i = 0; i < jvmArgs.size(); i++) {
                 String a = jvmArgs.get(i);
-                if (a.startsWith("@") || a.equals("-cp") || a.equals("-classpath") || a.equals("--class-path")) {
+                if (a.startsWith("@") || "-cp".equals(a) || "-classpath".equals(a) || "--class-path".equals(a)) {
                     at = i;
                     break;
                 }

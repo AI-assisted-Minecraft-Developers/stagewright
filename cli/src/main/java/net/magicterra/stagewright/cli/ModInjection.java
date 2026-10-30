@@ -110,7 +110,7 @@ final class ModInjection {
             throw new IllegalArgumentException("cannot tell which loader this pack runs on, so there"
                     + " is no way to pick the right StageWright build");
         }
-        if (!loader.equals("neoforge") && !loader.equals("fabric")) {
+        if (!"neoforge".equals(loader) && !"fabric".equals(loader)) {
             throw new IllegalArgumentException("StageWright runs on neoforge or fabric, not " + loader);
         }
     }

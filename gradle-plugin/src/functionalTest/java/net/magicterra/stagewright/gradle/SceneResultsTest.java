@@ -153,7 +153,7 @@ class SceneResultsTest {
                 .withProjectDir(dir.toFile())
                 .withPluginClasspath()
                 .withArguments("stagewrightTestFake", "--configuration-cache", "--stacktrace");
-        if (!gradle.equals("current")) {
+        if (!"current".equals(gradle)) {
             runner = runner.withGradleInstallation(new File(gradle));
         }
         BuildResult result = runner.build();

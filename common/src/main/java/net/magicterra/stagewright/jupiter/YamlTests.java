@@ -106,7 +106,7 @@ final class YamlTests {
             Map<String, Object> options = new LinkedHashMap<>();
             for (Map.Entry<?, ?> e : m.entrySet()) {
                 String key = String.valueOf(e.getKey());
-                boolean side = !key.equals("centered") && !key.equals("dimension");
+                boolean side = !"centered".equals(key) && !"dimension".equals(key);
                 options.put(key, side ? ScriptContext.ticks(e.getValue(), where + ": plot " + key) : e.getValue());
             }
             return options;
@@ -239,7 +239,7 @@ final class YamlTests {
     }
 
     private static Object step(ScriptContext context, String verb, Map<?, ?> step, Map<String, Object> saved) {
-        Object value = verb.equals("perf") ? null : substitute(step.get(verb), saved);
+        Object value = "perf".equals(verb) ? null : substitute(step.get(verb), saved);
         Map<String, Object> options = new HashMap<>();
         for (String key : List.of("within", TICKS, "as")) {
             if (step.containsKey(key)) {
@@ -261,7 +261,7 @@ final class YamlTests {
             case "perf" -> perf(context, step.get(verb), saved);
             case "java" -> java(context, value, substitute(step.get(PARAMS), saved));
             case "waitUntil", "settle" -> {
-                int run = verb.equals("settle")
+                int run = "settle".equals(verb)
                         ? (options.containsKey(TICKS) ? ScriptContext.ticks(options.get(TICKS), TICKS) : 20)
                         : 1;
                 Object[] last = {null};

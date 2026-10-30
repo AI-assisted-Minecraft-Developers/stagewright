@@ -111,14 +111,14 @@ final class TestCommand {
                 systemProps.add(a);
             } else if (a.startsWith("--")) {
                 String name = a.substring(2);
-                if (!name.equals("mod") && !VALUED.contains(name)) {
+                if (!"mod".equals(name) && !VALUED.contains(name)) {
                     throw new IllegalArgumentException("unknown option '" + a + "'");
                 }
                 if (i + 1 >= args.size()) {
                     throw new IllegalArgumentException(a + " needs a value");
                 }
                 String value = args.get(++i);
-                if (name.equals("mod")) {
+                if ("mod".equals(name)) {
                     extraMods.add(Path.of(value).toAbsolutePath().normalize());
                 } else {
                     opts.put(name, value);
@@ -437,7 +437,7 @@ final class TestCommand {
      */
     static String leaks(Map<String, String> opts) {
         String leaks = opts.getOrDefault("leaks", "fail");
-        if (!leaks.equals("fail") && !leaks.equals("report")) {
+        if (!"fail".equals(leaks) && !"report".equals(leaks)) {
             throw new IllegalArgumentException("--leaks is 'fail' or 'report', not '" + leaks + "'");
         }
         return leaks;

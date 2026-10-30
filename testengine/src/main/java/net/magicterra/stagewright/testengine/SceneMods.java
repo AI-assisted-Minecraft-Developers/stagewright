@@ -126,7 +126,7 @@ final class SceneMods {
     static Path gameDirectory(LaunchSpec.Process process) {
         List<String> args = process.args();
         for (int i = 0; i + 1 < args.size(); i++) {
-            if (args.get(i).equals("--gameDir")) {
+            if ("--gameDir".equals(args.get(i))) {
                 return process.workingDirectory().resolve(args.get(i + 1)).normalize();
             }
         }
@@ -269,7 +269,7 @@ final class SceneMods {
         try (Stream<Path> entries = Files.list(real)) {
             for (Path entry : entries.toList()) {
                 String name = entry.getFileName().toString();
-                if (name.equals(MODS) || name.equals("stagewright")) {
+                if (MODS.equals(name) || "stagewright".equals(name)) {
                     continue;
                 }
                 Files.createSymbolicLink(view.resolve(name), entry.toAbsolutePath());

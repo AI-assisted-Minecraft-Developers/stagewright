@@ -34,8 +34,7 @@ final class DevJUnitRuntime {
             NamedDomainObjectContainer<StageWrightTopology> topologies) {
         plugin.getRootProject()
                 .allprojects(p -> p.getConfigurations().configureEach(c -> {
-                    if (!c.getName().equals("forgeRuntimeLibrary")
-                            && !c.getName().equals("localRuntime")) {
+                    if (!"forgeRuntimeLibrary".equals(c.getName()) && !"localRuntime".equals(c.getName())) {
                         return;
                     }
                     c.withDependencies(dependencies -> {

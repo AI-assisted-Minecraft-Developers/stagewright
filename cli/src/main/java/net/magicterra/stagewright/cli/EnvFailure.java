@@ -5,8 +5,7 @@ package net.magicterra.stagewright.cli;
  * and without the usage text an argument error gets.
  */
 final class EnvFailure extends RuntimeException {
-private static final long serialVersionUID = 1L;
-
+    private static final long serialVersionUID = 1L;
 
     EnvFailure(String message) {
         super(message);

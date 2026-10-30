@@ -234,7 +234,7 @@ public final class Agent {
         for (Map.Entry<Thread, StackTraceElement[]> entry :
                 Thread.getAllStackTraces().entrySet()) {
             String name = entry.getKey().getName();
-            if (!name.equals("main") && !name.equals("Render thread") && !name.equals("Server thread")) {
+            if (!"main".equals(name) && !"Render thread".equals(name) && !"Server thread".equals(name)) {
                 continue;
             }
             List<String> frames = new ArrayList<>();
@@ -286,7 +286,7 @@ public final class Agent {
                 continue;
             }
             // The thread the JVM parks to wait for the others: it is the symptom, not a holder.
-            if (thread.getName().equals("DestroyJavaVM")) {
+            if ("DestroyJavaVM".equals(thread.getName())) {
                 continue;
             }
             // The recorder's own reader: it holds nothing the game left behind.
