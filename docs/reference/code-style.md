@@ -11,7 +11,7 @@ Spotless alone decides layout. Nobody arranges it by hand, and no other tool has
 |---|---|
 | Java, every source set | palantir-java-format 2.103.0, which also reflows javadoc text |
 | `*.gradle`, `build-logic/` included | Groovy-Eclipse, indenting with four spaces (`config/spotless/greclipse.properties`) |
-| JavaScript under `src/` (script tests) | Prettier 3.6.2, 120 columns, four-space indentation |
+| JavaScript under `src/` (script tests) | Prettier 3.6.2, 120 columns, four-space indentation, trailing commas where ES5 allows them |
 | Markdown, properties, YAML, JSON, TOML, `pack.mcmeta`, the XML under `config/` | trailing whitespace removed, leading tabs turned into spaces, a final newline |
 
 `./gradlew spotlessApply` rewrites the files; `spotlessCheck` reports what it would change. Run them in each of the
