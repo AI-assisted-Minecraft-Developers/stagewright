@@ -1,0 +1,7 @@
+# Whole-repository reformats, which `git blame` skips: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# Java sources, palantir-java-format
+4bcccbaef893ba286abfae0e2b61acae89897333
+# Gradle scripts, Groovy-Eclipse
+fe70f36fcfc02a2868097d4255b712ffec63ed05
+# JavaScript tests, Prettier
+cec00ee132d5cfd8350feac96507d6788005247c
