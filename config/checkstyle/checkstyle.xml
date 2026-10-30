@@ -8,7 +8,9 @@
     blank lines, import order and javadoc layout. What is left judges what a formatter cannot fix:
     naming, javadoc content, braces presence, switch defaults and the like. Added: JavaNCSS with its
     default limits, DeclarationOrder (fields before methods), ParameterNumber (at most 10) and
-    MultipleStringLiterals (a string written four or more times in one file).
+    MultipleStringLiterals (a string written four or more times in one file). Kept although it is
+    layout: EmptyLineSeparator, stricter than Google's, as the formatter does not add blank lines
+    between members, fields included.
 
     Suppress one finding with @SuppressWarnings("checkstyle:<check name in lower case>") and a comment
     saying why, or in config/checkstyle/suppressions.xml.
@@ -67,6 +69,12 @@
                value="LITERAL_DO, LITERAL_ELSE, LITERAL_FOR, LITERAL_IF, LITERAL_WHILE"/>
     </module>
     <module name="MultipleVariableDeclarations"/>
+    <module name="EmptyLineSeparator">
+      <property name="tokens"
+               value="PACKAGE_DEF, IMPORT, STATIC_IMPORT, CLASS_DEF, INTERFACE_DEF, ENUM_DEF,
+                    STATIC_INIT, INSTANCE_INIT, METHOD_DEF, CTOR_DEF, VARIABLE_DEF, RECORD_DEF,
+                    COMPACT_CTOR_DEF"/>
+    </module>
     <module name="ArrayTypeStyle"/>
     <module name="MissingSwitchDefault"/>
     <module name="FallThrough"/>
