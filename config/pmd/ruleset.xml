@@ -32,7 +32,7 @@
     <rule ref="category/java/errorprone.xml/CloseResource">
         <properties>
             <property name="allowedResourceTypes"
-                      value="java.io.ByteArrayOutputStream,java.io.ByteArrayInputStream,java.io.StringWriter,java.io.CharArrayWriter,java.util.stream.Stream,java.util.stream.IntStream,java.util.stream.LongStream,java.util.stream.DoubleStream,net.minecraft.world.level.Level,net.minecraft.server.level.ServerLevel,net.minecraft.client.multiplayer.ClientLevel,net.minecraft.client.Minecraft,net.minecraft.server.MinecraftServer"/>
+                      value="java.io.ByteArrayOutputStream,java.io.ByteArrayInputStream,java.io.StringWriter,java.io.CharArrayWriter,java.util.stream.Stream,java.util.stream.IntStream,java.util.stream.LongStream,java.util.stream.DoubleStream,net.minecraft.world.level.Level,net.minecraft.server.level.ServerLevel,net.minecraft.client.multiplayer.ClientLevel,net.minecraft.client.Minecraft,net.minecraft.server.MinecraftServer,net.minecraft.world.level.storage.LevelStorageSource.LevelStorageAccess,net.minecraft.server.WorldStem"/>
         </properties>
     </rule>
 
