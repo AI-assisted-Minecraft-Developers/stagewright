@@ -61,7 +61,7 @@ public final class ModsContracts {
             @Doc("Mods loaded, the loader, Minecraft and Java included where the loader lists them.") @Range(min = 0)
             int count,
 
-            @Doc("Each one, sorted by id.") @Length(max = 10000)
+            @Doc("Each one, sorted by id.") @Length(max = 10_000)
             List<Mod> mods)
             implements ModsReply {}
 

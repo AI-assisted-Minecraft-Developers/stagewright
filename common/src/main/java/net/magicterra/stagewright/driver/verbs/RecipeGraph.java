@@ -95,7 +95,7 @@ final class RecipeGraph {
             }
         }
         out.sort(String::compareTo);
-        return new UncraftableRecipes(out.size(), out.subList(0, Math.min(out.size(), 10000)));
+        return new UncraftableRecipes(out.size(), out.subList(0, Math.min(out.size(), 10_000)));
     }
 
     /**

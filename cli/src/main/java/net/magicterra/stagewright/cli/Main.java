@@ -97,7 +97,7 @@ public final class Main {
                 }
             }
         }
-        return 25565;
+        return 25_565;
     }
 
     private static void usage(java.io.PrintStream out) {

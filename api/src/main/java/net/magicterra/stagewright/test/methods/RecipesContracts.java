@@ -61,7 +61,7 @@ public final class RecipesContracts {
             String item,
 
             @Doc("Distinct items the walk may touch before it stops and reports truncated. Omitted: 5000.")
-            Optional<@Range(min = 1, max = 20000) Integer> maxNodes,
+            Optional<@Range(min = 1, max = 20_000) Integer> maxNodes,
 
             @Doc("Recipe generations the walk may descend before it stops and reports truncated. Omitted: 64.")
             Optional<@Range(min = 1, max = 256) Integer> maxDepth)
@@ -120,23 +120,23 @@ public final class RecipesContracts {
     public record Closure(
             @Doc("The item asked about.") @ResourceId String root,
 
-            @Doc("Every item reached, root first.") @Length(max = 20000)
+            @Doc("Every item reached, root first.") @Length(max = 20_000)
             List<@ResourceId String> items,
 
-            @Doc("Reached items nothing makes: the raw materials.") @Length(max = 20000)
+            @Doc("Reached items nothing makes: the raw materials.") @Length(max = 20_000)
             List<@ResourceId String> leaves,
 
-            @Doc("Every recipe expanded.") @Length(max = 50000)
+            @Doc("Every recipe expanded.") @Length(max = 50_000)
             List<@ResourceId String> recipes,
 
-            @Doc("'<recipe> slot <n>' for each slot nothing registered can fill.") @Length(max = 20000)
+            @Doc("'<recipe> slot <n>' for each slot nothing registered can fill.") @Length(max = 20_000)
             List<@Length(max = 512) String> unresolvable,
 
             @Doc("Recipes that declare no ingredient slots at all; their edges are inferred, see inferred.")
-            @Length(max = 20000)
+            @Length(max = 20_000)
             List<@ResourceId String> opaque,
 
-            @Doc("Items reached only through what an opaque recipe's own serialization mentions.") @Length(max = 20000)
+            @Doc("Items reached only through what an opaque recipe's own serialization mentions.") @Length(max = 20_000)
             List<@ResourceId String> inferred,
 
             @Doc("Deepest generation reached.") @Range(min = 0)
@@ -152,7 +152,7 @@ public final class RecipesContracts {
             @Doc("Total, even when the list below is cut.") @Range(min = 0)
             int count,
 
-            @Doc("Recipes with a slot nothing registered can fill, sorted.") @Length(max = 10000)
+            @Doc("Recipes with a slot nothing registered can fill, sorted.") @Length(max = 10_000)
             List<@ResourceId String> recipes)
             implements RecipesReply {}
 

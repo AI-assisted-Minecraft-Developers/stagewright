@@ -41,7 +41,7 @@ final class GeneratedRuns {
     /** The singleplayer world the integrated server's client creates; the test engine deletes it before each scene. */
     static final String INTEGRATED_WORLD = "StageWright";
 
-    static final int DEFAULT_SERVER_PORT = 25621;
+    static final int DEFAULT_SERVER_PORT = 25_621;
     static final String TESTMOD = "testmod";
 
     private GeneratedRuns() {}

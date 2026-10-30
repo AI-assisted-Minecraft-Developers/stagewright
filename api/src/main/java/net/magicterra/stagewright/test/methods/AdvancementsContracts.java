@@ -84,7 +84,7 @@ public final class AdvancementsContracts {
             @Range(min = 0)
             int count,
 
-            @Doc("Their ids, sorted; the first 100000.") @Length(max = 100000)
+            @Doc("Their ids, sorted; the first 100000.") @Length(max = 100_000)
             List<@ResourceId String> advancements)
             implements AdvancementsReply {}
 

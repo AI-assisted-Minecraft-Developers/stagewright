@@ -288,7 +288,7 @@ final class TestQueriesService implements TestQueriesApi {
                         for (String id : Mods.ids()) {
                             mods.add(new ModsContracts.Mod(id, clip(Mods.version(id), 256)));
                         }
-                        yield new ModsContracts.ModList(mods.size(), mods.subList(0, Math.min(mods.size(), 10000)));
+                        yield new ModsContracts.ModList(mods.size(), mods.subList(0, Math.min(mods.size(), 10_000)));
                     }
                     case ModsContracts.Has h ->
                         new ModsContracts.Present(

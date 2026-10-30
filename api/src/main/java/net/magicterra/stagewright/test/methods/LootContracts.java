@@ -54,7 +54,7 @@ public final class LootContracts {
             @Doc("A chest-shaped table; one needing a killer, a tool or a block state is invalid_params.") @ResourceId
             String table,
 
-            @Doc("How many times to roll it.") @Range(min = 1, max = 10000)
+            @Doc("How many times to roll it.") @Range(min = 1, max = 10_000)
             int times)
             implements LootOp {}
 
@@ -79,7 +79,7 @@ public final class LootContracts {
             @Range(min = 0)
             int count,
 
-            @Doc("Their ids, sorted; the first 100000.") @Length(max = 100000)
+            @Doc("Their ids, sorted; the first 100000.") @Length(max = 100_000)
             List<@ResourceId String> tables)
             implements LootReply {}
 

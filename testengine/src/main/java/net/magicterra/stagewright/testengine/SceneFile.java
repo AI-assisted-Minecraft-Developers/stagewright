@@ -50,7 +50,7 @@ record SceneFile(
     private static final Set<String> GAMEMODES = Set.of("survival", "creative", "adventure", "spectator");
     private static final Set<String> DIFFICULTIES = Set.of("peaceful", "easy", "normal", "hard");
     private static final Map<String, Long> NAMED_TIMES =
-            Map.of("day", 1000L, "noon", 6000L, "night", 13000L, "midnight", 18000L);
+            Map.of("day", 1000L, "noon", 6000L, "night", 13_000L, "midnight", 18_000L);
 
     /**
      * The world a scene runs on. The creation settings are null when not declared, and the game's own default then

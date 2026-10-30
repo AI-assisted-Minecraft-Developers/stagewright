@@ -49,7 +49,7 @@ public final class Display {
     private static final BigInteger ULONG_MAX = BigInteger.TWO.pow(64).subtract(BigInteger.ONE);
     private static final String COOKIE = "MIT-MAGIC-COOKIE-1";
     private static final int FAMILY_LOCAL = 256;
-    private static final int FAMILY_WILD = 65535;
+    private static final int FAMILY_WILD = 65_535;
     private static final long HANDSHAKE_MILLIS = 3000;
 
     private Display() {}
