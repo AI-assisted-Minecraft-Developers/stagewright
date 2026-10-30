@@ -77,11 +77,8 @@ BUILD_COMMANDS = [
 
 
 def built_jars(module):
-    # transformProduction* jars are architectury's intermediate inputs to the loader jars, never
-    # handed to anyone; what they feed is checked in its own right.
     build = ROOT / module / 'build'
-    return sorted(p for d in ('libs', 'devlibs') for p in (build / d).glob('*.jar')
-                  if '-transformProduction' not in p.name)
+    return sorted(p for d in ('libs', 'devlibs') for p in (build / d).glob('*.jar'))
 
 
 def check_jars(problems):
