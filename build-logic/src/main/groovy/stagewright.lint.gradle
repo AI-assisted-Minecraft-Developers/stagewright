@@ -57,7 +57,7 @@ spotless {
     if (!scripts.isEmpty()) {
         javascript {
             target scripts
-            prettier('3.6.2').config([printWidth: 120, tabWidth: 4])
+            prettier('3.6.2').config([printWidth: 120, tabWidth: 4, trailingComma: 'es5'])
         }
     }
     format 'misc', {
