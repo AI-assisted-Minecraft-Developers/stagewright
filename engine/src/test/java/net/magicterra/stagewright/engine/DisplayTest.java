@@ -38,7 +38,7 @@ class DisplayTest {
     private static final byte[] GOOD = "0123456789abcdef".getBytes(StandardCharsets.US_ASCII);
 
     /** Display :0 only, and it wants {@link #GOOD}. */
-    private static final Display.XServer ONLY_ZERO = (n, tcpToo, cookie) -> {
+    private static final Display.DisplayServer ONLY_ZERO = (n, tcpToo, cookie) -> {
         if (n != 0) {
             return Display.Answer.NOT_LISTENING;
         }
@@ -243,7 +243,7 @@ class DisplayTest {
     @Test
     void theDisplaysOwnProtocolDecidesWhetherTcpIsTriedAndTheReasonIsQuoted(@TempDir Path home) {
         List<Boolean> tcp = new ArrayList<>();
-        Display.XServer none = (n, tcpToo, cookie) -> {
+        Display.DisplayServer none = (n, tcpToo, cookie) -> {
             tcp.add(tcpToo);
             return new Display.Answer(Display.Answer.Kind.NOT_LISTENING, "/tmp/.X11-unix/X5: Permission denied");
         };

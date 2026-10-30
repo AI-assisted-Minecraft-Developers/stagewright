@@ -75,7 +75,7 @@ public final class Display {
      * Connects to local display {@code n}, presenting {@code cookie} (null for none); {@code tcpToo} when the display
      * names no protocol, so libxcb would try TCP after the socket.
      */
-    interface XServer {
+    interface DisplayServer {
         Answer connect(int n, boolean tcpToo, byte[] cookie);
     }
 
@@ -94,7 +94,7 @@ public final class Display {
      * GLFW passed as {@code org.lwjgl.glfw.libname} can do nothing else — so a dead {@code DISPLAY} beside a live
      * Wayland one still fails in {@code glfwInit}.
      */
-    static String missing(String osName, Map<String, ?> env, String hostname, XServer server) {
+    static String missing(String osName, Map<String, ?> env, String hostname, DisplayServer server) {
         if (!osName.toLowerCase(Locale.ROOT).contains("linux")) {
             return null;
         }
@@ -165,6 +165,8 @@ public final class Display {
      *
      * @param hostname this machine's name, or null when unknown and every local entry counts
      */
+    // Null means no entry matched: an empty array would read as a present, empty cookie to libxcb's caller.
+    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
     static byte[] cookie(Path authority, int n, String hostname) {
         byte[] file;
         try {
@@ -245,12 +247,12 @@ public final class Display {
         return new Answer(Answer.Kind.NOT_LISTENING, String.join("; ", tried));
     }
 
-    /** libxcb's display number: {@code strtoul}, saturating at 2^64 - 1, stored in an {@code int}. */
+    /** Parses a display number as libxcb does: {@code strtoul}, saturating at 2^64 - 1, stored in an {@code int}. */
     static int displayNumber(String digits) {
         return new BigInteger(digits).min(ULONG_MAX).intValue();
     }
 
-    /** libxcb's TCP port for display {@code n}: 6000 + n in an {@code unsigned short}, so it wraps. */
+    /** Computes the TCP port libxcb uses for display {@code n}: 6000 + n in an {@code unsigned short}, so it wraps. */
     static int tcpPort(int n) {
         return (TCP_PORT + n) & 0xFFFF;
     }
@@ -332,6 +334,8 @@ public final class Display {
     }
 
     /** A blocking connect that gives up at {@code deadline}; false if it did. */
+    // The cause is rethrown as it is: wrapping it again would only bury the IOException callers already catch.
+    @SuppressWarnings("PMD.PreserveStackTrace")
     private static boolean connect(SocketChannel channel, SocketAddress address, long deadline) throws IOException {
         CompletableFuture<Void> done = new CompletableFuture<>();
         // A platform thread: a virtual one connects without blocking underneath, and a unix socket

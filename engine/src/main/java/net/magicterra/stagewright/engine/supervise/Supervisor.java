@@ -62,6 +62,7 @@ public final class Supervisor implements AutoCloseable {
      */
     public record Leak(
             String thread, List<String> stack, List<String> jars, List<String> origin, List<String> originJars) {
+        /** A leak whose starter the JVM could not name, so both origin lists are empty. */
         public Leak(String thread, List<String> stack, List<String> jars) {
             this(thread, stack, jars, List.of(), List.of());
         }
@@ -107,6 +108,8 @@ public final class Supervisor implements AutoCloseable {
     }
 
     /** Bind the loopback interface on a free port and start listening. */
+    // The server is handed to the Supervisor, which closes it; this method only opens it.
+    @SuppressWarnings("PMD.CloseResource")
     public static Supervisor open() throws IOException {
         ServerSocket server = new ServerSocket(0, 4, InetAddress.getLoopbackAddress());
         byte[] random = new byte[16];
@@ -118,6 +121,7 @@ public final class Supervisor implements AutoCloseable {
         return supervisor;
     }
 
+    /** The loopback port the agent connects back to. */
     public int port() {
         return server.getLocalPort();
     }
@@ -230,6 +234,8 @@ public final class Supervisor implements AutoCloseable {
     }
 
     /** The endings the supervisor can see for itself. The lock is held. */
+    // The dead-game branch comes first on purpose: the live checks below only apply while the process runs.
+    @SuppressWarnings("PMD.ConfusingTernary")
     private Ended evaluate(ProcessHandle game, Limits limits) {
         if (done) {
             return Ended.DONE;
@@ -324,12 +330,14 @@ public final class Supervisor implements AutoCloseable {
         }
     }
 
+    /** The game phase the agent last reported, empty before the first report. */
     public String phase() {
         synchronized (lock) {
             return phase;
         }
     }
 
+    /** The server ticks the agent last reported as delivered. */
     public long ticks() {
         synchronized (lock) {
             return ticks;
@@ -395,6 +403,8 @@ public final class Supervisor implements AutoCloseable {
         }
     }
 
+    // Each accepted socket is closed by the reader thread it is handed to, not here.
+    @SuppressWarnings("PMD.CloseResource")
     private void acceptLoop() {
         while (!server.isClosed()) {
             try {
@@ -466,7 +476,8 @@ public final class Supervisor implements AutoCloseable {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    // Null marks a line that is not a JSON object; the reader skips it.
+    @SuppressWarnings({"unchecked", "PMD.ReturnEmptyCollectionRatherThanNull"})
     private static Map<String, Object> parse(String line) {
         try {
             return Json.parse(line) instanceof Map<?, ?> map ? (Map<String, Object>) map : null;

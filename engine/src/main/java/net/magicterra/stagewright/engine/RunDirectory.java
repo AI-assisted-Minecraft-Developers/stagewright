@@ -94,15 +94,16 @@ public final class RunDirectory {
     /** Force one server.properties key, leaving every other line exactly as it was. */
     private static void force(Path properties, String key, String value) {
         String line = key + "=" + value;
+        String newline = "\n";
         try {
             if (!Files.exists(properties)) {
-                Files.writeString(properties, line + "\n");
+                Files.writeString(properties, line + newline);
                 return;
             }
             String body = Files.readString(properties);
             String patched = body.replaceAll("(?m)^" + Pattern.quote(key) + "\\s*=.*$", Matcher.quoteReplacement(line));
             if (patched.equals(body) && !body.contains(line)) {
-                patched = body + (body.endsWith("\n") ? "" : "\n") + line + "\n";
+                patched = body + (body.endsWith(newline) ? "" : newline) + line + newline;
             }
             if (!patched.equals(body)) {
                 Files.writeString(properties, patched);
