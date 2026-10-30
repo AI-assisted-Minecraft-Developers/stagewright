@@ -44,7 +44,8 @@ public final class FakeGame {
             Thread.sleep(120_000);
             return;
         }
-        List<String> classes = List.of(System.getProperty("stagewright.junit.classes", "").split(","));
+        List<String> classes =
+                List.of(System.getProperty("stagewright.junit.classes", "").split(","));
         if (scenario.equals("dynamic")) {
             dynamic(classes);
             return;
@@ -84,11 +85,17 @@ public final class FakeGame {
                 }
                 start(methodId(c, m));
                 if (worldProblem != null) {
-                    finish(methodId(c, m), "FAILED", "{\"class\":\"org.opentest4j.AssertionFailedError\","
-                            + "\"message\":" + q(worldProblem) + ",\"trace\":[]}");
+                    finish(
+                            methodId(c, m),
+                            "FAILED",
+                            "{\"class\":\"org.opentest4j.AssertionFailedError\"," + "\"message\":" + q(worldProblem)
+                                    + ",\"trace\":[]}");
                 } else if (scenario.equals("assertFail") && m.equals("b")) {
-                    finish(methodId(c, m), "FAILED", "{\"class\":\"org.opentest4j.AssertionFailedError\","
-                            + "\"message\":\"expected 1 but was 2\",\"trace\":[\"x.Y.m(Y.java:3)\"]}");
+                    finish(
+                            methodId(c, m),
+                            "FAILED",
+                            "{\"class\":\"org.opentest4j.AssertionFailedError\","
+                                    + "\"message\":\"expected 1 but was 2\",\"trace\":[\"x.Y.m(Y.java:3)\"]}");
                 } else {
                     finish(methodId(c, m), "SUCCESSFUL", null);
                 }
@@ -98,13 +105,15 @@ public final class FakeGame {
         test("{\"type\":\"ended\"}");
         if (scenario.startsWith("leak")) {
             // A mod's pool that outlives the run: the JVM stays up until the agent's grace period ends it.
-            Thread pool = new Thread(() -> {
-                try {
-                    Thread.sleep(600_000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-            }, "mod-pool-1");
+            Thread pool = new Thread(
+                    () -> {
+                        try {
+                            Thread.sleep(600_000);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    },
+                    "mod-pool-1");
             pool.start();
             done();
             return;
@@ -172,8 +181,11 @@ public final class FakeGame {
         } else if (round == 1 && java.nio.file.Files.isRegularFile(mark)) {
             finish(methodId(c, m), "SUCCESSFUL", null);
         } else {
-            finish(methodId(c, m), "FAILED", "{\"class\":\"java.lang.AssertionError\",\"message\":"
-                    + q("round " + round + ", mark " + java.nio.file.Files.exists(mark)) + ",\"trace\":[]}");
+            finish(
+                    methodId(c, m),
+                    "FAILED",
+                    "{\"class\":\"java.lang.AssertionError\",\"message\":"
+                            + q("round " + round + ", mark " + java.nio.file.Files.exists(mark)) + ",\"trace\":[]}");
         }
         finish(classId(c), "SUCCESSFUL", null);
         if (round == 0) test("{\"type\":\"restart\",\"round\":1}");
@@ -190,19 +202,27 @@ public final class FakeGame {
         List<String> nodes = new ArrayList<>();
         nodes.add(node(engine, null, "StageWright scripts", false, null, null, null));
         nodes.add(scriptNode(file, engine, resource, false, resource));
-        for (String t : List.of("adds", "fails")) nodes.add(scriptNode(file + "/[test:" + t + "]", file, t, true, resource));
+        for (String t : List.of("adds", "fails"))
+            nodes.add(scriptNode(file + "/[test:" + t + "]", file, t, true, resource));
         test("{\"type\":\"planned\",\"nodes\":[" + String.join(",", nodes) + "]}");
         start(file);
         start(file + "/[test:adds]");
         test("{\"type\":\"report\",\"id\":" + q(file + "/[test:adds]") + ",\"entries\":{\"sum\":\"2\"}}");
-        test("{\"type\":\"record\",\"id\":" + q(file + "/[test:adds]") + ",\"name\":\"note\",\"value\":\"two\\nlines\"}");
+        test("{\"type\":\"record\",\"id\":" + q(file + "/[test:adds]")
+                + ",\"name\":\"note\",\"value\":\"two\\nlines\"}");
         test("{\"type\":\"record\",\"id\":" + q(file + "/[test:adds]") + ",\"name\":\"none found\",\"value\":\"\"}");
         if ("script".equals(scene)) finish(file + "/[test:adds]", "SUCCESSFUL", null);
-        else finish(file + "/[test:adds]", "FAILED", "{\"class\":\"java.lang.AssertionError\",\"message\":"
-                + q("-Dstagewright.junit.scene was " + scene) + ",\"trace\":[]}");
+        else
+            finish(
+                    file + "/[test:adds]",
+                    "FAILED",
+                    "{\"class\":\"java.lang.AssertionError\",\"message\":" + q("-Dstagewright.junit.scene was " + scene)
+                            + ",\"trace\":[]}");
         start(file + "/[test:fails]");
-        finish(file + "/[test:fails]", "FAILED", "{\"class\":\"java.lang.AssertionError\","
-                + "\"message\":\"expected 3 but was 2\",\"trace\":[]}");
+        finish(
+                file + "/[test:fails]",
+                "FAILED",
+                "{\"class\":\"java.lang.AssertionError\"," + "\"message\":\"expected 3 but was 2\",\"trace\":[]}");
         finish(file, "SUCCESSFUL", null);
         test("{\"type\":\"ended\"}");
         done();
@@ -228,8 +248,8 @@ public final class FakeGame {
         return node(classId(c), ENGINE, c.substring(c.lastIndexOf('.') + 1), false, c, null, null);
     }
 
-    private static String node(String id, String parent, String name, boolean test, String className, String method,
-                               String parameters) {
+    private static String node(
+            String id, String parent, String name, boolean test, String className, String method, String parameters) {
         StringBuilder s = new StringBuilder("{\"id\":").append(q(id));
         if (parent != null) s.append(",\"parent\":").append(q(parent));
         s.append(",\"name\":").append(q(name)).append(",\"test\":").append(test);

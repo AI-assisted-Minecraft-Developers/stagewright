@@ -42,8 +42,10 @@ public final class Quests {
         return game.onServer(server -> questFile() != null);
     }
 
-    /** Chapter filenames, in book order — the names of the {@code .snbt} files under
-     *  {@code config/ftbquests/quests/chapters/}. */
+    /**
+     * Chapter filenames, in book order — the names of the {@code .snbt} files under
+     * {@code config/ftbquests/quests/chapters/}.
+     */
     public List<String> chapters() {
         return game.onServer(server -> chapterNames());
     }
@@ -73,14 +75,14 @@ public final class Quests {
                 for (Object quest : questsIn(chapter)) out.add(codeOf(quest));
                 return out;
             }
-            throw new IllegalStateException("no chapter is named '" + filename + "' — this book has "
-                    + String.join(", ", chapterNames()));
+            throw new IllegalStateException(
+                    "no chapter is named '" + filename + "' — this book has " + String.join(", ", chapterNames()));
         });
     }
 
     /**
-     * The code strings this quest depends on: the edge list of the progression graph. A dependency naming a quest
-     * that no longer exists is the defect this finds — FTB Quests loads such a book without complaint.
+     * The code strings this quest depends on: the edge list of the progression graph. A dependency naming a quest that
+     * no longer exists is the defect this finds — FTB Quests loads such a book without complaint.
      */
     public List<String> dependenciesOf(String questCode) {
         return game.onServer(server -> {
@@ -93,24 +95,28 @@ public final class Quests {
 
     /** Whether this quest is completed for the body (strictly: for its team). */
     public boolean isComplete(Body body, String questCode) {
-        return body.onServer(player -> (boolean) call(teamData(player), "isCompleted",
-                new Class<?>[] {questObjectClass()}, requireQuest(questCode)));
+        return body.onServer(player -> (boolean)
+                call(teamData(player), "isCompleted", new Class<?>[] {questObjectClass()}, requireQuest(questCode)));
     }
 
     /** Whether the body may start this quest — its dependencies are met. */
     public boolean canStart(Body body, String questCode) {
-        return body.onServer(player -> (boolean) call(teamData(player), "canStartTasks",
-                new Class<?>[] {questClass()}, requireQuest(questCode)));
+        return body.onServer(player -> (boolean)
+                call(teamData(player), "canStartTasks", new Class<?>[] {questClass()}, requireQuest(questCode)));
     }
 
     /**
-     * Mark a quest completed for the body's team. <b>Not undone</b> when the test ends: FTB Quests has no
-     * "un-complete" that also unwinds rewards and the quests it unlocked, so a test that completes quests should run
-     * in a world provisioned for it.
+     * Mark a quest completed for the body's team. <b>Not undone</b> when the test ends: FTB Quests has no "un-complete"
+     * that also unwinds rewards and the quests it unlocked, so a test that completes quests should run in a world
+     * provisioned for it.
      */
     public Quests complete(Body body, String questCode) {
-        body.runOnServer(player -> call(teamData(player), "setCompleted", new Class<?>[] {long.class, Date.class},
-                idOf(requireQuest(questCode)), new Date()));
+        body.runOnServer(player -> call(
+                teamData(player),
+                "setCompleted",
+                new Class<?>[] {long.class, Date.class},
+                idOf(requireQuest(questCode)),
+                new Date()));
         return this;
     }
 
@@ -145,8 +151,8 @@ public final class Quests {
     private static Object requireFile() {
         Object file = questFile();
         if (file == null) {
-            throw new TestAbortedException("this test needs FTB Quests with a loaded quest file, which this runtime"
-                    + " does not have");
+            throw new TestAbortedException(
+                    "this test needs FTB Quests with a loaded quest file, which this runtime" + " does not have");
         }
         return file;
     }

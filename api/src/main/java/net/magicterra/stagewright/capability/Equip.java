@@ -54,8 +54,10 @@ public final class Equip {
 
     // ---- vanilla ----
 
-    /** Put an item in a vanilla equipment slot: {@code head}, {@code chest}, {@code legs}, {@code feet},
-     *  {@code mainhand} or {@code offhand}. */
+    /**
+     * Put an item in a vanilla equipment slot: {@code head}, {@code chest}, {@code legs}, {@code feet},
+     * {@code mainhand} or {@code offhand}.
+     */
     public Equip armor(Body body, String slot, String itemId) {
         EquipmentSlot equipmentSlot = Items.equipmentSlot(slot);
         pin(body);
@@ -99,8 +101,8 @@ public final class Equip {
         Runnable restore = body.onServer(player -> {
             Object handler = requireInventory(player);
             requireSlotType(handler, slotType);
-            ItemStack before = (ItemStack) call(stacksOf(handler, slotType), "getStackInSlot",
-                    new Class<?>[] {int.class}, index);
+            ItemStack before =
+                    (ItemStack) call(stacksOf(handler, slotType), "getStackInSlot", new Class<?>[] {int.class}, index);
             ItemStack copy = before == null ? ItemStack.EMPTY : before.copy();
             setCurio(handler, slotType, index, Ids.stack(itemId, 1));
             return () -> setCurio(handler, slotType, index, copy.copy());
@@ -160,15 +162,21 @@ public final class Equip {
         if (!pinned.add(body.name())) return;
         Runnable restore = body.onServer(player -> {
             Map<EquipmentSlot, ItemStack> before = new EnumMap<>(EquipmentSlot.class);
-            for (EquipmentSlot slot : EquipmentSlot.values()) before.put(slot, player.getItemBySlot(slot).copy());
+            for (EquipmentSlot slot : EquipmentSlot.values())
+                before.put(slot, player.getItemBySlot(slot).copy());
             return () -> before.forEach((slot, stack) -> player.setItemSlot(slot, stack.copy()));
         });
         game.afterTest(server -> restore.run());
     }
 
     private static void setCurio(Object handler, String slotType, int index, ItemStack stack) {
-        call(handler, "setEquippedCurio", new Class<?>[] {String.class, int.class, ItemStack.class},
-                slotType, index, stack);
+        call(
+                handler,
+                "setEquippedCurio",
+                new Class<?>[] {String.class, int.class, ItemStack.class},
+                slotType,
+                index,
+                stack);
     }
 
     private static Class<?> curiosApi() {

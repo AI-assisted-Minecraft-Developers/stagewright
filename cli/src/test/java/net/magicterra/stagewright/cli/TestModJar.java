@@ -20,18 +20,26 @@ final class TestModJar {
     static Path create(Path jar, String id, String version, String marker) throws IOException {
         Files.createDirectories(jar.getParent());
         try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(jar))) {
-            entry(out, "fabric.mod.json", "{\"schemaVersion\":1,\"id\":\"" + id
-                    + "\",\"version\":\"" + version + "\",\"depends\":{\"worlddriver\":\">=0.1.0-alpha.0 <0.2.0-alpha.0\"}}");
-            entry(out, "META-INF/neoforge.mods.toml", "[[mods]]\nmodId=\"" + id
-                    + "\"\nversion=\"" + version + "\"\n[[dependencies." + id
-                    + "]]\nmodId=\"worlddriver\"\ntype=\"required\"\nversionRange=\"[0.1.0-alpha.0,0.2.0-alpha.0)\"\n");
+            entry(
+                    out,
+                    "fabric.mod.json",
+                    "{\"schemaVersion\":1,\"id\":\"" + id + "\",\"version\":\"" + version
+                            + "\",\"depends\":{\"worlddriver\":\">=0.1.0-alpha.0 <0.2.0-alpha.0\"}}");
+            entry(
+                    out,
+                    "META-INF/neoforge.mods.toml",
+                    "[[mods]]\nmodId=\"" + id
+                            + "\"\nversion=\"" + version + "\"\n[[dependencies." + id
+                            + "]]\nmodId=\"worlddriver\"\ntype=\"required\"\nversionRange=\"[0.1.0-alpha.0,0.2.0-alpha.0)\"\n");
             entry(out, "marker.txt", marker);
         }
         return jar;
     }
 
-    /** A jar holding only {@code fabric.mod.json}, optionally as a stored entry whose local header
-     *  claims a data descriptor — readable through the central directory only. */
+    /**
+     * A jar holding only {@code fabric.mod.json}, optionally as a stored entry whose local header claims a data
+     * descriptor — readable through the central directory only.
+     */
     static Path withMetadata(Path jar, String fabricModJson, boolean storedWithDescriptor) throws IOException {
         Files.createDirectories(jar.getParent());
         byte[] text = fabricModJson.getBytes(StandardCharsets.UTF_8);

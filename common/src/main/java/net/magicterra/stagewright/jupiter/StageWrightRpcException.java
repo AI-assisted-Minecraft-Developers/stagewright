@@ -1,9 +1,9 @@
 package net.magicterra.stagewright.jupiter;
 
 /**
- * The driver answered with a failure: an error envelope, or a command {@code StageWright.exec} saw
- * fail. A call the socket could not carry throws {@link StageWrightTransportException} instead, and
- * one whose reply does not come in time {@link StageWrightTimeoutException}.
+ * The driver answered with a failure: an error envelope, or a command {@code StageWright.exec} saw fail. A call the
+ * socket could not carry throws {@link StageWrightTransportException} instead, and one whose reply does not come in
+ * time {@link StageWrightTimeoutException}.
  */
 public class StageWrightRpcException extends RuntimeException {
     private final String method;
@@ -20,8 +20,10 @@ public class StageWrightRpcException extends RuntimeException {
         return method;
     }
 
-    /** The envelope's error as one readable line ({@link StageWrightRpc#describeError}), or what
-     *  {@code StageWright.exec} found wrong. */
+    /**
+     * The envelope's error as one readable line ({@link StageWrightRpc#describeError}), or what
+     * {@code StageWright.exec} found wrong.
+     */
     public String error() {
         return error;
     }

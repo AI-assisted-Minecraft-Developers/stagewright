@@ -8,8 +8,8 @@ import java.lang.annotation.Target;
 
 /**
  * Run this test (or every test of this class) only in a game that has all of these; elsewhere it is reported as
- * disabled, naming what was missing. A test disabled this way in every scene it names fails the run: a requirement
- * no scene meets is a test that never runs, not one that passes.
+ * disabled, naming what was missing. A test disabled this way in every scene it names fails the run: a requirement no
+ * scene meets is a test that never runs, not one that passes.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

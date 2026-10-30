@@ -20,30 +20,28 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
  * Fetches files into an install directory, verifying each one and never leaving half of one behind.
  *
- * <p>Order of preference for every file: already in place and correct, then HMCL's cache, then the
- * network — each candidate URL the mirror offers, retried, the original last. A file is written beside
- * its target and renamed over it only once its sha1 and size check out, so a killed run or a second
- * launcher reading the same directory never sees a truncated jar.
+ * <p>Order of preference for every file: already in place and correct, then HMCL's cache, then the network — each
+ * candidate URL the mirror offers, retried, the original last. A file is written beside its target and renamed over it
+ * only once its sha1 and size check out, so a killed run or a second launcher reading the same directory never sees a
+ * truncated jar.
  */
 public final class Downloader implements AutoCloseable {
 
     /**
      * One file to put in place.
      *
-     * @param sha1       expected checksum, or null when the source publishes none
-     * @param size       expected size, or -1 when unknown
-     * @param trustSize  accept a file already in place on its size alone — for content-addressed
-     *                   assets, whose name is their hash, where rehashing 800 MB each run buys nothing
-     * @param cacheable  offer the file to HMCL's cache once verified
+     * @param sha1 expected checksum, or null when the source publishes none
+     * @param size expected size, or -1 when unknown
+     * @param trustSize accept a file already in place on its size alone — for content-addressed assets, whose name is
+     *     their hash, where rehashing 800 MB each run buys nothing
+     * @param cacheable offer the file to HMCL's cache once verified
      */
-    public record Artifact(URI url, Path target, String sha1, long size, boolean trustSize,
-                           boolean cacheable) {}
+    public record Artifact(URI url, Path target, String sha1, long size, boolean trustSize, boolean cacheable) {}
 
     private static final int ATTEMPTS = 3;
     private static final int PARALLELISM = 16;
@@ -85,14 +83,16 @@ public final class Downloader implements AutoCloseable {
                     return true;
                 } catch (FileNotFoundException e) {
                     last = e;
-                    break;              // absent at this source; retrying it will not change that
+                    break; // absent at this source; retrying it will not change that
                 } catch (IOException e) {
                     last = e;
                 }
             }
         }
-        throw new IOException("could not download " + a.url() + " to " + a.target() + " — "
-                + (last == null ? "no source" : last.getMessage()), last);
+        throw new IOException(
+                "could not download " + a.url() + " to " + a.target() + " — "
+                        + (last == null ? "no source" : last.getMessage()),
+                last);
     }
 
     /** Put every file in place, in parallel; returns how many came from the network. */
@@ -116,8 +116,8 @@ public final class Downloader implements AutoCloseable {
             }
         }
         if (first != null) {
-            throw new IOException(failed + " of " + all.size() + " downloads failed; the first: "
-                    + first.getMessage(), first);
+            throw new IOException(
+                    failed + " of " + all.size() + " downloads failed; the first: " + first.getMessage(), first);
         }
         return fetched;
     }
@@ -128,8 +128,8 @@ public final class Downloader implements AutoCloseable {
         for (URI uri : candidates.apply(url)) {
             for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
                 try {
-                    HttpResponse<String> response = http.send(request(uri),
-                            HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                    HttpResponse<String> response =
+                            http.send(request(uri), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
                     check(uri, response.statusCode());
                     return response.body();
                 } catch (FileNotFoundException e) {
@@ -144,8 +144,8 @@ public final class Downloader implements AutoCloseable {
             }
         }
         if (last instanceof FileNotFoundException notFound) throw notFound;
-        throw new IOException("could not fetch " + url + " — "
-                + (last == null ? "no source" : last.getMessage()), last);
+        throw new IOException(
+                "could not fetch " + url + " — " + (last == null ? "no source" : last.getMessage()), last);
     }
 
     private boolean inPlace(Artifact a) throws IOException {
@@ -160,8 +160,8 @@ public final class Downloader implements AutoCloseable {
             HttpResponse<Path> response = http.send(request(uri), HttpResponse.BodyHandlers.ofFile(temp));
             check(uri, response.statusCode());
             if (!Sha1.matches(temp, a.sha1(), a.size())) {
-                throw new IOException(uri + " served a file that does not match its checksum"
-                        + " (expected sha1 " + a.sha1() + ", size " + a.size() + ")");
+                throw new IOException(uri + " served a file that does not match its checksum" + " (expected sha1 "
+                        + a.sha1() + ", size " + a.size() + ")");
             }
             HmclCache.moveOver(temp, a.target());
         } catch (InterruptedException e) {
@@ -189,9 +189,9 @@ public final class Downloader implements AutoCloseable {
     }
 
     /**
-     * The proxy the environment names. Java does not read {@code HTTPS_PROXY} by itself, so on a box
-     * where every other tool goes through one, a plain {@code HttpClient} alone goes direct and times
-     * out. An explicit {@code -Dhttps.proxyHost} still wins.
+     * The proxy the environment names. Java does not read {@code HTTPS_PROXY} by itself, so on a box where every other
+     * tool goes through one, a plain {@code HttpClient} alone goes direct and times out. An explicit
+     * {@code -Dhttps.proxyHost} still wins.
      */
     static ProxySelector proxy(Map<String, String> env) {
         InetSocketAddress address = proxyAddress(env);
@@ -207,8 +207,11 @@ public final class Downloader implements AutoCloseable {
         if (address == null) return List.of();
         String host = address.getHostString();
         String port = String.valueOf(address.getPort());
-        return List.of("-Dhttps.proxyHost=" + host, "-Dhttps.proxyPort=" + port,
-                "-Dhttp.proxyHost=" + host, "-Dhttp.proxyPort=" + port);
+        return List.of(
+                "-Dhttps.proxyHost=" + host,
+                "-Dhttps.proxyPort=" + port,
+                "-Dhttp.proxyHost=" + host,
+                "-Dhttp.proxyPort=" + port);
     }
 
     static InetSocketAddress proxyAddress(Map<String, String> env) {

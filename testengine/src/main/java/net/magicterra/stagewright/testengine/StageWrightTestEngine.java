@@ -13,7 +13,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
-
 import org.junit.platform.engine.EngineDiscoveryRequest;
 import org.junit.platform.engine.ExecutionRequest;
 import org.junit.platform.engine.TestDescriptor;
@@ -29,8 +28,8 @@ import org.junit.platform.engine.support.descriptor.EngineDescriptor;
 
 /**
  * The outer engine, id {@value #ID}. Finds every class that declares a {@code @Scene} without loading it, and every
- * script test without the game ({@link ScriptScan}), groups the tests by scene, and runs each scene in a game of its own, reporting the game's results as this engine's. See
- * {@code docs/design/test-engine.md}.
+ * script test without the game ({@link ScriptScan}), groups the tests by scene, and runs each scene in a game of its
+ * own, reporting the game's results as this engine's. See {@code docs/design/test-engine.md}.
  */
 public final class StageWrightTestEngine implements TestEngine {
 
@@ -89,10 +88,12 @@ public final class StageWrightTestEngine implements TestEngine {
             }
         }
         for (ClasspathRootSelector s : request.getSelectorsByType(ClasspathRootSelector.class)) {
-            for (String script : ScriptScan.scriptsUnder(Path.of(s.getClasspathRoot()))) wantedScripts.put(script, t -> true);
+            for (String script : ScriptScan.scriptsUnder(Path.of(s.getClasspathRoot())))
+                wantedScripts.put(script, t -> true);
         }
         for (ClasspathResourceSelector s : request.getSelectorsByType(ClasspathResourceSelector.class)) {
-            if (ScriptScan.isScript(s.getClasspathResourceName())) wantedScripts.put(s.getClasspathResourceName(), t -> true);
+            if (ScriptScan.isScript(s.getClasspathResourceName()))
+                wantedScripts.put(s.getClasspathResourceName(), t -> true);
         }
         for (UniqueIdSelector s : request.getSelectorsByType(UniqueIdSelector.class)) {
             selectById(s.getUniqueId(), uniqueId, wanted, scenesOf, wantedScripts);
@@ -114,7 +115,8 @@ public final class StageWrightTestEngine implements TestEngine {
                 Nodes.TestClass testClass = new Nodes.TestClass(scene, scanned.get());
                 for (ClassScan.Method m : scanned.get().methods()) {
                     if (entry.getValue().test(m)) {
-                        testClass.addChild(new Nodes.TestMethod(testClass.getUniqueId(), scanned.get().className(), m));
+                        testClass.addChild(new Nodes.TestMethod(
+                                testClass.getUniqueId(), scanned.get().className(), m));
                     }
                 }
                 if (!testClass.getChildren().isEmpty()) scene.addChild(testClass);
@@ -134,7 +136,9 @@ public final class StageWrightTestEngine implements TestEngine {
                     Nodes.Scene scene = scenes.computeIfAbsent(sceneName, n -> new Nodes.Scene(uniqueId, n));
                     Nodes.ScriptFile file = scene.getChildren().stream()
                             .filter(c -> c instanceof Nodes.ScriptFile f && f.resource.equals(entry.getKey()))
-                            .map(Nodes.ScriptFile.class::cast).findFirst().orElse(null);
+                            .map(Nodes.ScriptFile.class::cast)
+                            .findFirst()
+                            .orElse(null);
                     if (file == null) {
                         file = new Nodes.ScriptFile(scene, entry.getKey());
                         scene.addChild(file);
@@ -158,20 +162,30 @@ public final class StageWrightTestEngine implements TestEngine {
                 new SceneRun(scene, request.getEngineExecutionListener(), coverage).run(loader);
             } else if (child instanceof Nodes.Unreadable unreadable) {
                 request.getEngineExecutionListener().executionStarted(unreadable);
-                request.getEngineExecutionListener().executionFinished(unreadable,
-                        TestExecutionResult.failed(new AssertionError(unreadable.error)));
+                request.getEngineExecutionListener()
+                        .executionFinished(
+                                unreadable, TestExecutionResult.failed(new AssertionError(unreadable.error)));
             }
         }
         List<String> neverRan = coverage.neverRan();
-        request.getEngineExecutionListener().executionFinished(engine, neverRan.isEmpty()
-                ? TestExecutionResult.successful()
-                : TestExecutionResult.failed(new AssertionError(neverRan.size() + " test(s) ran in no scene, every"
-                        + " scene they name lacking what their @Requires asks for:\n  " + String.join("\n  ", neverRan))));
+        request.getEngineExecutionListener()
+                .executionFinished(
+                        engine,
+                        neverRan.isEmpty()
+                                ? TestExecutionResult.successful()
+                                : TestExecutionResult.failed(
+                                        new AssertionError(neverRan.size() + " test(s) ran in no scene, every"
+                                                + " scene they name lacking what their @Requires asks for:\n  "
+                                                + String.join("\n  ", neverRan))));
     }
 
     /** A re-run of one node: its class (and method) or script (and test) are selected, in the scene its id names. */
-    private static void selectById(UniqueId id, UniqueId engineId, Map<String, Predicate<ClassScan.Method>> wanted,
-                                   Map<String, Set<String>> scenesOf, Map<String, Predicate<String>> wantedScripts) {
+    private static void selectById(
+            UniqueId id,
+            UniqueId engineId,
+            Map<String, Predicate<ClassScan.Method>> wanted,
+            Map<String, Set<String>> scenesOf,
+            Map<String, Predicate<String>> wantedScripts) {
         if (!id.hasPrefix(engineId)) return;
         String scene = null;
         String className = null;
@@ -185,17 +199,19 @@ public final class StageWrightTestEngine implements TestEngine {
                 case "method" -> methodKey = segment.getValue();
                 case "script" -> script = segment.getValue();
                 case "test" -> testName = segment.getValue();
-                default -> { }
+                default -> {}
             }
         }
         if (script != null) {
-            if (scene != null) scenesOf.computeIfAbsent(script, c -> new LinkedHashSet<>()).add(scene);
+            if (scene != null)
+                scenesOf.computeIfAbsent(script, c -> new LinkedHashSet<>()).add(scene);
             String name = testName;
             wantedScripts.merge(script, name == null ? t -> true : t -> t.equals(name), Predicate::or);
             return;
         }
         if (className == null) return;
-        if (scene != null) scenesOf.computeIfAbsent(className, c -> new LinkedHashSet<>()).add(scene);
+        if (scene != null)
+            scenesOf.computeIfAbsent(className, c -> new LinkedHashSet<>()).add(scene);
         String key = methodKey;
         wanted.merge(className, key == null ? m -> true : m -> m.key().equals(key), Predicate::or);
     }
@@ -203,10 +219,14 @@ public final class StageWrightTestEngine implements TestEngine {
     private static List<String> classesUnder(Path root) {
         if (!Files.isDirectory(root)) return List.of();
         try (Stream<Path> walk = Files.walk(root)) {
-            return walk.filter(p -> p.toString().endsWith(".class") && !p.getFileName().toString().contains("$"))
-                    .map(p -> root.relativize(p).toString().replace(root.getFileSystem().getSeparator(), ".")
+            return walk.filter(p -> p.toString().endsWith(".class")
+                            && !p.getFileName().toString().contains("$"))
+                    .map(p -> root.relativize(p)
+                            .toString()
+                            .replace(root.getFileSystem().getSeparator(), ".")
                             .replaceAll("\\.class$", ""))
-                    .sorted().toList();
+                    .sorted()
+                    .toList();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

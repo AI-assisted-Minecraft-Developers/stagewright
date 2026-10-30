@@ -1,5 +1,9 @@
 package net.magicterra.stagewright.capability;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -14,10 +18,6 @@ import java.util.Map;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.stream.Stream;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import net.magicterra.stagewright.test.Game;
 import org.opentest4j.TestAbortedException;
 
@@ -37,8 +37,10 @@ public final class Capabilities {
     /** The descriptors StageWright ships — the auto-detected ones, needing no configuration. */
     private static final String BUILT_IN_RESOURCE = "/data/stagewright/capabilities.json";
 
-    /** What discovery found: providers that loaded, by name in discovery order, and why each other one failed. A
-     *  list rather than a map by name: that name comes from the instance that never got built. */
+    /**
+     * What discovery found: providers that loaded, by name in discovery order, and why each other one failed. A list
+     * rather than a map by name: that name comes from the instance that never got built.
+     */
     private record Found(Map<String, CapabilityProvider> providers, List<String> loadFailures) {}
 
     private static volatile Found found;
@@ -86,8 +88,8 @@ public final class Capabilities {
     /**
      * The provider of an available capability, for a {@link Game} implementation to build and cache its facet.
      *
-     * @throws TestAbortedException naming what is missing when it is not available: a mod that is not installed is
-     *         not the pack's defect, but it must not read as a pass either
+     * @throws TestAbortedException naming what is missing when it is not available: a mod that is not installed is not
+     *     the pack's defect, but it must not read as a pass either
      */
     public CapabilityProvider require(String name) {
         CapabilityProvider provider = found().providers().get(name);
@@ -96,22 +98,25 @@ public final class Capabilities {
     }
 
     /**
-     * Why a capability could not be handed over. Three different situations: the provider is here and says no (the
-     * mod is absent — normal); the provider is not here but others are (the name is wrong, or that adapter did not
-     * ship); nothing is here at all (the framework's own service file did not make it into the jar).
+     * Why a capability could not be handed over. Three different situations: the provider is here and says no (the mod
+     * is absent — normal); the provider is not here but others are (the name is wrong, or that adapter did not ship);
+     * nothing is here at all (the framework's own service file did not make it into the jar).
      */
     private String reasonFor(String name, CapabilityProvider provider) {
         if (provider != null) return provider.absentReason();
         Found f = found();
         String head = "this test needs the '" + name + "' capability, which nothing in this run offers";
-        String failures = f.loadFailures().isEmpty() ? "" : ". " + f.loadFailures().size()
-                + " capability adapter(s) failed to load, and any of them may be the one that offers it: "
-                + String.join("; ", f.loadFailures());
+        String failures = f.loadFailures().isEmpty()
+                ? ""
+                : ". " + f.loadFailures().size()
+                        + " capability adapter(s) failed to load, and any of them may be the one that offers it: "
+                        + String.join("; ", f.loadFailures());
         if (f.providers().isEmpty()) {
-            return head + (f.loadFailures().isEmpty()
-                    ? " — and NO capability provider loaded at all, not even the ones StageWright ships, so this is"
-                            + " the framework's service file missing from the jar rather than a mod missing from the pack"
-                    : " — and no capability provider loaded at all" + failures);
+            return head
+                    + (f.loadFailures().isEmpty()
+                            ? " — and NO capability provider loaded at all, not even the ones StageWright ships, so this is"
+                                    + " the framework's service file missing from the jar rather than a mod missing from the pack"
+                            : " — and no capability provider loaded at all" + failures);
         }
         List<String> present = available();
         return head + " — registered here: " + String.join(", ", registered())
@@ -134,8 +139,8 @@ public final class Capabilities {
         Map<String, CapabilityProvider> providers = new LinkedHashMap<>();
         List<String> failed = new ArrayList<>();
 
-        for (ServiceLoader.Provider<CapabilityProvider> handle
-                : ServiceLoader.load(CapabilityProvider.class).stream().toList()) {
+        for (ServiceLoader.Provider<CapabilityProvider> handle :
+                ServiceLoader.load(CapabilityProvider.class).stream().toList()) {
             String className = handle.type().getName();
             CapabilityProvider provider;
             try {
@@ -170,8 +175,10 @@ public final class Capabilities {
         return new Found(java.util.Collections.unmodifiableMap(providers), List.copyOf(failed));
     }
 
-    /** From one resource rather than a directory: enumerating a resource folder works from an exploded build and not
-     *  from a jar. */
+    /**
+     * From one resource rather than a directory: enumerating a resource folder works from an exploded build and not
+     * from a jar.
+     */
     private static List<CapabilityDescriptor> builtInDescriptors() {
         try (InputStream in = Capabilities.class.getResourceAsStream(BUILT_IN_RESOURCE)) {
             if (in == null) return List.of();

@@ -6,13 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-
+import net.magicterra.stagewright.engine.json.JsonObject;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import net.magicterra.stagewright.engine.json.JsonObject;
 
 /** {@code stagewright { tests { ... } }}: the launch specs the test engine reads, and the Test task. */
 class TestSuiteLaunchSpecsTest {
@@ -62,13 +60,15 @@ class TestSuiteLaunchSpecsTest {
     }
 
     private GradleRunner runner(String... args) {
-        return GradleRunner.create().withProjectDir(dir.toFile()).withPluginClasspath().withArguments(args);
+        return GradleRunner.create()
+                .withProjectDir(dir.toFile())
+                .withPluginClasspath()
+                .withArguments(args);
     }
 
     @Test
     void launchSpecsAreWrittenForEachMappedTopology() throws Exception {
-        consumer("classes.from(files('classes'))\n"
-                + "topologies.put('dedicatedServerWithClient', 'withClient')");
+        consumer("classes.from(files('classes'))\n" + "topologies.put('dedicatedServerWithClient', 'withClient')");
 
         runner("stagewrightLaunchSpecsFabric").build();
 
@@ -88,7 +88,8 @@ class TestSuiteLaunchSpecsTest {
         assertEquals(dir.resolve("run-server").toString(), primary.getString("workingDirectory", null));
         String jvmArgs = primary.get("jvmArgs").toString();
         assertTrue(jvmArgs.contains("-Dserver.flag=1"), jvmArgs);
-        Path argFile = dir.resolve("build/stagewright/launches/fabric/classpath/dedicatedServerWithClient.primary.args");
+        Path argFile =
+                dir.resolve("build/stagewright/launches/fabric/classpath/dedicatedServerWithClient.primary.args");
         assertTrue(jvmArgs.contains("@" + argFile), "the classpath arrives as an argument file in jvmArgs: " + jvmArgs);
         assertTrue(Files.readString(argFile).contains("server.jar"));
 
@@ -100,37 +101,42 @@ class TestSuiteLaunchSpecsTest {
 
     @Test
     void theJvmArgsPropertyReachesThePrimaryAndTheCompanionAfterTheirOwnArguments() throws Exception {
-        consumer("classes.from(files('classes'))\n"
-                + "topologies.put('dedicatedServerWithClient', 'withClient')");
+        consumer("classes.from(files('classes'))\n" + "topologies.put('dedicatedServerWithClient', 'withClient')");
 
-        runner("stagewrightLaunchSpecsFabric", "--configuration-cache",
-                "-Pstagewright.jvmArgs= -Dextra.one=1 \t -Xmx3g  -Dserver.flag=2 ")
+        runner(
+                        "stagewrightLaunchSpecsFabric",
+                        "--configuration-cache",
+                        "-Pstagewright.jvmArgs= -Dextra.one=1 \t -Xmx3g  -Dserver.flag=2 ")
                 .build();
 
-        JsonObject json = JsonObject.readFrom(Files.readString(
-                dir.resolve("build/stagewright/launches/fabric/dedicatedServerWithClient.json")));
+        JsonObject json = JsonObject.readFrom(
+                Files.readString(dir.resolve("build/stagewright/launches/fabric/dedicatedServerWithClient.json")));
         for (String game : new String[] {"primary", "companion"}) {
             java.util.List<String> jvmArgs = json.get(game).asObject().get("jvmArgs").asArray().values().stream()
-                    .map(v -> v.asString()).toList();
-            assertEquals(java.util.List.of("-Dextra.one=1", "-Xmx3g", "-Dserver.flag=2"),
-                    jvmArgs.subList(jvmArgs.size() - 3, jvmArgs.size()), game + ": " + jvmArgs);
+                    .map(v -> v.asString())
+                    .toList();
+            assertEquals(
+                    java.util.List.of("-Dextra.one=1", "-Xmx3g", "-Dserver.flag=2"),
+                    jvmArgs.subList(jvmArgs.size() - 3, jvmArgs.size()),
+                    game + ": " + jvmArgs);
         }
         java.util.List<String> primary = json.get("primary").asObject().get("jvmArgs").asArray().values().stream()
-                .map(v -> v.asString()).toList();
-        assertTrue(primary.indexOf("-Dserver.flag=1") < primary.indexOf("-Dserver.flag=2"),
+                .map(v -> v.asString())
+                .toList();
+        assertTrue(
+                primary.indexOf("-Dserver.flag=1") < primary.indexOf("-Dserver.flag=2"),
                 "the run's own argument comes first, so the property's wins: " + primary);
     }
 
     @Test
     void withoutTheJvmArgsPropertyTheLaunchCarriesOnlyTheRunsArguments() throws Exception {
-        consumer("classes.from(files('classes'))\n"
-                + "topologies.put('dedicatedServerWithClient', 'withClient')");
+        consumer("classes.from(files('classes'))\n" + "topologies.put('dedicatedServerWithClient', 'withClient')");
 
         // Under the configuration cache, which has to read the empty list back.
         runner("stagewrightLaunchSpecsFabric", "--configuration-cache").build();
 
-        JsonObject json = JsonObject.readFrom(Files.readString(
-                dir.resolve("build/stagewright/launches/fabric/dedicatedServerWithClient.json")));
+        JsonObject json = JsonObject.readFrom(
+                Files.readString(dir.resolve("build/stagewright/launches/fabric/dedicatedServerWithClient.json")));
         String companion = json.get("companion").asObject().get("jvmArgs").toString();
         assertFalse(companion.contains("-Dserver.flag"), companion);
         assertFalse(companion.contains("-Dextra"), companion);
@@ -138,11 +144,11 @@ class TestSuiteLaunchSpecsTest {
 
     @Test
     void theTestTaskIsRegisteredWithTheLaunchesDirectory() throws Exception {
-        consumer("classes.from(files('classes'))\n"
-                + "topologies.put('dedicatedServerWithClient', 'withClient')");
+        consumer("classes.from(files('classes'))\n" + "topologies.put('dedicatedServerWithClient', 'withClient')");
 
         BuildResult result = runner("inspect", "-q").build();
-        assertTrue(result.getOutput().contains("LAUNCHES=" + dir.resolve("build/stagewright/launches/fabric")),
+        assertTrue(
+                result.getOutput().contains("LAUNCHES=" + dir.resolve("build/stagewright/launches/fabric")),
                 result.getOutput());
         BuildResult tasks = runner("tasks", "--all").build();
         assertTrue(tasks.getOutput().contains("stagewrightTestFabric"), tasks.getOutput());
@@ -151,8 +157,8 @@ class TestSuiteLaunchSpecsTest {
 
     @Test
     void aTestsPatternNamingAScriptPathIsWidenedSoGradleStartsTheEngine() throws Exception {
-        consumer("classes.from(sourceSets.main.output)\n"
-                + "topologies.put('dedicatedServerWithClient', 'withClient')");
+        consumer(
+                "classes.from(sourceSets.main.output)\n" + "topologies.put('dedicatedServerWithClient', 'withClient')");
         Files.createDirectories(dir.resolve("src/main/java"));
         Files.writeString(dir.resolve("src/main/java/FirstTest.java"), "public class FirstTest {}\n");
         // The engine is not resolvable here, and is not needed: the patterns are read right after the plugin's action,
@@ -169,12 +175,19 @@ class TestSuiteLaunchSpecsTest {
                 }
                 """);
 
-        BuildResult result = runner("stagewrightTestFabric", "--tests", "stagewright/tests/a.js.first",
-                "--tests", "*FirstTest").build();
+        BuildResult result = runner(
+                        "stagewrightTestFabric", "--tests", "stagewright/tests/a.js.first", "--tests", "*FirstTest")
+                .build();
         String out = result.getOutput();
-        String commandLine = out.lines().filter(l -> l.startsWith("COMMAND_LINE=")).findFirst().orElse("");
-        assertTrue(commandLine.contains("*stagewright/tests/a.js.first") && commandLine.contains("*FirstTest")
-                && !commandLine.contains("**"), out);
+        String commandLine = out.lines()
+                .filter(l -> l.startsWith("COMMAND_LINE="))
+                .findFirst()
+                .orElse("");
+        assertTrue(
+                commandLine.contains("*stagewright/tests/a.js.first")
+                        && commandLine.contains("*FirstTest")
+                        && !commandLine.contains("**"),
+                out);
         assertTrue(out.contains("BUILD_SCRIPT=[*stagewright/tests/b.js]"), out);
     }
 

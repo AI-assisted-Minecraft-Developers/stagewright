@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 import java.util.Map;
-
 import net.magicterra.stagewright.test.Body;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import net.minecraft.core.BlockPos;

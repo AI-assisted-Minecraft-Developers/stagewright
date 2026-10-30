@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A YAML step's {@code knownIssues}: entries taken out of every list in the step's result before its {@code expect}
- * is checked, each with the reason it is there. An issue is a map: its keys other than {@code reason} must all equal
- * an item's fields for the item to go, or, for an item that is a plain value, its one key's value must equal the item.
- * An issue that took nothing out is no longer seen, and fails the step, so the list shrinks as things get fixed.
+ * A YAML step's {@code knownIssues}: entries taken out of every list in the step's result before its {@code expect} is
+ * checked, each with the reason it is there. An issue is a map: its keys other than {@code reason} must all equal an
+ * item's fields for the item to go, or, for an item that is a plain value, its one key's value must equal the item. An
+ * issue that took nothing out is no longer seen, and fails the step, so the list shrinks as things get fixed.
  */
 final class KnownIssues {
 
@@ -22,8 +22,8 @@ final class KnownIssues {
         }
         for (Object each : list) {
             if (!(each instanceof Map<?, ?> m) || !(m.get("reason") instanceof String) || m.size() < 2) {
-                throw new IllegalArgumentException("a known issue is {field: value, reason: why}, not "
-                        + Expectations.show(each));
+                throw new IllegalArgumentException(
+                        "a known issue is {field: value, reason: why}, not " + Expectations.show(each));
             }
             Map<String, Object> issue = new LinkedHashMap<>();
             m.forEach((k, v) -> issue.put(String.valueOf(k), v));
@@ -80,6 +80,7 @@ final class KnownIssues {
             }
             return true;
         }
-        return fields.size() == 1 && Expectations.same(fields.values().iterator().next(), item);
+        return fields.size() == 1
+                && Expectations.same(fields.values().iterator().next(), item);
     }
 }

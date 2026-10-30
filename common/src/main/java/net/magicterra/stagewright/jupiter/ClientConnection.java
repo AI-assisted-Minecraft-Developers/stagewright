@@ -1,5 +1,7 @@
 package net.magicterra.stagewright.jupiter;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -8,9 +10,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.worlddriver.api.registry.ApiBatch;
@@ -26,8 +25,8 @@ import org.junit.jupiter.api.extension.ParameterResolutionException;
 /**
  * The {@link Client} of this game. On an integrated server it is this JVM's own WorldDriver. Where a topology joins a
  * client to a dedicated server, it is a registry of the server's methods each forwarded over that client's RPC
- * connection, found through the port file the client writes in its working directory, which the test engine names
- * as {@value #COMPANION_DIR}. One connection per run, opened when a test first asks.
+ * connection, found through the port file the client writes in its working directory, which the test engine names as
+ * {@value #COMPANION_DIR}. One connection per run, opened when a test first asks.
  */
 final class ClientConnection {
 
@@ -79,8 +78,8 @@ final class ClientConnection {
 
     /**
      * Every method this server's registry has, each batch under its own owner and id, forwarded to the client: the
-     * client runs the same mods, so it serves the same methods, StageWright's {@code mc.test.*} and other mods' included.
-     * One the client lacks fails when called, with the client's own answer.
+     * client runs the same mods, so it serves the same methods, StageWright's {@code mc.test.*} and other mods'
+     * included. One the client lacks fails when called, with the client's own answer.
      */
     private static ApiRegistry forwarding(StageWrightRpc rpc, ApiRegistry local) {
         ApiRegistry registry = new ApiRegistry();
@@ -94,17 +93,24 @@ final class ClientConnection {
 
     /** {@code spec} answered by the client: the params sent as they would be by any RPC caller, the reply read back. */
     private static <P, R> ApiMethod<P, R> forward(MethodSpec<P, R> spec, StageWrightRpc rpc) {
-        return new ApiMethod<>(spec, (params, context) -> CompletableFuture.supplyAsync(() -> {
-            JsonElement sent = spec.input().encode(params);
-            JsonObject envelope = rpc.envelope(spec.name(), sent instanceof JsonObject o ? o : new JsonObject(),
-                    CALL_MS);
-            JsonElement error = envelope.get("error");
-            if (error instanceof JsonObject e) {
-                ApiError rebuilt = ApiErrors.fromTree(e.get("data"));
-                throw rebuilt != null ? new ApiException(rebuilt)
-                        : ApiException.of(ApiError.Code.INTERNAL_ERROR, "the client refused " + spec.name() + ": " + e);
-            }
-            return spec.output().decode(envelope.get("result"));
-        }, CALLS));
+        return new ApiMethod<>(
+                spec,
+                (params, context) -> CompletableFuture.supplyAsync(
+                        () -> {
+                            JsonElement sent = spec.input().encode(params);
+                            JsonObject envelope = rpc.envelope(
+                                    spec.name(), sent instanceof JsonObject o ? o : new JsonObject(), CALL_MS);
+                            JsonElement error = envelope.get("error");
+                            if (error instanceof JsonObject e) {
+                                ApiError rebuilt = ApiErrors.fromTree(e.get("data"));
+                                throw rebuilt != null
+                                        ? new ApiException(rebuilt)
+                                        : ApiException.of(
+                                                ApiError.Code.INTERNAL_ERROR,
+                                                "the client refused " + spec.name() + ": " + e);
+                            }
+                            return spec.output().decode(envelope.get("result"));
+                        },
+                        CALLS));
     }
 }

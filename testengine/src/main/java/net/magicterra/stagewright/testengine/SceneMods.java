@@ -37,7 +37,9 @@ final class SceneMods {
 
     private SceneMods() {}
 
-    /** The process to start instead, what was left out, and the names that matched no mod of the game, for the report. */
+    /**
+     * The process to start instead, what was left out, and the names that matched no mod of the game, for the report.
+     */
     record Applied(LaunchSpec.Process process, List<String> excluded, List<String> unmatched) {}
 
     /** A jar that is a mod, and the ids it declares. */
@@ -45,8 +47,8 @@ final class SceneMods {
 
     /**
      * {@code process} without the mods {@code exclude} names, its scratch files under {@code scratch}. A name that
-     * matches no mod of the game is not an error — one scene may start a server and a client with different mods,
-     * and exclude from both what only one has — but it is answered in {@link Applied#unmatched}, for the report.
+     * matches no mod of the game is not an error — one scene may start a server and a client with different mods, and
+     * exclude from both what only one has — but it is answered in {@link Applied#unmatched}, for the report.
      */
     static Applied apply(LaunchSpec.Process process, List<String> exclude, Path scratch) throws IOException {
         Path gameDir = gameDirectory(process);
@@ -62,11 +64,14 @@ final class SceneMods {
         for (String name : exclude) {
             PathMatcher glob = FileSystems.getDefault().getPathMatcher("glob:" + name);
             List<Mod> matched = mods.stream()
-                    .filter(m -> m.ids().contains(name) || glob.matches(m.jar().getFileName())).toList();
+                    .filter(m -> m.ids().contains(name) || glob.matches(m.jar().getFileName()))
+                    .toList();
             if (matched.isEmpty()) unmatched.add(name);
             for (Mod m : matched) if (!excluded.contains(m)) excluded.add(m);
         }
-        List<String> report = excluded.stream().map(m -> m.jar().getFileName() + " " + m.ids()).toList();
+        List<String> report = excluded.stream()
+                .map(m -> m.jar().getFileName() + " " + m.ids())
+                .toList();
         if (excluded.isEmpty()) return new Applied(process, report, unmatched);
 
         if (isFabric(process, mods)) {
@@ -100,7 +105,8 @@ final class SceneMods {
     static Path gameDirectory(LaunchSpec.Process process) {
         List<String> args = process.args();
         for (int i = 0; i + 1 < args.size(); i++) {
-            if (args.get(i).equals("--gameDir")) return process.workingDirectory().resolve(args.get(i + 1)).normalize();
+            if (args.get(i).equals("--gameDir"))
+                return process.workingDirectory().resolve(args.get(i + 1)).normalize();
         }
         return process.workingDirectory();
     }
@@ -108,7 +114,9 @@ final class SceneMods {
     private static List<Path> jars(Path folder) throws IOException {
         if (!Files.isDirectory(folder)) return List.of();
         try (Stream<Path> list = Files.list(folder)) {
-            return list.filter(p -> p.getFileName().toString().endsWith(".jar") && Files.isRegularFile(p)).sorted().toList();
+            return list.filter(p -> p.getFileName().toString().endsWith(".jar") && Files.isRegularFile(p))
+                    .sorted()
+                    .toList();
         }
     }
 
@@ -199,7 +207,8 @@ final class SceneMods {
                 String list = eq > 0 ? token.substring(eq + 1) : token;
                 List<String> kept = new ArrayList<>();
                 for (String part : list.split(Pattern.quote(File.pathSeparator), -1)) {
-                    if (!gone.contains(part) && !gone.contains(cwd.resolve(part).normalize().toString())) kept.add(part);
+                    if (!gone.contains(part)
+                            && !gone.contains(cwd.resolve(part).normalize().toString())) kept.add(part);
                 }
                 replaced = head + String.join(File.pathSeparator, kept);
             }
@@ -210,8 +219,8 @@ final class SceneMods {
     }
 
     /**
-     * A game directory that is {@code real} but for {@code mods/}: every other entry links to the real one, so what
-     * the game reads and writes there is the real directory's, and {@code mods/} links only the jars kept.
+     * A game directory that is {@code real} but for {@code mods/}: every other entry links to the real one, so what the
+     * game reads and writes there is the real directory's, and {@code mods/} links only the jars kept.
      */
     private static Path gameDirectoryWithout(Path real, List<Mod> excluded, Path view) throws IOException {
         Files.createDirectories(view.resolve("mods"));
@@ -225,7 +234,8 @@ final class SceneMods {
         Set<Path> gone = new LinkedHashSet<>();
         excluded.forEach(m -> gone.add(m.jar()));
         for (Path jar : jars(real.resolve("mods"))) {
-            if (!gone.contains(jar)) Files.createSymbolicLink(view.resolve("mods").resolve(jar.getFileName()), jar.toAbsolutePath());
+            if (!gone.contains(jar))
+                Files.createSymbolicLink(view.resolve("mods").resolve(jar.getFileName()), jar.toAbsolutePath());
         }
         return view;
     }

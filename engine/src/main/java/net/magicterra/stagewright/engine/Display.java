@@ -30,20 +30,20 @@ import java.util.regex.Pattern;
 /**
  * Whether a game client can open a window — asked by every supervisor before it starts one.
  *
- * <p>Neither supervisor provides a display. That is the machine's, the user's or the CI image's to
- * supply, and a test runner that starts X servers ends up owning their leaks, their probing and their
- * platform quirks. What a supervisor can do is refuse early: without a display GLFW fails to
- * initialise, and NeoForge then opens a dialog asking whether to visit a help page — which nobody
- * will click, so the run sits asleep until a watchdog kills it minutes later.
+ * <p>Neither supervisor provides a display. That is the machine's, the user's or the CI image's to supply, and a test
+ * runner that starts X servers ends up owning their leaks, their probing and their platform quirks. What a supervisor
+ * can do is refuse early: without a display GLFW fails to initialise, and NeoForge then opens a dialog asking whether
+ * to visit a help page — which nobody will click, so the run sits asleep until a watchdog kills it minutes later.
  *
- * <p>A local X display is asked directly, with the connection handshake GLFW itself will make: an
- * authority file that is missing, stale, or holds no cookie for that display is refused by the server
- * in the reply, and the reply's own reason is what gets reported.
+ * <p>A local X display is asked directly, with the connection handshake GLFW itself will make: an authority file that
+ * is missing, stale, or holds no cookie for that display is refused by the server in the reply, and the reply's own
+ * reason is what gets reported.
  */
 public final class Display {
 
     /** A display on this machine: {@code :0}, {@code :1.0}, {@code unix:0}. {@code host:0} is remote. */
     private static final Pattern LOCAL = Pattern.compile("^(unix)?:(\\d+)(?:\\.\\d+)?$");
+
     private static final Path SOCKETS = Path.of("/tmp/.X11-unix");
     private static final int TCP_PORT = 6000;
     private static final BigInteger ULONG_MAX = BigInteger.TWO.pow(64).subtract(BigInteger.ONE);
@@ -55,19 +55,25 @@ public final class Display {
     private Display() {}
 
     /**
-     * What an X server said to a connection attempt: {@code reason} is the server's own when it
-     * refused, and what each attempt ran into when nothing answered.
+     * What an X server said to a connection attempt: {@code reason} is the server's own when it refused, and what each
+     * attempt ran into when nothing answered.
      */
     record Answer(Kind kind, String reason) {
-        enum Kind { ACCEPTED, REFUSED, NOT_LISTENING, NOT_ASKED }
+        enum Kind {
+            ACCEPTED,
+            REFUSED,
+            NOT_LISTENING,
+            NOT_ASKED
+        }
+
         static final Answer ACCEPTED = new Answer(Kind.ACCEPTED, null);
         static final Answer NOT_LISTENING = new Answer(Kind.NOT_LISTENING, null);
         static final Answer NOT_ASKED = new Answer(Kind.NOT_ASKED, null);
     }
 
     /**
-     * Connects to local display {@code n}, presenting {@code cookie} (null for none); {@code tcpToo}
-     * when the display names no protocol, so libxcb would try TCP after the socket.
+     * Connects to local display {@code n}, presenting {@code cookie} (null for none); {@code tcpToo} when the display
+     * names no protocol, so libxcb would try TCP after the socket.
      */
     interface XServer {
         Answer connect(int n, boolean tcpToo, byte[] cookie);
@@ -83,10 +89,10 @@ public final class Display {
     }
 
     /**
-     * {@code WAYLAND_DISPLAY} only stands in for a missing {@code DISPLAY}. When both are set the X
-     * one is still asked: measured in a KDE Wayland session, LWJGL's own GLFW opens Minecraft's window
-     * through Xwayland, and an X11-only GLFW passed as {@code org.lwjgl.glfw.libname} can do nothing
-     * else — so a dead {@code DISPLAY} beside a live Wayland one still fails in {@code glfwInit}.
+     * {@code WAYLAND_DISPLAY} only stands in for a missing {@code DISPLAY}. When both are set the X one is still asked:
+     * measured in a KDE Wayland session, LWJGL's own GLFW opens Minecraft's window through Xwayland, and an X11-only
+     * GLFW passed as {@code org.lwjgl.glfw.libname} can do nothing else — so a dead {@code DISPLAY} beside a live
+     * Wayland one still fails in {@code glfwInit}.
      */
     static String missing(String osName, Map<String, ?> env, String hostname, XServer server) {
         if (!osName.toLowerCase(Locale.ROOT).contains("linux")) return null;
@@ -106,24 +112,26 @@ public final class Display {
         // else none. The client's HOME, not the JVM's user.home, which need not match it.
         Object xauthority = env.get("XAUTHORITY");
         Object home = env.get("HOME");
-        Path authority = xauthority != null ? Path.of(xauthority.toString())
+        Path authority = xauthority != null
+                ? Path.of(xauthority.toString())
                 : home != null ? Path.of(home + "/.Xauthority") : null;
         byte[] cookie = authority == null ? null : cookie(authority, n, hostname);
         Answer answer = server.connect(n, local.group(1) == null, cookie);
         return switch (answer.kind()) {
             case ACCEPTED, NOT_ASKED -> null;
-            case NOT_LISTENING -> "DISPLAY=" + display + ", but no X server answers on it ("
-                    + (answer.reason() == null ? "nothing at " + SOCKETS.resolve("X" + n) : answer.reason())
-                    + "). Point DISPLAY at the X server that is running, or start one first.";
-            case REFUSED -> "the X server on DISPLAY=" + display + " refused a connection: \""
-                    + answer.reason() + "\" — " + authorityProblem(env, authority, cookie, n, hostname)
-                    + " Export XAUTHORITY from the desktop session (under Xwayland it is"
-                    + " /run/user/$UID/xauth_*, whose name changes with every login).";
+            case NOT_LISTENING ->
+                "DISPLAY=" + display + ", but no X server answers on it ("
+                        + (answer.reason() == null ? "nothing at " + SOCKETS.resolve("X" + n) : answer.reason())
+                        + "). Point DISPLAY at the X server that is running, or start one first.";
+            case REFUSED ->
+                "the X server on DISPLAY=" + display + " refused a connection: \""
+                        + answer.reason() + "\" — " + authorityProblem(env, authority, cookie, n, hostname)
+                        + " Export XAUTHORITY from the desktop session (under Xwayland it is"
+                        + " /run/user/$UID/xauth_*, whose name changes with every login).";
         };
     }
 
-    private static String authorityProblem(Map<String, ?> env, Path authority, byte[] cookie, int n,
-                                           String hostname) {
+    private static String authorityProblem(Map<String, ?> env, Path authority, byte[] cookie, int n, String hostname) {
         if (authority == null) {
             return "neither XAUTHORITY nor HOME is set, so the client has no authority file to present.";
         }
@@ -144,11 +152,10 @@ public final class Display {
     }
 
     /**
-     * The {@code MIT-MAGIC-COOKIE-1} an authority file holds for local display {@code n}, or null —
-     * the entry libxcb would present. A wildcard entry counts, and a local one only if it names
-     * {@code hostname}: a home shared between machines, or kept across a rename, holds entries for
-     * {@code :0} that belong to another host. An entry without a display number applies to every
-     * display.
+     * The {@code MIT-MAGIC-COOKIE-1} an authority file holds for local display {@code n}, or null — the entry libxcb
+     * would present. A wildcard entry counts, and a local one only if it names {@code hostname}: a home shared between
+     * machines, or kept across a rename, holds entries for {@code :0} that belong to another host. An entry without a
+     * display number applies to every display.
      *
      * @param hostname this machine's name, or null when unknown and every local entry counts
      */
@@ -182,7 +189,8 @@ public final class Display {
     /** The name libxcb looks up a local entry by — {@code gethostname()} — or null if unreadable. */
     private static String hostname() {
         try {
-            return Files.readString(Path.of("/proc/sys/kernel/hostname"), StandardCharsets.US_ASCII).strip();
+            return Files.readString(Path.of("/proc/sys/kernel/hostname"), StandardCharsets.US_ASCII)
+                    .strip();
         } catch (IOException | RuntimeException e) {
             return null;
         }
@@ -195,9 +203,9 @@ public final class Display {
     }
 
     /**
-     * Asks display {@code n} where libxcb would reach it: its socket in {@code sockets}, then, for a
-     * display that names no protocol, TCP on localhost. A server only libxcb can reach is still one
-     * GLFW can open a window on, and refusing it would stop a run that works.
+     * Asks display {@code n} where libxcb would reach it: its socket in {@code sockets}, then, for a display that names
+     * no protocol, TCP on localhost. A server only libxcb can reach is still one GLFW can open a window on, and
+     * refusing it would stop a run that works.
      */
     static Answer ask(Path sockets, int n, boolean tcpToo, byte[] cookie) {
         Path socket = sockets.resolve("X" + n);
@@ -240,26 +248,35 @@ public final class Display {
     }
 
     /**
-     * The X11 connection setup, as far as the server's verdict on it: the first eight bytes of its
-     * reply say whether the connection was accepted, and a refusal carries the server's reason.
+     * The X11 connection setup, as far as the server's verdict on it: the first eight bytes of its reply say whether
+     * the connection was accepted, and a refusal carries the server's reason.
      *
-     * <p>The connect blocks as libxcb's does — a server whose backlog is full is busy, not absent —
-     * but nothing here waits past {@code millis}, and running out of time lets the client through
-     * unasked.
+     * <p>The connect blocks as libxcb's does — a server whose backlog is full is busy, not absent — but nothing here
+     * waits past {@code millis}, and running out of time lets the client through unasked.
      */
     static Answer handshake(SocketAddress address, byte[] cookie, long millis) {
         byte[] name = cookie == null ? new byte[0] : COOKIE.getBytes(StandardCharsets.US_ASCII);
         byte[] data = cookie == null ? new byte[0] : cookie;
         ByteBuffer setup = ByteBuffer.allocate(12 + padded(name.length) + padded(data.length))
                 .order(ByteOrder.LITTLE_ENDIAN);
-        setup.put((byte) 'l').put((byte) 0).putShort((short) 11).putShort((short) 0)
-                .putShort((short) name.length).putShort((short) data.length).putShort((short) 0);
-        setup.put(name).position(12 + padded(name.length)).put(data).position(setup.capacity()).flip();
+        setup.put((byte) 'l')
+                .put((byte) 0)
+                .putShort((short) 11)
+                .putShort((short) 0)
+                .putShort((short) name.length)
+                .putShort((short) data.length)
+                .putShort((short) 0);
+        setup.put(name)
+                .position(12 + padded(name.length))
+                .put(data)
+                .position(setup.capacity())
+                .flip();
 
         long deadline = System.currentTimeMillis() + millis;
         try (SocketChannel channel = address instanceof UnixDomainSocketAddress
-                     ? SocketChannel.open(StandardProtocolFamily.UNIX) : SocketChannel.open();
-             Selector selector = Selector.open()) {
+                        ? SocketChannel.open(StandardProtocolFamily.UNIX)
+                        : SocketChannel.open();
+                Selector selector = Selector.open()) {
             if (!connect(channel, address, deadline)) return Answer.NOT_ASKED;
             channel.configureBlocking(false);
             SelectionKey key = channel.register(selector, SelectionKey.OP_WRITE);
@@ -277,37 +294,39 @@ public final class Display {
                     ? Byte.toUnsignedInt(head.get(1))
                     : Short.toUnsignedInt(head.order(ByteOrder.LITTLE_ENDIAN).getShort(6)) * 4;
             ByteBuffer reason = read(channel, selector, reasonLength, deadline);
-            String text = reason == null ? "" : new String(reason.array(), 0, reasonLength,
-                    StandardCharsets.ISO_8859_1);
+            String text =
+                    reason == null ? "" : new String(reason.array(), 0, reasonLength, StandardCharsets.ISO_8859_1);
             return new Answer(Answer.Kind.REFUSED, text.replace("\0", "").strip());
         } catch (IOException e) {
             // Said as it is: "permission denied" is not the same as no server.
-            return new Answer(Answer.Kind.NOT_LISTENING,
+            return new Answer(
+                    Answer.Kind.NOT_LISTENING,
                     e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
         }
     }
 
     /** A blocking connect that gives up at {@code deadline}; false if it did. */
-    private static boolean connect(SocketChannel channel, SocketAddress address, long deadline)
-            throws IOException {
+    private static boolean connect(SocketChannel channel, SocketAddress address, long deadline) throws IOException {
         CompletableFuture<Void> done = new CompletableFuture<>();
         // A platform thread: a virtual one connects without blocking underneath, and a unix socket
         // with a full backlog then fails at once instead of waiting.
-        Thread connecting = new Thread(() -> {
-            try {
-                channel.connect(address);
-                done.complete(null);
-            } catch (Throwable e) {
-                done.completeExceptionally(e);
-            }
-        }, "stagewright-x11-connect");
+        Thread connecting = new Thread(
+                () -> {
+                    try {
+                        channel.connect(address);
+                        done.complete(null);
+                    } catch (Throwable e) {
+                        done.completeExceptionally(e);
+                    }
+                },
+                "stagewright-x11-connect");
         connecting.setDaemon(true);
         connecting.start();
         try {
             done.get(Math.max(1, deadline - System.currentTimeMillis()), TimeUnit.MILLISECONDS);
             return true;
         } catch (TimeoutException e) {
-            return false;   // the caller closes the channel, which ends the connect still waiting
+            return false; // the caller closes the channel, which ends the connect still waiting
         } catch (ExecutionException e) {
             if (e.getCause() instanceof IOException io) throw io;
             throw new IOException(e.getCause());

@@ -8,7 +8,6 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-
 import org.junit.jupiter.api.Test;
 
 class GameTest {

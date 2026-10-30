@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.jupiter;
 
+import com.google.gson.Gson;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -15,17 +16,14 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import com.google.gson.Gson;
-
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Step;
 
 /**
  * Java methods that YAML and JavaScript tests reach: the {@link Step @Step} methods of the classes every
- * {@value #INDEX} resource lists, by name, and any public static method by class and name through YAML's
- * {@code java:}. A method takes by type what it needs of {@link Game}, a {@code Map} of its arguments, and the
- * arguments as given ({@code Object}); what it returns is the step's result, read as JSON when it is not plain values.
+ * {@value #INDEX} resource lists, by name, and any public static method by class and name through YAML's {@code java:}.
+ * A method takes by type what it needs of {@link Game}, a {@code Map} of its arguments, and the arguments as given
+ * ({@code Object}); what it returns is the step's result, read as JSON when it is not plain values.
  */
 final class JavaSteps {
 
@@ -51,7 +49,10 @@ final class JavaSteps {
             while (resources.hasMoreElements()) {
                 try (BufferedReader in = new BufferedReader(
                         new InputStreamReader(resources.nextElement().openStream(), StandardCharsets.UTF_8))) {
-                    in.lines().map(String::trim).filter(s -> !s.isEmpty() && !s.startsWith("#")).forEach(classes::add);
+                    in.lines()
+                            .map(String::trim)
+                            .filter(s -> !s.isEmpty() && !s.startsWith("#"))
+                            .forEach(classes::add);
                 }
             }
         } catch (IOException e) {
@@ -63,7 +64,8 @@ final class JavaSteps {
                 Step step = method.getAnnotation(Step.class);
                 if (step == null) continue;
                 String where = "@Step(\"" + step.value() + "\") " + method;
-                if (!Modifier.isStatic(method.getModifiers())) throw new IllegalArgumentException(where + " is not static");
+                if (!Modifier.isStatic(method.getModifiers()))
+                    throw new IllegalArgumentException(where + " is not static");
                 if (BuiltinSteps.NAMES.contains(step.value())) {
                     throw new IllegalArgumentException(where + ": the name is a built-in step's");
                 }
@@ -89,9 +91,11 @@ final class JavaSteps {
 
     /** {@code java: {class, method}}: the one public static method of that name. */
     static Method method(String className, String methodName) {
-        List<Method> named = Arrays.stream(type(className, Thread.currentThread().getContextClassLoader(),
-                        "the game's class path").getMethods())
-                .filter(m -> m.getName().equals(methodName) && Modifier.isStatic(m.getModifiers())).toList();
+        List<Method> named = Arrays.stream(
+                        type(className, Thread.currentThread().getContextClassLoader(), "the game's class path")
+                                .getMethods())
+                .filter(m -> m.getName().equals(methodName) && Modifier.isStatic(m.getModifiers()))
+                .toList();
         if (named.size() != 1) {
             throw new IllegalArgumentException(className + " has " + named.size() + " public static methods named "
                     + methodName + "; it needs exactly one");
@@ -145,7 +149,8 @@ final class JavaSteps {
     }
 
     private static boolean plain(Object value) {
-        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean) return true;
+        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean)
+            return true;
         if (value instanceof List<?> list) return list.stream().allMatch(JavaSteps::plain);
         if (value instanceof Map<?, ?> map) {
             return map.keySet().stream().allMatch(String.class::isInstance)

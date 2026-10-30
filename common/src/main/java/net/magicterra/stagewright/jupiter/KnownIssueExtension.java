@@ -14,8 +14,11 @@ public final class KnownIssueExtension implements InvocationInterceptor {
     private static final String ABORTED = "org.opentest4j.TestAbortedException";
 
     @Override
-    public void interceptTestMethod(Invocation<Void> invocation, ReflectiveInvocationContext<Method> invocationContext,
-                                    ExtensionContext context) throws Throwable {
+    public void interceptTestMethod(
+            Invocation<Void> invocation,
+            ReflectiveInvocationContext<Method> invocationContext,
+            ExtensionContext context)
+            throws Throwable {
         KnownIssue known = invocationContext.getExecutable().getAnnotation(KnownIssue.class);
         if (known == null) {
             invocation.proceed();

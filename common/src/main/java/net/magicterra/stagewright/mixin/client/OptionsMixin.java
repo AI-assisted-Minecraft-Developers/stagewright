@@ -1,7 +1,6 @@
 package net.magicterra.stagewright.mixin.client;
 
 import java.io.File;
-
 import net.magicterra.stagewright.client.RunOptions;
 import net.minecraft.client.Options;
 import org.spongepowered.asm.mixin.Final;
@@ -20,9 +19,9 @@ public abstract class OptionsMixin {
     private File optionsFile;
 
     /**
-     * As the file is read — before the narrator, the window and the first screen are built from it.
-     * At every return, not the tail: with no options.txt, a fresh game directory, {@code load} returns
-     * early, and a tail injection never runs.
+     * As the file is read — before the narrator, the window and the first screen are built from it. At every return,
+     * not the tail: with no options.txt, a fresh game directory, {@code load} returns early, and a tail injection never
+     * runs.
      */
     @Inject(method = "load", at = @At("RETURN"))
     private void stagewright$applyRunSettings(CallbackInfo ci) {

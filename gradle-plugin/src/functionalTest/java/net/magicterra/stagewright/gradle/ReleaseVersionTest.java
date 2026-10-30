@@ -1,5 +1,9 @@
 package net.magicterra.stagewright.gradle;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.file.Files;
@@ -8,8 +12,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
-
-import com.sun.net.httpserver.HttpServer;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
 import org.junit.jupiter.api.AfterEach;
@@ -17,17 +19,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 /**
  * The repository's own stagewright.version and stagewright.nexus convention plugins (build-logic), applied to a
- * throwaway project whose Nexus repository is a local server recording each upload, so no case here can
- * reach the real one.
+ * throwaway project whose Nexus repository is a local server recording each upload, so no case here can reach the real
+ * one.
  */
 class ReleaseVersionTest {
 
-    private static final Path BUILD_LOGIC = Path.of("..", "build-logic").toAbsolutePath().normalize();
+    private static final Path BUILD_LOGIC =
+            Path.of("..", "build-logic").toAbsolutePath().normalize();
 
     @TempDir
     Path dir;
@@ -39,7 +39,8 @@ class ReleaseVersionTest {
     void startNexus() throws IOException {
         nexus = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         nexus.createContext("/", exchange -> {
-            if ("PUT".equals(exchange.getRequestMethod())) uploads.add(exchange.getRequestURI().getPath());
+            if ("PUT".equals(exchange.getRequestMethod()))
+                uploads.add(exchange.getRequestURI().getPath());
             exchange.getRequestBody().readAllBytes();
             exchange.sendResponseHeaders("PUT".equals(exchange.getRequestMethod()) ? 201 : 404, -1);
             exchange.close();
@@ -78,7 +79,8 @@ class ReleaseVersionTest {
                     def v = version
                     doLast { println "VERSION=" + v }
                 }
-                """.formatted("http://127.0.0.1:" + nexus.getAddress().getPort() + "/"));
+                """.formatted(
+                        "http://127.0.0.1:" + nexus.getAddress().getPort() + "/"));
         Map<String, String> env = new HashMap<>(System.getenv());
         env.remove("BUILD_NUMBER");
         if (buildNumber != null) env.put("BUILD_NUMBER", buildNumber);
@@ -93,7 +95,8 @@ class ReleaseVersionTest {
         assertTrue(version.getOutput().contains("VERSION=0.1.0-snapshot+1.21.1"), version.getOutput());
 
         BuildResult publish = project(null)
-                .withArguments("publishAllPublicationsToGardelNexusRepository").buildAndFail();
+                .withArguments("publishAllPublicationsToGardelNexusRepository")
+                .buildAndFail();
         assertTrue(publish.getOutput().contains("not published to the Nexus"), publish.getOutput());
         assertEquals(List.of(), uploads);
     }
@@ -105,7 +108,8 @@ class ReleaseVersionTest {
         assertTrue(first.getOutput().contains("VERSION=0.1.0-alpha.0+1.21.1"), first.getOutput());
 
         BuildResult publish = project("42")
-                .withArguments("printVersion", "publishAllPublicationsToGardelNexusRepository").build();
+                .withArguments("printVersion", "publishAllPublicationsToGardelNexusRepository")
+                .build();
         assertTrue(publish.getOutput().contains("VERSION=0.1.0-alpha.42+1.21.1"), publish.getOutput());
         assertTrue(uploads.stream().anyMatch(u -> u.contains("/0.1.0-alpha.42+1.21.1/")), uploads.toString());
     }

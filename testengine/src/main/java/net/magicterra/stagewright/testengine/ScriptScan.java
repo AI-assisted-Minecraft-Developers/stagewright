@@ -1,5 +1,13 @@
 package net.magicterra.stagewright.testengine;
 
+import dev.latvian.mods.rhino.BaseFunction;
+import dev.latvian.mods.rhino.Context;
+import dev.latvian.mods.rhino.ContextFactory;
+import dev.latvian.mods.rhino.EvaluatorException;
+import dev.latvian.mods.rhino.RhinoException;
+import dev.latvian.mods.rhino.Scriptable;
+import dev.latvian.mods.rhino.ScriptableObject;
+import dev.latvian.mods.rhino.WrappedException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -10,26 +18,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
-
-import dev.latvian.mods.rhino.BaseFunction;
-import dev.latvian.mods.rhino.Context;
-import dev.latvian.mods.rhino.ContextFactory;
-import dev.latvian.mods.rhino.EvaluatorException;
-import dev.latvian.mods.rhino.RhinoException;
-import dev.latvian.mods.rhino.Scriptable;
-import dev.latvian.mods.rhino.ScriptableObject;
-import dev.latvian.mods.rhino.WrappedException;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 import org.yaml.snakeyaml.error.YAMLException;
 
 /**
- * Reads a script test file without the game: evaluates it once with a {@code test()} that only records what it is
- * given and a {@code step()} that does nothing, never running a test's body. What a file registers therefore cannot
- * depend on the game, which is the rule script tests are written under; a file whose top level reaches for the game
- * fails here, saying so. The game evaluates the same file again and runs the bodies. A YAML test file is read for
- * its test names and scenes only.
+ * Reads a script test file without the game: evaluates it once with a {@code test()} that only records what it is given
+ * and a {@code step()} that does nothing, never running a test's body. What a file registers therefore cannot depend on
+ * the game, which is the rule script tests are written under; a file whose top level reaches for the game fails here,
+ * saying so. The game evaluates the same file again and runs the bodies. A YAML test file is read for its test names
+ * and scenes only.
  */
 final class ScriptScan {
 
@@ -50,8 +49,11 @@ final class ScriptScan {
         if (!Files.isDirectory(dir)) return List.of();
         try (Stream<Path> walk = Files.walk(dir)) {
             return walk.filter(p -> isScript(p.toString()) && Files.isRegularFile(p))
-                    .map(p -> root.relativize(p).toString().replace(root.getFileSystem().getSeparator(), "/"))
-                    .sorted().toList();
+                    .map(p -> root.relativize(p)
+                            .toString()
+                            .replace(root.getFileSystem().getSeparator(), "/"))
+                    .sorted()
+                    .toList();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -76,15 +78,20 @@ final class ScriptScan {
         } catch (WrappedException e) {
             // A registration the recorder refused, at the line that made it.
             String where = e.lineNumber() > 0 ? resource + ":" + e.lineNumber() : resource;
-            return new Scanned(resource, List.of(), where + ": " + e.getWrappedException().getMessage());
+            return new Scanned(
+                    resource, List.of(), where + ": " + e.getWrappedException().getMessage());
         } catch (EvaluatorException e) {
             // A syntax error: the game's engine is this same Rhino, so the file would not load there either.
             String where = e.lineNumber() > 0 ? resource + ":" + e.lineNumber() : resource;
-            return new Scanned(resource, List.of(), where + ": " + (e.details() != null ? e.details() : e.getMessage()));
+            return new Scanned(
+                    resource, List.of(), where + ": " + (e.details() != null ? e.details() : e.getMessage()));
         } catch (RhinoException e) {
             String where = e.lineNumber() > 0 ? resource + ":" + e.lineNumber() : resource;
-            return new Scanned(resource, List.of(), where + ": " + (e.details() != null ? e.details() : e.getMessage())
-                    + " (outside the game a file only registers its tests: its top level cannot use the game)");
+            return new Scanned(
+                    resource,
+                    List.of(),
+                    where + ": " + (e.details() != null ? e.details() : e.getMessage())
+                            + " (outside the game a file only registers its tests: its top level cannot use the game)");
         } catch (RuntimeException e) {
             return new Scanned(resource, List.of(), resource + ": " + e.getMessage());
         }
@@ -115,8 +122,10 @@ final class ScriptScan {
                 }
                 List<String> scenes = scenes(test.containsKey("scene") ? test.get("scene") : file.get("scene"));
                 if (scenes.isEmpty()) {
-                    return new Scanned(resource, List.of(), resource + ": test '" + name + "' names no scene: give it"
-                            + " or the file a scene");
+                    return new Scanned(
+                            resource,
+                            List.of(),
+                            resource + ": test '" + name + "' names no scene: give it" + " or the file a scene");
                 }
                 if (tests.putIfAbsent(name, new Test(name, scenes)) != null) {
                     return new Scanned(resource, List.of(), resource + ": test '" + name + "' is there twice");
@@ -151,7 +160,8 @@ final class ScriptScan {
                 throw new IllegalArgumentException("test(name, options, body) takes a name, options and a function");
             }
             String name = n.toString();
-            List<String> scenes = scenes(args.length > 2 && args[1] instanceof Map<?, ?> options ? options.get("scene") : null);
+            List<String> scenes =
+                    scenes(args.length > 2 && args[1] instanceof Map<?, ?> options ? options.get("scene") : null);
             if (scenes.isEmpty()) {
                 throw new IllegalArgumentException("test '" + name + "' names no scene: give it options with scene,"
                         + " a scene's name or a list of them");

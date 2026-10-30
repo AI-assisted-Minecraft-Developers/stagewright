@@ -10,13 +10,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-
 import net.magicterra.stagewright.testengine.StageWrightTestEngine;
 import org.junit.platform.engine.reporting.ReportEntry;
 import org.junit.platform.launcher.TestExecutionListener;
@@ -46,8 +44,11 @@ final class RecordProperties implements TestExecutionListener {
         if (!id.isTest()) return;
         List<Property> properties = byTest.computeIfAbsent(id.getUniqueId(), k -> new ArrayList<>());
         synchronized (properties) {
-            entry.getKeyValuePairs().forEach((key, value) -> properties.add(
-                    key.equals(StageWrightTestEngine.BLANK_RECORD) ? new Property(value, "") : new Property(key, value)));
+            entry.getKeyValuePairs()
+                    .forEach((key, value) -> properties.add(
+                            key.equals(StageWrightTestEngine.BLANK_RECORD)
+                                    ? new Property(value, "")
+                                    : new Property(key, value)));
         }
     }
 
@@ -56,14 +57,17 @@ final class RecordProperties implements TestExecutionListener {
         if (byTest.isEmpty() || !Files.isDirectory(reports)) return;
         List<Path> files;
         try (Stream<Path> list = Files.list(reports)) {
-            files = list.filter(p -> p.getFileName().toString().endsWith(".xml")).sorted().toList();
+            files = list.filter(p -> p.getFileName().toString().endsWith(".xml"))
+                    .sorted()
+                    .toList();
         }
         for (Path file : files) addTo(file);
     }
 
     private void addTo(Path file) throws IOException {
         try {
-            Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file.toFile());
+            Document doc =
+                    DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file.toFile());
             NodeList cases = doc.getElementsByTagName("testcase");
             boolean changed = false;
             for (int i = 0; i < cases.getLength(); i++) {

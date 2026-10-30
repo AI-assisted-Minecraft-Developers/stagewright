@@ -5,7 +5,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Plot;
 import net.magicterra.worlddriver.api.methods.world.WorldContracts;
@@ -36,8 +35,8 @@ import net.minecraft.world.phys.AABB;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
- * One leased plot, on its dimension's row ({@link PlotLayout}), far from spawn. Its state, block entities and
- * entities included, is kept in a WorldDriver {@link RegionSnapshot} the plot holds itself rather than in
+ * One leased plot, on its dimension's row ({@link PlotLayout}), far from spawn. Its state, block entities and entities
+ * included, is kept in a WorldDriver {@link RegionSnapshot} the plot holds itself rather than in
  * {@code mc.world.snapshot}'s store, whose few dozen slots every test running at once would be competing for.
  */
 final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
@@ -55,6 +54,7 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     private static final int TICKET_DISTANCE = 2;
     /** Generating fresh chunks is the slow case; a minute of ticks covers it while the whole suite starts at once. */
     private static final int CHUNK_LOAD_TICKS = 1200;
+
     private static final AtomicInteger LEASES = new AtomicInteger();
 
     private final Game game;
@@ -74,8 +74,8 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         this.start = start;
         this.size = size;
         this.anchor = centered ? new Vec3i(size.getX() / 2, size.getY() / 2, size.getZ() / 2) : Vec3i.ZERO;
-        this.box = new BoundingBox(start, floorY, ROW_Z, start + size.getX() - 1, floorY + size.getY() - 1,
-                ROW_Z + size.getZ() - 1);
+        this.box = new BoundingBox(
+                start, floorY, ROW_Z, start + size.getX() - 1, floorY + size.getY() - 1, ROW_Z + size.getZ() - 1);
     }
 
     /** Lease a plot of {@code size} in {@code dimension}: load its chunks, keep its state, and empty it. */
@@ -86,7 +86,8 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
                         + ", but this one is " + size.getX() + " × " + size.getY() + " × " + size.getZ());
             }
         }
-        if (size.getY() < 1) throw new IllegalArgumentException("a plot is at least 1 tall, but this one is " + size.getY());
+        if (size.getY() < 1)
+            throw new IllegalArgumentException("a plot is at least 1 tall, but this one is " + size.getY());
         int floorY = game.onServer(server -> {
             ServerLevel level = GameImpl.level(server, dimension);
             return PlotLayout.floorY(BASE_Y, level.getMinBuildHeight(), level.getMaxBuildHeight(), size.getY());
@@ -101,16 +102,24 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
                 return server;
             });
             // Evaluated on the server thread, once a tick.
-            game.await().within(CHUNK_LOAD_TICKS).as("the chunks of " + plot + " to load")
+            game.await()
+                    .within(CHUNK_LOAD_TICKS)
+                    .as("the chunks of " + plot + " to load")
                     .until(() -> plot.chunksLoaded(held));
             // One server task: nothing changes the box between keeping it and emptying it.
             game.runOnServer(server -> {
-                // Forcing a loaded chunk costs nothing, and a forced chunk keeps the dimension ticking with no player in it.
+                // Forcing a loaded chunk costs nothing, and a forced chunk keeps the dimension ticking with no player
+                // in it.
                 plot.forceChunks(server, true);
                 plot.loadChunks(server, false);
-                plot.before = RegionSnapshot.capture(plot.level(server),
-                        new BlockPos(plot.box.minX(), plot.box.minY(), plot.box.minZ()), size.getX(), size.getY(),
-                        size.getZ(), true, true);
+                plot.before = RegionSnapshot.capture(
+                        plot.level(server),
+                        new BlockPos(plot.box.minX(), plot.box.minY(), plot.box.minZ()),
+                        size.getX(),
+                        size.getY(),
+                        size.getZ(),
+                        true,
+                        true);
                 plot.empty(server);
                 LeasedPlots.add(dimension, plot.box);
             });
@@ -189,16 +198,25 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         BlockState state = block.defaultBlockState();
         // One server task per tile, so a large fill lets the server tick between them.
         for (BoundingBox tile : PlotLayout.tiles(BoundingBox.fromCorners(a, b), WorldContracts.MAX_VOLUME)) {
-            game.runOnServer(server -> BlockEdits.fill(level(server), new BlockPos(tile.minX(), tile.minY(), tile.minZ()),
-                    new BlockPos(tile.maxX(), tile.maxY(), tile.maxZ()), state));
+            game.runOnServer(server -> BlockEdits.fill(
+                    level(server),
+                    new BlockPos(tile.minX(), tile.minY(), tile.minZ()),
+                    new BlockPos(tile.maxX(), tile.maxY(), tile.maxZ()),
+                    state));
         }
         return this;
     }
 
     @Override
     public Plot structure(ResourceLocation id, int x, int y, int z) {
-        return place(server -> server.getStructureManager().get(id).orElseThrow(() ->
-                new IllegalArgumentException("this game has no structure template " + id)), id.toString(), x, y, z);
+        return place(
+                server -> server.getStructureManager()
+                        .get(id)
+                        .orElseThrow(() -> new IllegalArgumentException("this game has no structure template " + id)),
+                id.toString(),
+                x,
+                y,
+                z);
     }
 
     @Override
@@ -207,24 +225,31 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         try {
             tag = NbtIo.readCompressed(file, NbtAccounter.unlimitedHeap());
         } catch (IOException e) {
-            throw new IllegalArgumentException("cannot read the structure file " + file.toAbsolutePath() + ": "
-                    + (Files.exists(file) ? e.getMessage() : "there is no such file"), e);
+            throw new IllegalArgumentException(
+                    "cannot read the structure file " + file.toAbsolutePath() + ": "
+                            + (Files.exists(file) ? e.getMessage() : "there is no such file"),
+                    e);
         }
         return place(server -> server.getStructureManager().readStructure(tag), file.toString(), x, y, z);
     }
 
-    private Plot place(Function<MinecraftServer, StructureTemplate> template, String what,
-                       int x, int y, int z) {
+    private Plot place(Function<MinecraftServer, StructureTemplate> template, String what, int x, int y, int z) {
         BlockPos corner = at(x, y, z);
         game.runOnServer(server -> {
             StructureTemplate t = template.apply(server);
             Vec3i far = t.getSize().offset(-1, -1, -1);
             if (!box.isInside(corner) || !box.isInside(corner.offset(far))) {
-                throw new IllegalArgumentException("the structure " + what + " is " + t.getSize().toShortString()
+                throw new IllegalArgumentException("the structure " + what + " is "
+                        + t.getSize().toShortString()
                         + " and does not fit in the plot at (" + x + ", " + y + ", " + z + "); the plot's cells run"
                         + " from " + min().toShortString() + " to " + max().toShortString());
             }
-            t.placeInWorld(level(server), corner, corner, new StructurePlaceSettings(), level(server).random,
+            t.placeInWorld(
+                    level(server),
+                    corner,
+                    corner,
+                    new StructurePlaceSettings(),
+                    level(server).random,
                     Block.UPDATE_CLIENTS);
         });
         return this;
@@ -250,8 +275,8 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     }
 
     /**
-     * Server thread: add or drop this lease's ticket on each of its chunks, which has them loaded over the
-     * next ticks. {@code setChunkForced} on a chunk not yet loaded would load it on the spot.
+     * Server thread: add or drop this lease's ticket on each of its chunks, which has them loaded over the next ticks.
+     * {@code setChunkForced} on a chunk not yet loaded would load it on the spot.
      */
     private void loadChunks(MinecraftServer server, boolean load) {
         ServerChunkCache chunks = level(server).getChunkSource();
@@ -289,9 +314,11 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     private void empty(MinecraftServer server) {
         ServerLevel level = level(server);
         BlockState air = Blocks.AIR.defaultBlockState();
-        for (BlockPos pos : BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ())) {
+        for (BlockPos pos :
+                BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ())) {
             // No neighbour updates and no drops: the plot is emptied, not mined.
-            if (!level.getBlockState(pos).isAir()) level.setBlock(pos, air, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+            if (!level.getBlockState(pos).isAir())
+                level.setBlock(pos, air, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
         }
         AABB area = AABB.of(box);
         for (Entity e : level.getEntities((Entity) null, area, e -> !(e instanceof Player))) e.discard();

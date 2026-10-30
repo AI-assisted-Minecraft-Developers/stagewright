@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.function.Function;
-
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -32,17 +31,18 @@ import net.minecraft.world.level.levelgen.presets.WorldPreset;
  * is the same world on both. The test engine writes those keys there before each scene; a key not written keeps the
  * default a dedicated server boots with.
  *
- * <p>Survival, easy, cheats on is that default, and deliberately not the quieter creative/peaceful pair a sandbox
- * would pick. The point of running on an integrated server as well as a dedicated one is that the two agree; under
- * creative/peaceful no hostile mob spawns and the player takes no damage, so every scene about being attacked timed
- * out and looked like a bot bug instead of reporting that the world was wrong.
+ * <p>Survival, easy, cheats on is that default, and deliberately not the quieter creative/peaceful pair a sandbox would
+ * pick. The point of running on an integrated server as well as a dedicated one is that the two agree; under
+ * creative/peaceful no hostile mob spawns and the player takes no damage, so every scene about being attacked timed out
+ * and looked like a bot bug instead of reporting that the world was wrong.
  */
-record WorldCreation(LevelSettings settings, WorldOptions options, Function<RegistryAccess, WorldDimensions> dimensions) {
+record WorldCreation(
+        LevelSettings settings, WorldOptions options, Function<RegistryAccess, WorldDimensions> dimensions) {
 
     /**
      * The seed when none is declared, fixed so a one-off failure stays reproducible. Matched by
-     * {@code RunDirectory.FIXED_SEED}, which pins the same value into a dedicated server's {@code server.properties}:
-     * a scene that declares {@code Terrain.GENERATED} asserts about ground this seed decides, so the two disagreeing
+     * {@code RunDirectory.FIXED_SEED}, which pins the same value into a dedicated server's {@code server.properties}: a
+     * scene that declares {@code Terrain.GENERATED} asserts about ground this seed decides, so the two disagreeing
      * would hand it a different landscape per topology.
      */
     static final long DEFAULT_SEED = 5471L;
@@ -52,18 +52,32 @@ record WorldCreation(LevelSettings settings, WorldOptions options, Function<Regi
         GameType mode = GameType.byName(p.getProperty("gamemode", "survival"), GameType.SURVIVAL);
         Difficulty difficulty = Difficulty.byName(p.getProperty("difficulty", "easy"));
         if (difficulty == null) difficulty = Difficulty.EASY;
-        DataPackConfig packs = new DataPackConfig(list(p.getProperty("initial-enabled-packs", "vanilla")),
+        DataPackConfig packs = new DataPackConfig(
+                list(p.getProperty("initial-enabled-packs", "vanilla")),
                 list(p.getProperty("initial-disabled-packs", "")));
-        LevelSettings settings = new LevelSettings(levelName, mode, false, difficulty, true, new GameRules(),
+        LevelSettings settings = new LevelSettings(
+                levelName,
+                mode,
+                false,
+                difficulty,
+                true,
+                new GameRules(),
                 new WorldDataConfiguration(packs, FeatureFlags.DEFAULT_FLAGS));
         String seed = p.getProperty("level-seed", "");
-        WorldOptions options = new WorldOptions(seed.isBlank() ? DEFAULT_SEED : WorldOptions.parseSeed(seed)
-                .orElse(WorldOptions.randomSeed()), Boolean.parseBoolean(p.getProperty("generate-structures", "true")),
+        WorldOptions options = new WorldOptions(
+                seed.isBlank() ? DEFAULT_SEED : WorldOptions.parseSeed(seed).orElse(WorldOptions.randomSeed()),
+                Boolean.parseBoolean(p.getProperty("generate-structures", "true")),
                 false);
-        ResourceKey<WorldPreset> preset = ResourceKey.create(Registries.WORLD_PRESET,
+        ResourceKey<WorldPreset> preset = ResourceKey.create(
+                Registries.WORLD_PRESET,
                 ResourceLocation.parse(presetId(p.getProperty("level-type", "minecraft:normal"))));
-        return new WorldCreation(settings, options,
-                registries -> registries.registryOrThrow(Registries.WORLD_PRESET).getHolderOrThrow(preset).value()
+        return new WorldCreation(
+                settings,
+                options,
+                registries -> registries
+                        .registryOrThrow(Registries.WORLD_PRESET)
+                        .getHolderOrThrow(preset)
+                        .value()
                         .createWorldDimensions());
     }
 
@@ -78,7 +92,10 @@ record WorldCreation(LevelSettings settings, WorldOptions options, Function<Regi
     }
 
     private static List<String> list(String commaSeparated) {
-        return Arrays.stream(commaSeparated.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+        return Arrays.stream(commaSeparated.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 
     private static Properties read(Path file) {

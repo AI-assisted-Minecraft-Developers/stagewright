@@ -103,10 +103,10 @@ public final class BlockEnergy implements Energy {
      * Every handler this block exposes: the no-side view first, then the six faces, deduplicated by identity.
      *
      * <p><b>Why writes walk the list.</b> {@code null} means "no particular side", and most mods answer it with an
-     * internal view carrying the machine's real numbers — so reads work through it — while insertion is granted only
-     * on the faces configured for input. Found on All the Mods 10: a Mekanism energy cube answered
-     * {@code canReceive() = true} through the no-side handler and took 0 of every 1000 offered. A write therefore
-     * tries each handler until one accepts, and stops there.
+     * internal view carrying the machine's real numbers — so reads work through it — while insertion is granted only on
+     * the faces configured for input. Found on All the Mods 10: a Mekanism energy cube answered {@code canReceive() =
+     * true} through the no-side handler and took 0 of every 1000 offered. A write therefore tries each handler until
+     * one accepts, and stops there.
      */
     static List<IEnergyStorage> handlers(ServerLevel level, BlockPos pos) {
         List<IEnergyStorage> out = new ArrayList<>();

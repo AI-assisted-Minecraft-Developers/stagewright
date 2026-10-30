@@ -1,15 +1,14 @@
 package net.magicterra.stagewright.cli.install;
 
-import java.util.Locale;
-
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.util.Locale;
 
 /**
- * Mojang's rule blocks, evaluated once for both halves of a client: what the installer downloads and
- * what the launcher puts on the classpath. Two copies of this could disagree, and a library allowed at
- * launch but skipped at install fails as a missing jar that looks like a broken download.
+ * Mojang's rule blocks, evaluated once for both halves of a client: what the installer downloads and what the launcher
+ * puts on the classpath. Two copies of this could disagree, and a library allowed at launch but skipped at install
+ * fails as a missing jar that looks like a broken download.
  */
 public final class Rules {
 
@@ -28,9 +27,9 @@ public final class Rules {
     /**
      * Absent means allowed, otherwise the last matching rule wins.
      *
-     * <p>Feature rules ({@code is_demo}, {@code has_custom_resolution}, quick-play) are skipped rather
-     * than evaluated, because we ask for none of those features — and a rule we cannot evaluate must
-     * not be allowed to turn an argument ON.
+     * <p>Feature rules ({@code is_demo}, {@code has_custom_resolution}, quick-play) are skipped rather than evaluated,
+     * because we ask for none of those features — and a rule we cannot evaluate must not be allowed to turn an argument
+     * ON.
      */
     public static boolean allowed(JsonObject entry) {
         return allowed(entry, OS);
@@ -43,7 +42,9 @@ public final class Rules {
         for (JsonElement element : rules) {
             JsonObject rule = element.getAsJsonObject();
             JsonObject ruleOs = rule.getAsJsonObject("os");
-            if (ruleOs != null && ruleOs.has("name") && !os.equals(ruleOs.get("name").getAsString())) {
+            if (ruleOs != null
+                    && ruleOs.has("name")
+                    && !os.equals(ruleOs.get("name").getAsString())) {
                 continue;
             }
             if (rule.has("features")) continue;

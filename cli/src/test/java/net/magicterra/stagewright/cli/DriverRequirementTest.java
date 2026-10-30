@@ -1,5 +1,7 @@
 package net.magicterra.stagewright.cli;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,7 +9,6 @@ import java.nio.file.attribute.FileTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import static org.junit.jupiter.api.Assertions.*;
 
 class DriverRequirementTest {
     @Test
@@ -22,8 +23,8 @@ class DriverRequirementTest {
     void effectivePackCopyMustSatisfyTheRange(@TempDir Path tmp) throws IOException {
         TestModJar.create(tmp.resolve("mods/driver.jar"), "worlddriver", "0.2.0-alpha.1+1.21.1", "old");
         Path extra = TestModJar.driver(tmp.resolve("candidate/driver.jar"), "candidate");
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> DriverRequirement.check(tmp, "fabric", List.of(extra), true));
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class, () -> DriverRequirement.check(tmp, "fabric", List.of(extra), true));
         assertTrue(error.getMessage().contains("incompatible"), error.getMessage());
     }
 
@@ -34,8 +35,8 @@ class DriverRequirementTest {
         FileTime before = Files.getLastModifiedTime(jar);
         TestModJar.create(jar, "worlddriver", "0.2.0-alpha.1+1.21.1", "newer");
         Files.setLastModifiedTime(jar, FileTime.fromMillis(before.toMillis() + 1000));
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> DriverRequirement.check(tmp, "fabric", List.of(), true));
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class, () -> DriverRequirement.check(tmp, "fabric", List.of(), true));
         assertTrue(error.getMessage().contains("incompatible"), error.getMessage());
     }
 
@@ -43,14 +44,21 @@ class DriverRequirementTest {
     void duplicateDriversAreRefused(@TempDir Path tmp) throws IOException {
         TestModJar.driver(tmp.resolve("mods/one.jar"), "one");
         Path extra = TestModJar.driver(tmp.resolve("two.jar"), "two");
-        assertThrows(IllegalArgumentException.class, () -> DriverRequirement.check(tmp, "neoforge", List.of(extra), true));
+        assertThrows(
+                IllegalArgumentException.class, () -> DriverRequirement.check(tmp, "neoforge", List.of(extra), true));
     }
 
     @Test
     void anUnrelatedModsMetadataIsLeftToItsLoader(@TempDir Path tmp) throws IOException {
         TestModJar.driver(tmp.resolve("mods/driver.jar"), "driver");
-        List<String> shapes = List.of("{\"schemaVersion\":1}", "[]", "{\"id\":null}", "{\"id\":7}", "{not json",
-                "{\"id\":\"other\",\"depends\":[\"worlddriver\"]}", "﻿{\"id\":\"other\"}");
+        List<String> shapes = List.of(
+                "{\"schemaVersion\":1}",
+                "[]",
+                "{\"id\":null}",
+                "{\"id\":7}",
+                "{not json",
+                "{\"id\":\"other\",\"depends\":[\"worlddriver\"]}",
+                "﻿{\"id\":\"other\"}");
         for (int i = 0; i < shapes.size(); i++) {
             TestModJar.withMetadata(tmp.resolve("mods/odd" + i + ".jar"), shapes.get(i), false);
         }
@@ -59,24 +67,28 @@ class DriverRequirementTest {
 
     @Test
     void ourOwnMetadataIsReadPastAByteOrderMark(@TempDir Path tmp) throws IOException {
-        TestModJar.withMetadata(tmp.resolve("mods/driver.jar"), "﻿{\"schemaVersion\":1,\"id\":\"worlddriver\","
-                + "\"version\":\"0.1.0-snapshot+1.21.1\"}", false);
+        TestModJar.withMetadata(
+                tmp.resolve("mods/driver.jar"),
+                "﻿{\"schemaVersion\":1,\"id\":\"worlddriver\"," + "\"version\":\"0.1.0-snapshot+1.21.1\"}",
+                false);
         assertDoesNotThrow(() -> DriverRequirement.check(tmp, "fabric", List.of(), true));
     }
 
     @Test
     void aJarThatOnlyReadsThroughItsDirectoryIsStillRead(@TempDir Path tmp) throws IOException {
         // A stored entry flagged with a data descriptor: ZipInputStream refuses it, ZipFile does not.
-        TestModJar.withMetadata(tmp.resolve("mods/driver.jar"), "{\"schemaVersion\":1,\"id\":\"worlddriver\","
-                + "\"version\":\"0.1.0-snapshot+1.21.1\"}", true);
+        TestModJar.withMetadata(
+                tmp.resolve("mods/driver.jar"),
+                "{\"schemaVersion\":1,\"id\":\"worlddriver\"," + "\"version\":\"0.1.0-snapshot+1.21.1\"}",
+                true);
         assertDoesNotThrow(() -> DriverRequirement.check(tmp, "fabric", List.of(), true));
     }
 
     @Test
     void aPackWhoseLoaderCannotBeToldIsReadByItsOwnMetadata(@TempDir Path tmp) throws IOException {
         TestModJar.create(tmp.resolve("mods/stagewright.jar"), "mc_testkit", "0.1.0-alpha.1+1.21.1", "framework");
-        IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
-                () -> DriverRequirement.check(tmp, null, List.of(), false));
+        IllegalArgumentException missing = assertThrows(
+                IllegalArgumentException.class, () -> DriverRequirement.check(tmp, null, List.of(), false));
         assertTrue(missing.getMessage().contains("requires one compatible WorldDriver"), missing.getMessage());
         assertFalse(missing.getMessage().contains("null"), missing.getMessage());
         TestModJar.driver(tmp.resolve("mods/driver.jar"), "driver");
@@ -85,8 +97,8 @@ class DriverRequirementTest {
 
     @Test
     void aLoaderWithNoStageWrightBuildIsRefusedByNameEvenWithoutInstalling(@TempDir Path tmp) {
-        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-                () -> DriverRequirement.check(tmp, "forge", List.of(), false));
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class, () -> DriverRequirement.check(tmp, "forge", List.of(), false));
         assertTrue(error.getMessage().contains("not forge"), error.getMessage());
     }
 
@@ -96,8 +108,8 @@ class DriverRequirementTest {
             for (String version : List.of("0.1.0", "0.1.0-alpha.12+1.21.1", "0.1.0-snapshot+1.21.1", "0.1.12")) {
                 assertTrue(DriverRequirement.accepts(range, version), version);
             }
-            for (String version : List.of("0.0.9", "0.2.0-alpha.1+1.21.1", "0.2.0-snapshot+1.21.1", "bad",
-                    "0.1.0-beta", "0.1.0-SNAPSHOT")) {
+            for (String version : List.of(
+                    "0.0.9", "0.2.0-alpha.1+1.21.1", "0.2.0-snapshot+1.21.1", "bad", "0.1.0-beta", "0.1.0-SNAPSHOT")) {
                 assertFalse(DriverRequirement.accepts(range, version), version);
             }
         }
@@ -106,12 +118,16 @@ class DriverRequirementTest {
     @Test
     void aNumberedFloorRefusesTheBuildsBeforeIt() {
         for (String range : List.of(">=0.1.0-alpha.900 <0.2.0-alpha.0", "[0.1.0-alpha.900,0.2.0-alpha.0)")) {
-            for (String version : List.of("0.1.0-alpha.900+1.21.1", "0.1.0-alpha.1000+1.21.1",
-                    "0.1.0-snapshot+1.21.1", "0.1.0", "0.1.1-alpha.1+1.21.1")) {
+            for (String version : List.of(
+                    "0.1.0-alpha.900+1.21.1",
+                    "0.1.0-alpha.1000+1.21.1",
+                    "0.1.0-snapshot+1.21.1",
+                    "0.1.0",
+                    "0.1.1-alpha.1+1.21.1")) {
                 assertTrue(DriverRequirement.accepts(range, version), version);
             }
-            for (String version : List.of("0.1.0-alpha.899+1.21.1", "0.1.0-alpha.1+1.21.1", "0.1.0-alpha.0",
-                    "0.2.0-alpha.1+1.21.1")) {
+            for (String version : List.of(
+                    "0.1.0-alpha.899+1.21.1", "0.1.0-alpha.1+1.21.1", "0.1.0-alpha.0", "0.2.0-alpha.1+1.21.1")) {
                 assertFalse(DriverRequirement.accepts(range, version), version);
             }
         }

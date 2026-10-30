@@ -2,8 +2,8 @@ package net.magicterra.stagewright.test;
 
 /**
  * Values a test keeps for the tests after a restart: what one test records before the game restarts, an
- * {@code afterRestart} test reads after. Values are kept as JSON in the game's directory, so a value is plain
- * (a string, number, boolean, list or map) or a record or class Gson writes; a scene starts with none.
+ * {@code afterRestart} test reads after. Values are kept as JSON in the game's directory, so a value is plain (a
+ * string, number, boolean, list or map) or a record or class Gson writes; a scene starts with none.
  */
 public interface Store {
 

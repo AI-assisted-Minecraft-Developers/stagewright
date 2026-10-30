@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-
 import net.magicterra.stagewright.cli.install.ClientSpec;
 import net.magicterra.stagewright.cli.install.Downloader;
 import net.magicterra.stagewright.cli.install.Installer;
@@ -15,12 +14,11 @@ import net.magicterra.stagewright.cli.install.MinecraftDir;
 import net.magicterra.stagewright.cli.install.Mirror;
 
 /**
- * Run a modpack's tests, with no build tool anywhere: {@code stagewright test <server-dir>}, see
- * {@link TestCommand}.
+ * Run a modpack's tests, with no build tool anywhere: {@code stagewright test <server-dir>}, see {@link TestCommand}.
  *
- * <p>The Gradle plugin cannot be a modpack author's entry point: they have a {@code mods/} folder
- * and a launcher, not a Gradle project. Java rather than a script, and not arbitrarily: a modpack
- * author is running Minecraft, so a JVM is the one interpreter they are guaranteed to have.
+ * <p>The Gradle plugin cannot be a modpack author's entry point: they have a {@code mods/} folder and a launcher, not a
+ * Gradle project. Java rather than a script, and not arbitrarily: a modpack author is running Minecraft, so a JVM is
+ * the one interpreter they are guaranteed to have.
  */
 public final class Main {
 
@@ -61,8 +59,9 @@ public final class Main {
     }
 
     /** Install {@code client} into {@code installDir} unless it is there; answers the version to launch. */
-    static String install(ClientSpec client, Path installDir, Map<String, String> opts, String javaBinary,
-                          Consumer<String> log) throws IOException, InterruptedException {
+    static String install(
+            ClientSpec client, Path installDir, Map<String, String> opts, String javaBinary, Consumer<String> log)
+            throws IOException, InterruptedException {
         Mirror mirror = Mirror.parse(opts.getOrDefault("mirror", "none"));
         try (Downloader downloader = new Downloader(mirror, installDir)) {
             return new Installer(installDir, downloader, javaBinary, log).install(client);
@@ -76,9 +75,9 @@ public final class Main {
     /**
      * The port the pack's server will listen on.
      *
-     * <p>Read from {@code server.properties} rather than assumed, because a pack that moved off
-     * 25565 would otherwise produce a client dialling a port nothing answers — which looks from the
-     * outside exactly like the server failing to start.
+     * <p>Read from {@code server.properties} rather than assumed, because a pack that moved off 25565 would otherwise
+     * produce a client dialling a port nothing answers — which looks from the outside exactly like the server failing
+     * to start.
      */
     static int serverPort(Path gameDir) throws IOException {
         Path properties = gameDir.resolve("server.properties");

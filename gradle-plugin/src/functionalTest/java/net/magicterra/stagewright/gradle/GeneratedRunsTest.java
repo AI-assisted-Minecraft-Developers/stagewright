@@ -6,18 +6,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-
+import net.magicterra.stagewright.engine.json.JsonObject;
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import net.magicterra.stagewright.engine.json.JsonObject;
-
 /**
  * A suite with a loader project: the runs the plugin declares in that project's loom, and the launch specs read back
- * from the run tasks loom makes of them. The loom here is a stand-in with the members the plugin calls, which
- * registers a {@code run<Name>} task per run as loom does.
+ * from the run tasks loom makes of them. The loom here is a stand-in with the members the plugin calls, which registers
+ * a {@code run<Name>} task per run as loom does.
  */
 class GeneratedRunsTest {
 
@@ -83,11 +81,15 @@ class GeneratedRunsTest {
     }
 
     private GradleRunner runner(String... args) {
-        return GradleRunner.create().withProjectDir(dir.toFile()).withPluginClasspath().withArguments(args);
+        return GradleRunner.create()
+                .withProjectDir(dir.toFile())
+                .withPluginClasspath()
+                .withArguments(args);
     }
 
     private JsonObject spec(String topology) throws Exception {
-        return JsonObject.readFrom(Files.readString(dir.resolve("build/stagewright/launches/fabric/" + topology + ".json")));
+        return JsonObject.readFrom(
+                Files.readString(dir.resolve("build/stagewright/launches/fabric/" + topology + ".json")));
     }
 
     @Test
@@ -103,23 +105,31 @@ class GeneratedRunsTest {
         JsonObject primary = alone.get("primary").asObject();
         assertEquals("server", primary.getString("mainClass", null));
         assertEquals("[\"--port\",\"25621\"]", primary.get("args").toString());
-        assertEquals(dir.resolve("loader/run-stagewright/fabric/dedicated-server").toString(),
+        assertEquals(
+                dir.resolve("loader/run-stagewright/fabric/dedicated-server").toString(),
                 primary.getString("workingDirectory", null));
         String jvmArgs = primary.get("jvmArgs").toString();
         assertTrue(jvmArgs.contains("-Xmx1g") && jvmArgs.contains("-Da.b=c"), jvmArgs);
         assertFalse(jvmArgs.contains("awaitPlayer"), jvmArgs);
 
         JsonObject withClient = spec("dedicatedServerWithClient");
-        assertEquals(dir.resolve("loader/run-stagewright/fabric/with-client").toString(),
+        assertEquals(
+                dir.resolve("loader/run-stagewright/fabric/with-client").toString(),
                 withClient.getString("gameDirectory", null));
-        assertTrue(withClient.get("primary").asObject().get("jvmArgs").toString()
+        assertTrue(withClient
+                .get("primary")
+                .asObject()
+                .get("jvmArgs")
+                .toString()
                 .contains("-Dstagewright.awaitPlayer=true"));
         JsonObject companion = withClient.get("companion").asObject();
         assertEquals("client", companion.getString("mainClass", null));
         String clientArgs = companion.get("jvmArgs").toString();
-        assertTrue(clientArgs.contains("-Dstagewright.client.connect=127.0.0.1:25621") && clientArgs.contains("-Da.b=c"),
+        assertTrue(
+                clientArgs.contains("-Dstagewright.client.connect=127.0.0.1:25621") && clientArgs.contains("-Da.b=c"),
                 clientArgs);
-        assertEquals(dir.resolve("loader/run-stagewright/fabric/joining-client").toString(),
+        assertEquals(
+                dir.resolve("loader/run-stagewright/fabric/joining-client").toString(),
                 companion.getString("workingDirectory", null));
 
         JsonObject integrated = spec("integratedServer");
@@ -128,26 +138,39 @@ class GeneratedRunsTest {
         JsonObject host = integrated.get("primary").asObject();
         assertEquals("client", host.getString("mainClass", null));
         String hostArgs = host.get("jvmArgs").toString();
-        assertTrue(hostArgs.contains("-Dstagewright.client.world=StageWright")
-                && hostArgs.contains("-Dstagewright.awaitPlayer=true") && hostArgs.contains("-Da.b=c"), hostArgs);
-        assertEquals(dir.resolve("loader/run-stagewright/fabric/integrated-server").toString(),
+        assertTrue(
+                hostArgs.contains("-Dstagewright.client.world=StageWright")
+                        && hostArgs.contains("-Dstagewright.awaitPlayer=true")
+                        && hostArgs.contains("-Da.b=c"),
+                hostArgs);
+        assertEquals(
+                dir.resolve("loader/run-stagewright/fabric/integrated-server").toString(),
                 host.getString("workingDirectory", null));
 
         String runs = runner(":loader:inspectRuns", "-q").build().getOutput();
-        for (String name : new String[] {"stagewrightFabricDedicatedServer", "stagewrightFabricDedicatedServerWithClient",
-                "stagewrightFabricJoiningClient", "stagewrightFabricIntegratedServer"}) {
+        for (String name : new String[] {
+            "stagewrightFabricDedicatedServer",
+            "stagewrightFabricDedicatedServerWithClient",
+            "stagewrightFabricJoiningClient",
+            "stagewrightFabricIntegratedServer"
+        }) {
             assertTrue(runs.contains("RUN " + name + " ide=false source=testmod"), runs);
         }
     }
 
     @Test
     void theRunSourceSetAndPortCanBeChosen() throws Exception {
-        consumer("classes.from(files('classes'))\nloaderProject = ':loader'\nrunSourceSet = 'main'\nserverPort = 25700");
+        consumer(
+                "classes.from(files('classes'))\nloaderProject = ':loader'\nrunSourceSet = 'main'\nserverPort = 25700");
 
         runner("stagewrightLaunchSpecsFabric").build();
 
-        assertEquals("[\"--port\",\"25700\"]", spec("dedicatedServer").get("primary").asObject().get("args").toString());
-        assertTrue(runner(":loader:inspectRuns", "-q").build().getOutput()
+        assertEquals(
+                "[\"--port\",\"25700\"]",
+                spec("dedicatedServer").get("primary").asObject().get("args").toString());
+        assertTrue(runner(":loader:inspectRuns", "-q")
+                .build()
+                .getOutput()
                 .contains("RUN stagewrightFabricJoiningClient ide=false source=main"));
     }
 

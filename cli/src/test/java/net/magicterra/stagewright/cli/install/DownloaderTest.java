@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -17,8 +18,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,8 +69,10 @@ class DownloaderTest {
             assertTrue(d.fetch(a));
             assertFalse(d.fetch(a));
             assertEquals(1, hits.get("/good.jar").get());
-            assertTrue(Files.isRegularFile(install.resolve("cache/SHA-1/" + a.sha1().substring(0, 2)
-                    + "/" + a.sha1())), "a verified download is offered to HMCL's cache");
+            assertTrue(
+                    Files.isRegularFile(
+                            install.resolve("cache/SHA-1/" + a.sha1().substring(0, 2) + "/" + a.sha1())),
+                    "a verified download is offered to HMCL's cache");
         }
     }
 
@@ -79,8 +80,13 @@ class DownloaderTest {
     void theCacheIsConsultedBeforeTheNetwork(@TempDir Path install) throws IOException {
         try (Downloader d = downloader(install, List::of)) {
             d.fetch(artifact(install, "/good.jar"));
-            Downloader.Artifact elsewhere = new Downloader.Artifact(base.resolve("/good.jar"),
-                    install.resolve("libraries/other/place.jar"), Sha1.of(BODY), BODY.length, false, true);
+            Downloader.Artifact elsewhere = new Downloader.Artifact(
+                    base.resolve("/good.jar"),
+                    install.resolve("libraries/other/place.jar"),
+                    Sha1.of(BODY),
+                    BODY.length,
+                    false,
+                    true);
             assertFalse(d.fetch(elsewhere));
             assertEquals(1, hits.get("/good.jar").get());
         }
@@ -89,8 +95,13 @@ class DownloaderTest {
     @Test
     void aFileThatDoesNotMatchItsChecksumNeverLands(@TempDir Path install) throws IOException {
         try (Downloader d = downloader(install, List::of)) {
-            Downloader.Artifact a = new Downloader.Artifact(base.resolve("/corrupt.jar"),
-                    install.resolve("libraries/corrupt.jar"), Sha1.of(BODY), -1, false, true);
+            Downloader.Artifact a = new Downloader.Artifact(
+                    base.resolve("/corrupt.jar"),
+                    install.resolve("libraries/corrupt.jar"),
+                    Sha1.of(BODY),
+                    -1,
+                    false,
+                    true);
             assertThrows(IOException.class, () -> d.fetch(a));
             assertFalse(Files.exists(a.target()));
             try (var left = Files.list(a.target().getParent())) {
@@ -101,8 +112,7 @@ class DownloaderTest {
 
     @Test
     void aFailingMirrorFallsBackToTheOriginal(@TempDir Path install) throws IOException {
-        try (Downloader d = downloader(install,
-                uri -> List.of(base.resolve("/broken-mirror" + uri.getPath()), uri))) {
+        try (Downloader d = downloader(install, uri -> List.of(base.resolve("/broken-mirror" + uri.getPath()), uri))) {
             assertTrue(d.fetch(artifact(install, "/good.jar")));
             assertEquals(3, hits.get("/broken-mirror/good.jar").get(), "a 500 is retried");
             assertEquals(1, hits.get("/good.jar").get());
@@ -127,7 +137,7 @@ class DownloaderTest {
     }
 
     private Downloader.Artifact artifact(Path install, String path) {
-        return new Downloader.Artifact(base.resolve(path), install.resolve("libraries" + path),
-                Sha1.of(BODY), BODY.length, false, true);
+        return new Downloader.Artifact(
+                base.resolve(path), install.resolve("libraries" + path), Sha1.of(BODY), BODY.length, false, true);
     }
 }

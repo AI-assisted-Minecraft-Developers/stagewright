@@ -1,20 +1,20 @@
 package net.magicterra.stagewright.capability;
 
-import java.util.ArrayList;
-import java.util.List;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import java.util.ArrayList;
+import java.util.List;
 import net.magicterra.stagewright.test.Game;
 import net.minecraft.core.registries.BuiltInRegistries;
 
 /**
- * A capability declared in JSON instead of written in Java — the layer between
- * {@link Probe#of} and {@link CapabilityProvider}.
+ * A capability declared in JSON instead of written in Java — the layer between {@link Probe#of} and
+ * {@link CapabilityProvider}.
  *
- * <p>{@link CapabilityProvider} asks for a jar. A modpack author has a {@code config/} folder, and
- * telling them to stand up a Gradle project to name a class is the same mistake as telling them to
- * do it to write a test. So a descriptor is a file:
+ * <p>{@link CapabilityProvider} asks for a jar. A modpack author has a {@code config/} folder, and telling them to
+ * stand up a Gradle project to name a class is the same mistake as telling them to do it to write a test. So a
+ * descriptor is a file:
  *
  * <pre>{@code
  * // config/stagewright/capabilities/mekanism.json
@@ -32,25 +32,23 @@ import net.minecraft.core.registries.BuiltInRegistries;
  *
  * <h2>What it can test for</h2>
  *
- * <p>Any combination of {@code mods} (all must be loaded), {@code anyMods} (at least one),
- * {@code classes} (all must be in this JVM), {@code items} and {@code blocks} (all must be
- * registered). <b>At least one condition is required.</b> A descriptor with none would claim to be
- * available in every runtime, which is worse than useless: tests gated on it would run against a
- * pack that does not have the thing, and fail for the wrong reason.
+ * <p>Any combination of {@code mods} (all must be loaded), {@code anyMods} (at least one), {@code classes} (all must be
+ * in this JVM), {@code items} and {@code blocks} (all must be registered). <b>At least one condition is required.</b> A
+ * descriptor with none would claim to be available in every runtime, which is worse than useless: tests gated on it
+ * would run against a pack that does not have the thing, and fail for the wrong reason.
  *
- * <p>Registry conditions are the ones worth reaching for when a mod is present but its content is
- * not — a mod loaded with its feature switched off in config registers no items, and no amount of
- * mod-list checking notices.
+ * <p>Registry conditions are the ones worth reaching for when a mod is present but its content is not — a mod loaded
+ * with its feature switched off in config registers no items, and no amount of mod-list checking notices.
  *
  * <h2>Where they come from</h2>
  *
  * <ul>
- *   <li><b>Built in</b> — {@code data/stagewright/capabilities.json} in the harness jar. These are
- *       the auto-detected ones: a pack that has Mekanism gets {@code game.capability("mekanism")}
- *       having configured nothing, and a pack that does not gets an aborted test that says so.</li>
- *   <li><b>The pack's own</b> — {@code config/stagewright/capabilities/*.json} (see {@link PackFiles}).
- *       A pack file with a built-in's name REPLACES it, so a pack
- *       whose fork of a mod moved a class can correct us without waiting for a release.</li>
+ *   <li><b>Built in</b> — {@code data/stagewright/capabilities.json} in the harness jar. These are the auto-detected
+ *       ones: a pack that has Mekanism gets {@code game.capability("mekanism")} having configured nothing, and a pack
+ *       that does not gets an aborted test that says so.
+ *   <li><b>The pack's own</b> — {@code config/stagewright/capabilities/*.json} (see {@link PackFiles}). A pack file
+ *       with a built-in's name REPLACES it, so a pack whose fork of a mod moved a class can correct us without waiting
+ *       for a release.
  * </ul>
  *
  * @see CapabilityProvider for the typed version, when you do have a jar
@@ -67,9 +65,16 @@ public final class CapabilityDescriptor implements CapabilityProvider {
     private final String absent;
     private final String source;
 
-    private CapabilityDescriptor(String name, List<String> mods, List<String> anyMods,
-            List<String> classes, List<String> items, List<String> blocks, String probeClass,
-            String absent, String source) {
+    private CapabilityDescriptor(
+            String name,
+            List<String> mods,
+            List<String> anyMods,
+            List<String> classes,
+            List<String> items,
+            List<String> blocks,
+            String probeClass,
+            String absent,
+            String source) {
         this.name = name;
         this.mods = mods;
         this.anyMods = anyMods;
@@ -84,11 +89,10 @@ public final class CapabilityDescriptor implements CapabilityProvider {
     /**
      * Parse one descriptor.
      *
-     * @param source where it came from, quoted in every error — a pack author editing a file needs
-     *               to be told which file, and there can be dozens.
-     * @throws IllegalStateException on anything malformed. Loudly, at load: a descriptor that
-     *               silently degrades to "unavailable" is indistinguishable from an absent mod, and
-     *               a typo would then read as a normal skip forever.
+     * @param source where it came from, quoted in every error — a pack author editing a file needs to be told which
+     *     file, and there can be dozens.
+     * @throws IllegalStateException on anything malformed. Loudly, at load: a descriptor that silently degrades to
+     *     "unavailable" is indistinguishable from an absent mod, and a typo would then read as a normal skip forever.
      */
     public static CapabilityDescriptor parse(JsonObject json, String source) {
         String name = string(json, "name", source);
@@ -100,15 +104,22 @@ public final class CapabilityDescriptor implements CapabilityProvider {
         List<String> classes = strings(json, "classes", source);
         List<String> items = strings(json, "items", source);
         List<String> blocks = strings(json, "blocks", source);
-        if (mods.isEmpty() && anyMods.isEmpty() && classes.isEmpty() && items.isEmpty()
-                && blocks.isEmpty()) {
+        if (mods.isEmpty() && anyMods.isEmpty() && classes.isEmpty() && items.isEmpty() && blocks.isEmpty()) {
             throw new IllegalStateException("capability descriptor '" + name + "' in " + source
                     + " states no condition (mods / anyMods / classes / items / blocks), so it would"
                     + " report itself available in every runtime — including ones without the thing"
                     + " it names, where tests gated on it would run and fail for the wrong reason");
         }
-        return new CapabilityDescriptor(name, mods, anyMods, classes, items, blocks,
-                string(json, "probe", source), string(json, "absent", source), source);
+        return new CapabilityDescriptor(
+                name,
+                mods,
+                anyMods,
+                classes,
+                items,
+                blocks,
+                string(json, "probe", source),
+                string(json, "absent", source),
+                source);
     }
 
     @Override
@@ -133,8 +144,10 @@ public final class CapabilityDescriptor implements CapabilityProvider {
                 + ", and this runtime does not satisfy it: " + missingSummary() + stated;
     }
 
-    /** The first unsatisfied condition, or null when everything holds. Kept as one method so
-     *  {@link #availableIn} and the abort message can never disagree about why. */
+    /**
+     * The first unsatisfied condition, or null when everything holds. Kept as one method so {@link #availableIn} and
+     * the abort message can never disagree about why.
+     */
     private String missing() {
         for (String mod : mods) {
             if (!Mods.loaded(mod)) return "the mod '" + mod + "' is not loaded";
@@ -158,8 +171,10 @@ public final class CapabilityDescriptor implements CapabilityProvider {
         return null;
     }
 
-    /** {@link #missing} without a context, for {@link #absentReason} — which the registry calls
-     *  holding only the provider. States the conditions rather than which one failed. */
+    /**
+     * {@link #missing} without a context, for {@link #absentReason} — which the registry calls holding only the
+     * provider. States the conditions rather than which one failed.
+     */
     private String missingSummary() {
         List<String> parts = new ArrayList<>();
         if (!mods.isEmpty()) parts.add("mods " + mods);
@@ -201,18 +216,16 @@ public final class CapabilityDescriptor implements CapabilityProvider {
         JsonElement e = json.get(key);
         if (e == null || e.isJsonNull()) return List.of();
         List<String> out = new ArrayList<>();
-        if (e.isJsonPrimitive()) {                    // one entry may be written bare
+        if (e.isJsonPrimitive()) { // one entry may be written bare
             out.add(e.getAsString());
             return List.copyOf(out);
         }
         if (!e.isJsonArray()) {
-            throw new IllegalStateException("'" + key + "' in " + source
-                    + " must be a string or an array of strings");
+            throw new IllegalStateException("'" + key + "' in " + source + " must be a string or an array of strings");
         }
         for (JsonElement element : (JsonArray) e) {
             if (!element.isJsonPrimitive()) {
-                throw new IllegalStateException("'" + key + "' in " + source
-                        + " must contain only strings");
+                throw new IllegalStateException("'" + key + "' in " + source + " must contain only strings");
             }
             out.add(element.getAsString());
         }

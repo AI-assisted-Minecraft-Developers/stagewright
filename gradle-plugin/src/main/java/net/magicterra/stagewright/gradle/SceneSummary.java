@@ -21,10 +21,15 @@ final class SceneSummary implements TestListener {
     @Override
     public void afterSuite(TestDescriptor suite, TestResult result) {
         if (!isScene(suite)) return;
-        StringBuilder line = new StringBuilder("[stagewright] ").append(suite.getClassName()).append(": ")
-                .append(result.getSuccessfulTestCount()).append(" passed, ")
-                .append(result.getSkippedTestCount()).append(" skipped");
-        if (result.getFailedTestCount() > 0) line.append(", ").append(result.getFailedTestCount()).append(" failed");
+        StringBuilder line = new StringBuilder("[stagewright] ")
+                .append(suite.getClassName())
+                .append(": ")
+                .append(result.getSuccessfulTestCount())
+                .append(" passed, ")
+                .append(result.getSkippedTestCount())
+                .append(" skipped");
+        if (result.getFailedTestCount() > 0)
+            line.append(", ").append(result.getFailedTestCount()).append(" failed");
         Logging.getLogger(SceneSummary.class).lifecycle(line.toString());
     }
 

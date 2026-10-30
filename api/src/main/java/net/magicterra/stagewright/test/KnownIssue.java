@@ -8,8 +8,8 @@ import java.lang.annotation.Target;
 
 /**
  * A test known to fail, kept running so it is noticed when it stops. Its failure is reported as aborted with this
- * reason and the original failure as the cause; its passing is reported as a failure, so the annotation is removed
- * once the issue is fixed rather than left to hide the next regression.
+ * reason and the original failure as the cause; its passing is reported as a failure, so the annotation is removed once
+ * the issue is fixed rather than left to hide the next regression.
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)

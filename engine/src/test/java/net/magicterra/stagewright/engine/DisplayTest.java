@@ -29,7 +29,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -42,8 +41,8 @@ class DisplayTest {
     private static final Display.XServer ONLY_ZERO = (n, tcpToo, cookie) -> {
         if (n != 0) return Display.Answer.NOT_LISTENING;
         if (Arrays.equals(cookie, GOOD)) return Display.Answer.ACCEPTED;
-        return new Display.Answer(Display.Answer.Kind.REFUSED,
-                "Authorization required, but no authorization protocol specified");
+        return new Display.Answer(
+                Display.Answer.Kind.REFUSED, "Authorization required, but no authorization protocol specified");
     };
 
     /** With {@code home} as the client's HOME unless {@code env} names one. */
@@ -113,8 +112,8 @@ class DisplayTest {
     void onlyTheLocalEntryNamingThisHostIsPresented(@TempDir Path home) throws IOException {
         // A home shared with another machine, or kept across a rename: its :0 is not ours.
         ByteArrayOutputStream file = new ByteArrayOutputStream();
-        file.write(entry(256, "elsewhere", "0", "MIT-MAGIC-COOKIE-1",
-                "not the cookie!!".getBytes(StandardCharsets.US_ASCII)));
+        file.write(entry(
+                256, "elsewhere", "0", "MIT-MAGIC-COOKIE-1", "not the cookie!!".getBytes(StandardCharsets.US_ASCII)));
         file.write(entry(256, "host", "0", "MIT-MAGIC-COOKIE-1", GOOD));
         Path auth = Files.write(home.resolve("xauth"), file.toByteArray());
 
@@ -146,9 +145,9 @@ class DisplayTest {
 
     @Test
     void aDisplayNumberIsReadAsLibxcbReadsIt(@TempDir Path home) throws IOException {
-        assertEquals(1215752191, Display.displayNumber("99999999999"));   // low 32 bits of it
+        assertEquals(1215752191, Display.displayNumber("99999999999")); // low 32 bits of it
         assertEquals(0, Display.displayNumber("4294967296"));
-        assertEquals(-1, Display.displayNumber("999999999999999999999999"));   // strtoul saturates
+        assertEquals(-1, Display.displayNumber("999999999999999999999999")); // strtoul saturates
         assertEquals(6000, Display.tcpPort(65536));
         assertEquals(5999, Display.tcpPort(-1));
 
@@ -185,13 +184,17 @@ class DisplayTest {
             sent = serveOnce(server, new byte[] {1, 0, 11, 0, 0, 0, 0, 0});
             assertEquals(Display.Answer.ACCEPTED, Display.handshake(UnixDomainSocketAddress.of(socket), GOOD, 3000));
             byte[] setup = sent.get();
-            assertEquals(18, ByteBuffer.wrap(setup, 6, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
+            assertEquals(
+                    18,
+                    ByteBuffer.wrap(setup, 6, 2).order(ByteOrder.LITTLE_ENDIAN).getShort());
             assertEquals("MIT-MAGIC-COOKIE-1", new String(setup, 12, 18, StandardCharsets.US_ASCII));
             assertArrayEquals(GOOD, Arrays.copyOfRange(setup, 32, 48));
         }
         Files.delete(socket);
-        assertEquals(Display.Answer.Kind.NOT_LISTENING,
-                Display.handshake(UnixDomainSocketAddress.of(socket), null, 3000).kind());
+        assertEquals(
+                Display.Answer.Kind.NOT_LISTENING,
+                Display.handshake(UnixDomainSocketAddress.of(socket), null, 3000)
+                        .kind());
     }
 
     @Test
@@ -202,10 +205,13 @@ class DisplayTest {
             int n = ((InetSocketAddress) server.getLocalAddress()).getPort() - 6000;
 
             // unix:N names its protocol, and libxcb then tries nothing else.
-            assertEquals(Display.Answer.Kind.NOT_LISTENING, Display.ask(sockets, n, false, null).kind());
+            assertEquals(
+                    Display.Answer.Kind.NOT_LISTENING,
+                    Display.ask(sockets, n, false, null).kind());
 
             CompletableFuture<byte[]> sent = serveOnce(server, refusal("No protocol specified"));
-            assertEquals(new Display.Answer(Display.Answer.Kind.REFUSED, "No protocol specified"),
+            assertEquals(
+                    new Display.Answer(Display.Answer.Kind.REFUSED, "No protocol specified"),
                     Display.ask(sockets, n, true, null));
             assertEquals('l', sent.get()[0]);
         }
@@ -263,8 +269,8 @@ class DisplayTest {
             }
 
             // libxcb waits on it, so the check must neither hang nor call it absent.
-            Display.Answer answer = assertTimeoutPreemptively(Duration.ofSeconds(10),
-                    () -> Display.handshake(address, null, 500));
+            Display.Answer answer =
+                    assertTimeoutPreemptively(Duration.ofSeconds(10), () -> Display.handshake(address, null, 500));
 
             assertEquals(Display.Answer.NOT_ASKED, answer);
         } finally {
@@ -293,8 +299,12 @@ class DisplayTest {
     private static byte[] refusal(String reason) {
         byte[] text = reason.getBytes(StandardCharsets.US_ASCII);
         ByteBuffer out = ByteBuffer.allocate(8 + pad(text.length)).order(ByteOrder.LITTLE_ENDIAN);
-        out.put((byte) 0).put((byte) text.length).putShort((short) 11).putShort((short) 0)
-                .putShort((short) (pad(text.length) / 4)).put(text);
+        out.put((byte) 0)
+                .put((byte) text.length)
+                .putShort((short) 11)
+                .putShort((short) 0)
+                .putShort((short) (pad(text.length) / 4))
+                .put(text);
         return out.array();
     }
 
@@ -314,8 +324,12 @@ class DisplayTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ByteBuffer b = ByteBuffer.allocate(512).order(ByteOrder.BIG_ENDIAN);
         b.putShort((short) family);
-        for (byte[] field : new byte[][] {address.getBytes(StandardCharsets.US_ASCII),
-                number.getBytes(StandardCharsets.US_ASCII), name.getBytes(StandardCharsets.US_ASCII), data}) {
+        for (byte[] field : new byte[][] {
+            address.getBytes(StandardCharsets.US_ASCII),
+            number.getBytes(StandardCharsets.US_ASCII),
+            name.getBytes(StandardCharsets.US_ASCII),
+            data
+        }) {
             b.putShort((short) field.length).put(field);
         }
         out.write(b.array(), 0, b.position());

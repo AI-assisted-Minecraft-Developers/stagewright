@@ -1,9 +1,9 @@
 package net.magicterra.stagewright.jupiter;
 
 /**
- * The socket could not carry the call: a handshake that failed, timed out or was interrupted, a
- * broken socket, or an interrupted wait for a reply. Not a {@link StageWrightRpcException}, so
- * nothing written to handle a refusal can take one for it.
+ * The socket could not carry the call: a handshake that failed, timed out or was interrupted, a broken socket, or an
+ * interrupted wait for a reply. Not a {@link StageWrightRpcException}, so nothing written to handle a refusal can take
+ * one for it.
  */
 public class StageWrightTransportException extends RuntimeException {
     private final String method;

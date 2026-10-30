@@ -7,9 +7,8 @@ import java.util.function.BooleanSupplier;
 
 /**
  * Conditions a test thread waits on, checked on the server thread at the end of every tick. A waiter is answered
- * {@code true} the first tick its condition holds and {@code false} once its budget of ticks has passed; a
- * condition that throws fails the wait with that throwable. Also what the {@code mc.test.*} methods that span
- * ticks wait on.
+ * {@code true} the first tick its condition holds and {@code false} once its budget of ticks has passed; a condition
+ * that throws fails the wait with that throwable. Also what the {@code mc.test.*} methods that span ticks wait on.
  */
 public final class ServerTicks {
 

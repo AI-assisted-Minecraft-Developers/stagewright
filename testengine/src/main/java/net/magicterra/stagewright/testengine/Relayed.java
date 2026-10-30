@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.opentest4j.TestAbortedException;
 
 /**
@@ -48,8 +47,10 @@ final class Relayed {
     }
 
     private static boolean isAssertion(String className) {
-        return className.equals("java.lang.AssertionError") || className.startsWith("org.opentest4j.")
-                || className.startsWith("org.assertj.") || className.endsWith("AssertionFailedError");
+        return className.equals("java.lang.AssertionError")
+                || className.startsWith("org.opentest4j.")
+                || className.startsWith("org.assertj.")
+                || className.endsWith("AssertionFailedError");
     }
 
     private static StackTraceElement[] frames(Object trace) {

@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
 import net.magicterra.stagewright.test.Requires;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import org.junit.platform.engine.EngineDiscoveryRequest;
@@ -29,12 +28,12 @@ import org.junit.platform.engine.support.descriptor.EngineDescriptor;
  * The JUnit engine for tests written in JavaScript or YAML, inside the game. A selected {@code .js} resource is
  * evaluated once at discovery through WorldDriver's {@link Scripting}, which collects what it registers with
  * {@code test(name, options, body)} and {@code step(name, body)}; a {@code .yaml} one is read by {@link YamlTests}.
- * Each test runs later with the context {@link ScriptContext} builds. A file that fails to load is reported as a
- * failed container rather than dropped, so a typo cannot make its tests disappear.
+ * Each test runs later with the context {@link ScriptContext} builds. A file that fails to load is reported as a failed
+ * container rather than dropped, so a typo cannot make its tests disappear.
  *
  * <p>JavaScript files load before YAML ones, since a YAML step may be a script's. The tests run beside the game's Java
- * tests, concurrently as {@link ScriptScheduler} arranges. The test engine outside the game discovers
- * the same files without the game (docs/design/test-engine.md), so what a file registers must not depend on the game.
+ * tests, concurrently as {@link ScriptScheduler} arranges. The test engine outside the game discovers the same files
+ * without the game (docs/design/test-engine.md), so what a file registers must not depend on the game.
  */
 public final class ScriptTestEngine implements TestEngine {
 
@@ -44,8 +43,8 @@ public final class ScriptTestEngine implements TestEngine {
     static final String SCENE = "stagewright.junit.scene";
 
     /** The options {@code test()} understands. The scene is read by the test engine outside the game, not here. */
-    private static final Set<String> OPTIONS = Set.of("scene", "requires", "dependsOn", "knownIssue", "locks", "isolated",
-            "afterRestart");
+    private static final Set<String> OPTIONS =
+            Set.of("scene", "requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart");
 
     private volatile TestDescriptor discovered;
 
@@ -60,7 +59,8 @@ public final class ScriptTestEngine implements TestEngine {
         Steps steps = new Steps(new LinkedHashMap<>(), JavaSteps.none());
         RuntimeException javaStepsError = null;
         try {
-            steps = new Steps(steps.scripts(), JavaSteps.load(Thread.currentThread().getContextClassLoader()));
+            steps = new Steps(
+                    steps.scripts(), JavaSteps.load(Thread.currentThread().getContextClassLoader()));
         } catch (RuntimeException e) {
             // Every file fails with it: which of them would have taken a step that is missing cannot be told.
             javaStepsError = e;
@@ -131,7 +131,8 @@ public final class ScriptTestEngine implements TestEngine {
             loaded.add(file);
             for (TestDescriptor test : file.getChildren()) tests.add((Test) test);
         }
-        ScriptScheduler.run(tests, request.getConfigurationParameters(), (test, scheduler) -> test.execute(listener, scheduler));
+        ScriptScheduler.run(
+                tests, request.getConfigurationParameters(), (test, scheduler) -> test.execute(listener, scheduler));
         for (File file : loaded) listener.executionFinished(file, TestExecutionResult.successful());
         listener.executionFinished(engine, TestExecutionResult.successful());
     }
@@ -208,8 +209,11 @@ public final class ScriptTestEngine implements TestEngine {
 
         /** {@code test(name, body)} or {@code test(name, options, body)}. */
         private Object register(Object... args) {
-            if (args.length < 2 || !(args[0] instanceof String name) || !(args[args.length - 1] instanceof Scripting.Function body)) {
-                throw new IllegalArgumentException("test(name, options, body) takes a name, optional options, and a function");
+            if (args.length < 2
+                    || !(args[0] instanceof String name)
+                    || !(args[args.length - 1] instanceof Scripting.Function body)) {
+                throw new IllegalArgumentException(
+                        "test(name, options, body) takes a name, optional options, and a function");
             }
             Map<?, ?> options = args.length > 2 && args[1] instanceof Map<?, ?> m ? m : Map.of();
             add(name, options, context -> body.call(context.asScript()));
@@ -220,8 +224,8 @@ public final class ScriptTestEngine implements TestEngine {
         private void add(String name, Map<?, ?> options, Body body) {
             for (Object key : options.keySet()) {
                 if (!OPTIONS.contains(String.valueOf(key))) {
-                    throw new IllegalArgumentException("test '" + name + "': unknown option '" + key + "'; known: "
-                            + OPTIONS);
+                    throw new IllegalArgumentException(
+                            "test '" + name + "': unknown option '" + key + "'; known: " + OPTIONS);
                 }
             }
             if (!inThisScene(options.get("scene"))) return;
@@ -241,9 +245,17 @@ public final class ScriptTestEngine implements TestEngine {
             if (afterRestart != null && !(afterRestart instanceof Boolean)) {
                 throw new IllegalArgumentException("test '" + name + "': afterRestart is true or false");
             }
-            addChild(new Test(id, this, name, requires(name, options.get("requires")),
-                    dependencies(resource, name, options.get("dependsOn")), locks(name, options.get("locks")),
-                    Boolean.TRUE.equals(isolated), Boolean.TRUE.equals(afterRestart), (String) known, body));
+            addChild(new Test(
+                    id,
+                    this,
+                    name,
+                    requires(name, options.get("requires")),
+                    dependencies(resource, name, options.get("dependsOn")),
+                    locks(name, options.get("locks")),
+                    Boolean.TRUE.equals(isolated),
+                    Boolean.TRUE.equals(afterRestart),
+                    (String) known,
+                    body));
         }
 
         /** Whether a test naming {@code scenes} runs in this game: every test does when no scene was chosen. */
@@ -255,7 +267,9 @@ public final class ScriptTestEngine implements TestEngine {
 
         /** {@code step(name, body)}: a named step any test can take with {@code t.step(name, args)}. */
         private Object registerStep(Object... args) {
-            if (args.length != 2 || !(args[0] instanceof String name) || !(args[1] instanceof Scripting.Function body)) {
+            if (args.length != 2
+                    || !(args[0] instanceof String name)
+                    || !(args[1] instanceof Scripting.Function body)) {
                 throw new IllegalArgumentException("step(name, body) takes a name and a function");
             }
             if (BuiltinSteps.NAMES.contains(name)) {
@@ -280,7 +294,8 @@ public final class ScriptTestEngine implements TestEngine {
 
     /** What {@code requires} asks for: a capability's name, or {@code mod:<id>}, alone or in a list. */
     private static Requirement requires(String test, Object value) {
-        List<Object> items = value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
+        List<Object> items =
+                value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
         List<Requires.Capability> capabilities = new ArrayList<>();
         List<String> mods = new ArrayList<>();
         for (Object item : items) {
@@ -289,13 +304,15 @@ public final class ScriptTestEngine implements TestEngine {
                 mods.add(s.substring(4));
                 continue;
             }
-            capabilities.add(switch (s) {
-                case "client" -> Requires.Capability.CLIENT;
-                case "dedicatedServer" -> Requires.Capability.DEDICATED_SERVER;
-                case "integratedServer" -> Requires.Capability.INTEGRATED_SERVER;
-                default -> throw new IllegalArgumentException("test '" + test + "': requires '" + s + "' is none of"
-                        + " client, dedicatedServer, integratedServer, mod:<id>");
-            });
+            capabilities.add(
+                    switch (s) {
+                        case "client" -> Requires.Capability.CLIENT;
+                        case "dedicatedServer" -> Requires.Capability.DEDICATED_SERVER;
+                        case "integratedServer" -> Requires.Capability.INTEGRATED_SERVER;
+                        default ->
+                            throw new IllegalArgumentException("test '" + test + "': requires '" + s + "' is none of"
+                                    + " client, dedicatedServer, integratedServer, mod:<id>");
+                    });
         }
         return new Requirement(capabilities.toArray(Requires.Capability[]::new), mods.toArray(String[]::new));
     }
@@ -311,12 +328,13 @@ public final class ScriptTestEngine implements TestEngine {
      * {@code com.example.SomeTest#method} a Java test, waited for as a script test is.
      */
     private static List<String> dependencies(String resource, String test, Object value) {
-        List<Object> items = value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
+        List<Object> items =
+                value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
         List<String> keys = new ArrayList<>();
         for (Object item : items) {
             if (!(item instanceof String s) || s.isBlank()) {
-                throw new IllegalArgumentException("test '" + test + "': dependsOn names tests, but has "
-                        + Expectations.show(item));
+                throw new IllegalArgumentException(
+                        "test '" + test + "': dependsOn names tests, but has " + Expectations.show(item));
             }
             keys.add(s.contains("#") ? s : resource + "#" + s);
         }
@@ -329,11 +347,13 @@ public final class ScriptTestEngine implements TestEngine {
      * {@code player:<name>}), or any name the tests agree on. Tests naming one lock never run at once.
      */
     private static Set<String> locks(String test, Object value) {
-        List<Object> items = value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
+        List<Object> items =
+                value == null ? List.of() : value instanceof List<?> l ? new ArrayList<>(l) : List.of(value);
         Set<String> locks = new HashSet<>();
         for (Object item : items) {
             if (!(item instanceof String s) || s.isBlank()) {
-                throw new IllegalArgumentException("test '" + test + "': locks are names, but has " + Expectations.show(item));
+                throw new IllegalArgumentException(
+                        "test '" + test + "': locks are names, but has " + Expectations.show(item));
             }
             locks.add(TestScope.LOCK_PREFIX + s);
         }
@@ -352,8 +372,17 @@ public final class ScriptTestEngine implements TestEngine {
         private final String knownIssue;
         private final Body body;
 
-        private Test(UniqueId id, File file, String name, Requirement requirement, List<String> dependsOn,
-                     Set<String> locks, boolean isolated, boolean afterRestart, String knownIssue, Body body) {
+        private Test(
+                UniqueId id,
+                File file,
+                String name,
+                Requirement requirement,
+                List<String> dependsOn,
+                Set<String> locks,
+                boolean isolated,
+                boolean afterRestart,
+                String knownIssue,
+                Body body) {
             super(id, name, ClasspathResourceSource.from(file.resource));
             this.file = file;
             this.name = name;
@@ -386,8 +415,8 @@ public final class ScriptTestEngine implements TestEngine {
                 List<String> missing = RequiresCondition.missing(requirement.capabilities(), requirement.mods());
                 if (!missing.isEmpty()) {
                     // The prefix is how the engine outside tells a requirement no scene met from any other skip.
-                    listener.executionSkipped(this, RequiresCondition.REASON_PREFIX + "this game has no "
-                            + String.join(", ", missing));
+                    listener.executionSkipped(
+                            this, RequiresCondition.REASON_PREFIX + "this game has no " + String.join(", ", missing));
                     return TestExecutionResult.Status.ABORTED;
                 }
             }
@@ -418,15 +447,16 @@ public final class ScriptTestEngine implements TestEngine {
                     }
                 }
                 if (why != null) {
-                    return TestExecutionResult.aborted(new IllegalStateException("depends on " + dependency + ", which "
-                            + why));
+                    return TestExecutionResult.aborted(
+                            new IllegalStateException("depends on " + dependency + ", which " + why));
                 }
             }
             return scheduler.blocker(this);
         }
 
         private TestExecutionResult run() {
-            ScriptContext context = new ScriptContext(GameExtension.game(), file.steps.scripts(), file.steps.java(), this);
+            ScriptContext context =
+                    new ScriptContext(GameExtension.game(), file.steps.scripts(), file.steps.java(), this);
             TestScope.bind(TestScope.ofScript(getDisplayName(), locks, isolated));
             Throwable failure = null;
             try {
@@ -446,7 +476,8 @@ public final class ScriptTestEngine implements TestEngine {
             if (failure == null) return TestExecutionResult.successful();
             // Matched by name: in a Fabric development game the class may come from another loader.
             return failure.getClass().getName().equals("org.opentest4j.TestAbortedException")
-                    ? TestExecutionResult.aborted(failure) : TestExecutionResult.failed(failure);
+                    ? TestExecutionResult.aborted(failure)
+                    : TestExecutionResult.failed(failure);
         }
     }
 }

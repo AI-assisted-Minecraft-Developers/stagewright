@@ -20,11 +20,10 @@ import org.gradle.api.provider.Property;
  * }
  * }</pre>
  *
- * With {@link #getLoaderProject()} the plugin declares the suite's runs in that project's loom or ModDevGradle, one
- * per topology
- * a scene may name, and the loader plugin still builds each launch. With {@link #getTopologies()} instead the suite
- * borrows topologies the build declares. Each suite gets a {@code stagewrightTest<Name>} task running the outer test
- * engine; see docs/design/test-engine.md.
+ * With {@link #getLoaderProject()} the plugin declares the suite's runs in that project's loom or ModDevGradle, one per
+ * topology a scene may name, and the loader plugin still builds each launch. With {@link #getTopologies()} instead the
+ * suite borrows topologies the build declares. Each suite gets a {@code stagewrightTest<Name>} task running the outer
+ * test engine; see docs/design/test-engine.md.
  */
 public abstract class StageWrightTestSuite implements Named {
 
@@ -45,14 +44,14 @@ public abstract class StageWrightTestSuite implements Named {
 
     /**
      * What the test classes link against: Minecraft, the mods, StageWright's api — the test source set's compile
-     * classpath. Gradle loads every class under {@link #getClasses()} by name in the test JVM, without running it,
-     * and a class whose supertypes are missing there fails to load and fails the task. Nothing here is started.
+     * classpath. Gradle loads every class under {@link #getClasses()} by name in the test JVM, without running it, and
+     * a class whose supertypes are missing there fails to load and fails the task. Nothing here is started.
      */
     public abstract ConfigurableFileCollection getClasspath();
 
     /**
-     * The topology name a scene declares, to the topology declared in {@code topologies} that runs it. Left empty
-     * when {@link #getLoaderProject()} is set: the suite's runs are generated then.
+     * The topology name a scene declares, to the topology declared in {@code topologies} that runs it. Left empty when
+     * {@link #getLoaderProject()} is set: the suite's runs are generated then.
      */
     public abstract MapProperty<String, String> getTopologies();
 
@@ -60,15 +59,15 @@ public abstract class StageWrightTestSuite implements Named {
      * The loom or ModDevGradle project whose runs this suite's games are, such as {@code ':fabric'}. The plugin
      * declares them there: {@code stagewright<Name>DedicatedServer}, {@code stagewright<Name>DedicatedServerWithClient}
      * and the {@code stagewright<Name>JoiningClient} that joins it, each in its own directory under
-     * {@code run-stagewright/<name>/}, with no IDE run configuration. Convention: the project the plugin is applied
-     * to, when it applies either.
+     * {@code run-stagewright/<name>/}, with no IDE run configuration. Convention: the project the plugin is applied to,
+     * when it applies either.
      */
     public abstract Property<String> getLoaderProject();
 
     /**
-     * The source set of {@link #getLoaderProject()} the generated runs start from, which is what puts the tests in
-     * the game while {@code runClient} goes without them. Convention: {@code testmod}, created seeing {@code main}
-     * when the project has none.
+     * The source set of {@link #getLoaderProject()} the generated runs start from, which is what puts the tests in the
+     * game while {@code runClient} goes without them. Convention: {@code testmod}, created seeing {@code main} when the
+     * project has none.
      */
     public abstract Property<String> getRunSourceSet();
 
@@ -94,8 +93,8 @@ public abstract class StageWrightTestSuite implements Named {
     public abstract Property<String> getLeaks();
 
     /**
-     * Whether the plugin brings WorldDriver as well as StageWright into the generated runs, and its api onto the
-     * tests' compile classpath. Convention: true; WorldDriver's own build, which is WorldDriver, turns it off.
+     * Whether the plugin brings WorldDriver as well as StageWright into the generated runs, and its api onto the tests'
+     * compile classpath. Convention: true; WorldDriver's own build, which is WorldDriver, turns it off.
      */
     public abstract Property<Boolean> getIncludeWorldDriver();
 
@@ -107,8 +106,8 @@ public abstract class StageWrightTestSuite implements Named {
 
     /**
      * Whether the run source set compiles against the plugin's {@code stagewrightTestCompile} configuration:
-     * StageWright's api and WorldDriver's, both in Mojang names, and JUnit Jupiter's unless the build declares its
-     * own there. Convention: true.
+     * StageWright's api and WorldDriver's, both in Mojang names, and JUnit Jupiter's unless the build declares its own
+     * there. Convention: true.
      */
     public abstract Property<Boolean> getTestDependencies();
 }

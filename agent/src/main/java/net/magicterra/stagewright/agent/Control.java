@@ -3,14 +3,12 @@ package net.magicterra.stagewright.agent;
 /**
  * What the game tells the agent.
  *
- * <p>The agent's jar is appended to the system class path, so this class is reachable from anywhere
- * with {@code ClassLoader.getSystemClassLoader().loadClass(NAME)} — which is how the mod, loaded by a
- * loader's own class loader, calls it without linking against it. Every signature uses JDK types
- * only, for the same reason.
+ * <p>The agent's jar is appended to the system class path, so this class is reachable from anywhere with
+ * {@code ClassLoader.getSystemClassLoader().loadClass(NAME)} — which is how the mod, loaded by a loader's own class
+ * loader, calls it without linking against it. Every signature uses JDK types only, for the same reason.
  *
- * <p>Every method does nothing when the JVM was not started with the agent, and none throws, so the
- * mod can call them unconditionally. That is the whole contract: a game started by hand has no agent
- * and behaves as it always did.
+ * <p>Every method does nothing when the JVM was not started with the agent, and none throws, so the mod can call them
+ * unconditionally. That is the whole contract: a game started by hand has no agent and behaves as it always did.
  */
 public final class Control {
 
@@ -31,8 +29,8 @@ public final class Control {
     }
 
     /**
-     * The run is over and its results are complete. The agent gives the JVM a grace period to end
-     * on its own, and after it reports what held the JVM up and ends it.
+     * The run is over and its results are complete. The agent gives the JVM a grace period to end on its own, and after
+     * it reports what held the JVM up and ends it.
      */
     public static void done() {
         Agent agent = Agent.running();
@@ -40,8 +38,8 @@ public final class Control {
     }
 
     /**
-     * One event of the in-game test run, as a JSON object, for whoever started the game to report as its own.
-     * The agent does not read it: what the object holds is between the game and that supervisor.
+     * One event of the in-game test run, as a JSON object, for whoever started the game to report as its own. The agent
+     * does not read it: what the object holds is between the game and that supervisor.
      */
     public static void test(String json) {
         Agent agent = Agent.running();

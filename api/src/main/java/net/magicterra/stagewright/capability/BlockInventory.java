@@ -9,10 +9,10 @@ import net.minecraft.core.BlockPos;
  * <h2>Why this is one facet and not one adapter per mod</h2>
  *
  * <p>Mekanism, Thermal, Create, AE2 and several hundred others do not share an API. They share a <i>capability</i>: a
- * block's inventory is reached through one platform interface, because that is how hoppers and pipes talk to them.
- * So a facet written against the capability covers all of them, including mods written after this file, and a block
- * that does not implement it is reported as not implementing it. Vanilla containers implement it too: a chest
- * answers {@code slots() == 27}.
+ * block's inventory is reached through one platform interface, because that is how hoppers and pipes talk to them. So a
+ * facet written against the capability covers all of them, including mods written after this file, and a block that
+ * does not implement it is reported as not implementing it. Vanilla containers implement it too: a chest answers
+ * {@code slots() == 27}.
  *
  * <pre>{@code
  * BlockInventory inv = game.capability("itemhandler", BlockInventory.class);

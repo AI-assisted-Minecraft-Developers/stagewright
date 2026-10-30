@@ -2,7 +2,6 @@ package net.magicterra.stagewright.jupiter;
 
 import java.util.Optional;
 import java.util.function.UnaryOperator;
-
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessApi;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.BotsOp;
@@ -17,8 +16,8 @@ import net.magicterra.worlddriver.api.methods.test.TestInputContracts.HeldKeys;
 
 /**
  * The {@link net.magicterra.stagewright.test.Driven} verbs for one ref, through {@code mc.test.bots} and
- * {@code mc.test.input.press}. Those answer within the call on the server thread, so each runs there as one task and
- * no server tick falls between a test's two calls unless it waits for one.
+ * {@code mc.test.input.press}. Those answer within the call on the server thread, so each runs there as one task and no
+ * server tick falls between a test's two calls unless it waits for one.
  */
 final class Drive {
 
@@ -53,12 +52,18 @@ final class Drive {
         if (!press.bot().equals(ref)) {
             throw new IllegalArgumentException("a press for " + ref + " was turned into one for " + press.bot());
         }
-        return game.onServer(server -> TestHarnessApi.of(game.registry()).press(press).toCompletableFuture().join())
+        return game.onServer(server -> TestHarnessApi.of(game.registry())
+                        .press(press)
+                        .toCompletableFuture()
+                        .join())
                 .held();
     }
 
     private static BotsReply bots(Game game, BotsOp op) {
-        return game.onServer(server -> TestHarnessApi.of(game.registry()).bots(op).toCompletableFuture().join());
+        return game.onServer(server -> TestHarnessApi.of(game.registry())
+                .bots(op)
+                .toCompletableFuture()
+                .join());
     }
 
     private static int positive(int ticks) {

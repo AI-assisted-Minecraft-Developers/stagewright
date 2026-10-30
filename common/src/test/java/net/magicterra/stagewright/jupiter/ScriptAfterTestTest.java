@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.api.registry.Scripting;
 import net.magicterra.worlddriver.script.HostedScripts;
@@ -42,15 +41,16 @@ class ScriptAfterTestTest {
         // The first to throw, which ran last-registered first, is the failure; the next rides along.
         assertTrue(failure instanceof AssertionError, String.valueOf(failure));
         assertEquals(1, failure.getSuppressed().length);
-        assertTrue(failure.getSuppressed()[0].getMessage().contains("cleanup broke"),
+        assertTrue(
+                failure.getSuppressed()[0].getMessage().contains("cleanup broke"),
                 failure.getSuppressed()[0].getMessage());
     }
 
     @Test
     void aTestThatAlreadyFailedKeepsItsFailureWithTheCleanupsAdded() {
         AssertionError body = new AssertionError("the body failed");
-        Throwable failure = ScriptContext.runAfterTest(cleanups("[function () { throw new Error('cleanup broke'); }]"),
-                body, null);
+        Throwable failure =
+                ScriptContext.runAfterTest(cleanups("[function () { throw new Error('cleanup broke'); }]"), body, null);
         assertSame(body, failure);
         assertEquals(1, body.getSuppressed().length);
     }

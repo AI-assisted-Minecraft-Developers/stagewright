@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
-
 import org.junit.platform.engine.EngineExecutionListener;
 import org.junit.platform.engine.TestDescriptor;
 import org.junit.platform.engine.TestExecutionResult;
@@ -16,8 +15,9 @@ import org.junit.platform.engine.support.descriptor.MethodSource;
 
 /**
  * Turns one game's test events into the outer tree's: a game node is matched to an outer one by class, method and
- * parameter types, or by script file and test name, and reported under the outer node's id. Called on the supervisor's reader thread while the game
- * runs, then once more from the engine's thread to close out what the game never reported, hence synchronized.
+ * parameter types, or by script file and test name, and reported under the outer node's id. Called on the supervisor's
+ * reader thread while the game runs, then once more from the engine's thread to close out what the game never reported,
+ * hence synchronized.
  */
 final class Relay implements Consumer<Map<String, Object>> {
 
@@ -34,6 +34,7 @@ final class Relay implements Consumer<Map<String, Object>> {
     private final Set<TestDescriptor> finished = new HashSet<>();
     /** Classes and script files a round finished unsuccessfully, held until close-out. */
     private final Map<TestDescriptor, TestExecutionResult> containers = new HashMap<>();
+
     private boolean plan;
     private boolean ended;
     private int restart = -1;
@@ -97,10 +98,13 @@ final class Relay implements Consumer<Map<String, Object>> {
                 Map<?, ?> failure = event.get("failure") instanceof Map<?, ?> f ? f : null;
                 TestExecutionResult result = switch (status) {
                     case "SUCCESSFUL" -> TestExecutionResult.successful();
-                    case "ABORTED" -> TestExecutionResult.aborted(failure == null ? null : Relayed.failure(failure, true));
-                    default -> TestExecutionResult.failed(failure == null
-                            ? new AssertionError("the game reported a failure without a throwable")
-                            : Relayed.failure(failure, false));
+                    case "ABORTED" ->
+                        TestExecutionResult.aborted(failure == null ? null : Relayed.failure(failure, true));
+                    default ->
+                        TestExecutionResult.failed(
+                                failure == null
+                                        ? new AssertionError("the game reported a failure without a throwable")
+                                        : Relayed.failure(failure, false));
                 };
                 // A class or script file may have tests in a later round, after a restart: it finishes at close-out,
                 // with the first failure any round reported for it.
@@ -110,7 +114,8 @@ final class Relay implements Consumer<Map<String, Object>> {
                 }
                 // Children end before their parent: what the game never ran under this node is closed out first.
                 for (TestDescriptor child : d.getChildren()) {
-                    if (!finished.contains(child)) closeOut(child, null, "the game finished its parent without running it");
+                    if (!finished.contains(child))
+                        closeOut(child, null, "the game finished its parent without running it");
                 }
                 finish(d, result);
             }
@@ -127,8 +132,10 @@ final class Relay implements Consumer<Map<String, Object>> {
                     entries.forEach((k, v) -> record(d, String.valueOf(k), String.valueOf(v)));
                 }
             }
-            case "error" -> error =event.get("failure") instanceof Map<?, ?> f ? Relayed.failure(f, false)
-                    : new IllegalStateException("the game's test run could not start");
+            case "error" ->
+                error = event.get("failure") instanceof Map<?, ?> f
+                        ? Relayed.failure(f, false)
+                        : new IllegalStateException("the game's test run could not start");
             case "restart" -> restart = event.get("round") instanceof Number n ? n.intValue() : -1;
             case "ended" -> ended = true;
             default -> {
@@ -167,8 +174,12 @@ final class Relay implements Consumer<Map<String, Object>> {
             if (finished.contains(c)) continue;
             start(c);
             if (own != null) finish(c, own);
-            else finish(c, anyClosed ? TestExecutionResult.failed(new AssertionError("not every test in it ran"))
-                    : TestExecutionResult.successful());
+            else
+                finish(
+                        c,
+                        anyClosed
+                                ? TestExecutionResult.failed(new AssertionError("not every test in it ran"))
+                                : TestExecutionResult.successful());
         }
     }
 
@@ -195,8 +206,8 @@ final class Relay implements Consumer<Map<String, Object>> {
     }
 
     /**
-     * A value the test recorded in the game. Published as a report entry under its name, which a build tool's report
-     * or an IDE shows; a blank value, which a report entry cannot hold, as {@value StageWrightTestEngine#BLANK_RECORD}
+     * A value the test recorded in the game. Published as a report entry under its name, which a build tool's report or
+     * an IDE shows; a blank value, which a report entry cannot hold, as {@value StageWrightTestEngine#BLANK_RECORD}
      * naming it. Also printed, one line each, since Gradle's own test report reads no report entries at all: in its
      * test report the line is the output of whichever test was running then, and says which test it belongs to.
      */
@@ -205,8 +216,11 @@ final class Relay implements Consumer<Map<String, Object>> {
         String label = key(d) != null ? key(d) : d.getDisplayName();
         System.out.println("[stagewright] record " + sceneName + " " + label + ": " + name + " = "
                 + value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n"));
-        listener.reportingEntryPublished(d, value.isBlank()
-                ? ReportEntry.from(StageWrightTestEngine.BLANK_RECORD, name) : ReportEntry.from(name, value));
+        listener.reportingEntryPublished(
+                d,
+                value.isBlank()
+                        ? ReportEntry.from(StageWrightTestEngine.BLANK_RECORD, name)
+                        : ReportEntry.from(name, value));
     }
 
     /** A test's key for coverage, the same in every scene; null for a container. */
@@ -241,8 +255,10 @@ final class Relay implements Consumer<Map<String, Object>> {
         if (parent == null) return;
         String gameId = String.valueOf(node.get("id"));
         UniqueId.Segment last = UniqueId.parse(gameId).getLastSegment();
-        Nodes.Dynamic d = new Nodes.Dynamic(parent.getUniqueId().append(last.getType(), last.getValue()),
-                String.valueOf(node.get("name")), parent.getSource().filter(MethodSource.class::isInstance).orElse(null),
+        Nodes.Dynamic d = new Nodes.Dynamic(
+                parent.getUniqueId().append(last.getType(), last.getValue()),
+                String.valueOf(node.get("name")),
+                parent.getSource().filter(MethodSource.class::isInstance).orElse(null),
                 Boolean.TRUE.equals(node.get("test")));
         parent.addChild(d);
         byGameId.put(gameId, d);

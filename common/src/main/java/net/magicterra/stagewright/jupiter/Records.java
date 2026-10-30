@@ -1,10 +1,8 @@
 package net.magicterra.stagewright.jupiter;
 
-import java.util.function.Consumer;
-
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-
+import java.util.function.Consumer;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.harness.AgentBridge;
 import org.junit.platform.engine.TestSource;

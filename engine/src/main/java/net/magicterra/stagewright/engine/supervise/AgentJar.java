@@ -8,11 +8,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * The supervision agent's jar, which rides inside the jar of whatever launches the game and is
- * written out where a game can load it from with {@code -javaagent}.
+ * The supervision agent's jar, which rides inside the jar of whatever launches the game and is written out where a game
+ * can load it from with {@code -javaagent}.
  *
- * <p>Written beside the run's other artifacts, not into the pack's {@code mods/}: it is not a mod,
- * and a loader that found it there would try to load it as one.
+ * <p>Written beside the run's other artifacts, not into the pack's {@code mods/}: it is not a mod, and a loader that
+ * found it there would try to load it as one.
  */
 public final class AgentJar {
 
@@ -24,8 +24,8 @@ public final class AgentJar {
     /**
      * Write the agent into {@code dir} and return its path. Rewritten every run: it is small.
      *
-     * @param owner a class from the jar that carries the agent as a resource; each launcher bundles
-     *              its own copy, and a resource is looked up through the loader of the class asking
+     * @param owner a class from the jar that carries the agent as a resource; each launcher bundles its own copy, and a
+     *     resource is looked up through the loader of the class asking
      */
     public static Path stage(Class<?> owner, Path dir) {
         try (InputStream in = owner.getResourceAsStream(RESOURCE)) {

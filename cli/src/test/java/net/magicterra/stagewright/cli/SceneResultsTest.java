@@ -12,9 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-
 import javax.xml.parsers.DocumentBuilderFactory;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.platform.engine.ConfigurationParameters;
@@ -34,7 +32,9 @@ class SceneResultsTest {
     private static final UniqueId ENGINE = UniqueId.forEngine("stagewright");
 
     private static UniqueId test(String scene, String name) {
-        return ENGINE.append("scene", scene).append("script", "stagewright/tests/crops.js").append("test", name);
+        return ENGINE.append("scene", scene)
+                .append("script", "stagewright/tests/crops.js")
+                .append("test", name);
     }
 
     private static String testcase(UniqueId id, String name, String time, String outcome) {
@@ -43,35 +43,54 @@ class SceneResultsTest {
         String scene = SceneResults.sceneOf(id.toString());
         String classname = scene == null ? script : scene + "/" + script;
         return "<testcase name=\"" + name + "\" classname=\"" + classname + "\" time=\"" + time + "\">\n"
-                + outcome + "<system-out><![CDATA[\nunique-id: " + id + "\ndisplay-name: " + name + "\n]]></system-out>\n"
+                + outcome + "<system-out><![CDATA[\nunique-id: " + id + "\ndisplay-name: " + name
+                + "\n]]></system-out>\n"
                 + "</testcase>\n";
     }
 
     private static Element suiteOf(Path file) throws Exception {
-        return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file.toFile()).getDocumentElement();
+        return DocumentBuilderFactory.newInstance()
+                .newDocumentBuilder()
+                .parse(file.toFile())
+                .getDocumentElement();
     }
 
     @Test
     void theSceneIsReadFromTheUniqueId() {
         assertEquals("mms-client", SceneResults.sceneOf(test("mms-client", "a").toString()));
-        assertNull(SceneResults.sceneOf(ENGINE.append("script", "stagewright/tests/x.js").toString()));
+        assertNull(SceneResults.sceneOf(
+                ENGINE.append("script", "stagewright/tests/x.js").toString()));
         assertNull(SceneResults.sceneOf(""));
     }
 
     @Test
     void eachSceneGetsASuiteOfItsOwnAndTheTestsInNoneStayBehind(@TempDir Path reports) throws Exception {
         Path xml = reports.resolve("TEST-stagewright.xml");
-        Files.writeString(xml, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                + "<testsuite name=\"StageWright\" tests=\"5\" skipped=\"2\" failures=\"1\" errors=\"0\" time=\"9\""
-                + " hostname=\"h\">\n<properties><property name=\"os.name\" value=\"Linux\"/></properties>\n"
-                + testcase(test("mms", "cropDrying"), "cropDrying", "1.5", "")
-                + testcase(test("mms", "cropGrowing"), "cropGrowing", "2.25", "<failure message=\"no\">x</failure>")
-                + testcase(test("mms-client", "cropDrying"), "cropDrying", "0", "<skipped><![CDATA[no --client]]></skipped>")
-                + testcase(test("mms-client", "cropGrowing"), "cropGrowing", "0", "<skipped/>")
-                + testcase(ENGINE.append("script", "stagewright/tests/lost.js").append("test", "lost"), "lost", "0.1",
-                        "<failure message=\"ran in no scene\"/>")
-                + "<system-out><![CDATA[\nunique-id: [engine:stagewright]\n]]></system-out>\n"
-                + "</testsuite>\n");
+        Files.writeString(
+                xml,
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                        + "<testsuite name=\"StageWright\" tests=\"5\" skipped=\"2\" failures=\"1\" errors=\"0\" time=\"9\""
+                        + " hostname=\"h\">\n<properties><property name=\"os.name\" value=\"Linux\"/></properties>\n"
+                        + testcase(test("mms", "cropDrying"), "cropDrying", "1.5", "")
+                        + testcase(
+                                test("mms", "cropGrowing"),
+                                "cropGrowing",
+                                "2.25",
+                                "<failure message=\"no\">x</failure>")
+                        + testcase(
+                                test("mms-client", "cropDrying"),
+                                "cropDrying",
+                                "0",
+                                "<skipped><![CDATA[no --client]]></skipped>")
+                        + testcase(test("mms-client", "cropGrowing"), "cropGrowing", "0", "<skipped/>")
+                        + testcase(
+                                ENGINE.append("script", "stagewright/tests/lost.js")
+                                        .append("test", "lost"),
+                                "lost",
+                                "0.1",
+                                "<failure message=\"ran in no scene\"/>")
+                        + "<system-out><![CDATA[\nunique-id: [engine:stagewright]\n]]></system-out>\n"
+                        + "</testsuite>\n");
 
         SceneResults.split(reports);
 
@@ -85,7 +104,9 @@ class SceneResultsTest {
         assertEquals(1, mms.getElementsByTagName("property").getLength(), "the run's properties come along");
         NodeList cases = mms.getElementsByTagName("testcase");
         assertEquals(2, cases.getLength());
-        assertEquals("mms/stagewright/tests/crops.js", ((Element) cases.item(0)).getAttribute("classname"),
+        assertEquals(
+                "mms/stagewright/tests/crops.js",
+                ((Element) cases.item(0)).getAttribute("classname"),
                 "the classname is left as the engine reported it");
         assertEquals("cropDrying", ((Element) cases.item(0)).getAttribute("name"));
 
@@ -99,18 +120,23 @@ class SceneResultsTest {
         assertEquals("StageWright", rest.getAttribute("name"));
         assertEquals("1", rest.getAttribute("tests"));
         assertEquals("1", rest.getAttribute("failures"));
-        assertEquals("stagewright/tests/lost.js",
+        assertEquals(
+                "stagewright/tests/lost.js",
                 ((Element) rest.getElementsByTagName("testcase").item(0)).getAttribute("classname"));
     }
 
     @Test
     void aFileWhoseTestsAllLieInScenesIsReplacedByTheirs(@TempDir Path reports) throws Exception {
         Path xml = reports.resolve("TEST-stagewright.xml");
-        Files.writeString(xml, "<testsuite name=\"StageWright\" tests=\"1\">\n"
-                + testcase(test("stagewright", "a"), "a", "1", "") + "</testsuite>\n");
+        Files.writeString(
+                xml,
+                "<testsuite name=\"StageWright\" tests=\"1\">\n" + testcase(test("stagewright", "a"), "a", "1", "")
+                        + "</testsuite>\n");
         SceneResults.split(reports);
         assertFalse(Files.exists(xml));
-        assertEquals("stagewright", suiteOf(reports.resolve("TEST-stagewright-scene.xml")).getAttribute("name"));
+        assertEquals(
+                "stagewright",
+                suiteOf(reports.resolve("TEST-stagewright-scene.xml")).getAttribute("name"));
     }
 
     @Test
@@ -189,11 +215,15 @@ class SceneResultsTest {
 
     @Test
     void aFailedSceneSaysWhatFailedFirst() {
-        String line = SceneResults.summary("mms", SceneResults.countsOf(1, 2, 0),
+        String line = SceneResults.summary(
+                "mms",
+                SceneResults.countsOf(1, 2, 0),
                 TestExecutionResult.failed(new IllegalStateException("the game crashed\nat line 2")));
         assertTrue(line.startsWith("scene mms failed: 3 tests, 1 passed, 2 failed, in "), line);
         assertTrue(line.endsWith(" s — the game crashed"), line);
-        assertTrue(SceneResults.summary("mms", SceneResults.countsOf(1, 1, 0), TestExecutionResult.successful())
-                .startsWith("scene mms failed: 2 tests, 1 passed, 1 failed"), "a failed test fails its scene");
+        assertTrue(
+                SceneResults.summary("mms", SceneResults.countsOf(1, 1, 0), TestExecutionResult.successful())
+                        .startsWith("scene mms failed: 2 tests, 1 passed, 1 failed"),
+                "a failed test fails its scene");
     }
 }

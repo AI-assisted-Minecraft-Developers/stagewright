@@ -7,16 +7,24 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import net.magicterra.stagewright.engine.Json;
 
 /**
- * How to start the games of one topology, written by whatever configured the test run (the Gradle plugin, the CLI)
- * as {@code <topology>.json} in the directory {@value #PROPERTY} names. The format is in
+ * How to start the games of one topology, written by whatever configured the test run (the Gradle plugin, the CLI) as
+ * {@code <topology>.json} in the directory {@value #PROPERTY} names. The format is in
  * {@code docs/reference/launch-spec.md}.
  */
-record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, boolean cleanWorld, int timeoutMinutes,
-                  int stallMinutes, boolean server, Leaks leaks, Process primary, Process companion) {
+record LaunchSpec(
+        String topology,
+        Path gameDirectory,
+        Path worldDirectory,
+        boolean cleanWorld,
+        int timeoutMinutes,
+        int stallMinutes,
+        boolean server,
+        Leaks leaks,
+        Process primary,
+        Process companion) {
 
     static final String PROPERTY = "stagewright.launches";
 
@@ -38,7 +46,10 @@ record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, bool
     enum Leaks {
         /** The scene fails. */
         FAIL,
-        /** The scene's verdict is its tests'; for a launcher whose own threads never end, such as Architectury Loom's in dev. */
+        /**
+         * The scene's verdict is its tests'; for a launcher whose own threads never end, such as Architectury Loom's in
+         * dev.
+         */
         REPORT;
 
         static Leaks parse(Object value) {
@@ -55,8 +66,13 @@ record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, bool
      * One JVM: {@code java jvmArgs… mainClass args…}, in {@code workingDirectory}; {@code mainClass} is null when an
      * argument file in {@code jvmArgs} names it, as a NeoForge server's does.
      */
-    record Process(String java, List<String> jvmArgs, String mainClass, List<String> args, Path workingDirectory,
-                   Map<String, String> environment) {
+    record Process(
+            String java,
+            List<String> jvmArgs,
+            String mainClass,
+            List<String> args,
+            Path workingDirectory,
+            Map<String, String> environment) {
 
         /**
          * The command line, with {@code extra} JVM arguments placed after the run's own system properties and before
@@ -114,21 +130,31 @@ record LaunchSpec(String topology, Path gameDirectory, Path worldDirectory, bool
     static LaunchSpec parse(String topology, Map<?, ?> o) {
         Object companion = o.get("companion");
         Path gameDirectory = Path.of(string(o, "gameDirectory"));
-        return new LaunchSpec(topology, gameDirectory,
+        return new LaunchSpec(
+                topology,
+                gameDirectory,
                 gameDirectory.resolve(o.get("worldDirectory") instanceof String w ? w : "world"),
                 !Boolean.FALSE.equals(o.get("cleanWorld")),
-                number(o, "timeoutMinutes", 20), number(o, "stallMinutes", 5), Boolean.TRUE.equals(o.get("server")),
-                Leaks.parse(o.get("leaks")), process((Map<?, ?>) o.get("primary")),
+                number(o, "timeoutMinutes", 20),
+                number(o, "stallMinutes", 5),
+                Boolean.TRUE.equals(o.get("server")),
+                Leaks.parse(o.get("leaks")),
+                process((Map<?, ?>) o.get("primary")),
                 companion instanceof Map<?, ?> c ? process(c) : null);
     }
 
     private static Process process(Map<?, ?> p) {
         if (p == null) throw new IllegalArgumentException("no primary process");
         Map<String, String> env = new LinkedHashMap<>();
-        if (p.get("environment") instanceof Map<?, ?> e) e.forEach((k, v) -> env.put(String.valueOf(k), String.valueOf(v)));
-        return new Process(string(p, "java"), strings(p.get("jvmArgs")),
+        if (p.get("environment") instanceof Map<?, ?> e)
+            e.forEach((k, v) -> env.put(String.valueOf(k), String.valueOf(v)));
+        return new Process(
+                string(p, "java"),
+                strings(p.get("jvmArgs")),
                 p.get("mainClass") instanceof String main ? main : null,
-                strings(p.get("args")), Path.of(string(p, "workingDirectory")), env);
+                strings(p.get("args")),
+                Path.of(string(p, "workingDirectory")),
+                env);
     }
 
     private static String string(Map<?, ?> o, String key) {

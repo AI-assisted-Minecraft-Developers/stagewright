@@ -7,8 +7,8 @@ import net.neoforged.neoforge.common.NeoForge;
 /**
  * NeoForge's half of the client director: a tick source, and nothing else.
  *
- * <p>The director itself lives in {@code :common} — driving a client into a world is vanilla
- * Minecraft on both loaders, and the only genuine difference is which event delivers the tick.
+ * <p>The director itself lives in {@code :common} — driving a client into a world is vanilla Minecraft on both loaders,
+ * and the only genuine difference is which event delivers the tick.
  */
 public final class StageWrightClientDirector {
 

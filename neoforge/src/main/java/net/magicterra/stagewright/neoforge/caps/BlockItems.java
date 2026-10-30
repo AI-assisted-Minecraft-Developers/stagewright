@@ -17,8 +17,8 @@ import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.items.IItemHandler;
 
 /**
- * The inventory of a block, through the item-handler capability rather than through {@code Container}. Every machine
- * in every tech mod — input slots that refuse output, sided access — exposes itself through this one capability, and
+ * The inventory of a block, through the item-handler capability rather than through {@code Container}. Every machine in
+ * every tech mod — input slots that refuse output, sided access — exposes itself through this one capability, and
  * vanilla containers implement it too: a chest answers {@code slots() == 27}.
  *
  * <pre>{@code
@@ -93,7 +93,8 @@ public final class BlockItems implements BlockInventory {
             require(pos, handlers);
             ItemStack stack = new ItemStack(item(itemId), 1);
             for (IItemHandler handler : handlers) {
-                if (slot < handler.getSlots() && handler.insertItem(slot, stack, true).isEmpty()) return true;
+                if (slot < handler.getSlots()
+                        && handler.insertItem(slot, stack, true).isEmpty()) return true;
             }
             return false;
         });

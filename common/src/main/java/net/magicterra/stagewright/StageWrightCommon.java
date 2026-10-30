@@ -30,9 +30,9 @@ public final class StageWrightCommon {
     // delay in the burst regime. So the tests start once the cadence has stabilized to the real
     // ~50 ms rhythm — 10 consecutive server ticks spaced >=40 ms apart — or after 1200 ticks with
     // no settle, so a pathological host can never hang the run. Server thread only.
-    private static final long CADENCE_NANOS = 40_000_000L;   // 40 ms — floor of a real ~50 ms tick
-    private static final int CADENCE_STREAK = 10;            // consecutive on-cadence ticks to settle
-    private static final int SETTLE_SAFETY_TICKS = 1200;     // never hang: start anyway after this many
+    private static final long CADENCE_NANOS = 40_000_000L; // 40 ms — floor of a real ~50 ms tick
+    private static final int CADENCE_STREAK = 10; // consecutive on-cadence ticks to settle
+    private static final int SETTLE_SAFETY_TICKS = 1200; // never hang: start anyway after this many
     private static boolean settled;
     private static int settleTickCount;
     private static int consecutiveCadenceTicks;
@@ -40,6 +40,7 @@ public final class StageWrightCommon {
 
     /** Server ticks seen, which the supervision agent reads as this JVM's progress. */
     private static long serverTicks;
+
     private static final int AGENT_TICK_INTERVAL = 20;
     private static boolean playersOpped;
 
@@ -49,8 +50,8 @@ public final class StageWrightCommon {
     private StageWrightCommon() {}
 
     /**
-     * A joining client has its own API and never receives a local SERVER_STARTED event. Called every
-     * client tick, so a failure is logged and retried rather than thrown into the game's tick.
+     * A joining client has its own API and never receives a local SERVER_STARTED event. Called every client tick, so a
+     * failure is logged and retried rather than thrown into the game's tick.
      */
     public static void onClientWorldReady() {
         try {
@@ -130,7 +131,8 @@ public final class StageWrightCommon {
         if (lastTickNanos != 0L && (now - lastTickNanos) >= CADENCE_NANOS) {
             if (++consecutiveCadenceTicks >= CADENCE_STREAK) {
                 settled = true;
-                LOG.info("[{}] tick cadence settled after {} server ticks (tick debt drained)", MOD_ID, settleTickCount);
+                LOG.info(
+                        "[{}] tick cadence settled after {} server ticks (tick debt drained)", MOD_ID, settleTickCount);
             }
         } else if (lastTickNanos != 0L) {
             consecutiveCadenceTicks = 0;
@@ -138,8 +140,11 @@ public final class StageWrightCommon {
         lastTickNanos = now;
         if (!settled && settleTickCount >= SETTLE_SAFETY_TICKS) {
             settled = true;
-            LOG.warn("[{}] tick cadence did NOT settle within {} server ticks; starting anyway (tick debt may still"
-                    + " be draining, so waits may run in the burst regime)", MOD_ID, SETTLE_SAFETY_TICKS);
+            LOG.warn(
+                    "[{}] tick cadence did NOT settle within {} server ticks; starting anyway (tick debt may still"
+                            + " be draining, so waits may run in the burst regime)",
+                    MOD_ID,
+                    SETTLE_SAFETY_TICKS);
         }
         return settled;
     }
@@ -149,7 +154,10 @@ public final class StageWrightCommon {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (server.getPlayerList().isOp(player.getGameProfile())) continue;
             server.getPlayerList().op(player.getGameProfile());
-            LOG.info("[{}] op'd the test client '{}'", MOD_ID, player.getGameProfile().getName());
+            LOG.info(
+                    "[{}] op'd the test client '{}'",
+                    MOD_ID,
+                    player.getGameProfile().getName());
         }
     }
 }

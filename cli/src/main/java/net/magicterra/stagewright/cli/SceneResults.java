@@ -13,13 +13,11 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
-
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
-
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.UniqueId;
 import org.junit.platform.launcher.TestExecutionListener;
@@ -34,8 +32,8 @@ import org.w3c.dom.Node;
  *
  * <p>JUnit's XML puts every test of the engine in one {@code <testsuite name="StageWright">}. The engine already names
  * each class and script file {@code <scene>/<class>}, so a testcase's {@code classname} says its scene, as in the files
- * Gradle writes; {@link #split} gives the CLI Gradle's layout too, one {@code TEST-<scene>.xml} per scene whose suite is
- * named for the scene, and leaves the {@code classname} as the engine reported it. A testcase is placed by the scene
+ * Gradle writes; {@link #split} gives the CLI Gradle's layout too, one {@code TEST-<scene>.xml} per scene whose suite
+ * is named for the scene, and leaves the {@code classname} as the engine reported it. A testcase is placed by the scene
  * segment of the unique id in its {@code <system-out>}, which every testcase has, whatever its class source.
  *
  * <p>As a listener it prints a line as each scene ends, with its counts, so a run that passes says what it ran.
@@ -99,7 +97,11 @@ final class SceneResults implements TestExecutionListener {
                 c.skipped++;
             }
         } else if (isScene(id)) {
-            long tests = plan == null ? 0 : plan.getDescendants(id).stream().filter(TestIdentifier::isTest).count();
+            long tests = plan == null
+                    ? 0
+                    : plan.getDescendants(id).stream()
+                            .filter(TestIdentifier::isTest)
+                            .count();
             log.accept("scene " + scene + " skipped, " + tests + (tests == 1 ? " test: " : " tests: ") + reason);
         }
     }
@@ -126,12 +128,20 @@ final class SceneResults implements TestExecutionListener {
     static String summary(String scene, Counts c, TestExecutionResult result) {
         boolean passed = result.getStatus() == TestExecutionResult.Status.SUCCESSFUL && c.failed == 0;
         int tests = c.passed + c.failed + c.skipped;
-        StringBuilder line = new StringBuilder("scene ").append(scene).append(passed ? " passed: " : " failed: ")
-                .append(tests).append(tests == 1 ? " test, " : " tests, ").append(c.passed).append(" passed");
+        StringBuilder line = new StringBuilder("scene ")
+                .append(scene)
+                .append(passed ? " passed: " : " failed: ")
+                .append(tests)
+                .append(tests == 1 ? " test, " : " tests, ")
+                .append(c.passed)
+                .append(" passed");
         if (c.failed > 0) line.append(", ").append(c.failed).append(" failed");
         if (c.skipped > 0) line.append(", ").append(c.skipped).append(" skipped");
-        line.append(", in ").append(BigDecimal.valueOf((System.nanoTime() - c.startedAt) / 1e9)
-                .setScale(1, RoundingMode.HALF_UP).toPlainString()).append(" s");
+        line.append(", in ")
+                .append(BigDecimal.valueOf((System.nanoTime() - c.startedAt) / 1e9)
+                        .setScale(1, RoundingMode.HALF_UP)
+                        .toPlainString())
+                .append(" s");
         Optional<Throwable> why = result.getThrowable();
         if (result.getStatus() != TestExecutionResult.Status.SUCCESSFUL && why.isPresent()) {
             String message = String.valueOf(why.get().getMessage());
@@ -153,14 +163,17 @@ final class SceneResults implements TestExecutionListener {
         if (!Files.isDirectory(reports)) return;
         List<Path> files;
         try (Stream<Path> list = Files.list(reports)) {
-            files = list.filter(p -> p.getFileName().toString().endsWith(".xml")).sorted().toList();
+            files = list.filter(p -> p.getFileName().toString().endsWith(".xml"))
+                    .sorted()
+                    .toList();
         }
         for (Path file : files) splitFile(file);
     }
 
     private static void splitFile(Path file) throws IOException {
         try {
-            Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file.toFile());
+            Document doc =
+                    DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file.toFile());
             Element suite = doc.getDocumentElement();
             if (!suite.getTagName().equals("testsuite")) return;
             Map<String, List<Element>> scenes = new LinkedHashMap<>();
@@ -178,7 +191,9 @@ final class SceneResults implements TestExecutionListener {
                 if (child instanceof Element e && e.getTagName().equals("properties")) suiteProperties = e;
             }
             for (Map.Entry<String, List<Element>> scene : scenes.entrySet()) {
-                Document out = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+                Document out = DocumentBuilderFactory.newInstance()
+                        .newDocumentBuilder()
+                        .newDocument();
                 Element root = (Element) out.importNode(suite, false);
                 out.appendChild(root);
                 root.setAttribute("name", scene.getKey());
@@ -232,7 +247,10 @@ final class SceneResults implements TestExecutionListener {
     }
 
     private static String seconds(double s) {
-        return BigDecimal.valueOf(s).setScale(3, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
+        return BigDecimal.valueOf(s)
+                .setScale(3, RoundingMode.HALF_UP)
+                .stripTrailingZeros()
+                .toPlainString();
     }
 
     private static void write(Document doc, Path file) throws Exception {

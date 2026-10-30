@@ -4,19 +4,18 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import net.magicterra.stagewright.engine.json.JsonObject;
 import net.magicterra.stagewright.engine.json.JsonValue;
 
 /**
  * Reads one JSON value into plain Java values.
  *
- * <p>An adapter over the vendored minimal-json, not a parser: the places a hand-written JSON parser
- * goes wrong — escapes, surrogate pairs, the number grammar — are exactly the ones that fail quietly.
- * See {@code json/VENDORED.md} for why the library is copied in rather than depended on.
+ * <p>An adapter over the vendored minimal-json, not a parser: the places a hand-written JSON parser goes wrong —
+ * escapes, surrogate pairs, the number grammar — are exactly the ones that fail quietly. See {@code json/VENDORED.md}
+ * for why the library is copied in rather than depended on.
  *
- * <p>Objects become {@link LinkedHashMap}, arrays {@link List}, numbers {@link Double}, and the rest
- * map to their obvious Java types. Insertion order is preserved.
+ * <p>Objects become {@link LinkedHashMap}, arrays {@link List}, numbers {@link Double}, and the rest map to their
+ * obvious Java types. Insertion order is preserved.
  */
 public final class Json {
 

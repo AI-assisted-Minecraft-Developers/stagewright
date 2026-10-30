@@ -25,14 +25,16 @@ import java.util.zip.ZipInputStream;
 /** Checks the required driver in the effective mod set before changing a world or downloading. */
 final class DriverRequirement {
     private record Mod(String id, String version, String driverRange, String source) {}
+
     private static final String FABRIC_METADATA = "fabric.mod.json";
     private static final String NEOFORGE_METADATA = "META-INF/neoforge.mods.toml";
+
     private DriverRequirement() {}
 
     /**
-     * A null {@code loader} is a pack whose loader could not be told, which only --no-install lets
-     * through: each jar is then read by whichever metadata file it carries. A loader that is told
-     * and has no StageWright build is refused either way.
+     * A null {@code loader} is a pack whose loader could not be told, which only --no-install lets through: each jar is
+     * then read by whichever metadata file it carries. A loader that is told and has no StageWright build is refused
+     * either way.
      */
     static void check(Path gameDir, String loader, List<Path> extras, boolean bundledFramework) {
         if (loader != null || bundledFramework) ModInjection.requireLoader(loader);
@@ -44,40 +46,62 @@ final class DriverRequirement {
                 for (Path jar : files.filter(DriverRequirement::isJar).sorted().toList()) {
                     mods.addAll(read(jar, loader));
                 }
-            } catch (IOException e) { throw new UncheckedIOException("cannot inspect " + dir, e); }
+            } catch (IOException e) {
+                throw new UncheckedIOException("cannot inspect " + dir, e);
+            }
         }
         for (Path extra : extras) {
             if (!Files.isRegularFile(extra)) throw new IllegalArgumentException("--mod " + extra + " is not a file");
             if (!Files.exists(dir.resolve(extra.getFileName()))) mods.addAll(read(extra, loader));
         }
-        List<Mod> frameworks = mods.stream().filter(m -> m.id().equals("mc_testkit")).toList();
+        List<Mod> frameworks =
+                mods.stream().filter(m -> m.id().equals("mc_testkit")).toList();
         if (frameworks.isEmpty() && bundledFramework) {
             String resource = "/mods/mc_stagewright-" + loader + ".jar";
             try (InputStream in = DriverRequirement.class.getResourceAsStream(resource)) {
                 if (in == null) throw new IllegalStateException("this CLI carries no " + resource);
-                frameworks = metadata(in, loader, resource).stream().filter(m -> m.id().equals("mc_testkit")).toList();
-            } catch (IOException e) { throw new UncheckedIOException(e); }
+                frameworks = metadata(in, loader, resource).stream()
+                        .filter(m -> m.id().equals("mc_testkit"))
+                        .toList();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
         }
-        if (frameworks.size() != 1) throw new IllegalArgumentException("expected one StageWright mod for "
-                + loaderName + ", found " + frameworks.size());
+        if (frameworks.size() != 1)
+            throw new IllegalArgumentException(
+                    "expected one StageWright mod for " + loaderName + ", found " + frameworks.size());
         Mod framework = frameworks.get(0);
-        if (framework.driverRange() == null) throw new IllegalArgumentException(framework.source()
-                + " does not declare a required WorldDriver dependency; install the current StageWright");
-        List<Mod> drivers = mods.stream().filter(m -> m.id().equals("worlddriver")).toList();
-        if (drivers.size() != 1) throw new IllegalArgumentException("StageWright requires one compatible WorldDriver mod for "
-                + loaderName + ", found " + drivers.size()
-                + (drivers.isEmpty() ? "" : " (" + String.join(", ", drivers.stream().map(Mod::source).toList()) + ")")
-                + ". Install it in " + dir + " or pass --mod <worlddriver.jar>");
+        if (framework.driverRange() == null)
+            throw new IllegalArgumentException(framework.source()
+                    + " does not declare a required WorldDriver dependency; install the current StageWright");
+        List<Mod> drivers =
+                mods.stream().filter(m -> m.id().equals("worlddriver")).toList();
+        if (drivers.size() != 1)
+            throw new IllegalArgumentException("StageWright requires one compatible WorldDriver mod for "
+                    + loaderName + ", found " + drivers.size()
+                    + (drivers.isEmpty()
+                            ? ""
+                            : " ("
+                                    + String.join(
+                                            ", ",
+                                            drivers.stream().map(Mod::source).toList()) + ")")
+                    + ". Install it in " + dir + " or pass --mod <worlddriver.jar>");
         Mod driver = drivers.get(0);
-        if (!accepts(framework.driverRange(), driver.version())) throw new IllegalArgumentException(
-                "WorldDriver " + driver.version() + " in " + driver.source() + " is incompatible with "
-                + framework.source() + ": requires " + framework.driverRange());
+        if (!accepts(framework.driverRange(), driver.version()))
+            throw new IllegalArgumentException("WorldDriver " + driver.version() + " in " + driver.source()
+                    + " is incompatible with " + framework.source() + ": requires " + framework.driverRange());
     }
 
-    /** The version {@code jar} declares for the mod {@code id} ({@code mc_testkit} or {@code worlddriver}); null if none. */
+    /**
+     * The version {@code jar} declares for the mod {@code id} ({@code mc_testkit} or {@code worlddriver}); null if
+     * none.
+     */
     static String declaredVersion(Path jar, String loader, String id) {
-        return read(jar, loader).stream().filter(m -> m.id().equals(id))
-                .map(m -> m.version() == null ? "no version" : m.version()).findFirst().orElse(null);
+        return read(jar, loader).stream()
+                .filter(m -> m.id().equals(id))
+                .map(m -> m.version() == null ? "no version" : m.version())
+                .findFirst()
+                .orElse(null);
     }
 
     /** The jars directly in {@code dir}, by name; none when it is no directory. */
@@ -85,7 +109,9 @@ final class DriverRequirement {
         if (!Files.isDirectory(dir)) return List.of();
         try (var files = Files.list(dir)) {
             return files.filter(DriverRequirement::isJar).sorted().toList();
-        } catch (IOException e) { throw new UncheckedIOException("cannot inspect " + dir, e); }
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot inspect " + dir, e);
+        }
     }
 
     static boolean isFramework(Path jar, String loader) {
@@ -96,8 +122,13 @@ final class DriverRequirement {
         Path dir = gameDir.resolve("mods");
         if (!Files.isDirectory(dir)) return List.of();
         try (var files = Files.list(dir)) {
-            return files.filter(DriverRequirement::isJar).filter(p -> isFramework(p, loader)).sorted().toList();
-        } catch (IOException e) { throw new UncheckedIOException(e); }
+            return files.filter(DriverRequirement::isJar)
+                    .filter(p -> isFramework(p, loader))
+                    .sorted()
+                    .toList();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static boolean isJar(Path path) {
@@ -105,29 +136,39 @@ final class DriverRequirement {
     }
 
     /**
-     * By entry name through the central directory: a pack's jars need not be stream-readable. A
-     * file that is no zip at all is not one of our two mods, so the loader judges it, not this.
+     * By entry name through the central directory: a pack's jars need not be stream-readable. A file that is no zip at
+     * all is not one of our two mods, so the loader judges it, not this.
      *
-     * <p>A run asks about the same jars several times (preflight, staging, which jars are
-     * StageWright), so each answer is kept for as long as the file's size and mtime are unchanged.
+     * <p>A run asks about the same jars several times (preflight, staging, which jars are StageWright), so each answer
+     * is kept for as long as the file's size and mtime are unchanged.
      */
     private static List<Mod> read(Path jar, String loader) {
         Read key;
         try {
-            key = new Read(jar.toAbsolutePath().normalize(), Files.size(jar),
-                    Files.getLastModifiedTime(jar).toMillis(), loader);
-        } catch (IOException e) { throw new UncheckedIOException("cannot open " + jar, e); }
+            key = new Read(
+                    jar.toAbsolutePath().normalize(),
+                    Files.size(jar),
+                    Files.getLastModifiedTime(jar).toMillis(),
+                    loader);
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot open " + jar, e);
+        }
         return READS.computeIfAbsent(key, k -> open(jar, loader));
     }
 
     private record Read(Path jar, long size, long modified, String loader) {}
+
     private static final Map<Read, List<Mod>> READS = new ConcurrentHashMap<>();
 
     private static List<Mod> open(Path jar, String loader) {
         ZipFile opened;
-        try { opened = new ZipFile(jar.toFile()); }
-        catch (ZipException notAZip) { return List.of(); }
-        catch (IOException e) { throw new UncheckedIOException("cannot open " + jar, e); }
+        try {
+            opened = new ZipFile(jar.toFile());
+        } catch (ZipException notAZip) {
+            return List.of();
+        } catch (IOException e) {
+            throw new UncheckedIOException("cannot open " + jar, e);
+        }
         try (ZipFile zip = opened) {
             for (String path : metadataPaths(loader)) {
                 ZipEntry entry = zip.getEntry(path);
@@ -146,7 +187,7 @@ final class DriverRequirement {
     private static List<Mod> metadata(InputStream input, String loader, String source) throws IOException {
         List<String> paths = metadataPaths(loader);
         try (ZipInputStream zip = new ZipInputStream(input)) {
-            for (ZipEntry entry; (entry = zip.getNextEntry()) != null;) {
+            for (ZipEntry entry; (entry = zip.getNextEntry()) != null; ) {
                 if (!paths.contains(entry.getName())) continue;
                 return parse(entry.getName(), new String(zip.readAllBytes(), StandardCharsets.UTF_8), source);
             }
@@ -160,14 +201,17 @@ final class DriverRequirement {
     }
 
     /**
-     * Only our two mods are read; metadata this cannot read as one of them, in whatever shape, is
-     * that mod's loader's business. A missing field of ours reads as null and is refused by name.
+     * Only our two mods are read; metadata this cannot read as one of them, in whatever shape, is that mod's loader's
+     * business. A missing field of ours reads as null and is refused by name.
      */
     private static List<Mod> parse(String path, String text, String source) {
         if (path.equals(FABRIC_METADATA)) {
             JsonElement root;
-            try { root = JsonParser.parseString(text.startsWith("﻿") ? text.substring(1) : text); }
-            catch (JsonParseException unreadable) { return List.of(); }
+            try {
+                root = JsonParser.parseString(text.startsWith("﻿") ? text.substring(1) : text);
+            } catch (JsonParseException unreadable) {
+                return List.of();
+            }
             if (!root.isJsonObject()) return List.of();
             JsonObject json = root.getAsJsonObject();
             String id = string(json, "id");
@@ -182,7 +226,7 @@ final class DriverRequirement {
             if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) continue;
             String range = null;
             for (String dep : text.split("(?m)^\\s*\\[\\[")) {
-                if (dep.startsWith("dependencies." + id + "]]" )
+                if (dep.startsWith("dependencies." + id + "]]")
                         && "worlddriver".equals(value(dep, "modId"))
                         && "required".equals(value(dep, "type"))) range = value(dep, "versionRange");
             }
@@ -207,7 +251,8 @@ final class DriverRequirement {
         Matcher bounds = Pattern.compile("(?:>=|\\[)([0-9.]+)-alpha\\.([0-9]+)(?: <|,)([0-9.]+)-alpha\\.0\\)?")
                 .matcher(range);
         if (!bounds.matches()) throw new IllegalArgumentException("unsupported WorldDriver release range: " + range);
-        Matcher actual = Pattern.compile("([0-9]+\\.[0-9]+\\.[0-9]+)(?:-([0-9A-Za-z.-]+))?(?:\\+[0-9A-Za-z.-]+)?").matcher(version == null ? "" : version);
+        Matcher actual = Pattern.compile("([0-9]+\\.[0-9]+\\.[0-9]+)(?:-([0-9A-Za-z.-]+))?(?:\\+[0-9A-Za-z.-]+)?")
+                .matcher(version == null ? "" : version);
         if (!actual.matches()) return false;
         // StageWright candidates are numbered builds, local snapshots and releases. Leave other prerelease
         // ordering to the loader by refusing unsupported candidates before starting the game.

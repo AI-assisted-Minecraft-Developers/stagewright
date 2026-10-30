@@ -17,8 +17,8 @@ public final class DriverRuntime {
     }
 
     /**
-     * Register once per API instance; publish the marker only after all registrations succeed.
-     * A client asks every tick, so an API already registered is answered without the lock.
+     * Register once per API instance; publish the marker only after all registrations succeed. A client asks every
+     * tick, so an API already registered is answered without the lock.
      */
     public static void registerVerbs() {
         ApiRegistry api = requireApi();

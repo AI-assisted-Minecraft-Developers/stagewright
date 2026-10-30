@@ -22,8 +22,8 @@ final class SceneSetup {
 
     /**
      * Put the save {@code from} names where the game looks for its world. A zip is unpacked from the folder holding its
-     * {@code level.dat}, so a zip of the world folder and one of its contents both do; a directory on the class path
-     * is copied.
+     * {@code level.dat}, so a zip of the world folder and one of its contents both do; a directory on the class path is
+     * copied.
      */
     static void installSave(String from, ClassLoader loader, Path world) throws IOException {
         String resource = SceneFile.ROOT + from;
@@ -62,16 +62,18 @@ final class SceneSetup {
                 }
             }
         }
-        if (prefix == null) throw new IllegalStateException("world.from: " + resource + " holds no level.dat, so it is"
-                + " not a save");
+        if (prefix == null)
+            throw new IllegalStateException(
+                    "world.from: " + resource + " holds no level.dat, so it is" + " not a save");
         Path root = world.toAbsolutePath().normalize();
         try (ZipInputStream zip = new ZipInputStream(url.openStream())) {
             for (ZipEntry e = zip.getNextEntry(); e != null; e = zip.getNextEntry()) {
                 if (!e.getName().startsWith(prefix) || e.getName().length() == prefix.length()) continue;
-                Path target = root.resolve(e.getName().substring(prefix.length())).normalize();
+                Path target =
+                        root.resolve(e.getName().substring(prefix.length())).normalize();
                 if (!target.startsWith(root)) {
-                    throw new IllegalStateException("world.from: " + resource + " has an entry outside its world: "
-                            + e.getName());
+                    throw new IllegalStateException(
+                            "world.from: " + resource + " has an entry outside its world: " + e.getName());
                 }
                 if (e.isDirectory()) {
                     Files.createDirectories(target);

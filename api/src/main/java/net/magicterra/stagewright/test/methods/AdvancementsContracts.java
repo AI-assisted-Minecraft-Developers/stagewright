@@ -18,63 +18,91 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 public final class AdvancementsContracts {
     private AdvancementsContracts() {}
 
-    @Tag("op") @Named("TestAdvancementsParams")
+    @Tag("op")
+    @Named("TestAdvancementsParams")
     public sealed interface AdvancementsOp permits Grant, Revoke, Progress, ListAdvancements {}
 
     @Variant("list")
     public record ListAdvancements(
             @Doc("Only the advancements of this namespace, e.g. minecraft. Omitted: every advancement.")
-            Optional<@Length(min = 1, max = 64) String> namespace) implements AdvancementsOp {}
+            Optional<@Length(min = 1, max = 64) String> namespace)
+            implements AdvancementsOp {}
 
     @Variant("grant")
-    public record Grant(@Doc("A server player, e.g. player:steve.") @BotRef String bot,
-            @Doc("Advancement id.") @ResourceId String id) implements AdvancementsOp {}
+    public record Grant(
+            @Doc("A server player, e.g. player:steve.") @BotRef
+            String bot,
+
+            @Doc("Advancement id.") @ResourceId String id)
+            implements AdvancementsOp {}
 
     @Variant("revoke")
-    public record Revoke(@Doc("A server player, e.g. player:steve.") @BotRef String bot,
-            @Doc("Advancement id.") @ResourceId String id) implements AdvancementsOp {}
+    public record Revoke(
+            @Doc("A server player, e.g. player:steve.") @BotRef
+            String bot,
+
+            @Doc("Advancement id.") @ResourceId String id)
+            implements AdvancementsOp {}
 
     @Variant("progress")
-    public record Progress(@Doc("A server player, e.g. player:steve.") @BotRef String bot,
-            @Doc("Advancement id.") @ResourceId String id) implements AdvancementsOp {}
+    public record Progress(
+            @Doc("A server player, e.g. player:steve.") @BotRef
+            String bot,
 
-    @Tag("op") @Named("TestAdvancementsReply")
+            @Doc("Advancement id.") @ResourceId String id)
+            implements AdvancementsOp {}
+
+    @Tag("op")
+    @Named("TestAdvancementsReply")
     public sealed interface AdvancementsReply permits Granted, Revoked, Progressed, AdvancementList {}
 
     @Variant("list")
     public record AdvancementList(
             @Doc("Advancements loaded (in the namespace, when one was named), even when the list below is cut.")
-            @Range(min = 0) int count,
-            @Doc("Their ids, sorted; the first 100000.") @Length(max = 100000) List<@ResourceId String> advancements)
+            @Range(min = 0)
+            int count,
+
+            @Doc("Their ids, sorted; the first 100000.") @Length(max = 100000)
+            List<@ResourceId String> advancements)
             implements AdvancementsReply {}
 
     @Variant("grant")
     public record Granted(
             @Doc("Whether the advancement is now complete.") boolean done,
+
             @Doc("Exactly the criteria this call awarded; revoke these to undo it without taking back earlier ones.")
-            @Length(max = 1024) List<@Length(max = 256) String> awarded) implements AdvancementsReply {}
+            @Length(max = 1024)
+            List<@Length(max = 256) String> awarded)
+            implements AdvancementsReply {}
 
     @Variant("revoke")
     public record Revoked(
-            @Doc("Whether the advancement is still complete; false after a revoke.") boolean done,
-            @Doc("The criteria taken back.") @Length(max = 1024) List<@Length(max = 256) String> revoked)
+            @Doc("Whether the advancement is still complete; false after a revoke.")
+            boolean done,
+
+            @Doc("The criteria taken back.") @Length(max = 1024)
+            List<@Length(max = 256) String> revoked)
             implements AdvancementsReply {}
 
     @Variant("progress")
     public record Progressed(
             boolean done,
             @Length(max = 1024) List<@Length(max = 256) String> completed,
-            @Length(max = 1024) List<@Length(max = 256) String> remaining) implements AdvancementsReply {}
+            @Length(max = 1024) List<@Length(max = 256) String> remaining)
+            implements AdvancementsReply {}
 
     public static final UnionType<AdvancementsOp> ADVANCEMENTS_PARAMS = ApiTypes.union(AdvancementsOp.class);
 
     public static final UnionType<AdvancementsReply> ADVANCEMENTS_REPLY = ApiTypes.union(AdvancementsReply.class);
 
     public static final MethodSpec<AdvancementsOp, AdvancementsReply> ADVANCEMENTS = MethodSpec.of(
-                    "mc.test.advancements", ADVANCEMENTS_PARAMS, ADVANCEMENTS_REPLY,
+                    "mc.test.advancements",
+                    ADVANCEMENTS_PARAMS,
+                    ADVANCEMENTS_REPLY,
                     "grant awards every unmet criterion of an advancement to a server player, revoke takes every met "
                             + "one back, progress reads where it stands, list names every advancement loaded. Progress is saved with the player, so a "
                             + "test that grants should revoke what the grant reported. An unknown player is "
                             + "invalid_params at /bot, an unknown advancement at /id.")
-            .hidden().effects(MethodSpec.Effect.WORLD_WRITE);
+            .hidden()
+            .effects(MethodSpec.Effect.WORLD_WRITE);
 }

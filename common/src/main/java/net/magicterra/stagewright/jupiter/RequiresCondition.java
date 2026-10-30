@@ -22,15 +22,19 @@ public final class RequiresCondition implements ExecutionCondition {
     @Override
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
         AnnotatedElement element = context.getElement().orElse(null);
-        Requires requires = element == null ? null
+        Requires requires = element == null
+                ? null
                 : AnnotationSupport.findAnnotation(element, Requires.class).orElse(null);
         if (requires == null) return ConditionEvaluationResult.enabled("no @Requires");
         List<String> missing = missing(requires.value(), requires.mods());
-        return missing.isEmpty() ? ConditionEvaluationResult.enabled("this game has what @Requires names")
+        return missing.isEmpty()
+                ? ConditionEvaluationResult.enabled("this game has what @Requires names")
                 : ConditionEvaluationResult.disabled(REASON_PREFIX + "this game has no " + String.join(", ", missing));
     }
 
-    /** What of {@code capabilities} and {@code mods} this game lacks; also what a script test's {@code requires} asks. */
+    /**
+     * What of {@code capabilities} and {@code mods} this game lacks; also what a script test's {@code requires} asks.
+     */
     static List<String> missing(Requires.Capability[] capabilities, String[] mods) {
         List<String> missing = new ArrayList<>();
         if (capabilities.length > 0) {

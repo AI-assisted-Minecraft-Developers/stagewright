@@ -12,11 +12,10 @@ import java.util.Set;
 /**
  * What earlier versions of StageWright copied into a run directory's {@code mods/} folder.
  *
- * <p>Nothing copies anything there any more: the CLI hands its jars to the loader
- * ({@code -Dfabric.addMods}, {@code --fml.mods}), because its game directory may be a player's own
- * {@code .minecraft}. What is left is the copies older versions made, recorded by name in
- * {@link #LEDGER}. The CLI only names them ({@link #ledgered}), because a name is all the ledger kept,
- * and a pack may since have put its own jar under it.
+ * <p>Nothing copies anything there any more: the CLI hands its jars to the loader ({@code -Dfabric.addMods},
+ * {@code --fml.mods}), because its game directory may be a player's own {@code .minecraft}. What is left is the copies
+ * older versions made, recorded by name in {@link #LEDGER}. The CLI only names them ({@link #ledgered}), because a name
+ * is all the ledger kept, and a pack may since have put its own jar under it.
  */
 public final class ModInstall {
 
@@ -30,7 +29,9 @@ public final class ModInstall {
         Path mods = gameDir.resolve("mods");
         if (!Files.isDirectory(mods)) return List.of();
         try {
-            return previouslyInstalled(mods).stream().filter(Files::isRegularFile).toList();
+            return previouslyInstalled(mods).stream()
+                    .filter(Files::isRegularFile)
+                    .toList();
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read the ledger in " + mods, e);
         }

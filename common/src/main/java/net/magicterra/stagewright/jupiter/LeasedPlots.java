@@ -4,7 +4,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.Entity;
@@ -45,7 +44,8 @@ public final class LeasedPlots {
      * drives as an {@code Npc} already is, and stays so.
      */
     public static void onEntityJoin(Entity entity, Level level) {
-        if (entity instanceof Mob mob && !mob.isPersistenceRequired()
+        if (entity instanceof Mob mob
+                && !mob.isPersistenceRequired()
                 && contains(level.dimension(), entity.blockPosition())) {
             mob.setPersistenceRequired();
         }

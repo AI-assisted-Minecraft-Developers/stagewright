@@ -13,7 +13,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
-
 import net.magicterra.stagewright.capability.CapabilityProvider;
 import net.magicterra.stagewright.test.Await;
 import net.magicterra.stagewright.test.Game;
@@ -42,6 +41,7 @@ final class GameImpl implements Game {
 
     /** Wall time allowed per tick of a budget before a wait gives up on the server itself, plus a fixed margin. */
     private static final long WALL_MS_PER_TICK = 1_000;
+
     private static final long WALL_MARGIN_MS = 60_000;
 
     private final MinecraftServer server;
@@ -54,7 +54,8 @@ final class GameImpl implements Game {
 
     GameImpl(MinecraftServer server) {
         this.server = server;
-        this.store = new StoreImpl(server.getServerDirectory().resolve("stagewright").resolve(StoreImpl.FILE));
+        this.store =
+                new StoreImpl(server.getServerDirectory().resolve("stagewright").resolve(StoreImpl.FILE));
     }
 
     @Override
@@ -63,10 +64,10 @@ final class GameImpl implements Game {
     }
 
     /**
-     * WorldDriver's registry, every call through it allowed to wait this long for a busy game thread to take it.
-     * The registry's own limit is a few seconds, which suits an agent that would rather hear "busy"; a test may wait
-     * as long as WorldDriver lets any call wait, while plots generate under a heavy pack. A stopped server is the
-     * engine's watchdog's to catch.
+     * WorldDriver's registry, every call through it allowed to wait this long for a busy game thread to take it. The
+     * registry's own limit is a few seconds, which suits an agent that would rather hear "busy"; a test may wait as
+     * long as WorldDriver lets any call wait, while plots generate under a heavy pack. A stopped server is the engine's
+     * watchdog's to catch.
      */
     static final long THREAD_WAIT_MS = CallContext.SERVER_CAP_MS;
 
@@ -99,7 +100,8 @@ final class GameImpl implements Game {
         // The calling test goes along, so a soft check made in the task is that test's.
         TestScope scope = TestScope.bound();
         try {
-            return server.submit(() -> TestScope.lending(scope, () -> work.apply(server))).join();
+            return server.submit(() -> TestScope.lending(scope, () -> work.apply(server)))
+                    .join();
         } catch (CompletionException e) {
             throw rethrow(e.getCause() == null ? e : e.getCause());
         }
@@ -136,9 +138,10 @@ final class GameImpl implements Game {
         ServerLevel level = server.getLevel(dimension);
         if (level == null) {
             List<String> have = new ArrayList<>();
-            for (ServerLevel l : server.getAllLevels()) have.add(l.dimension().location().toString());
-            throw new IllegalArgumentException("this game has no dimension " + dimension.location() + "; it has "
-                    + have);
+            for (ServerLevel l : server.getAllLevels())
+                have.add(l.dimension().location().toString());
+            throw new IllegalArgumentException(
+                    "this game has no dimension " + dimension.location() + "; it has " + have);
         }
         return level;
     }
@@ -291,12 +294,13 @@ final class GameImpl implements Game {
     /** Whether {@code condition} held within {@code budget} ticks. */
     private boolean waitFor(BooleanSupplier condition, int budget) {
         if (server.isSameThread()) {
-            throw new IllegalStateException("a tick wait was started on the server thread, which would wait for itself");
+            throw new IllegalStateException(
+                    "a tick wait was started on the server thread, which would wait for itself");
         }
         TestScope scope = TestScope.bound();
-        BooleanSupplier asTheTest = scope == null ? condition
-                : () -> TestScope.lending(scope, condition::getAsBoolean);
-        CompletableFuture<Boolean> done = scope != null && scope.frozeTicks() ? stepping(asTheTest, budget)
+        BooleanSupplier asTheTest = scope == null ? condition : () -> TestScope.lending(scope, condition::getAsBoolean);
+        CompletableFuture<Boolean> done = scope != null && scope.frozeTicks()
+                ? stepping(asTheTest, budget)
                 : ServerTicks.await(asTheTest, budget);
         try {
             return done.get(budget * WALL_MS_PER_TICK + WALL_MARGIN_MS, TimeUnit.MILLISECONDS);
@@ -318,11 +322,13 @@ final class GameImpl implements Game {
      */
     private CompletableFuture<Boolean> stepping(BooleanSupplier condition, int budget) {
         return onServer(s -> {
-            CompletableFuture<Boolean> done = ServerTicks.await(() -> {
-                boolean holds = condition.getAsBoolean();
-                if (holds) s.tickRateManager().stopStepping();
-                return holds;
-            }, budget);
+            CompletableFuture<Boolean> done = ServerTicks.await(
+                    () -> {
+                        boolean holds = condition.getAsBoolean();
+                        if (holds) s.tickRateManager().stopStepping();
+                        return holds;
+                    },
+                    budget);
             if (budget > 0) s.tickRateManager().stepGameIfPaused(budget);
             return done;
         });

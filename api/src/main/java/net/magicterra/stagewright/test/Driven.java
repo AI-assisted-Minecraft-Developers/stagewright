@@ -1,15 +1,14 @@
 package net.magicterra.stagewright.test;
 
 import java.util.function.UnaryOperator;
-
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
 import net.magicterra.worlddriver.api.methods.test.TestInputContracts.HeldKeys;
 
 /**
- * A body WorldDriver drives on the server's tick, which a test may take over: {@link #park} takes it off the tick
- * list, and from then on only {@link #tick}, {@link #step} and {@link #think} move it, one tick at a time, so the test
- * can read or change the world between any two of them. A parked body stays parked until {@link #unpark} or until a
- * task is started on it, which puts it back on the list. A mob is the exception: the world still moves it, see
+ * A body WorldDriver drives on the server's tick, which a test may take over: {@link #park} takes it off the tick list,
+ * and from then on only {@link #tick}, {@link #step} and {@link #think} move it, one tick at a time, so the test can
+ * read or change the world between any two of them. A parked body stays parked until {@link #unpark} or until a task is
+ * started on it, which puts it back on the list. A mob is the exception: the world still moves it, see
  * {@link Npc#park}.
  */
 public interface Driven {

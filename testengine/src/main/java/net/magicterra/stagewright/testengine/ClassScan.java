@@ -7,7 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -16,9 +15,9 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 
 /**
- * Reads a test class from its bytes, never loading it: its signatures name Minecraft and the mods, which this JVM
- * does not have. What it reads is what the outer tree needs — the scenes, the test methods (inherited ones too), and
- * display names — and the game's own discovery is checked against it.
+ * Reads a test class from its bytes, never loading it: its signatures name Minecraft and the mods, which this JVM does
+ * not have. What it reads is what the outer tree needs — the scenes, the test methods (inherited ones too), and display
+ * names — and the game's own discovery is checked against it.
  */
 final class ClassScan {
 
@@ -64,7 +63,10 @@ final class ClassScan {
             up.methods.forEach(methods::putIfAbsent);
             parent = up.superName;
         }
-        return Optional.of(new Scanned(className, List.copyOf(top.scenes), Optional.ofNullable(top.displayName),
+        return Optional.of(new Scanned(
+                className,
+                List.copyOf(top.scenes),
+                Optional.ofNullable(top.displayName),
                 List.copyOf(methods.values())));
     }
 
@@ -72,12 +74,15 @@ final class ClassScan {
         try (InputStream in = loader.getResourceAsStream(className.replace('.', '/') + ".class")) {
             if (in == null) return null;
             Reading reading = new Reading();
-            new ClassReader(in).accept(reading, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            new ClassReader(in)
+                    .accept(reading, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
             return reading;
         }
     }
 
-    /** {@code (I[Ljava/lang/String;)V} becomes {@code int, [Ljava.lang.String;}, as {@code Class.getName} spells each. */
+    /**
+     * {@code (I[Ljava/lang/String;)V} becomes {@code int, [Ljava.lang.String;}, as {@code Class.getName} spells each.
+     */
     static String parameters(String descriptor) {
         List<String> names = new ArrayList<>();
         for (Type t : Type.getArgumentTypes(descriptor)) {
@@ -98,7 +103,8 @@ final class ClassScan {
         }
 
         @Override
-        public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+        public void visit(
+                int version, int access, String name, String signature, String superName, String[] interfaces) {
             this.superName = superName == null ? null : superName.replace('/', '.');
             skip = (access & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_INTERFACE | Opcodes.ACC_ANNOTATION)) != 0;
         }
@@ -112,7 +118,8 @@ final class ClassScan {
         }
 
         @Override
-        public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+        public MethodVisitor visitMethod(
+                int access, String name, String descriptor, String signature, String[] exceptions) {
             if ((access & (Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE | Opcodes.ACC_SYNTHETIC)) != 0) return null;
             String parameters = parameters(descriptor);
             return new MethodVisitor(Opcodes.ASM9) {

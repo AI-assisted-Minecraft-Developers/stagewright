@@ -26,13 +26,13 @@ import org.gradle.api.tasks.SourceSet;
  * }
  * }</pre>
  *
- * A topology runs nothing by itself: a test suite in {@code tests} maps the topology names its scenes
- * declare to these, and its {@code stagewrightTest<Suite>} task launches them.
+ * A topology runs nothing by itself: a test suite in {@code tests} maps the topology names its scenes declare to these,
+ * and its {@code stagewrightTest<Suite>} task launches them.
  *
- * <p><b>On the names.</b> All three run scenes on a SERVER; what differs is which server, and
- * whether a real client is attached to it — {@code integratedServer} is the one inside a game
- * client, {@code dedicatedServerWithClient} is a headless server with a client joined over
- * multiplayer. The topology formerly called "the client topology" never ran a scene on a client.
+ * <p><b>On the names.</b> All three run scenes on a SERVER; what differs is which server, and whether a real client is
+ * attached to it — {@code integratedServer} is the one inside a game client, {@code dedicatedServerWithClient} is a
+ * headless server with a client joined over multiplayer. The topology formerly called "the client topology" never ran a
+ * scene on a client.
  */
 public abstract class StageWrightExtension {
 
@@ -41,8 +41,9 @@ public abstract class StageWrightExtension {
     private SourceSet testmodSourceSetRef;
 
     @javax.inject.Inject
-    public StageWrightExtension(NamedDomainObjectContainer<StageWrightTopology> topologies,
-                                NamedDomainObjectContainer<StageWrightTestSuite> tests) {
+    public StageWrightExtension(
+            NamedDomainObjectContainer<StageWrightTopology> topologies,
+            NamedDomainObjectContainer<StageWrightTestSuite> tests) {
         this.topologies = topologies;
         this.tests = tests;
     }
@@ -65,18 +66,19 @@ public abstract class StageWrightExtension {
     }
 
     /**
-     * Register a {@code testmod} source set that sees main's output and main's own classpaths.
-     * Convention: {@code false} — off means no source set is created and the plugin is invisible.
+     * Register a {@code testmod} source set that sees main's output and main's own classpaths. Convention:
+     * {@code false} — off means no source set is created and the plugin is invisible.
      *
-     * <p>Classpath wiring only. Attaching that source set to a dev RUN belongs to the host loader
-     * plugin, whose DSL differs per loader ({@code neoForge.mods { … sourceSet … }} under
-     * ModDevGradle, run configs under loom), so the consumer writes that one line rather than the
-     * plugin guessing which loader it is inside.
+     * <p>Classpath wiring only. Attaching that source set to a dev RUN belongs to the host loader plugin, whose DSL
+     * differs per loader ({@code neoForge.mods { … sourceSet … }} under ModDevGradle, run configs under loom), so the
+     * consumer writes that one line rather than the plugin guessing which loader it is inside.
      */
     public abstract Property<Boolean> getTestmodSourceSet();
 
-    /** The registered {@code testmod} source set, or null when {@link #getTestmodSourceSet()} is
-     *  false or the {@code java} plugin was never applied. */
+    /**
+     * The registered {@code testmod} source set, or null when {@link #getTestmodSourceSet()} is false or the
+     * {@code java} plugin was never applied.
+     */
     public SourceSet getTestmodSourceSetRef() {
         return testmodSourceSetRef;
     }

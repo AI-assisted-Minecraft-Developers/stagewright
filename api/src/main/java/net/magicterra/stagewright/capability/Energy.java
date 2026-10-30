@@ -4,8 +4,8 @@ import net.minecraft.core.BlockPos;
 
 /**
  * Energy stored in a block, as every tech mod exposes it. Registered as the capability {@code "energy"}. See
- * {@link BlockInventory} for why this is one facet over a platform capability, where the implementation lives, and
- * what positions are.
+ * {@link BlockInventory} for why this is one facet over a platform capability, where the implementation lives, and what
+ * positions are.
  *
  * <p>Nothing in vanilla implements this, so a runtime with no tech mod answers {@code present() == false} everywhere.
  * That is a true answer, not a reason to abort.

@@ -1,5 +1,8 @@
 package net.magicterra.stagewright.cli;
 
+import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClasspathRoots;
+
+import com.google.gson.GsonBuilder;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintWriter;
@@ -22,9 +25,6 @@ import java.util.jar.JarFile;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-
-import com.google.gson.GsonBuilder;
-
 import net.magicterra.stagewright.cli.install.ClientSpec;
 import net.magicterra.stagewright.engine.RunDirectory;
 import org.junit.platform.launcher.Launcher;
@@ -35,22 +35,18 @@ import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
 import org.junit.platform.launcher.listeners.TestExecutionSummary;
 import org.junit.platform.reporting.legacy.xml.LegacyXmlReportGeneratingListener;
 
-import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClasspathRoots;
-
 /**
  * {@code stagewright test <game-dir>}: the YAML and JavaScript tests under {@code <game-dir>/stagewright/} (or the
  * directory {@code --tests} names), with the scenes beside them, run in the pack's own dedicated server the way the
- * Gradle plugin runs a mod's. The tests and
- * scenes go into the game as a mod of their own, staged with StageWright as {@link ModInjection} stages it; the CLI
- * writes the launch spec the plugin would have written and runs the same JUnit engine in this JVM, which writes
- * JUnit XML. The server plays in {@code stagewright/world}, which each scene starts afresh; the pack's own world is
- * left alone.
+ * Gradle plugin runs a mod's. The tests and scenes go into the game as a mod of their own, staged with StageWright as
+ * {@link ModInjection} stages it; the CLI writes the launch spec the plugin would have written and runs the same JUnit
+ * engine in this JVM, which writes JUnit XML. The server plays in {@code stagewright/world}, which each scene starts
+ * afresh; the pack's own world is left alone.
  *
- * <p>With {@code --client}, a client is installed, and the scenes of the two
- * topologies with a client run too: {@code integratedServer} in that client, {@code dedicatedServerWithClient} with
- * it joined to the pack's server. It runs in {@code stagewright/client}, since the engine deletes a client's saves
- * before each scene, with the server's mods or those {@code --client-mods} names, and the rest of a client directory
- * {@code --client-dir} names linked in.
+ * <p>With {@code --client}, a client is installed, and the scenes of the two topologies with a client run too:
+ * {@code integratedServer} in that client, {@code dedicatedServerWithClient} with it joined to the pack's server. It
+ * runs in {@code stagewright/client}, since the engine deletes a client's saves before each scene, with the server's
+ * mods or those {@code --client-mods} names, and the rest of a client directory {@code --client-dir} names linked in.
  *
  * <p>The results are JUnit XML, one file per scene ({@link SceneResults}), with a line on the console as each scene
  * ends.
@@ -59,6 +55,7 @@ final class TestCommand {
 
     /** The mod the tests and scenes ride in. */
     static final String MOD_ID = "stagewright_pack_tests";
+
     private static final String DEDICATED = "dedicatedServer";
     private static final String INTEGRATED = "integratedServer";
     private static final String WITH_CLIENT = "dedicatedServerWithClient";
@@ -66,14 +63,28 @@ final class TestCommand {
     private static final String SERVER_WORLD = RunDirectory.ARTIFACT_DIR + "/world";
     /** The singleplayer world an integrated server's scene plays in. */
     static final String CLIENT_WORLD = "StageWright";
-    private static final Set<String> VALUED = Set.of("launch", "java", "reports", "timeout", "stall-timeout",
-            "client", "client-mods", "client-dir", "tests", "install-dir", "username", "mirror", "leaks");
+
+    private static final Set<String> VALUED = Set.of(
+            "launch",
+            "java",
+            "reports",
+            "timeout",
+            "stall-timeout",
+            "client",
+            "client-mods",
+            "client-dir",
+            "tests",
+            "install-dir",
+            "username",
+            "mirror",
+            "leaks");
     /**
      * What a client directory named by {@code --client-dir} keeps to itself: {@code mods/} comes from
      * {@code --client-mods}, the engine deletes the scene's save under {@code saves/}, and logs, crash reports and the
      * run's own {@code stagewright/} are this run's output, which must not land in the pack's directory.
      */
-    static final Set<String> CLIENT_DIR_OWN = Set.of("mods", "saves", "logs", "crash-reports", RunDirectory.ARTIFACT_DIR);
+    static final Set<String> CLIENT_DIR_OWN =
+            Set.of("mods", "saves", "logs", "crash-reports", RunDirectory.ARTIFACT_DIR);
 
     private TestCommand() {}
 
@@ -89,10 +100,12 @@ final class TestCommand {
                 systemProps.add(a);
             } else if (a.startsWith("--")) {
                 String name = a.substring(2);
-                if (!name.equals("mod") && !VALUED.contains(name)) throw new IllegalArgumentException("unknown option '" + a + "'");
+                if (!name.equals("mod") && !VALUED.contains(name))
+                    throw new IllegalArgumentException("unknown option '" + a + "'");
                 if (i + 1 >= args.size()) throw new IllegalArgumentException(a + " needs a value");
                 String value = args.get(++i);
-                if (name.equals("mod")) extraMods.add(Path.of(value).toAbsolutePath().normalize());
+                if (name.equals("mod"))
+                    extraMods.add(Path.of(value).toAbsolutePath().normalize());
                 else opts.put(name, value);
             } else if (gameDir == null) {
                 gameDir = Path.of(a).toAbsolutePath().normalize();
@@ -103,7 +116,8 @@ final class TestCommand {
         if (gameDir == null) throw new IllegalArgumentException("stagewright test needs the pack's server directory");
         if (!Files.isDirectory(gameDir)) throw new IllegalArgumentException(gameDir + " is not a directory");
         leaks(opts);
-        // What the run writes stays under the server directory wherever the tests come from: they may be a repository's.
+        // What the run writes stays under the server directory wherever the tests come from: they may be a
+        // repository's.
         Path artifacts = gameDir.resolve(RunDirectory.ARTIFACT_DIR);
         Path source = testsDir(gameDir, opts);
         Path clientSource = clientDir(opts);
@@ -111,13 +125,14 @@ final class TestCommand {
 
         String loader = GameLaunch.loader(gameDir);
         ModInjection.requireLoader(loader);
-        String java = opts.getOrDefault("java", Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        String java = opts.getOrDefault(
+                "java", Path.of(System.getProperty("java.home"), "bin", "java").toString());
         List<String> launch = opts.containsKey("launch")
                 ? new ArrayList<>(List.of(opts.get("launch").split("\\s+")))
                 : GameLaunch.detect(gameDir, java, log);
         if (launch == null) {
-            throw new IllegalArgumentException("cannot tell how to start the server in " + gameDir + " — pass --launch"
-                    + " \"<command>\"");
+            throw new IllegalArgumentException(
+                    "cannot tell how to start the server in " + gameDir + " — pass --launch" + " \"<command>\"");
         }
 
         Path work = artifacts.resolve("build");
@@ -125,7 +140,8 @@ final class TestCommand {
         Path root = work.resolve("root");
         // worlds: the saves a scene's world.from names.
         for (String dir : List.of("scenes", "tests", "worlds")) {
-            int copied = copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir));
+            int copied =
+                    copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir));
             if (Files.isDirectory(source.resolve(dir))) log.accept(copied + " files from " + source.resolve(dir));
         }
         Path jar = modJar(root, work.resolve(MOD_ID + ".jar"));
@@ -157,15 +173,36 @@ final class TestCommand {
             String versionId = install(client, installDir, opts, java, log);
             ModInjection.Arguments clientMods = ModInjection.prepare(clientDir, loader, mods, log);
             String username = Main.username(opts);
-            Map<String, Object> integrated = clientProcess(java, ClientLaunch.parts(installDir, clientDir, versionId,
-                    clientProps(systemProps, clientMods, "stagewright.client.world=" + CLIENT_WORLD,
-                            "stagewright.awaitPlayer=true"), clientMods.game(), username), clientDir);
+            Map<String, Object> integrated = clientProcess(
+                    java,
+                    ClientLaunch.parts(
+                            installDir,
+                            clientDir,
+                            versionId,
+                            clientProps(
+                                    systemProps,
+                                    clientMods,
+                                    "stagewright.client.world=" + CLIENT_WORLD,
+                                    "stagewright.awaitPlayer=true"),
+                            clientMods.game(),
+                            username),
+                    clientDir);
             write(launches, topology(INTEGRATED, clientDir, "saves/" + CLIENT_WORLD, false, integrated, null, opts));
-            Map<String, Object> joining = clientProcess(java, ClientLaunch.parts(installDir, clientDir, versionId,
-                    clientProps(systemProps, clientMods, "stagewright.client.connect=127.0.0.1:"
-                            + Main.serverPort(gameDir)), clientMods.game(), username), clientDir);
-            Map<String, Object> awaiting = serverProcess(gameDir, launch, systemProps, injected,
-                    List.of("-Dstagewright.awaitPlayer=true"));
+            Map<String, Object> joining = clientProcess(
+                    java,
+                    ClientLaunch.parts(
+                            installDir,
+                            clientDir,
+                            versionId,
+                            clientProps(
+                                    systemProps,
+                                    clientMods,
+                                    "stagewright.client.connect=127.0.0.1:" + Main.serverPort(gameDir)),
+                            clientMods.game(),
+                            username),
+                    clientDir);
+            Map<String, Object> awaiting =
+                    serverProcess(gameDir, launch, systemProps, injected, List.of("-Dstagewright.awaitPlayer=true"));
             write(launches, topology(WITH_CLIENT, gameDir, SERVER_WORLD, true, awaiting, joining, opts));
         } else {
             if (clientSource != null) log.accept("--client-dir is unused: the run was given no --client");
@@ -178,11 +215,15 @@ final class TestCommand {
         // user's choice here, not a mistake in a build.
         System.setProperty("stagewright.launches.missing", "skip");
 
-        Path reports = Path.of(opts.getOrDefault("reports", artifacts.resolve("reports").toString())).toAbsolutePath();
+        Path reports = Path.of(opts.getOrDefault(
+                        "reports", artifacts.resolve("reports").toString()))
+                .toAbsolutePath();
         return execute(root, reports, log);
     }
 
-    /** {@code --tests}, or {@code <server-dir>/stagewright}: the directory holding {@code tests/} and {@code scenes/}. */
+    /**
+     * {@code --tests}, or {@code <server-dir>/stagewright}: the directory holding {@code tests/} and {@code scenes/}.
+     */
     static Path testsDir(Path gameDir, Map<String, String> opts) {
         Path dir = opts.containsKey("tests")
                 ? Path.of(opts.get("tests")).toAbsolutePath().normalize()
@@ -201,27 +242,33 @@ final class TestCommand {
         return dir;
     }
 
-    /** The jars the client loads: {@code --client-mods}, else the client directory's {@code mods/}, else the server's. */
+    /**
+     * The jars the client loads: {@code --client-mods}, else the client directory's {@code mods/}, else the server's.
+     */
     static Path clientMods(Path gameDir, Path clientSource, Map<String, String> opts) {
-        if (opts.containsKey("client-mods")) return Path.of(opts.get("client-mods")).toAbsolutePath().normalize();
+        if (opts.containsKey("client-mods"))
+            return Path.of(opts.get("client-mods")).toAbsolutePath().normalize();
         return (clientSource != null ? clientSource : gameDir).resolve("mods");
     }
 
     /**
      * Give the client in {@code clientDir} every entry of {@code from} but those in {@link #CLIENT_DIR_OWN}, each as a
      * symbolic link, so the client reads the pack's {@code config/}, {@code kubejs/}, {@code options.txt} and the like
-     * as they are now, and nothing of the pack is copied. What a mod writes into a linked directory lands in the pack's.
-     * The links of the run before are taken out first, those of entries since removed included; with {@code from} null
-     * that is all it does. A real file or directory where a link would go is refused before anything changes: it is
-     * what a run without {@code --client-dir}, or a script, left there, and it may hold the only copy of something.
-     * Answers how many entries were linked.
+     * as they are now, and nothing of the pack is copied. What a mod writes into a linked directory lands in the
+     * pack's. The links of the run before are taken out first, those of entries since removed included; with
+     * {@code from} null that is all it does. A real file or directory where a link would go is refused before anything
+     * changes: it is what a run without {@code --client-dir}, or a script, left there, and it may hold the only copy of
+     * something. Answers how many entries were linked.
      */
     static int linkClientDir(Path from, Path clientDir, Consumer<String> log) throws IOException {
         Files.createDirectories(clientDir);
         List<Path> entries = List.of();
         if (from != null) {
             try (Stream<Path> list = Files.list(from)) {
-                entries = list.filter(p -> !CLIENT_DIR_OWN.contains(p.getFileName().toString())).sorted().toList();
+                entries = list.filter(
+                                p -> !CLIENT_DIR_OWN.contains(p.getFileName().toString()))
+                        .sorted()
+                        .toList();
             }
             List<String> occupied = new ArrayList<>();
             for (Path entry : entries) {
@@ -255,8 +302,9 @@ final class TestCommand {
         return entries.size();
     }
 
-    private static String install(ClientSpec client, Path installDir, Map<String, String> opts, String java,
-                                  Consumer<String> log) throws IOException {
+    private static String install(
+            ClientSpec client, Path installDir, Map<String, String> opts, String java, Consumer<String> log)
+            throws IOException {
         try {
             return Main.install(client, installDir, opts, java, log);
         } catch (InterruptedException e) {
@@ -270,12 +318,15 @@ final class TestCommand {
      * copied. A pack's client mods are not always its server's, so {@code --client-mods} may name others.
      */
     static void linkMods(Path from, Path to, Consumer<String> log) throws IOException {
-        if (!Files.isDirectory(from)) throw new IllegalArgumentException("--client-mods " + from + " is not a directory");
+        if (!Files.isDirectory(from))
+            throw new IllegalArgumentException("--client-mods " + from + " is not a directory");
         deleteTree(to);
         Files.createDirectories(to);
         List<Path> jars;
         try (Stream<Path> list = Files.list(from)) {
-            jars = list.filter(p -> p.getFileName().toString().endsWith(".jar") && Files.isRegularFile(p)).sorted().toList();
+            jars = list.filter(p -> p.getFileName().toString().endsWith(".jar") && Files.isRegularFile(p))
+                    .sorted()
+                    .toList();
         }
         for (Path jar : jars) {
             Path target = to.resolve(jar.getFileName().toString());
@@ -289,7 +340,8 @@ final class TestCommand {
     }
 
     private static void write(Path launches, Map<String, Object> spec) throws IOException {
-        Files.writeString(launches.resolve(spec.get("topology") + ".json"),
+        Files.writeString(
+                launches.resolve(spec.get("topology") + ".json"),
                 new GsonBuilder().setPrettyPrinting().create().toJson(spec));
     }
 
@@ -302,9 +354,14 @@ final class TestCommand {
     }
 
     /** One topology's launch spec; the format is docs/reference/launch-spec.md. */
-    static Map<String, Object> topology(String name, Path gameDir, String worldDir, boolean server,
-                                        Map<String, Object> primary, Map<String, Object> companion,
-                                        Map<String, String> opts) {
+    static Map<String, Object> topology(
+            String name,
+            Path gameDir,
+            String worldDir,
+            boolean server,
+            Map<String, Object> primary,
+            Map<String, Object> companion,
+            Map<String, String> opts) {
         Map<String, Object> spec = new LinkedHashMap<>();
         spec.put("topology", name);
         spec.put("gameDirectory", gameDir.toString());
@@ -329,8 +386,8 @@ final class TestCommand {
 
     /**
      * {@code --leaks}: what a game that had to be forced down after its run does to its scene, {@code fail} (the
-     * default) or {@code report}. A pack whose mod keeps an idle pool thread alive past the grace period would otherwise
-     * fail every scene; the report entry is written either way.
+     * default) or {@code report}. A pack whose mod keeps an idle pool thread alive past the grace period would
+     * otherwise fail every scene; the report entry is written either way.
      */
     static String leaks(Map<String, String> opts) {
         String leaks = opts.getOrDefault("leaks", "fail");
@@ -352,8 +409,12 @@ final class TestCommand {
     }
 
     /** The pack's server, started as {@code launch} would, playing in {@code stagewright/world}. */
-    static Map<String, Object> serverProcess(Path gameDir, List<String> launch, List<String> systemProps,
-                                             ModInjection.Arguments injected, List<String> topologyProps) {
+    static Map<String, Object> serverProcess(
+            Path gameDir,
+            List<String> launch,
+            List<String> systemProps,
+            ModInjection.Arguments injected,
+            List<String> topologyProps) {
         List<String> command = new ArrayList<>(launch.subList(1, launch.size()));
         command.remove("nogui");
         List<String> jvmArgs = new ArrayList<>(systemProps);
@@ -374,7 +435,8 @@ final class TestCommand {
         }
         args.add("nogui");
         // The world the scenes play in, never the pack's: cleanWorld deletes it before each scene.
-        args.addAll(List.of("--universe", gameDir.resolve(RunDirectory.ARTIFACT_DIR).toString(), "--world", "world"));
+        args.addAll(
+                List.of("--universe", gameDir.resolve(RunDirectory.ARTIFACT_DIR).toString(), "--world", "world"));
         args.addAll(injected.game());
 
         Map<String, Object> primary = new LinkedHashMap<>();
@@ -388,7 +450,9 @@ final class TestCommand {
 
     private static String mainClassOf(Path jar) {
         try (JarFile file = new JarFile(jar.toFile())) {
-            String main = file.getManifest() == null ? null : file.getManifest().getMainAttributes().getValue("Main-Class");
+            String main = file.getManifest() == null
+                    ? null
+                    : file.getManifest().getMainAttributes().getValue("Main-Class");
             if (main == null) throw new IllegalArgumentException(jar + " names no Main-Class, so it cannot be started");
             return main;
         } catch (IOException e) {
@@ -399,7 +463,8 @@ final class TestCommand {
     /** The tests and scenes as a mod either loader takes: resources only, so it declares no entry point. */
     static Path modJar(Path root, Path jar) throws IOException {
         Files.createDirectories(jar.getParent());
-        try (OutputStream out = Files.newOutputStream(jar); ZipOutputStream zip = new ZipOutputStream(out)) {
+        try (OutputStream out = Files.newOutputStream(jar);
+                ZipOutputStream zip = new ZipOutputStream(out)) {
             entry(zip, "fabric.mod.json", """
                     {"schemaVersion": 1, "id": "%s", "version": "0.0.0", "name": "StageWright pack tests"}
                     """.formatted(MOD_ID));
@@ -445,7 +510,11 @@ final class TestCommand {
             SummaryGeneratingListener summary = new SummaryGeneratingListener();
             PrintWriter out = new PrintWriter(System.out, true);
             RecordProperties records = new RecordProperties();
-            launcher.execute(request, summary, new LegacyXmlReportGeneratingListener(reports, out), records,
+            launcher.execute(
+                    request,
+                    summary,
+                    new LegacyXmlReportGeneratingListener(reports, out),
+                    records,
                     new SceneResults(log));
             records.writeInto(reports);
             SceneResults.split(reports);

@@ -2,7 +2,6 @@ package net.magicterra.stagewright.testengine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
@@ -15,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -27,7 +25,8 @@ class SceneModsTest {
 
     private Path jar(Path at, String entry, String text) throws IOException {
         Files.createDirectories(at.getParent());
-        try (OutputStream out = Files.newOutputStream(at); ZipOutputStream zip = new ZipOutputStream(out)) {
+        try (OutputStream out = Files.newOutputStream(at);
+                ZipOutputStream zip = new ZipOutputStream(out)) {
             zip.putNextEntry(new ZipEntry(entry));
             zip.write(text.getBytes(StandardCharsets.UTF_8));
             zip.closeEntry();
@@ -49,8 +48,11 @@ class SceneModsTest {
         jar(game.resolve("mods/other.jar"), "fabric.mod.json", "{\"id\":\"other\"}");
         SceneMods.Applied applied = SceneMods.apply(
                 process("net.fabricmc.loader.impl.launch.server.FabricServerLauncher", List.of("-Xmx2G"), List.of()),
-                List.of("farmersdelight"), game.resolve("stagewright/scene-mods/primary"));
-        assertEquals("-Dfabric.debug.disableModIds=farmersdelight", applied.process().jvmArgs().get(0));
+                List.of("farmersdelight"),
+                game.resolve("stagewright/scene-mods/primary"));
+        assertEquals(
+                "-Dfabric.debug.disableModIds=farmersdelight",
+                applied.process().jvmArgs().get(0));
         assertTrue(Files.exists(game.resolve("mods/farmers.jar")), "the pack's mods/ is left alone");
     }
 
@@ -61,7 +63,8 @@ class SceneModsTest {
         Files.createDirectories(game.resolve("config"));
         SceneMods.Applied applied = SceneMods.apply(
                 process(null, List.of("@libraries/net/neoforged/neoforge/21.1.230/unix_args.txt"), List.of("nogui")),
-                List.of("farmersdelight-*.jar"), game.resolve("stagewright/scene-mods/primary"));
+                List.of("farmersdelight-*.jar"),
+                game.resolve("stagewright/scene-mods/primary"));
         List<String> args = applied.process().args();
         int at = args.indexOf("--gameDir");
         Path view = Path.of(args.get(at + 1));
@@ -78,11 +81,13 @@ class SceneModsTest {
         Path keep = neoforgeMod(game.resolve("libs/keep.jar"), "keep");
         Path legacy = Files.writeString(game.resolve("legacy.txt"), farmers + "\n" + keep + "\n");
         String sep = File.pathSeparator;
-        Path vmArgs = Files.writeString(game.resolve("vm.txt"), "-DlegacyClassPath.file=" + legacy + "\n-cp \""
-                + keep + sep + farmers + "\"\n");
+        Path vmArgs = Files.writeString(
+                game.resolve("vm.txt"),
+                "-DlegacyClassPath.file=" + legacy + "\n-cp \"" + keep + sep + farmers + "\"\n");
         Path scratch = game.resolve("stagewright/scene-mods/primary");
         SceneMods.Applied applied = SceneMods.apply(
-                process("net.neoforged.devlaunch.Main", List.of("@" + vmArgs), List.of()), List.of("farmersdelight"),
+                process("net.neoforged.devlaunch.Main", List.of("@" + vmArgs), List.of()),
+                List.of("farmersdelight"),
                 scratch);
         String rewritten = applied.process().jvmArgs().get(0);
         assertTrue(rewritten.startsWith("@" + scratch), rewritten);
@@ -109,9 +114,12 @@ class SceneModsTest {
         jar(game.resolve("mods/farmers.jar"), "fabric.mod.json", "{\"schemaVersion\":1,\"id\":\"farmersdelight\"}");
         SceneMods.Applied applied = SceneMods.apply(
                 process("net.fabricmc.loader.impl.launch.server.FabricServerLauncher", List.of(), List.of()),
-                List.of("luckperms", "farmersdelight"), game.resolve("s"));
+                List.of("luckperms", "farmersdelight"),
+                game.resolve("s"));
         assertEquals(List.of("luckperms"), applied.unmatched());
-        assertEquals("-Dfabric.debug.disableModIds=farmersdelight", applied.process().jvmArgs().get(0));
+        assertEquals(
+                "-Dfabric.debug.disableModIds=farmersdelight",
+                applied.process().jvmArgs().get(0));
     }
 
     @Test

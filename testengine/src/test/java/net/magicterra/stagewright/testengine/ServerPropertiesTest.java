@@ -10,7 +10,6 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -24,7 +23,8 @@ class ServerPropertiesTest {
         Path file = temp.resolve("cp/stagewright/scenes/x.yaml");
         Files.createDirectories(file.getParent());
         Files.writeString(file, "topology: t\nworld:\n" + worldYaml);
-        try (URLClassLoader loader = new URLClassLoader(new URL[] {temp.resolve("cp").toUri().toURL()}, null)) {
+        try (URLClassLoader loader =
+                new URLClassLoader(new URL[] {temp.resolve("cp").toUri().toURL()}, null)) {
             return SceneFile.load("x", loader).world();
         }
     }
@@ -41,8 +41,10 @@ class ServerPropertiesTest {
     void keepsUnrelatedKeysAndWritesTheCreationKeys() throws IOException {
         Path file = temp.resolve("server.properties");
         Files.writeString(file, "server-port=25601\nlevel-seed=old\n");
-        SceneRun.writeServerProperties(file, world("  seed: 5471\n  preset: minecraft:flat\n  structures: false\n"
-                + "  gamemode: creative\n  difficulty: hard\n"));
+        SceneRun.writeServerProperties(
+                file,
+                world("  seed: 5471\n  preset: minecraft:flat\n  structures: false\n"
+                        + "  gamemode: creative\n  difficulty: hard\n"));
         Properties p = read(file);
         assertEquals("25601", p.getProperty("server-port"));
         assertEquals("5471", p.getProperty("level-seed"));

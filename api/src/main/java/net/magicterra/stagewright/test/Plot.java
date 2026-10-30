@@ -6,7 +6,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.nio.file.Path;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.resources.ResourceKey;
@@ -58,12 +57,15 @@ public interface Plot {
      */
     Plot structure(ResourceLocation id, int x, int y, int z);
 
-    /** {@link #structure(ResourceLocation, int, int, int)} from a structure file, compressed NBT as a structure block saves it. */
+    /**
+     * {@link #structure(ResourceLocation, int, int, int)} from a structure file, compressed NBT as a structure block
+     * saves it.
+     */
     Plot structure(Path file, int x, int y, int z);
 
     /**
-     * The size of the plot a parameter receives: {@code @Size(32)} for a cube, or each axis on its own,
-     * {@code @Size(x = 120, y = 16, z = 8)}, where an axis left out takes {@link #value}. Without it, a 16-block cube.
+     * The size of the plot a parameter receives: {@code @Size(32)} for a cube, or each axis on its own, {@code @Size(x
+     * = 120, y = 16, z = 8)}, where an axis left out takes {@link #value}. Without it, a 16-block cube.
      */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)
@@ -83,13 +85,18 @@ public interface Plot {
         int z() default 0;
     }
 
-    /** The parameter's plot has relative {@code (0, 0, 0)} in its middle, so coordinates run from minus half the size. */
+    /**
+     * The parameter's plot has relative {@code (0, 0, 0)} in its middle, so coordinates run from minus half the size.
+     */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.PARAMETER)
     @interface Centered {}
 
-    /** The dimension the parameter's plot is leased in, such as {@code "minecraft:the_nether"}; without it, the overworld. */
+    /**
+     * The dimension the parameter's plot is leased in, such as {@code "minecraft:the_nether"}; without it, the
+     * overworld.
+     */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)
     @Target(ElementType.PARAMETER)

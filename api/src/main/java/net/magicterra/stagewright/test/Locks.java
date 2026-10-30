@@ -2,8 +2,8 @@ package net.magicterra.stagewright.test;
 
 /**
  * Names for Jupiter's {@code @ResourceLock} that cover the game's global state. A test that changes one through
- * {@link Game}'s {@code override} methods must hold its lock read-write (or the class must be {@code @Isolated}),
- * which keeps two tests from changing the same thing at once; the override is refused otherwise.
+ * {@link Game}'s {@code override} methods must hold its lock read-write (or the class must be {@code @Isolated}), which
+ * keeps two tests from changing the same thing at once; the override is refused otherwise.
  */
 public final class Locks {
 

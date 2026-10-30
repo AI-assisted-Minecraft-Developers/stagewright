@@ -27,12 +27,12 @@ import net.minecraft.world.level.block.state.BlockState;
  * <ul>
  *   <li><b>In scope — the menu.</b> Slots, what may go in them, what comes out, what a click does. This is an
  *       {@link AbstractContainerMenu}, it lives on the server, and it is where essentially all of a modded GUI's
- *       behaviour is.</li>
+ *       behaviour is.
  *   <li><b>Out of scope — the screen.</b> Pixels and layout live in the client; reach them through
- *       {@link net.magicterra.stagewright.test.Client}.</li>
+ *       {@link net.magicterra.stagewright.test.Client}.
  *   <li><b>Out of reach — a mod that does not use the seam.</b> Everything here goes through {@code MenuProvider}. A
  *       mod that opens its GUI with its own packet has none to hand (Mekanism is the measured case); ask
- *       {@link #hasMenuAt} before assuming.</li>
+ *       {@link #hasMenuAt} before assuming.
  * </ul>
  *
  * <pre>{@code
@@ -42,9 +42,9 @@ import net.minecraft.world.level.block.state.BlockState;
  * }</pre>
  *
  * <p>Positions are world positions in the overworld, such as {@link net.magicterra.stagewright.test.Plot#at} answers
- * ({@code {x, y, z}} from a script test). A menu is opened for a body, which is not moved: put it near the block
- * first if the menu checks distance. Whatever a test opens is closed when it ends, and the body's inventory restored
- * through {@link Items}, because closing a container hands its contents back to the player.
+ * ({@code {x, y, z}} from a script test). A menu is opened for a body, which is not moved: put it near the block first
+ * if the menu checks distance. Whatever a test opens is closed when it ends, and the body's inventory restored through
+ * {@link Items}, because closing a container hands its contents back to the player.
  */
 public final class Menus {
 
@@ -53,11 +53,18 @@ public final class Menus {
 
     /** Swallows the packets a screen would have wanted: this menu was never announced to a client. */
     private static final ContainerSynchronizer SILENT = new ContainerSynchronizer() {
-        @Override public void sendInitialData(AbstractContainerMenu menu,
-                NonNullList<ItemStack> items, ItemStack carried, int[] data) { }
-        @Override public void sendSlotChange(AbstractContainerMenu menu, int slot, ItemStack stack) { }
-        @Override public void sendCarriedChange(AbstractContainerMenu menu, ItemStack carried) { }
-        @Override public void sendDataChange(AbstractContainerMenu menu, int id, int value) { }
+        @Override
+        public void sendInitialData(
+                AbstractContainerMenu menu, NonNullList<ItemStack> items, ItemStack carried, int[] data) {}
+
+        @Override
+        public void sendSlotChange(AbstractContainerMenu menu, int slot, ItemStack stack) {}
+
+        @Override
+        public void sendCarriedChange(AbstractContainerMenu menu, ItemStack carried) {}
+
+        @Override
+        public void sendDataChange(AbstractContainerMenu menu, int id, int value) {}
     };
 
     /** What this facet opened for one body. */
@@ -78,10 +85,10 @@ public final class Menus {
     /**
      * Open the menu of the block at a position, for the body.
      *
-     * <p>The block's own {@code MenuProvider} first — the route a right-click takes, where conditional cases such as
-     * a double chest live — and, when it answers nothing, the block entity if that is a {@code MenuProvider}: a mod
-     * with its own block hierarchy never overrides the block's, while its block entity is one. A block with neither
-     * fails here.
+     * <p>The block's own {@code MenuProvider} first — the route a right-click takes, where conditional cases such as a
+     * double chest live — and, when it answers nothing, the block entity if that is a {@code MenuProvider}: a mod with
+     * its own block hierarchy never overrides the block's, while its block entity is one. A block with neither fails
+     * here.
      */
     public Menus openAt(Body body, BlockPos pos) {
         registerClose(body);
@@ -102,8 +109,10 @@ public final class Menus {
         return this;
     }
 
-    /** Whether the block at a position offers a menu this facet can open — the question {@link #openAt} cannot
-     *  answer, since it throws. */
+    /**
+     * Whether the block at a position offers a menu this facet can open — the question {@link #openAt} cannot answer,
+     * since it throws.
+     */
     public boolean hasMenuAt(BlockPos pos) {
         return game.onServer(server -> providerAt(server.overworld(), pos) != null);
     }
@@ -164,8 +173,10 @@ public final class Menus {
 
     // ---- writing ----
 
-    /** Put an item directly into a slot, then tell the menu its inputs changed — a recipe-shaped menu recomputes its
-     *  output in {@code slotsChanged}, so without that the output slot reads stale. */
+    /**
+     * Put an item directly into a slot, then tell the menu its inputs changed — a recipe-shaped menu recomputes its
+     * output in {@code slotsChanged}, so without that the output slot reads stale.
+     */
     public Menus put(Body body, int slot, String itemId, int count) {
         body.runOnServer(player -> {
             AbstractContainerMenu menu = require(body, player);
@@ -209,7 +220,7 @@ public final class Menus {
         ClickType type = clickTypeOf(clickType);
         body.runOnServer(player -> {
             AbstractContainerMenu menu = require(body, player);
-            slotAt(body, player, slot);                       // bounds-checked with this facet's message
+            slotAt(body, player, slot); // bounds-checked with this facet's message
             menu.clicked(slot, button, type, player);
             menu.broadcastChanges();
         });
@@ -267,7 +278,8 @@ public final class Menus {
     private Slot slotAt(Body body, ServerPlayer player, int slot) {
         AbstractContainerMenu menu = require(body, player);
         if (slot < 0 || slot >= menu.slots.size()) {
-            throw new IllegalStateException("slot " + slot + " is out of range for '" + open.get(body.name()).title()
+            throw new IllegalStateException("slot " + slot + " is out of range for '"
+                    + open.get(body.name()).title()
                     + "', which has " + menu.slots.size() + " slots (the menu's own slots come first, the player's"
                     + " inventory after them)");
         }
@@ -302,7 +314,9 @@ public final class Menus {
             }
         }
         List<String> names = new ArrayList<>();
-        for (ClickType candidate : ClickType.values()) names.add(candidate.name().toLowerCase(Locale.ROOT));
-        throw new IllegalStateException("'" + name + "' is not a click type — the types are " + String.join(", ", names));
+        for (ClickType candidate : ClickType.values())
+            names.add(candidate.name().toLowerCase(Locale.ROOT));
+        throw new IllegalStateException(
+                "'" + name + "' is not a click type — the types are " + String.join(", ", names));
     }
 }

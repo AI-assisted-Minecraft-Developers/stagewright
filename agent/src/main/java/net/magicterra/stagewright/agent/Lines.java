@@ -3,8 +3,8 @@ package net.magicterra.stagewright.agent;
 import java.util.List;
 
 /**
- * Builds one JSON object on one line. The agent has no JSON library to lean on, and the objects it
- * sends are flat enough that a builder is shorter than the question of which library to carry.
+ * Builds one JSON object on one line. The agent has no JSON library to lean on, and the objects it sends are flat
+ * enough that a builder is shorter than the question of which library to carry.
  */
 final class Lines {
 

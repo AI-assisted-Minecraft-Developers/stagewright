@@ -6,21 +6,17 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-
-import org.junit.jupiter.api.ClassDescriptor;
 import org.junit.jupiter.api.ClassOrderer;
 import org.junit.jupiter.api.ClassOrdererContext;
-import org.junit.jupiter.api.MethodDescriptor;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.MethodOrdererContext;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
 /**
- * The default method and class order of an in-game run: Jupiter's own order, except that a test runs after the
- * tests its {@code @DependsOn} names, and a class after the classes it names with {@code in}; a test named through
- * script tests ({@link Dependencies#javaUpstream}) counts as named. Stable, so tests
- * with no dependencies keep their places. A cycle leaves its members where they were; the run refuses it before
- * this is asked.
+ * The default method and class order of an in-game run: Jupiter's own order, except that a test runs after the tests
+ * its {@code @DependsOn} names, and a class after the classes it names with {@code in}; a test named through script
+ * tests ({@link Dependencies#javaUpstream}) counts as named. Stable, so tests with no dependencies keep their places. A
+ * cycle leaves its members where they were; the run refuses it before this is asked.
  */
 public final class DependencyOrder implements MethodOrderer, ClassOrderer {
 

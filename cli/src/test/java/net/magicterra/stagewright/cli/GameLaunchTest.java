@@ -8,16 +8,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Which loader a pack directory boots.
  *
- * <p>Every case here is a shape a real pack directory has: a folder under {@code libraries/} holding
- * every loader the pack has ever had installed, and one launch script the installer wrote naming the
- * one it actually boots.
+ * <p>Every case here is a shape a real pack directory has: a folder under {@code libraries/} holding every loader the
+ * pack has ever had installed, and one launch script the installer wrote naming the one it actually boots.
  */
 class GameLaunchTest {
 
@@ -42,7 +40,8 @@ class GameLaunchTest {
     void theInstallersRunScriptDecides(@TempDir Path gameDir) throws IOException {
         installLoader(gameDir, "21.1.248");
         installLoader(gameDir, "21.5.34-beta");
-        Files.writeString(gameDir.resolve("run.sh"),
+        Files.writeString(
+                gameDir.resolve("run.sh"),
                 "java @user_jvm_args.txt @libraries/net/neoforged/neoforge/21.1.248/unix_args.txt \"$@\"\n");
 
         List<String> log = new ArrayList<>();
@@ -73,7 +72,7 @@ class GameLaunchTest {
         Path vanilla = Files.createFile(gameDir.resolve("server.jar"));
         // Newer, as it is once the launcher has downloaded it on its first start.
         vanilla.toFile().setLastModified(launcher.toFile().lastModified() + 60_000);
-        List<String> command = GameLaunch.detect(gameDir, "java", line -> { });
+        List<String> command = GameLaunch.detect(gameDir, "java", line -> {});
         assertEquals(List.of("java", "-jar", launcher.toString(), "nogui"), command);
     }
 
@@ -82,10 +81,11 @@ class GameLaunchTest {
         installLoader(gameDir, "21.1.190");
         installLoader(gameDir, "21.5.34-beta");
         // Backslashes and CRLF, exactly as the NeoForge installer writes them.
-        Files.writeString(gameDir.resolve("run.bat"),
+        Files.writeString(
+                gameDir.resolve("run.bat"),
                 "java @user_jvm_args.txt @libraries\\net\\neoforged\\neoforge\\21.1.190\\win_args.txt %*\r\n");
 
-        List<String> command = GameLaunch.detect(gameDir, "java", line -> { });
+        List<String> command = GameLaunch.detect(gameDir, "java", line -> {});
 
         assertTrue(command.stream().anyMatch(a -> a.contains("/21.1.190/")), command.toString());
     }

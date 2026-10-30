@@ -10,9 +10,8 @@ import java.util.TreeMap;
 /**
  * What this jar was built from: its version, and which engine and framework builds it carries.
  *
- * <p>Printed at the start of every run. The framework comes from mavenLocal, published there by
- * the root build, and a CLI built before republishing it carries the old code without any sign of
- * it — the times printed here are that sign.
+ * <p>Printed at the start of every run. The framework comes from mavenLocal, published there by the root build, and a
+ * CLI built before republishing it carries the old code without any sign of it — the times printed here are that sign.
  */
 final class BuildInfo {
 
@@ -32,8 +31,7 @@ final class BuildInfo {
         List<String> out = new ArrayList<>();
         out.add("stagewright CLI " + p.getProperty("version", "?"));
         TreeMap<String, String> parts = new TreeMap<>();
-        p.stringPropertyNames().stream().filter(k -> !k.equals("version"))
-                .forEach(k -> parts.put(k, p.getProperty(k)));
+        p.stringPropertyNames().stream().filter(k -> !k.equals("version")).forEach(k -> parts.put(k, p.getProperty(k)));
         // Each value is "<published instant> <sha1 prefix>".
         parts.forEach((jar, value) -> out.add("  " + jar + " published " + value.replace(" ", ", sha1 ")));
         return out;

@@ -13,8 +13,8 @@ import java.util.Set;
 import net.magicterra.stagewright.test.methods.RecipesContracts.AuditReport;
 import net.magicterra.stagewright.test.methods.RecipesContracts.Closure;
 import net.magicterra.stagewright.test.methods.RecipesContracts.Counted;
-import net.magicterra.stagewright.test.methods.RecipesContracts.KindCount;
 import net.magicterra.stagewright.test.methods.RecipesContracts.IngredientsOf;
+import net.magicterra.stagewright.test.methods.RecipesContracts.KindCount;
 import net.magicterra.stagewright.test.methods.RecipesContracts.ProducedBy;
 import net.magicterra.stagewright.test.methods.RecipesContracts.Slot;
 import net.magicterra.stagewright.test.methods.RecipesContracts.UncraftableRecipes;
@@ -38,18 +38,19 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 
 /**
- * The loaded recipe graph for one question: who makes what, out of what, and whether the chain closes. Built from
- * the recipe manager each time, so it never goes stale across a datapack reload.
+ * The loaded recipe graph for one question: who makes what, out of what, and whether the chain closes. Built from the
+ * recipe manager each time, so it never goes stale across a datapack reload.
  *
  * <p>Several recipes cannot be asked what they make or consume: the "special" ones (map cloning, armour dyeing,
- * firework assembly) compute themselves at runtime, and {@code getResultItem} or {@code getIngredients} on a modded
- * one can throw. Every read here goes through a guard that turns that into "declares nothing", because one bad
- * recipe must not hide the rest of the graph.
+ * firework assembly) compute themselves at runtime, and {@code getResultItem} or {@code getIngredients} on a modded one
+ * can throw. Every read here goes through a guard that turns that into "declares nothing", because one bad recipe must
+ * not hide the rest of the graph.
  */
 final class RecipeGraph {
 
     /** Result id to the recipes that make it. */
     private final Map<String, List<String>> byResult = new LinkedHashMap<>();
+
     private final Map<String, RecipeHolder<?>> byId = new LinkedHashMap<>();
     private final ServerLevel level;
 
@@ -59,7 +60,8 @@ final class RecipeGraph {
             byId.put(holder.id().toString(), holder);
             ItemStack result = resultOf(holder.value());
             if (result.isEmpty()) continue; // dynamic recipe
-            byResult.computeIfAbsent(idOf(result), k -> new ArrayList<>()).add(holder.id().toString());
+            byResult.computeIfAbsent(idOf(result), k -> new ArrayList<>())
+                    .add(holder.id().toString());
         }
     }
 
@@ -91,8 +93,8 @@ final class RecipeGraph {
     }
 
     /**
-     * Lay every grid recipe out from its own first-accepted ingredients and see what it assembles. A recipe
-     * that throws, makes nothing, or makes something else than it declares is a failure; the rest are the audit.
+     * Lay every grid recipe out from its own first-accepted ingredients and see what it assembles. A recipe that
+     * throws, makes nothing, or makes something else than it declares is a failure; the rest are the audit.
      */
     AuditReport audit() {
         int attempted = 0;
@@ -117,7 +119,8 @@ final class RecipeGraph {
                     failure = "declares " + declared + " but makes " + made;
                 }
             } catch (RuntimeException e) {
-                failure = "threw " + e.getClass().getSimpleName() + (e.getMessage() == null ? "" : " (" + e.getMessage() + ")");
+                failure = "threw " + e.getClass().getSimpleName()
+                        + (e.getMessage() == null ? "" : " (" + e.getMessage() + ")");
             }
             if (failure != null) {
                 failures.add(entry.getKey() + " [" + kind + "]: " + failure);
@@ -126,16 +129,24 @@ final class RecipeGraph {
         }
         failures.sort(String::compareTo);
         List<String> cut = failures.subList(0, Math.min(failures.size(), 1000)).stream()
-                .map(f -> f.length() > 1024 ? f.substring(0, 1024) : f).toList();
-        return new AuditReport(byId.size(), attempted, attempted - failures.size(), skipped, failures.size(),
-                mostFirst(bySerializer), cut);
+                .map(f -> f.length() > 1024 ? f.substring(0, 1024) : f)
+                .toList();
+        return new AuditReport(
+                byId.size(),
+                attempted,
+                attempted - failures.size(),
+                skipped,
+                failures.size(),
+                mostFirst(bySerializer),
+                cut);
     }
 
     /** How many recipes are loaded, in all and per recipe type. */
     Counted count() {
         Map<String, Integer> byType = new LinkedHashMap<>();
         for (RecipeHolder<?> holder : byId.values()) {
-            ResourceLocation type = BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType());
+            ResourceLocation type =
+                    BuiltInRegistries.RECIPE_TYPE.getKey(holder.value().getType());
             byType.merge(type == null ? "?" : type.toString(), 1, Integer::sum);
         }
         return new Counted(byId.size(), mostFirst(byType));
@@ -144,9 +155,12 @@ final class RecipeGraph {
     /** Counts by kind, most first, then by name; cut at the reply's limit. */
     private static List<KindCount> mostFirst(Map<String, Integer> counts) {
         return counts.entrySet().stream()
-                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+                .sorted(Map.Entry.<String, Integer>comparingByValue()
+                        .reversed()
+                        .thenComparing(Map.Entry.comparingByKey()))
                 .limit(4096)
-                .map(e -> new KindCount(e.getKey().length() > 256 ? e.getKey().substring(0, 256) : e.getKey(), e.getValue()))
+                .map(e -> new KindCount(
+                        e.getKey().length() > 256 ? e.getKey().substring(0, 256) : e.getKey(), e.getValue()))
                 .toList();
     }
 
@@ -194,7 +208,10 @@ final class RecipeGraph {
                     opaque.add(recipeId);
                     for (String next : mentionedBy(byId.get(recipeId))) {
                         if (seen.contains(next)) continue;
-                        if (seen.size() >= maxNodes) { truncated = true; continue; }
+                        if (seen.size() >= maxNodes) {
+                            truncated = true;
+                            continue;
+                        }
                         seen.add(next);
                         frontier.addLast(new String[] {next, String.valueOf(depth + 1)});
                     }
@@ -209,7 +226,10 @@ final class RecipeGraph {
                     for (String next : accepted) {
                         declared.add(next);
                         if (seen.contains(next)) continue;
-                        if (seen.size() >= maxNodes) { truncated = true; continue; }
+                        if (seen.size() >= maxNodes) {
+                            truncated = true;
+                            continue;
+                        }
                         seen.add(next);
                         frontier.addLast(new String[] {next, String.valueOf(depth + 1)});
                     }
@@ -221,9 +241,18 @@ final class RecipeGraph {
         Set<String> inferred = new LinkedHashSet<>(seen);
         inferred.removeAll(declared);
         inferred.remove(root);
-        return new Closure(root, List.copyOf(seen), List.copyOf(leaves), List.copyOf(recipes),
-                unresolvable.stream().map(s -> s.length() > 512 ? s.substring(0, 512) : s).toList(),
-                List.copyOf(opaque), List.copyOf(inferred), deepest, truncated);
+        return new Closure(
+                root,
+                List.copyOf(seen),
+                List.copyOf(leaves),
+                List.copyOf(recipes),
+                unresolvable.stream()
+                        .map(s -> s.length() > 512 ? s.substring(0, 512) : s)
+                        .toList(),
+                List.copyOf(opaque),
+                List.copyOf(inferred),
+                deepest,
+                truncated);
     }
 
     // ---- ids ----
@@ -240,7 +269,9 @@ final class RecipeGraph {
     private RecipeHolder<?> holder(String recipeId) {
         RecipeHolder<?> holder = byId.get(recipeId);
         if (holder == null) {
-            throw ApiException.invalidParam("/recipe", ApiIssue.Code.INVALID_VALUE,
+            throw ApiException.invalidParam(
+                    "/recipe",
+                    ApiIssue.Code.INVALID_VALUE,
                     "no recipe is registered as " + recipeId + "; " + byId.size() + " are loaded");
         }
         return holder;

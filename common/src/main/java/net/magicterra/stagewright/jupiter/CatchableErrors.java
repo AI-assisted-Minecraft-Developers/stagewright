@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import net.magicterra.worlddriver.api.registry.Scripting;
 import net.magicterra.worlddriver.api.schema.ApiException;
 
@@ -14,14 +13,14 @@ import net.magicterra.worlddriver.api.schema.ApiException;
  * <p>WorldDriver's {@link Scripting} lets a Java function's exception leave the script engine as itself, and Rhino lets
  * a script's {@code catch} see only errors of the script's own: a Java exception runs the script's {@code finally}
  * blocks and leaves the script altogether. So each function goes to the script through a small script function that
- * calls it, and when the Java side answers with a refusal instead of a value, throws a script {@code Error} carrying its
- * message, the Java class as {@code type} and WorldDriver's error code as {@code code}. StageWright links no Rhino of
- * its own, so this is the one way to raise a script error from here.
+ * calls it, and when the Java side answers with a refusal instead of a value, throws a script {@code Error} carrying
+ * its message, the Java class as {@code type} and WorldDriver's error code as {@code code}. StageWright links no Rhino
+ * of its own, so this is the one way to raise a script error from here.
  *
  * <p>Only exceptions are turned into script errors. An {@link Error}, which is what a failed {@code t.expect} and a
- * {@code t.waitUntil} out of budget throw, still cannot be caught, nor can an abort ({@code TestAbortedException}),
- * nor anything thrown once the test thread has been interrupted. A script error nobody caught fails the test with
- * the Java exception it came from as its cause, so the report still has the Java side's stack.
+ * {@code t.waitUntil} out of budget throw, still cannot be caught, nor can an abort ({@code TestAbortedException}), nor
+ * anything thrown once the test thread has been interrupted. A script error nobody caught fails the test with the Java
+ * exception it came from as its cause, so the report still has the Java side's stack.
  */
 final class CatchableErrors {
 
@@ -69,7 +68,9 @@ final class CatchableErrors {
      * script did not catch (or caught and threw again).
      */
     Throwable explain(Throwable failure) {
-        if (!(failure instanceof Scripting.ScriptFailure) || failure.getCause() != null || failure.getMessage() == null) {
+        if (!(failure instanceof Scripting.ScriptFailure)
+                || failure.getCause() != null
+                || failure.getMessage() == null) {
             return failure;
         }
         synchronized (raised) {
@@ -94,7 +95,11 @@ final class CatchableErrors {
         out.put("message", message);
         out.put("type", e.getClass().getName());
         ApiException api = ApiException.find(e);
-        out.put("code", api == null || api.error().code() == null ? null : api.error().code().name());
+        out.put(
+                "code",
+                api == null || api.error().code() == null
+                        ? null
+                        : api.error().code().name());
         return out;
     }
 
@@ -105,7 +110,8 @@ final class CatchableErrors {
             map.forEach((k, v) -> out.put(String.valueOf(k), handlesIn(v)));
             return out;
         }
-        if (value instanceof List<?> list) return list.stream().map(this::handlesIn).toList();
+        if (value instanceof List<?> list)
+            return list.stream().map(this::handlesIn).toList();
         return value;
     }
 
@@ -156,7 +162,8 @@ final class CatchableErrors {
     }
 
     private synchronized Scripting.Function factory() {
-        if (factory == null) factory = (Scripting.Function) scripting.evaluate("stagewright-catchable", FACTORY, Map.of());
+        if (factory == null)
+            factory = (Scripting.Function) scripting.evaluate("stagewright-catchable", FACTORY, Map.of());
         return factory;
     }
 }

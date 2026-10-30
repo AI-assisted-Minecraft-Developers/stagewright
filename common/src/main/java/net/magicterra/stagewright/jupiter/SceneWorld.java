@@ -1,24 +1,22 @@
 package net.magicterra.stagewright.jupiter;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
-
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.GameRules;
 
 /**
- * The part of a scene's world that is set once the world is loaded, before the first test: game rules, the clock,
- * the weather, the tick rate, mob spawning. The test engine passes it as {@value #PROPERTY}; the part that applies when
- * the world is created reached the game through {@code server.properties}, and the datapacks among it are checked
- * here, since a pack id the game does not know is dropped without a word.
+ * The part of a scene's world that is set once the world is loaded, before the first test: game rules, the clock, the
+ * weather, the tick rate, mob spawning. The test engine passes it as {@value #PROPERTY}; the part that applies when the
+ * world is created reached the game through {@code server.properties}, and the datapacks among it are checked here,
+ * since a pack id the game does not know is dropped without a word.
  */
 final class SceneWorld {
 
@@ -42,7 +40,8 @@ final class SceneWorld {
         overworld.setWeatherParameters(raining ? 0 : WEATHER_TICKS, raining ? WEATHER_TICKS : 0, raining, thundering);
         rules.getRule(GameRules.RULE_WEATHER_CYCLE).set(!w.get("weatherFrozen").getAsBoolean(), server);
         rules.getRule(GameRules.RULE_DOMOBSPAWNING).set(w.get("mobSpawning").getAsBoolean(), server);
-        if (w.has("tickRate")) server.tickRateManager().setTickRate(w.get("tickRate").getAsFloat());
+        if (w.has("tickRate"))
+            server.tickRateManager().setTickRate(w.get("tickRate").getAsFloat());
 
         // Declared rules last, so one the scene names outright wins over one derived from time or weather.
         Map<String, GameRules.Key<?>> keys = new HashMap<>();
@@ -52,16 +51,19 @@ final class SceneWorld {
                 keys.put(key.getId(), key);
             }
         });
-        for (Map.Entry<String, JsonElement> declared : w.getAsJsonObject("gamerules").entrySet()) {
+        for (Map.Entry<String, JsonElement> declared :
+                w.getAsJsonObject("gamerules").entrySet()) {
             GameRules.Key<?> key = keys.get(declared.getKey());
             if (key == null) {
-                throw new IllegalStateException("the scene sets game rule '" + declared.getKey() + "', which this game"
-                        + " does not have");
+                throw new IllegalStateException(
+                        "the scene sets game rule '" + declared.getKey() + "', which this game" + " does not have");
             }
             GameRules.Value<?> value = rules.getRule(key);
-            if (value instanceof GameRules.BooleanValue b && declared.getValue().getAsJsonPrimitive().isBoolean()) {
+            if (value instanceof GameRules.BooleanValue b
+                    && declared.getValue().getAsJsonPrimitive().isBoolean()) {
                 b.set(declared.getValue().getAsBoolean(), server);
-            } else if (value instanceof GameRules.IntegerValue i && declared.getValue().getAsJsonPrimitive().isNumber()) {
+            } else if (value instanceof GameRules.IntegerValue i
+                    && declared.getValue().getAsJsonPrimitive().isNumber()) {
                 i.set(declared.getValue().getAsInt(), server);
             } else {
                 throw new IllegalStateException("the scene sets game rule '" + declared.getKey() + "' to "

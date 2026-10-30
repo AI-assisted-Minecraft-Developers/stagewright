@@ -7,17 +7,17 @@ import org.junit.platform.engine.support.descriptor.ClassSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
 
 /**
- * The outer tree: engine, then one node per scene, per test class or script file in it, per test method or script
- * test, plus the invocations a game registers while running. A class or script test named by several scenes sits
- * under each, and runs in each.
+ * The outer tree: engine, then one node per scene, per test class or script file in it, per test method or script test,
+ * plus the invocations a game registers while running. A class or script test named by several scenes sits under each,
+ * and runs in each.
  *
  * <p>A class's and a script file's source is a {@link ClassSource} named {@code <scene>/<class>} or
  * {@code <scene>/<file>}, and the scene's one named for the scene. A build tool takes the nearest class source above a
  * test as the test's class: Gradle files its JUnit XML by it, one file per class, naming the {@code testsuite} and each
  * {@code testcase}'s {@code classname} for it. Named for the class alone, a class that runs in three scenes gave three
  * files {@code TEST-<class>-1.xml} to {@code -3.xml} and no word of which scene each was. Each test's
- * {@link MethodSource} still names the real class or file, which is what Gradle's {@code --tests} filter matches it
- * on. An IDE cannot open a class from a Gradle run's node any more.
+ * {@link MethodSource} still names the real class or file, which is what Gradle's {@code --tests} filter matches it on.
+ * An IDE cannot open a class from a Gradle run's node any more.
  */
 final class Nodes {
 
@@ -43,7 +43,8 @@ final class Nodes {
         final String className;
 
         TestClass(Scene scene, ClassScan.Scanned scanned) {
-            super(scene.getUniqueId().append("class", scanned.className()),
+            super(
+                    scene.getUniqueId().append("class", scanned.className()),
                     scanned.displayName().orElse(simpleName(scanned.className())),
                     ClassSource.from(scene.name + "/" + scanned.className()));
             this.className = scanned.className();
@@ -61,7 +62,9 @@ final class Nodes {
         final ClassScan.Method method;
 
         TestMethod(UniqueId parent, String className, ClassScan.Method method) {
-            super(parent.append("method", method.key()), method.displayName().orElse(method.key()),
+            super(
+                    parent.append("method", method.key()),
+                    method.displayName().orElse(method.key()),
                     MethodSource.from(className, method.name(), method.parameters()));
             this.className = className;
             this.method = method;
@@ -96,7 +99,9 @@ final class Nodes {
         final String resource;
 
         ScriptFile(Scene scene, String resource) {
-            super(scene.getUniqueId().append("script", resource), resource,
+            super(
+                    scene.getUniqueId().append("script", resource),
+                    resource,
                     ClassSource.from(scene.name + "/" + resource));
             this.resource = resource;
         }

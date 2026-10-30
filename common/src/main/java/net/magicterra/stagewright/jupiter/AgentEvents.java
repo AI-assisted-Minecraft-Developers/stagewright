@@ -3,7 +3,6 @@ package net.magicterra.stagewright.jupiter;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-
 import net.magicterra.stagewright.harness.AgentBridge;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.reporting.ReportEntry;

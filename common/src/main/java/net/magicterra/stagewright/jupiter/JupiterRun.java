@@ -1,5 +1,9 @@
 package net.magicterra.stagewright.jupiter;
 
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -17,24 +21,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.harness.AgentBridge;
 import net.minecraft.server.MinecraftServer;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.DiscoverySelector;
-import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.engine.FilterResult;
+import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.EngineFilter;
-import org.junit.platform.launcher.PostDiscoveryFilter;
 import org.junit.platform.launcher.Launcher;
 import org.junit.platform.launcher.LauncherDiscoveryRequest;
+import org.junit.platform.launcher.PostDiscoveryFilter;
 import org.junit.platform.launcher.TestPlan;
 import org.junit.platform.launcher.core.LauncherConfig;
 import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
@@ -46,11 +44,12 @@ import org.junit.platform.reporting.legacy.xml.LegacyXmlReportGeneratingListener
 /**
  * Runs JUnit tests inside the game, on a thread of their own, once the server's tick cadence has settled.
  *
- * <p>Which tests: the classes in {@value #CLASSES} and the script resources in {@value #SCRIPTS} (each
- * comma-separated) when either is set, else every entry of every {@value #INDEX} resource on the game's class path,
- * one per line, a name ending {@code .js} or {@code .yaml} being a script ({@link ScriptTestEngine}). Nothing runs unless one of
- * {@value #CLASSES}, {@value #SCRIPTS} or {@value #ENABLED} is set. Reports go to {@code <game dir>/stagewright/junit/}: JUnit XML
- * and a {@code summary.json}. With {@value #EXIT} the server stops once the run is over.
+ * <p>Which tests: the classes in {@value #CLASSES} and the script resources in {@value #SCRIPTS} (each comma-separated)
+ * when either is set, else every entry of every {@value #INDEX} resource on the game's class path, one per line, a name
+ * ending {@code .js} or {@code .yaml} being a script ({@link ScriptTestEngine}). Nothing runs unless one of
+ * {@value #CLASSES}, {@value #SCRIPTS} or {@value #ENABLED} is set. Reports go to {@code <game
+ * dir>/stagewright/junit/}: JUnit XML and a {@code summary.json}. With {@value #EXIT} the server stops once the run is
+ * over.
  */
 public final class JupiterRun {
 
@@ -107,13 +106,18 @@ public final class JupiterRun {
                     : indexed(loader);
             List<String> classes = entries.stream().filter(e -> !isScript(e)).toList();
             List<String> scripts = entries.stream().filter(JupiterRun::isScript).toList();
-            StageWrightCommon.LOG.info("[{}] running {} JUnit test classes and {} test scripts in the game",
-                    StageWrightCommon.MOD_ID, classes.size(), scripts.size());
+            StageWrightCommon.LOG.info(
+                    "[{}] running {} JUnit test classes and {} test scripts in the game",
+                    StageWrightCommon.MOD_ID,
+                    classes.size(),
+                    scripts.size());
             GameImpl game = new GameImpl(server);
             String world = System.getProperty(SceneWorld.PROPERTY);
             if (world != null) {
                 JsonObject declared = JsonParser.parseString(world).getAsJsonObject();
-                StageWrightCommon.LOG.info("[{}] scene world: {}", StageWrightCommon.MOD_ID,
+                StageWrightCommon.LOG.info(
+                        "[{}] scene world: {}",
+                        StageWrightCommon.MOD_ID,
                         game.onServer(s -> SceneWorld.apply(s, declared)));
             }
             GameExtension.bind(game);
@@ -123,11 +127,16 @@ public final class JupiterRun {
             Rounds.load(artifacts);
             Handovers.load(artifacts, Rounds.current());
             ScriptTestEngine scriptEngine = new ScriptTestEngine();
-            Launcher launcher = LauncherFactory.create(LauncherConfig.builder().addTestEngines(scriptEngine).build());
+            Launcher launcher = LauncherFactory.create(
+                    LauncherConfig.builder().addTestEngines(scriptEngine).build());
             // Two plans, run side by side so a test of either kind may wait for one of the other. The scripts are
-            // discovered first: the Java tests' order, decided as they are discovered, follows dependencies through them.
+            // discovered first: the Java tests' order, decided as they are discovered, follows dependencies through
+            // them.
             TestPlan scriptPlan = launcher.discover(request(
-                    scripts.stream().map(DiscoverySelectors::selectClasspathResource).toList(), ScriptTestEngine.ID));
+                    scripts.stream()
+                            .map(DiscoverySelectors::selectClasspathResource)
+                            .toList(),
+                    ScriptTestEngine.ID));
             Dependencies.scripts(scriptEngine.discoveredTests());
             TestPlan javaPlan = launcher.discover(request(
                     classes.stream().map(DiscoverySelectors::selectClass).toList(), "junit-jupiter"));
@@ -138,19 +147,28 @@ public final class JupiterRun {
             SummaryGeneratingListener javaSummary = new SummaryGeneratingListener();
             SummaryGeneratingListener scriptSummary = new SummaryGeneratingListener();
             StringWriter xmlLog = new StringWriter();
-            Thread scriptThread = new Thread(() -> {
-                try {
-                    launcher.execute(scriptPlan, scriptSummary, relay,
-                            new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
-                } finally {
-                    Dependencies.scriptsOver();
-                }
-            }, "stagewright-scripts");
+            Thread scriptThread = new Thread(
+                    () -> {
+                        try {
+                            launcher.execute(
+                                    scriptPlan,
+                                    scriptSummary,
+                                    relay,
+                                    new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
+                        } finally {
+                            Dependencies.scriptsOver();
+                        }
+                    },
+                    "stagewright-scripts");
             scriptThread.setDaemon(true);
             scriptThread.setContextClassLoader(loader);
             scriptThread.start();
             try {
-                launcher.execute(javaPlan, javaSummary, relay, Dependencies.ENDINGS,
+                launcher.execute(
+                        javaPlan,
+                        javaSummary,
+                        relay,
+                        Dependencies.ENDINGS,
                         new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
             } finally {
                 Dependencies.javaOver();
@@ -160,8 +178,11 @@ public final class JupiterRun {
             Handovers.sweep(artifacts, restarting);
             Rounds.save(artifacts, Dependencies.outcomes());
             if (restarting) {
-                StageWrightCommon.LOG.info("[{}] round {} is over; tests remain for round {}, after a restart",
-                        StageWrightCommon.MOD_ID, Rounds.current(), Rounds.current() + 1);
+                StageWrightCommon.LOG.info(
+                        "[{}] round {} is over; tests remain for round {}, after a restart",
+                        StageWrightCommon.MOD_ID,
+                        Rounds.current(),
+                        Rounds.current() + 1);
                 relay.restart(Rounds.current() + 1);
             }
             relay.ended();
@@ -177,8 +198,9 @@ public final class JupiterRun {
             StageWrightCommon.LOG.error("[{}] the JUnit run could not complete", StageWrightCommon.MOD_ID, t);
             relay.error(t);
             try {
-                Files.writeString(reports.resolve("summary.json"), "{\"error\":" + new com.google.gson.Gson().toJson(
-                        String.valueOf(t)) + "}");
+                Files.writeString(
+                        reports.resolve("summary.json"),
+                        "{\"error\":" + new com.google.gson.Gson().toJson(String.valueOf(t)) + "}");
             } catch (IOException ignored) {
                 // the log line above is the record
             }
@@ -201,17 +223,22 @@ public final class JupiterRun {
         AgentBridge.system().done();
         server.halt(false);
         if (!server.isDedicatedServer() || AgentBridge.system().attached()) return;
-        Thread watchdog = new Thread(() -> {
-            try {
-                Thread.sleep(EXIT_GRACE_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-            StageWrightCommon.LOG.warn("[{}] the JVM is still up {}s after the run halted the server: a mod is holding"
-                    + " a non-daemon thread. Forcing exit.", StageWrightCommon.MOD_ID, EXIT_GRACE_MS / 1000);
-            Runtime.getRuntime().halt(0);
-        }, "stagewright-exit-watchdog");
+        Thread watchdog = new Thread(
+                () -> {
+                    try {
+                        Thread.sleep(EXIT_GRACE_MS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                    StageWrightCommon.LOG.warn(
+                            "[{}] the JVM is still up {}s after the run halted the server: a mod is holding"
+                                    + " a non-daemon thread. Forcing exit.",
+                            StageWrightCommon.MOD_ID,
+                            EXIT_GRACE_MS / 1000);
+                    Runtime.getRuntime().halt(0);
+                },
+                "stagewright-exit-watchdog");
         // Daemon, so it cannot itself become the thread that keeps the JVM alive on a clean shutdown.
         watchdog.setDaemon(true);
         watchdog.start();
@@ -219,9 +246,11 @@ public final class JupiterRun {
 
     /** Keeps the Java tests of the round this game runs ({@link Rounds}); script tests are kept by their engine. */
     private static final PostDiscoveryFilter THIS_ROUND = descriptor -> {
-        if (!(descriptor.getSource().orElse(null) instanceof MethodSource m)) return FilterResult.included("not a test");
+        if (!(descriptor.getSource().orElse(null) instanceof MethodSource m))
+            return FilterResult.included("not a test");
         int round = Rounds.of(m.getClassName() + "#" + m.getMethodName());
-        return round == Rounds.current() ? FilterResult.included("this round")
+        return round == Rounds.current()
+                ? FilterResult.included("this round")
                 : FilterResult.excluded("runs in round " + round + " of the scene's restarts");
     };
 
@@ -242,7 +271,10 @@ public final class JupiterRun {
     }
 
     private static List<String> split(String listed) {
-        return Arrays.stream(listed.split(",")).map(String::trim).filter(s -> !s.isEmpty()).toList();
+        return Arrays.stream(listed.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 
     private static boolean isScript(String entry) {
@@ -262,7 +294,10 @@ public final class JupiterRun {
         while (resources.hasMoreElements()) {
             try (BufferedReader in = new BufferedReader(
                     new InputStreamReader(resources.nextElement().openStream(), StandardCharsets.UTF_8))) {
-                in.lines().map(String::trim).filter(s -> !s.isEmpty() && !s.startsWith("#")).forEach(names::add);
+                in.lines()
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty() && !s.startsWith("#"))
+                        .forEach(names::add);
             }
         }
         return new ArrayList<>(names);
@@ -274,13 +309,36 @@ public final class JupiterRun {
         JsonArray listed = new JsonArray();
         selected.forEach(listed::add);
         o.add("selected", listed);
-        o.addProperty("found", summaries.stream().mapToLong(TestExecutionSummary::getTestsFoundCount).sum());
-        o.addProperty("succeeded", summaries.stream().mapToLong(TestExecutionSummary::getTestsSucceededCount).sum());
-        o.addProperty("failed", summaries.stream().mapToLong(TestExecutionSummary::getTestsFailedCount).sum());
-        o.addProperty("aborted", summaries.stream().mapToLong(TestExecutionSummary::getTestsAbortedCount).sum());
-        o.addProperty("skipped", summaries.stream().mapToLong(TestExecutionSummary::getTestsSkippedCount).sum());
-        o.addProperty("containersFailed",
-                summaries.stream().mapToLong(TestExecutionSummary::getContainersFailedCount).sum());
+        o.addProperty(
+                "found",
+                summaries.stream()
+                        .mapToLong(TestExecutionSummary::getTestsFoundCount)
+                        .sum());
+        o.addProperty(
+                "succeeded",
+                summaries.stream()
+                        .mapToLong(TestExecutionSummary::getTestsSucceededCount)
+                        .sum());
+        o.addProperty(
+                "failed",
+                summaries.stream()
+                        .mapToLong(TestExecutionSummary::getTestsFailedCount)
+                        .sum());
+        o.addProperty(
+                "aborted",
+                summaries.stream()
+                        .mapToLong(TestExecutionSummary::getTestsAbortedCount)
+                        .sum());
+        o.addProperty(
+                "skipped",
+                summaries.stream()
+                        .mapToLong(TestExecutionSummary::getTestsSkippedCount)
+                        .sum());
+        o.addProperty(
+                "containersFailed",
+                summaries.stream()
+                        .mapToLong(TestExecutionSummary::getContainersFailedCount)
+                        .sum());
         JsonArray failures = new JsonArray();
         for (TestExecutionSummary s : summaries) {
             for (TestExecutionSummary.Failure f : s.getFailures()) {

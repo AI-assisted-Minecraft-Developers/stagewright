@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
 class KnownIssuesTest {
@@ -17,10 +16,11 @@ class KnownIssuesTest {
                 Map.of("item", "minecraft:wander_add_map", "reason", "dungeons-and-taverns 4.4.4"),
                 Map.of("id", "x:y", "reason", "plain values too")));
         Object result = Map.of(
-                "uncraftable", List.of(Map.of("item", "minecraft:wander_add_map", "recipe", "r1"), Map.of("item", "a:b")),
+                "uncraftable",
+                        List.of(Map.of("item", "minecraft:wander_add_map", "recipe", "r1"), Map.of("item", "a:b")),
                 "ids", List.of("x:y", "z:z"));
-        assertEquals(Map.of("uncraftable", List.of(Map.of("item", "a:b")), "ids", List.of("z:z")),
-                known.subtract(result));
+        assertEquals(
+                Map.of("uncraftable", List.of(Map.of("item", "a:b")), "ids", List.of("z:z")), known.subtract(result));
         known.checkAllSeen();
     }
 

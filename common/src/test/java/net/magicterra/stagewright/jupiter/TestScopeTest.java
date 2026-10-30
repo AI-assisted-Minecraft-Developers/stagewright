@@ -9,7 +9,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
-
 import net.magicterra.stagewright.test.Locks;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.MultipleFailuresError;
@@ -19,7 +18,8 @@ class TestScopeTest {
     @Test
     void aScriptOverrideWithoutItsLockIsRefusedInTheScriptsOwnTerms() {
         TestScope scope = TestScope.ofScript("rains", Set.of(), false);
-        IllegalStateException e = assertThrows(IllegalStateException.class,
+        IllegalStateException e = assertThrows(
+                IllegalStateException.class,
                 () -> scope.require(Locks.WEATHER, "Locks.WEATHER", "game.overrideWeather"));
         assertTrue(e.getMessage().contains("locks: ['weather']"), e.getMessage());
     }

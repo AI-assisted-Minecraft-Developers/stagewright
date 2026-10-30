@@ -4,7 +4,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
-
 import net.magicterra.stagewright.capability.Capabilities;
 import net.magicterra.stagewright.capability.CapabilityProvider;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
@@ -17,8 +16,8 @@ import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 
 /**
- * The game instance a test runs in, injected as a test method or constructor parameter. Tests run on a test
- * thread, not the server thread, so every method here may block: a test reads as the sequence of things it does.
+ * The game instance a test runs in, injected as a test method or constructor parameter. Tests run on a test thread, not
+ * the server thread, so every method here may block: a test reads as the sequence of things it does.
  *
  * <p>Game operations are WorldDriver's: {@link #api} hands out a family's caller, for example
  * {@code game.api(WorldBlockingApi::of).block(...)}, which answers on this thread.
@@ -34,11 +33,11 @@ public interface Game {
     }
 
     /**
-     * Run {@code work} on the server thread and answer its result here, so a group of reads and writes happens
-     * between two ticks with nothing else interleaved. Must not itself call a blocking {@code Game} method: the
-     * server thread would wait for itself, so that is refused at once. Called on the server thread, as from an
-     * {@link Await} condition, it runs {@code work} there and then. The work runs as part of the calling test:
-     * {@link #check} counts for it there, while an override or {@link #afterTest}, which the test must undo, is refused.
+     * Run {@code work} on the server thread and answer its result here, so a group of reads and writes happens between
+     * two ticks with nothing else interleaved. Must not itself call a blocking {@code Game} method: the server thread
+     * would wait for itself, so that is refused at once. Called on the server thread, as from an {@link Await}
+     * condition, it runs {@code work} there and then. The work runs as part of the calling test: {@link #check} counts
+     * for it there, while an override or {@link #afterTest}, which the test must undo, is refused.
      */
     <T> T onServer(Function<MinecraftServer, T> work);
 
@@ -86,9 +85,9 @@ public interface Game {
 
     /**
      * A soft assertion: when {@code holds} is false, {@code what} is kept and the test goes on. Every check that failed
-     * is reported together once the test ends, and fails it, so a test probing many things sees all that are wrong,
-     * not the first. From the test's own thread, or inside an {@link #onServer} task or {@link Await} condition the
-     * test started.
+     * is reported together once the test ends, and fails it, so a test probing many things sees all that are wrong, not
+     * the first. From the test's own thread, or inside an {@link #onServer} task or {@link Await} condition the test
+     * started.
      */
     void check(boolean holds, String what);
 
@@ -137,15 +136,15 @@ public interface Game {
     void freezeTicks();
 
     /**
-     * Run {@code undo} on the server thread when the calling test ends, passed or not; the last registered runs
-     * first. For facets that change shared state, such as a player's inventory. Only from a test's own thread.
+     * Run {@code undo} on the server thread when the calling test ends, passed or not; the last registered runs first.
+     * For facets that change shared state, such as a player's inventory. Only from a test's own thread.
      */
     void afterTest(Consumer<MinecraftServer> undo);
 
     /**
      * A capability some mod in this run contributed (see {@link CapabilityProvider}): its facet, the same object for
-     * the rest of the test. When this game does not offer it the test is aborted, not failed, with a reason naming
-     * what is missing and what is offered instead.
+     * the rest of the test. When this game does not offer it the test is aborted, not failed, with a reason naming what
+     * is missing and what is offered instead.
      */
     Object capability(String name);
 
@@ -153,13 +152,16 @@ public interface Game {
     default <T> T capability(String name, Class<T> type) {
         Object facet = capability(name);
         if (!type.isInstance(facet)) {
-            throw new IllegalStateException("the '" + name + "' capability is a " + facet.getClass().getName()
-                    + ", not a " + type.getName() + " — its provider and this test disagree about what that name means");
+            throw new IllegalStateException(
+                    "the '" + name + "' capability is a " + facet.getClass().getName() + ", not a " + type.getName()
+                            + " — its provider and this test disagree about what that name means");
         }
         return type.cast(facet);
     }
 
-    /** What this game offers: {@link Capabilities#has}, {@link Capabilities#available}, {@link Capabilities#registered}. */
+    /**
+     * What this game offers: {@link Capabilities#has}, {@link Capabilities#available}, {@link Capabilities#registered}.
+     */
     default Capabilities capabilities() {
         return Capabilities.in(this);
     }

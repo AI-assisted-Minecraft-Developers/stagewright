@@ -13,7 +13,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ForkJoinPool;
-
 import net.magicterra.stagewright.test.DependsOn;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -26,10 +25,10 @@ import org.junit.platform.launcher.TestPlan;
 
 /**
  * {@link DependsOn} and a script test's {@code dependsOn}: which tests the run holds, how each one ended, and the wait
- * before a dependent test until its dependencies have ended, all of them having passed. Java and script tests run
- * side by side, so either kind may wait for the other. The ordering half is {@link DependencyOrder}, and for script
- * tests {@link ScriptScheduler}. Registered for every test through extension auto-detection, like
- * {@link GameExtension}, which calls {@link #awaitUpstream} before the test takes its locks.
+ * before a dependent test until its dependencies have ended, all of them having passed. Java and script tests run side
+ * by side, so either kind may wait for the other. The ordering half is {@link DependencyOrder}, and for script tests
+ * {@link ScriptScheduler}. Registered for every test through extension auto-detection, like {@link GameExtension},
+ * which calls {@link #awaitUpstream} before the test takes its locks.
  *
  * <p>A test is named by a key: {@code com.example.SomeTest#method} for a Java test, {@code file.js#name} for a
  * script's, the file being its class path resource.
@@ -53,7 +52,12 @@ public final class Dependencies implements TestWatcher {
         }
     }
 
-    private enum Outcome { SUCCEEDED, FAILED, ABORTED, DISABLED }
+    private enum Outcome {
+        SUCCEEDED,
+        FAILED,
+        ABORTED,
+        DISABLED
+    }
 
     private static final String PARALLEL = "junit.jupiter.execution.parallel.enabled";
 
@@ -62,7 +66,9 @@ public final class Dependencies implements TestWatcher {
     private static final Map<Ref, Outcome> OUTCOMES = new ConcurrentHashMap<>();
     /** Completed once a planned test has ended for good: every invocation of it, or the container it was in. */
     private static final Map<Ref, CompletableFuture<Void>> ENDED = new ConcurrentHashMap<>();
-    /** What every test of the run depends on, by key: Java tests' from {@link #prepare}, scripts' from {@link #scripts}. */
+    /**
+     * What every test of the run depends on, by key: Java tests' from {@link #prepare}, scripts' from {@link #scripts}.
+     */
     private static final Map<String, List<String>> EDGES = new ConcurrentHashMap<>();
     /** How each script test of the run ended, completed as it ends. */
     private static final Map<String, CompletableFuture<TestExecutionResult.Status>> SCRIPTS = new ConcurrentHashMap<>();
@@ -109,8 +115,8 @@ public final class Dependencies implements TestWatcher {
     }
 
     /**
-     * Before the run's Java tests are discovered: the script tests it holds and what each depends on, by key. The
-     * Java tests' order is decided at their discovery and depends on these.
+     * Before the run's Java tests are discovered: the script tests it holds and what each depends on, by key. The Java
+     * tests' order is decided at their discovery and depends on these.
      */
     static void scripts(Map<String, List<String>> edges) {
         EDGES.keySet().removeIf(Dependencies::isScript);
@@ -128,8 +134,8 @@ public final class Dependencies implements TestWatcher {
 
     /**
      * Before the run: remember which Java tests it holds and answer every dependency cycle among its tests with a Java
-     * test in it, each as the tests around it. A run with one must not start. A cycle of script tests alone fails
-     * only those tests, as {@link ScriptScheduler} finds.
+     * test in it, each as the tests around it. A run with one must not start. A cycle of script tests alone fails only
+     * those tests, as {@link ScriptScheduler} finds.
      */
     static List<String> prepare(TestPlan plan) {
         Map<Ref, List<String>> java = new HashMap<>();
@@ -164,7 +170,8 @@ public final class Dependencies implements TestWatcher {
             List<String> loop = new ArrayList<>(path);
             loop = loop.subList(loop.indexOf(at), loop.size());
             if (!loop.stream().allMatch(Dependencies::isScript)) {
-                cycles.add(String.join(" -> ", loop.stream().map(Dependencies::show).toList()) + " -> " + show(at));
+                cycles.add(String.join(
+                                " -> ", loop.stream().map(Dependencies::show).toList()) + " -> " + show(at));
             }
             return;
         }
@@ -215,7 +222,8 @@ public final class Dependencies implements TestWatcher {
     static String earlierRound(String key) {
         String status = Rounds.endedBefore(key);
         if (status == null) return "is not in this run";
-        return TestExecutionResult.Status.SUCCESSFUL.name().equals(status) ? null
+        return TestExecutionResult.Status.SUCCESSFUL.name().equals(status)
+                ? null
                 : "did not pass before the restart (" + status + ")";
     }
 
@@ -224,8 +232,13 @@ public final class Dependencies implements TestWatcher {
         Map<String, TestExecutionResult.Status> all = new HashMap<>();
         for (Ref ref : planned) {
             Outcome o = OUTCOMES.get(ref);
-            all.put(ref.key(), o == Outcome.SUCCEEDED ? TestExecutionResult.Status.SUCCESSFUL
-                    : o == Outcome.FAILED ? TestExecutionResult.Status.FAILED : TestExecutionResult.Status.ABORTED);
+            all.put(
+                    ref.key(),
+                    o == Outcome.SUCCEEDED
+                            ? TestExecutionResult.Status.SUCCESSFUL
+                            : o == Outcome.FAILED
+                                    ? TestExecutionResult.Status.FAILED
+                                    : TestExecutionResult.Status.ABORTED);
         }
         SCRIPTS.forEach((key, ended) -> all.put(key, ended.getNow(TestExecutionResult.Status.ABORTED)));
         return all;
@@ -251,12 +264,14 @@ public final class Dependencies implements TestWatcher {
     }
 
     /**
-     * Before a Java test takes its locks: wait for the tests it depends on, and abort it unless each of them passed.
-     * A Java test it depends on that has not run yet is waited for only in a parallel run; one at a time, it can only
-     * be ordered after this one. A script test is always waited for, since the scripts run beside the Java tests.
+     * Before a Java test takes its locks: wait for the tests it depends on, and abort it unless each of them passed. A
+     * Java test it depends on that has not run yet is waited for only in a parallel run; one at a time, it can only be
+     * ordered after this one. A script test is always waited for, since the scripts run beside the Java tests.
      */
     static void awaitUpstream(ExtensionContext context) throws InterruptedException {
-        boolean parallel = context.getConfigurationParameter(PARALLEL).map(Boolean::parseBoolean).orElse(false);
+        boolean parallel = context.getConfigurationParameter(PARALLEL)
+                .map(Boolean::parseBoolean)
+                .orElse(false);
         for (Ref ref : upstream(context.getRequiredTestClass(), context.getRequiredTestMethod())) {
             if (!planned.contains(ref)) {
                 String why = earlierRound(ref.key());
@@ -274,7 +289,7 @@ public final class Dependencies implements TestWatcher {
                         + " skipped first");
             }
             switch (outcome) {
-                case SUCCEEDED -> { }
+                case SUCCEEDED -> {}
                 case FAILED -> Assumptions.abort("depends on " + ref + ", which failed");
                 case ABORTED -> Assumptions.abort("depends on " + ref + ", which was aborted");
                 case DISABLED -> Assumptions.abort("depends on " + ref + ", which is disabled");
@@ -285,8 +300,8 @@ public final class Dependencies implements TestWatcher {
             if (ended == null) {
                 String why = earlierRound(key);
                 if (why == null) continue;
-                Assumptions.abort("depends on " + key + ", which " + why + (why.startsWith("is not")
-                        ? ": not in this scene, or its file did not load" : ""));
+                Assumptions.abort("depends on " + key + ", which " + why
+                        + (why.startsWith("is not") ? ": not in this scene, or its file did not load" : ""));
             }
             await(ended);
             TestExecutionResult.Status status = ended.getNow(TestExecutionResult.Status.ABORTED);
@@ -319,8 +334,8 @@ public final class Dependencies implements TestWatcher {
     /**
      * Block until {@code ended} is done. On a test worker, a fork-join thread, a plain wait would hold one of the
      * pool's threads while what it waits for may still be queued for one; a managed block lets the pool add a thread
-     * for as long as this one waits. Elsewhere it is a plain wait. No cycle can make this wait forever: a run with
-     * one never starts.
+     * for as long as this one waits. Elsewhere it is a plain wait. No cycle can make this wait forever: a run with one
+     * never starts.
      */
     private static void await(CompletableFuture<?> ended) throws InterruptedException {
         if (ended == null || ended.isDone()) return;
@@ -344,8 +359,8 @@ public final class Dependencies implements TestWatcher {
 
     /**
      * Marks tests ended as the launcher reports their nodes finished or skipped. The node of a test method itself, not
-     * an invocation of it; and every test under a container that ended, since a class that failed in
-     * {@code @BeforeAll} or was disabled reports nothing for its methods.
+     * an invocation of it; and every test under a container that ended, since a class that failed in {@code @BeforeAll}
+     * or was disabled reports nothing for its methods.
      */
     static final TestExecutionListener ENDINGS = new TestExecutionListener() {
         @Override
@@ -380,13 +395,17 @@ public final class Dependencies implements TestWatcher {
     /** The test {@code id} is the method node of, or null for a class, an invocation, or anything else. */
     private static Ref methodNode(TestPlan plan, TestIdentifier id) {
         if (!(id.getSource().orElse(null) instanceof MethodSource source)) return null;
-        boolean invocation = plan.getParent(id).flatMap(TestIdentifier::getSource)
-                .filter(MethodSource.class::isInstance).isPresent();
+        boolean invocation = plan.getParent(id)
+                .flatMap(TestIdentifier::getSource)
+                .filter(MethodSource.class::isInstance)
+                .isPresent();
         return invocation ? null : new Ref(source.getClassName(), source.getMethodName());
     }
 
     private static void record(ExtensionContext context, Outcome outcome) {
-        Ref ref = new Ref(context.getRequiredTestClass().getName(), context.getRequiredTestMethod().getName());
+        Ref ref = new Ref(
+                context.getRequiredTestClass().getName(),
+                context.getRequiredTestMethod().getName());
         // A parameterized test ends once per invocation; any one that did not succeed decides.
         OUTCOMES.merge(ref, outcome, (was, now) -> was == Outcome.SUCCEEDED ? now : was);
     }

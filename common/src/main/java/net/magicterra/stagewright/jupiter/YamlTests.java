@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import net.magicterra.stagewright.test.Perf;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -17,11 +16,11 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
 /**
  * Tests written in YAML: a file of {@code tests}, each a list of steps run in order. A step is a WorldDriver call
  * ({@code call: method} with {@code params}), a wait ({@code wait}, {@code waitUntil}, {@code settle}), a Java method
- * ({@code java: {class, method}}), a measurement ({@code perf}), or a named
- * step a script registered ({@code name: args}); any of them may carry {@code expect}, checked by
- * {@link Expectations#expect}, or {@code check}, the same checked softly: a miss is reported when the test ends and the
- * steps go on. And {@code save: name}, which a later step reads as {@code ${name}} or
- * {@code ${name.field}}. There is no expression language: a step that needs one is a named step written in JavaScript.
+ * ({@code java: {class, method}}), a measurement ({@code perf}), or a named step a script registered ({@code name:
+ * args}); any of them may carry {@code expect}, checked by {@link Expectations#expect}, or {@code check}, the same
+ * checked softly: a miss is reported when the test ends and the steps go on. And {@code save: name}, which a later step
+ * reads as {@code ${name}} or {@code ${name.field}}. There is no expression language: a step that needs one is a named
+ * step written in JavaScript.
  */
 final class YamlTests {
 
@@ -29,12 +28,26 @@ final class YamlTests {
     /** The options {@code test()} takes, passed on as they are. */
     private static final List<String> OPTIONS =
             List.of("requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart");
-    private static final Set<String> TEST_KEYS = Set.of("name", "scene", "requires", "dependsOn", "knownIssue", "locks",
-            "isolated", "afterRestart", "plot", "given", "when", "then", "steps");
+
+    private static final Set<String> TEST_KEYS = Set.of(
+            "name",
+            "scene",
+            "requires",
+            "dependsOn",
+            "knownIssue",
+            "locks",
+            "isolated",
+            "afterRestart",
+            "plot",
+            "given",
+            "when",
+            "then",
+            "steps");
     /** The keys a step may carry beside the one that says what it does. */
     private static final Set<String> MODIFIERS =
             Set.of("params", "expect", "check", "knownIssues", "save", "within", "ticks", "as");
-    private static final Pattern REFERENCE =Pattern.compile("\\$\\{([A-Za-z_][\\w.]*)}");
+
+    private static final Pattern REFERENCE = Pattern.compile("\\$\\{([A-Za-z_][\\w.]*)}");
 
     private YamlTests() {}
 
@@ -97,9 +110,11 @@ final class YamlTests {
         for (String phase : phased ? List.of("given", "when", "then") : List.of("steps")) {
             Object list = test.get(phase);
             if (list == null) continue;
-            if (!(list instanceof List<?> l)) throw new IllegalArgumentException(where + ": " + phase + " is a list of steps");
+            if (!(list instanceof List<?> l))
+                throw new IllegalArgumentException(where + ": " + phase + " is a list of steps");
             for (Object step : l) {
-                if (!(step instanceof Map<?, ?> m)) throw new IllegalArgumentException(where + ": a step is a map, not " + step);
+                if (!(step instanceof Map<?, ?> m))
+                    throw new IllegalArgumentException(where + ": a step is a map, not " + step);
                 verb(m, where);
                 out.add(m);
             }
@@ -110,7 +125,10 @@ final class YamlTests {
 
     /** The one key of a step that says what it does. */
     private static String verb(Map<?, ?> step, String where) {
-        List<String> verbs = step.keySet().stream().map(String::valueOf).filter(k -> !MODIFIERS.contains(k)).toList();
+        List<String> verbs = step.keySet().stream()
+                .map(String::valueOf)
+                .filter(k -> !MODIFIERS.contains(k))
+                .toList();
         if (verbs.size() != 1) {
             throw new IllegalArgumentException(where + ": a step does one thing, but " + step.keySet() + " names "
                     + (verbs.isEmpty() ? "nothing to do" : verbs));
@@ -179,7 +197,10 @@ final class YamlTests {
             List<?> steps = phase.get("steps") instanceof List<?> s ? s : List.of();
             measurement.phase(name, () -> run(context, steps, saved, "phase " + name + ", step "));
         }
-        measurement.warmup(count(perf, "warmup", 200)).sample(count(perf, "sample", 600)).repeat(count(perf, "repeat", 3));
+        measurement
+                .warmup(count(perf, "warmup", 200))
+                .sample(count(perf, "sample", 600))
+                .repeat(count(perf, "repeat", 3));
         Map<String, Object> result = PerfSampler.report(PerfSampler.measure(context.game(), measurement));
         context.record("perf", result);
         return result;
@@ -207,16 +228,21 @@ final class YamlTests {
             case "java" -> java(context, value, substitute(step.get("params"), saved));
             case "waitUntil", "settle" -> {
                 int run = verb.equals("settle")
-                        ? (options.containsKey("ticks") ? ScriptContext.ticks(options.get("ticks"), "ticks") : 20) : 1;
+                        ? (options.containsKey("ticks") ? ScriptContext.ticks(options.get("ticks"), "ticks") : 20)
+                        : 1;
                 Object[] last = {null};
-                context.poll(() -> holds(context, value, saved, last), ScriptContext.within(options), run,
+                context.poll(
+                        () -> holds(context, value, saved, last),
+                        ScriptContext.within(options),
+                        run,
                         ScriptContext.as(options));
                 yield last[0];
             }
             default -> {
                 if (!context.hasStep(verb)) {
-                    throw new IllegalArgumentException("'" + verb + "' is neither call, wait, waitUntil, settle, perf, java, a"
-                            + " built-in step " + BuiltinSteps.NAMES + " nor one a script or a Java @Step registered");
+                    throw new IllegalArgumentException(
+                            "'" + verb + "' is neither call, wait, waitUntil, settle, perf, java, a" + " built-in step "
+                                    + BuiltinSteps.NAMES + " nor one a script or a Java @Step registered");
                 }
                 yield context.step(verb, value);
             }
@@ -228,8 +254,10 @@ final class YamlTests {
      * {@link JavaSteps} method is.
      */
     private static Object java(ScriptContext context, Object value, Object params) {
-        if (!(value instanceof Map<?, ?> target) || !(target.get("class") instanceof String className)
-                || !(target.get("method") instanceof String methodName) || target.size() != 2) {
+        if (!(value instanceof Map<?, ?> target)
+                || !(target.get("class") instanceof String className)
+                || !(target.get("method") instanceof String methodName)
+                || target.size() != 2) {
             throw new IllegalArgumentException("java: {class, method}");
         }
         return JavaSteps.invoke(JavaSteps.method(className, methodName), context.game(), params);
@@ -237,7 +265,9 @@ final class YamlTests {
 
     /** A {@code waitUntil}/{@code settle} condition: {@code {call, params, expect}}, its call made once per check. */
     private static boolean holds(ScriptContext context, Object condition, Map<String, Object> saved, Object[] last) {
-        if (!(condition instanceof Map<?, ?> c) || !(c.get("call") instanceof String method) || !c.containsKey("expect")) {
+        if (!(condition instanceof Map<?, ?> c)
+                || !(c.get("call") instanceof String method)
+                || !c.containsKey("expect")) {
             throw new IllegalArgumentException("a condition is {call: method, params: …, expect: …}");
         }
         last[0] = context.call(method, c.get("params"));
@@ -256,7 +286,8 @@ final class YamlTests {
             if (whole.matches()) return lookup(whole.group(1), saved);
             Matcher m = REFERENCE.matcher(s);
             StringBuilder out = new StringBuilder();
-            while (m.find()) m.appendReplacement(out, Matcher.quoteReplacement(String.valueOf(lookup(m.group(1), saved))));
+            while (m.find())
+                m.appendReplacement(out, Matcher.quoteReplacement(String.valueOf(lookup(m.group(1), saved))));
             m.appendTail(out);
             return out.toString();
         }
@@ -276,8 +307,8 @@ final class YamlTests {
     private static Object lookup(String path, Map<String, Object> saved) {
         String[] keys = path.split("\\.");
         if (!saved.containsKey(keys[0])) {
-            throw new IllegalArgumentException("${" + path + "}: nothing was saved as '" + keys[0] + "'; saved: "
-                    + saved.keySet());
+            throw new IllegalArgumentException(
+                    "${" + path + "}: nothing was saved as '" + keys[0] + "'; saved: " + saved.keySet());
         }
         Object at = saved.get(keys[0]);
         for (int i = 1; i < keys.length; i++) {

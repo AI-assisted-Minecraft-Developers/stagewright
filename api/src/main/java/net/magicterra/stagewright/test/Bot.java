@@ -7,10 +7,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * A server-side player WorldDriver joins for one test, injected as a test method parameter: it is on the player list
- * as any player is, so mobs, advancements and chunk loading see it. It joins at the world spawn in survival with an
- * empty inventory and full health and hunger, and leaves when the test ends unless the test {@linkplain Keep keeps}
- * it for a later one.
+ * A server-side player WorldDriver joins for one test, injected as a test method parameter: it is on the player list as
+ * any player is, so mobs, advancements and chunk loading see it. It joins at the world spawn in survival with an empty
+ * inventory and full health and hunger, and leaves when the test ends unless the test {@linkplain Keep keeps} it for a
+ * later one.
  */
 public interface Bot extends Body, Driven {
 
@@ -36,8 +36,8 @@ public interface Bot extends Body, Driven {
     }
 
     /**
-     * The parameter's bot joins {@linkplain #park parked}, before the server has ticked it once, so it stays where
-     * the test puts it until the test ticks it.
+     * The parameter's bot joins {@linkplain #park parked}, before the server has ticked it once, so it stays where the
+     * test puts it until the test ticks it.
      */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)
@@ -50,8 +50,8 @@ public interface Bot extends Body, Driven {
      * is aborted removes it instead, and a kept bot no test takes leaves when the run's tests are over. It must stand
      * outside the test's plots, which are put back when the test ends. A test that takes it after a restart
      * ({@code @DependsOn(afterRestart = true)}) finds it where the game before left it: the bot left that game as a
-     * disconnecting player does, which saved it, and joins the next one from that save, in the same dimension, with
-     * the same inventory and state.
+     * disconnecting player does, which saved it, and joins the next one from that save, in the same dimension, with the
+     * same inventory and state.
      */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)
@@ -60,9 +60,9 @@ public interface Bot extends Body, Driven {
 
     /**
      * The parameter's bot is the one a test this one {@code @DependsOn} kept under the same {@link Name}: the same
-     * player, where it stood and with what it had, back on the tick list unless the parameter is also
-     * {@link Parked}; across a restart, the same player joined again from its save. The test fails when no passed test
-     * kept a bot of that name, or another test took it first.
+     * player, where it stood and with what it had, back on the tick list unless the parameter is also {@link Parked};
+     * across a restart, the same player joined again from its save. The test fails when no passed test kept a bot of
+     * that name, or another test took it first.
      */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)

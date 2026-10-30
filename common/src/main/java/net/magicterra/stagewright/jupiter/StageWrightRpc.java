@@ -4,7 +4,6 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
@@ -21,21 +20,20 @@ import java.util.function.BooleanSupplier;
 /**
  * Synchronous bare-RPC client over a plain {@link WebSocket} (path {@code /rpc}).
  *
- * <p>Wire format is the driver's JSON-RPC 2.0 envelope (the request's {@code jsonrpc} member is
- * optional to the driver, so it is not sent):
+ * <p>Wire format is the driver's JSON-RPC 2.0 envelope (the request's {@code jsonrpc} member is optional to the driver,
+ * so it is not sent):
+ *
  * <pre>
  *   request:  {"id":N,"method":"mc.x.y","params":{…}}
  *   success:  {"id":N,"result":…}
  *   error:    {"id":N,"error":{"code":int,"message":"…","data":{code,message,issues,execution}}}
  * </pre>
  *
- * <p><b>Concurrency contract:</b> this client is designed for a <i>serial lease</i>
- * — one test thread issuing one call at a time (there is one attach per JVM, per
- * {@link StageWrightExtension}). It is thread-safe enough for that: ids come from an
- * {@link AtomicLong} and the in-flight table is a {@link ConcurrentHashMap}, so the
- * websocket reader thread can complete a call issued by the test thread. It does NOT
- * guarantee ordering or fairness under genuinely concurrent callers; do not share one
- * instance across parallel calls.
+ * <p><b>Concurrency contract:</b> this client is designed for a <i>serial lease</i> — one test thread issuing one call
+ * at a time (there is one attach per JVM, per {@link StageWrightExtension}). It is thread-safe enough for that: ids
+ * come from an {@link AtomicLong} and the in-flight table is a {@link ConcurrentHashMap}, so the websocket reader
+ * thread can complete a call issued by the test thread. It does NOT guarantee ordering or fairness under genuinely
+ * concurrent callers; do not share one instance across parallel calls.
  */
 public final class StageWrightRpc implements AutoCloseable {
     private static final Gson GSON = new Gson();
@@ -57,9 +55,9 @@ public final class StageWrightRpc implements AutoCloseable {
     }
 
     /**
-     * Connect to {@code wsUri} (e.g. {@code ws://127.0.0.1:39801/rpc}), completing
-     * the websocket handshake before returning. Throws {@link StageWrightTransportException}
-     * if the connection cannot be established within {@code connectTimeoutMs}.
+     * Connect to {@code wsUri} (e.g. {@code ws://127.0.0.1:39801/rpc}), completing the websocket handshake before
+     * returning. Throws {@link StageWrightTransportException} if the connection cannot be established within
+     * {@code connectTimeoutMs}.
      */
     public static StageWrightRpc connect(String wsUri, long connectTimeoutMs) {
         HttpClient client = HttpClient.newBuilder()
@@ -76,11 +74,11 @@ public final class StageWrightRpc implements AutoCloseable {
             connected = true;
             return rpc;
         } catch (TimeoutException e) {
-            throw new StageWrightTransportException("<connect>", "websocket handshake to " + wsUri
-                    + " timed out after " + connectTimeoutMs + "ms");
+            throw new StageWrightTransportException(
+                    "<connect>", "websocket handshake to " + wsUri + " timed out after " + connectTimeoutMs + "ms");
         } catch (ExecutionException e) {
-            throw new StageWrightTransportException("<connect>", "websocket handshake to " + wsUri
-                    + " failed: " + e.getCause());
+            throw new StageWrightTransportException(
+                    "<connect>", "websocket handshake to " + wsUri + " failed: " + e.getCause());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new StageWrightTransportException("<connect>", "interrupted while connecting to " + wsUri);
@@ -93,9 +91,9 @@ public final class StageWrightRpc implements AutoCloseable {
 
     /**
      * Issue one request and block at most {@code timeoutMs} for its reply. Throws the refusal as
-     * {@link StageWrightRpcException}, a broken socket, an interrupt or a request that could not be
-     * sent within {@code timeoutMs} as {@link StageWrightTransportException}, and a request sent but
-     * unanswered as {@link StageWrightTimeoutException}.
+     * {@link StageWrightRpcException}, a broken socket, an interrupt or a request that could not be sent within
+     * {@code timeoutMs} as {@link StageWrightTransportException}, and a request sent but unanswered as
+     * {@link StageWrightTimeoutException}.
      */
     public JsonObject call(String method, JsonObject params, long timeoutMs) {
         return resultOf(method, envelope(method, params, timeoutMs));
@@ -127,8 +125,10 @@ public final class StageWrightRpc implements AutoCloseable {
             // Not sent in all that time: the server has stopped reading the socket, and every call after
             // this one would queue behind it and wait out its own timeout without reaching the server.
             if (send != null && !send.isDone()) {
-                throw new StageWrightTransportException(method, "the request could not be sent within "
-                        + timeoutMs + "ms: the server has stopped reading the socket");
+                throw new StageWrightTransportException(
+                        method,
+                        "the request could not be sent within " + timeoutMs
+                                + "ms: the server has stopped reading the socket");
             }
             throw new StageWrightTimeoutException("RPC call " + method + " timed out after " + timeoutMs + "ms");
         } catch (ExecutionException e) {
@@ -141,20 +141,25 @@ public final class StageWrightRpc implements AutoCloseable {
         }
     }
 
-    /** Send {@code payload} after the send before it, unless its call has given up by then: the socket
-     *  refuses a send while one is unfinished, a reply can beat its own request's send, and a request
-     *  sent after its call gave up would act on whatever scene is running by then. */
+    /**
+     * Send {@code payload} after the send before it, unless its call has given up by then: the socket refuses a send
+     * while one is unfinished, a reply can beat its own request's send, and a request sent after its call gave up would
+     * act on whatever scene is running by then.
+     */
     private synchronized CompletableFuture<WebSocket> sendAfterTheLast(String payload, BooleanSupplier wanted) {
         CompletableFuture<WebSocket> sent = lastSend.handle((ws, failed) -> null)
-                .thenCompose(ignored -> wanted.getAsBoolean() ? webSocket.sendText(payload, true)
+                .thenCompose(ignored -> wanted.getAsBoolean()
+                        ? webSocket.sendText(payload, true)
                         : CompletableFuture.completedFuture(webSocket));
         lastSend = sent;
         return sent;
     }
 
-    /** {@code json} with every surrogate as a JSON unicode escape: raw, half a pair makes the socket
-     *  fail the send with the IOException of a broken connection; escaped, any string decodes to what
-     *  was passed. Only a JSON string can hold one, and there the escape is valid. */
+    /**
+     * {@code json} with every surrogate as a JSON unicode escape: raw, half a pair makes the socket fail the send with
+     * the IOException of a broken connection; escaped, any string decodes to what was passed. Only a JSON string can
+     * hold one, and there the escape is valid.
+     */
     static String escapeSurrogates(String json) {
         StringBuilder out = null;
         for (int i = 0; i < json.length(); i++) {
@@ -195,12 +200,13 @@ public final class StageWrightRpc implements AutoCloseable {
     // format without opening a socket.
 
     /** Build a request envelope {@code {"id":id,"method":method,"params":params}}. */
-    /** The three helpers below are the hand-rolled envelope itself — {@code {id, method, params}} out,
-     *  {@code {id, result|error}} back, with notifications distinguished by the ABSENCE of an "id"
-     *  key rather than by its value. They are public because that envelope is the contract two
-     *  independent clients already speak (this one and {@code scripts/rpc.py}), so encoding it is a
-     *  legitimate thing to ask this class for, and because the tests that pin the format must be able
-     *  to reach it from wherever they live. */
+    /**
+     * The three helpers below are the hand-rolled envelope itself — {@code {id, method, params}} out, {@code {id,
+     * result|error}} back, with notifications distinguished by the ABSENCE of an "id" key rather than by its value.
+     * They are public because that envelope is the contract two independent clients already speak (this one and
+     * {@code scripts/rpc.py}), so encoding it is a legitimate thing to ask this class for, and because the tests that
+     * pin the format must be able to reach it from wherever they live.
+     */
     public static JsonObject encodeRequest(long id, String method, JsonObject params) {
         JsonObject req = new JsonObject();
         req.addProperty("id", id);
@@ -219,11 +225,10 @@ public final class StageWrightRpc implements AutoCloseable {
     }
 
     /**
-     * Interpret a reply envelope: an {@code error} member (non-null) throws
-     * {@link StageWrightRpcException} carrying {@link #describeError} of it; otherwise the
-     * {@code result} is returned as a {@link JsonObject}. A non-object / absent result is wrapped as
-     * {@code {"result": <value>}} so the frozen {@code JsonObject} return type holds
-     * for methods that reply with a bare primitive or array.
+     * Interpret a reply envelope: an {@code error} member (non-null) throws {@link StageWrightRpcException} carrying
+     * {@link #describeError} of it; otherwise the {@code result} is returned as a {@link JsonObject}. A non-object /
+     * absent result is wrapped as {@code {"result": <value>}} so the frozen {@code JsonObject} return type holds for
+     * methods that reply with a bare primitive or array.
      */
     public static JsonObject resultOf(String method, JsonObject envelope) {
         JsonElement err = envelope.get("error");
@@ -240,9 +245,9 @@ public final class StageWrightRpc implements AutoCloseable {
     }
 
     /**
-     * One readable line for an envelope's {@code error}: {@code message [api code] at /path: issue; …}
-     * from a {@code {code, message, data:{code, issues}}} object, the string itself from a bare string
-     * (an older driver), and the raw JSON from anything else. A test reads this line, never a parse of it.
+     * One readable line for an envelope's {@code error}: {@code message [api code] at /path: issue; …} from a
+     * {@code {code, message, data:{code, issues}}} object, the string itself from a bare string (an older driver), and
+     * the raw JSON from anything else. A test reads this line, never a parse of it.
      */
     public static String describeError(JsonElement err) {
         if (err.isJsonPrimitive()) return err.getAsString();

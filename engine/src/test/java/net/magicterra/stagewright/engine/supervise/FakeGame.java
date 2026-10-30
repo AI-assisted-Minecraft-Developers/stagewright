@@ -3,8 +3,8 @@ package net.magicterra.stagewright.engine.supervise;
 import java.lang.reflect.Method;
 
 /**
- * A stand-in for a game, started with the real agent: it reports through {@code Control} the way the
- * mod will, then either ends or leaves a non-daemon thread behind.
+ * A stand-in for a game, started with the real agent: it reports through {@code Control} the way the mod will, then
+ * either ends or leaves a non-daemon thread behind.
  */
 public final class FakeGame {
 
@@ -57,8 +57,8 @@ public final class FakeGame {
     }
 
     private static void call(String method, Class<?> parameter, Object argument) throws Exception {
-        Class<?> control = Class.forName("net.magicterra.stagewright.agent.Control", true,
-                ClassLoader.getSystemClassLoader());
+        Class<?> control =
+                Class.forName("net.magicterra.stagewright.agent.Control", true, ClassLoader.getSystemClassLoader());
         Method m = parameter == null ? control.getMethod(method) : control.getMethod(method, parameter);
         if (parameter == null) m.invoke(null);
         else m.invoke(null, argument);

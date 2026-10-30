@@ -5,8 +5,8 @@ import java.util.List;
 
 /**
  * A measurement for {@link Game#perf}: phases run one after another in the same run, each after its own setup, so a
- * test compares a feature against a baseline taken minutes earlier on the same machine rather than against a
- * constant that encodes whoever wrote it.
+ * test compares a feature against a baseline taken minutes earlier on the same machine rather than against a constant
+ * that encodes whoever wrote it.
  *
  * <pre>{@code
  * Map<String, Perf.Window> r = game.perf(Perf.phases()
@@ -15,9 +15,9 @@ import java.util.List;
  * assertThat(r.get("loaded").tpsDropVs(r.get("baseline"))).isLessThan(0.05);
  * }</pre>
  *
- * <p>Each phase waits {@link #warmup} ticks, then samples {@link #repeat} windows of {@link #sample} ticks and
- * reports their median. The samples are taken by a wait's own condition on the server thread, so nothing is added to
- * the tick when no test measures.
+ * <p>Each phase waits {@link #warmup} ticks, then samples {@link #repeat} windows of {@link #sample} ticks and reports
+ * their median. The samples are taken by a wait's own condition on the server thread, so nothing is added to the tick
+ * when no test measures.
  */
 public final class Perf {
 
@@ -27,20 +27,26 @@ public final class Perf {
     /**
      * One phase's median window.
      *
-     * @param ticks    server ticks in a window
-     * @param wallMs   wall time of a window
-     * @param tps      ticks per second, capped at 20, the rate the server paces itself to
+     * @param ticks server ticks in a window
+     * @param wallMs wall time of a window
+     * @param tps ticks per second, capped at 20, the rate the server paces itself to
      * @param msptMean mean interval between ticks, in ms
-     * @param msptP99  99th-percentile interval, in ms: where a stutter shows while the mean stays flat
-     * @param heapMib  used heap at window close after a collection hint: retained, not peak
-     * @param cpu      process CPU time over wall time, as a fraction of one core (not divided by the core count, so
-     *                 the same regression reads the same on every host); NaN where the JVM does not report it
-     * @param fps      mean client frame rate, or NaN when this JVM has no client: every dedicated server, the
-     *                 server half of {@code dedicatedServerWithClient} included. Only {@code integratedServer}
-     *                 measures it.
+     * @param msptP99 99th-percentile interval, in ms: where a stutter shows while the mean stays flat
+     * @param heapMib used heap at window close after a collection hint: retained, not peak
+     * @param cpu process CPU time over wall time, as a fraction of one core (not divided by the core count, so the same
+     *     regression reads the same on every host); NaN where the JVM does not report it
+     * @param fps mean client frame rate, or NaN when this JVM has no client: every dedicated server, the server half of
+     *     {@code dedicatedServerWithClient} included. Only {@code integratedServer} measures it.
      */
-    public record Window(int ticks, double wallMs, double tps, double msptMean, double msptP99, double heapMib,
-                         double cpu, double fps) {
+    public record Window(
+            int ticks,
+            double wallMs,
+            double tps,
+            double msptMean,
+            double msptP99,
+            double heapMib,
+            double cpu,
+            double fps) {
 
         /** Fractional TPS drop against a baseline: 0.05 is 5% slower, negative is faster. */
         public double tpsDropVs(Window baseline) {

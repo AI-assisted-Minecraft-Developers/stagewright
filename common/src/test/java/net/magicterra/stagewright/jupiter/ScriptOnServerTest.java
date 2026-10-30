@@ -15,7 +15,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
-
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 import net.magicterra.worlddriver.api.registry.Scripting;
@@ -54,7 +53,9 @@ class ScriptOnServerTest {
         InvocationHandler handler = (proxy, method, args) -> switch (method.getName()) {
             case "onServer" -> {
                 try {
-                    yield serverThread.submit(() -> ((Function<Object, ?>) args[0]).apply(null)).get();
+                    yield serverThread
+                            .submit(() -> ((Function<Object, ?>) args[0]).apply(null))
+                            .get();
                 } catch (ExecutionException e) {
                     throw e.getCause();
                 }
@@ -86,8 +87,8 @@ class ScriptOnServerTest {
     }
 
     private Object run(String body) {
-        Scripting.Function test = (Scripting.Function) scripting.evaluate("t.js", "(function (t) { " + body + " })",
-                Map.of());
+        Scripting.Function test =
+                (Scripting.Function) scripting.evaluate("t.js", "(function (t) { " + body + " })", Map.of());
         return test.call(t.asScript());
     }
 
@@ -105,9 +106,10 @@ class ScriptOnServerTest {
 
     @Test
     void aWaitInsideIsRefusedAndOutsideItWaits() {
-        RuntimeException refused = assertThrows(RuntimeException.class,
-                () -> run("t.onServer(function () { t.wait(3); });"));
-        assertTrue(String.valueOf(rootMessage(refused)).contains("t.wait cannot be called inside t.onServer"),
+        RuntimeException refused =
+                assertThrows(RuntimeException.class, () -> run("t.onServer(function () { t.wait(3); });"));
+        assertTrue(
+                String.valueOf(rootMessage(refused)).contains("t.wait cannot be called inside t.onServer"),
                 String.valueOf(rootMessage(refused)));
         assertEquals(List.of(), waited);
         run("t.wait(3);");
@@ -116,12 +118,16 @@ class ScriptOnServerTest {
 
     @Test
     void anythingElseThatWouldWaitIsRefusedToo() {
-        for (String call : List.of("t.waitUntil(function () { return true; })", "t.plot()", "t.bot()",
+        for (String call : List.of(
+                "t.waitUntil(function () { return true; })",
+                "t.plot()",
+                "t.bot()",
                 "t.settle(function () { return true; })")) {
-            RuntimeException refused = assertThrows(RuntimeException.class,
-                    () -> run("t.onServer(function () { " + call + "; });"), call);
-            assertTrue(String.valueOf(rootMessage(refused)).contains("inside t.onServer"), call + ": "
-                    + rootMessage(refused));
+            RuntimeException refused =
+                    assertThrows(RuntimeException.class, () -> run("t.onServer(function () { " + call + "; });"), call);
+            assertTrue(
+                    String.valueOf(rootMessage(refused)).contains("inside t.onServer"),
+                    call + ": " + rootMessage(refused));
         }
     }
 

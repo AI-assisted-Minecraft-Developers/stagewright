@@ -9,7 +9,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-
+import net.magicterra.stagewright.engine.json.JsonArray;
+import net.magicterra.stagewright.engine.json.JsonObject;
+import net.magicterra.stagewright.engine.json.PrettyPrint;
 import org.gradle.api.DefaultTask;
 import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.provider.ListProperty;
@@ -17,17 +19,13 @@ import org.gradle.api.tasks.Internal;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 
-import net.magicterra.stagewright.engine.json.JsonArray;
-import net.magicterra.stagewright.engine.json.JsonObject;
-import net.magicterra.stagewright.engine.json.PrettyPrint;
-
 /**
- * Writes {@code <topology>.json} for each topology a test suite may ask for, in the format the test
- * engine reads (docs/reference/launch-spec.md).
+ * Writes {@code <topology>.json} for each topology a test suite may ask for, in the format the test engine reads
+ * (docs/reference/launch-spec.md).
  *
- * <p>The launches are values captured when the task graph is built, not task references, so the
- * task stays configuration-cacheable; the files are written at execution because the classpath
- * argfiles and the loader's late bindings only exist once the run tasks' own dependencies have run.
+ * <p>The launches are values captured when the task graph is built, not task references, so the task stays
+ * configuration-cacheable; the files are written at execution because the classpath argfiles and the loader's late
+ * bindings only exist once the run tasks' own dependencies have run.
  */
 public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
 
@@ -42,14 +40,23 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
         final boolean server;
         /** {@code fail} or {@code report}: what a game forced down after its run does to its scene. */
         final String leaks;
+
         final CompanionLaunch primary;
         final CompanionLaunch companion;
         /** Appended to both games' JVM arguments, after the run's own: {@value StageWrightPlugin#JVM_ARGS_PROPERTY}. */
         final List<String> extraJvmArgs;
 
-        Entry(String topology, File gameDirectory, boolean cleanWorld, int timeoutMinutes,
-              int stallMinutes, boolean server, String leaks, CompanionLaunch primary, CompanionLaunch companion,
-              List<String> extraJvmArgs) {
+        Entry(
+                String topology,
+                File gameDirectory,
+                boolean cleanWorld,
+                int timeoutMinutes,
+                int stallMinutes,
+                boolean server,
+                String leaks,
+                CompanionLaunch primary,
+                CompanionLaunch companion,
+                List<String> extraJvmArgs) {
             // An ArrayList: the configuration cache cannot read back an empty List.copyOf ("null array").
             this.extraJvmArgs = new ArrayList<>(extraJvmArgs);
             this.leaks = leaks;
@@ -81,8 +88,8 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
         File dir = getLaunchesDirectory().get().getAsFile();
         File argFiles = new File(dir, "classpath");
         for (Entry entry : getEntries().get()) {
-            JsonObject primary = process(entry.primary, new File(argFiles, entry.topology + ".primary.args"),
-                    entry.extraJvmArgs);
+            JsonObject primary =
+                    process(entry.primary, new File(argFiles, entry.topology + ".primary.args"), entry.extraJvmArgs);
             JsonObject json = new JsonObject()
                     .add("topology", entry.topology)
                     .add("gameDirectory", entry.gameDirectory.getAbsolutePath());
@@ -95,14 +102,18 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
                     .add("leaks", entry.leaks)
                     .add("primary", primary);
             if (entry.companion != null) {
-                json.add("companion", process(entry.companion,
-                        new File(argFiles, entry.topology + ".companion.args"), entry.extraJvmArgs));
+                json.add(
+                        "companion",
+                        process(
+                                entry.companion,
+                                new File(argFiles, entry.topology + ".companion.args"),
+                                entry.extraJvmArgs));
             }
             File out = new File(dir, entry.topology + ".json");
             try {
                 Files.createDirectories(out.getParentFile().toPath());
-                Files.writeString(out.toPath(), json.toString(PrettyPrint.indentWithSpaces(2)) + "\n",
-                        StandardCharsets.UTF_8);
+                Files.writeString(
+                        out.toPath(), json.toString(PrettyPrint.indentWithSpaces(2)) + "\n", StandardCharsets.UTF_8);
             } catch (IOException e) {
                 throw new UncheckedIOException("cannot write the launch spec " + out, e);
             }

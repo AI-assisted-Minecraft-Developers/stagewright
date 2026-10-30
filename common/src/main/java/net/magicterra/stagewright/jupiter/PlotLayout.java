@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -52,8 +51,8 @@ final class PlotLayout {
     }
 
     /**
-     * The y of a plot {@code height} tall: {@code preferred}, lowered as far as the world's floor {@code minY} so its top
-     * stays below {@code maxY}, the first height nothing can be built at.
+     * The y of a plot {@code height} tall: {@code preferred}, lowered as far as the world's floor {@code minY} so its
+     * top stays below {@code maxY}, the first height nothing can be built at.
      */
     static int floorY(int preferred, int minY, int maxY, int height) {
         if (height > maxY - minY) {
@@ -73,8 +72,13 @@ final class PlotLayout {
         for (int x = box.minX(); x <= box.maxX(); x += stepX) {
             for (int z = box.minZ(); z <= box.maxZ(); z += stepZ) {
                 for (int y = box.minY(); y <= box.maxY(); y += stepY) {
-                    out.add(new BoundingBox(x, y, z, Math.min(box.maxX(), x + stepX - 1),
-                            Math.min(box.maxY(), y + stepY - 1), Math.min(box.maxZ(), z + stepZ - 1)));
+                    out.add(new BoundingBox(
+                            x,
+                            y,
+                            z,
+                            Math.min(box.maxX(), x + stepX - 1),
+                            Math.min(box.maxY(), y + stepY - 1),
+                            Math.min(box.maxZ(), z + stepZ - 1)));
                 }
             }
         }

@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 import java.util.Optional;
-
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.BlockPosition;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
 import org.junit.jupiter.api.Test;
@@ -22,7 +21,8 @@ class ScriptHandlesTest {
 
     @Test
     void aPressCarriesEveryKeyItNames() {
-        Press p = ScriptHandles.press(Press.of("player:a"),
+        Press p = ScriptHandles.press(
+                Press.of("player:a"),
                 Map.of("jump", true, "sneak", false, "aimAt", Map.of("x", 1, "y", 2, "z", 3), "hit", 7));
         assertEquals(Optional.of(true), p.jump());
         assertEquals(Optional.of(false), p.sneak());
@@ -47,7 +47,8 @@ class ScriptHandlesTest {
 
     @Test
     void anUnknownKeyIsRefusedWithTheKeysThereAre() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
                 () -> ScriptHandles.press(Press.of("player:a"), Map.of("crouch", true)));
         assertTrue(e.getMessage().contains("sneak"), e.getMessage());
     }

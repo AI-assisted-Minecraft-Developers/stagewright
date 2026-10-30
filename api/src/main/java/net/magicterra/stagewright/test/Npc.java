@@ -2,7 +2,6 @@ package net.magicterra.stagewright.test;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.entity.Mob;

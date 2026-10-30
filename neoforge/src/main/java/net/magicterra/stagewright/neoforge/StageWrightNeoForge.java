@@ -29,11 +29,14 @@ public final class StageWrightNeoForge {
         }
     }
 
-    /** Hand the API this runtime's mod list. Here rather than in {@code :common} because the
-     *  list lives in the loader, and {@code :stagewright-api} compiles against neither loader. */
+    /**
+     * Hand the API this runtime's mod list. Here rather than in {@code :common} because the list lives in the loader,
+     * and {@code :stagewright-api} compiles against neither loader.
+     */
     private static void installModList() {
         Map<String, String> byId = new LinkedHashMap<>();
-        for (net.neoforged.fml.ModContainer mod : net.neoforged.fml.ModList.get().getSortedMods()) {
+        for (net.neoforged.fml.ModContainer mod :
+                net.neoforged.fml.ModList.get().getSortedMods()) {
             byId.put(mod.getModId(), mod.getModInfo().getVersion().toString());
         }
         Mods.install(byId);

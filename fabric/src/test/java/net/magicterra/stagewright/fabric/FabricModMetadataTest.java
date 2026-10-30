@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
@@ -13,10 +16,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import net.fabricmc.loader.api.Version;
 import net.fabricmc.loader.api.VersionParsingException;
 import net.fabricmc.loader.api.metadata.version.VersionInterval;
@@ -24,9 +23,9 @@ import net.fabricmc.loader.api.metadata.version.VersionPredicate;
 import org.junit.jupiter.api.Test;
 
 /**
- * The fabric.mod.json processResources writes into the jar, against gradle.properties. Every value
- * both state must come from the property: a literal drifts from the NeoForge jar the next time the
- * property changes. Ranges are compared by the interval Fabric Loader itself parses them into.
+ * The fabric.mod.json processResources writes into the jar, against gradle.properties. Every value both state must come
+ * from the property: a literal drifts from the NeoForge jar the next time the property changes. Ranges are compared by
+ * the interval Fabric Loader itself parses them into.
  */
 class FabricModMetadataTest {
 
@@ -80,18 +79,23 @@ class FabricModMetadataTest {
         assertEquals(prop("mod_name"), META.get("name").getAsString());
         assertEquals(prop("mod_license"), META.get("license").getAsString());
         assertEquals(prop("mod_description"), META.get("description").getAsString());
-        assertEquals(List.of(prop("mod_authors")),
-                META.getAsJsonArray("authors").asList().stream().map(JsonElement::getAsString).toList());
+        assertEquals(
+                List.of(prop("mod_authors")),
+                META.getAsJsonArray("authors").asList().stream()
+                        .map(JsonElement::getAsString)
+                        .toList());
     }
 
     @Test
     void minecraftRangeIsTheOneGradlePropertiesStates() throws VersionParsingException {
-        assertSameInterval("minecraft_version_range", META.getAsJsonObject("depends").get("minecraft"));
+        assertSameInterval(
+                "minecraft_version_range", META.getAsJsonObject("depends").get("minecraft"));
     }
 
     @Test
     void loaderRangeIsTheOneGradlePropertiesStates() throws VersionParsingException {
-        assertSameInterval("fabric_loader_version_range", META.getAsJsonObject("depends").get("fabricloader"));
+        assertSameInterval(
+                "fabric_loader_version_range", META.getAsJsonObject("depends").get("fabricloader"));
     }
 
     /** Any predicate in a string-or-array dependency value matches, as Fabric Loader reads it. */
@@ -120,9 +124,10 @@ class FabricModMetadataTest {
         String laterCompatible = major + "." + minor + "." + (Integer.parseInt(v.group(3)) + 1);
         // Every build is published as a pre-release of its line, which SemVer orders below the line.
         String earlierLine = major == 0 ? "0." + (minor - 1) + ".9" : (major - 1) + ".9.9";
-        List<String> covered = new java.util.ArrayList<>(List.of(built, base, laterCompatible, base + "-snapshot+1.21.1"));
-        List<String> refused = new java.util.ArrayList<>(List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1",
-                nextBreaking + "-alpha.1+1.21.1"));
+        List<String> covered =
+                new java.util.ArrayList<>(List.of(built, base, laterCompatible, base + "-snapshot+1.21.1"));
+        List<String> refused = new java.util.ArrayList<>(
+                List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1", nextBreaking + "-alpha.1+1.21.1"));
         // A numbered pin is the floor: the next build is in, the one before it is out.
         Matcher n = Pattern.compile("-alpha\\.(\\d+)(?:\\+|$)").matcher(built);
         if (n.find()) {

@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
 import org.junit.jupiter.api.io.TempDir;
@@ -148,7 +147,9 @@ class SceneResultsTest {
     @MethodSource("gradles")
     void eachSceneHasItsOwnResultsFileAndSummaryLine(String gradle) throws Exception {
         consumer();
-        GradleRunner runner = GradleRunner.create().withProjectDir(dir.toFile()).withPluginClasspath()
+        GradleRunner runner = GradleRunner.create()
+                .withProjectDir(dir.toFile())
+                .withPluginClasspath()
                 .withArguments("stagewrightTestFake", "--configuration-cache", "--stacktrace");
         if (!gradle.equals("current")) runner = runner.withGradleInstallation(new File(gradle));
         BuildResult result = runner.build();
@@ -160,7 +161,9 @@ class SceneResultsTest {
         Path results = dir.resolve("build/test-results/stagewrightTestFake");
         List<Path> files = new ArrayList<>();
         try (Stream<Path> list = Files.list(results)) {
-            list.filter(p -> p.getFileName().toString().endsWith(".xml")).sorted().forEach(files::add);
+            list.filter(p -> p.getFileName().toString().endsWith(".xml"))
+                    .sorted()
+                    .forEach(files::add);
         }
         assertEquals(2, files.size(), "one file per scene and class: " + files);
 
@@ -172,13 +175,16 @@ class SceneResultsTest {
             assertTrue(suite.find(), xml);
             suites.add(suite.group(1));
             List<String> cases = new ArrayList<>();
-            Matcher m = Pattern.compile("<testcase name=\"([^\"]*)\" classname=\"([^\"]*)\"").matcher(xml);
+            Matcher m = Pattern.compile("<testcase name=\"([^\"]*)\" classname=\"([^\"]*)\"")
+                    .matcher(xml);
             while (m.find()) {
                 assertEquals(suite.group(1), m.group(2), "each test's class names its scene: " + xml);
                 cases.add(m.group(1));
             }
             assertEquals(List.of("holds()", "lights()"), cases.stream().sorted().toList(), xml);
         }
-        assertEquals(List.of("alpha/demo.PortalTest", "beta/demo.PortalTest"), suites.stream().sorted().toList());
+        assertEquals(
+                List.of("alpha/demo.PortalTest", "beta/demo.PortalTest"),
+                suites.stream().sorted().toList());
     }
 }

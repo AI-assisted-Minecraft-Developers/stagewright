@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
-
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -22,8 +21,8 @@ import net.minecraft.world.level.block.entity.HopperBlockEntity;
  */
 final class BuiltinSteps {
 
-    static final Set<String> NAMES = Set.of("place", "insert", "container", "chunk.unload", "chunk.reload",
-            "store.put", "store.get");
+    static final Set<String> NAMES =
+            Set.of("place", "insert", "container", "chunk.unload", "chunk.reload", "store.put", "store.get");
 
     private BuiltinSteps() {}
 
@@ -36,7 +35,8 @@ final class BuiltinSteps {
             case "chunk.reload" -> chunk(context, "reload", args);
             case "store.put" -> {
                 // {key: value, …}: each kept for the tests after a restart.
-                map(args, "store.put: {key: value}").forEach((k, v) -> context.game().store().put(String.valueOf(k), v));
+                map(args, "store.put: {key: value}")
+                        .forEach((k, v) -> context.game().store().put(String.valueOf(k), v));
                 yield null;
             }
             case "store.get" -> {
@@ -109,8 +109,9 @@ final class BuiltinSteps {
         if (map.containsKey("within")) params.put("withinTicks", map.get("within"));
         Object reply = context.call("mc.test.chunks", params);
         if (!(reply instanceof Map<?, ?> r) || !Boolean.TRUE.equals(r.get("done"))) {
-            throw new AssertionError("chunk." + op + ": not done in time" + (reply instanceof Map<?, ?> r2
-                    && r2.get("heldBy") != null ? ", held by " + r2.get("heldBy") : "") + ": " + reply);
+            throw new AssertionError("chunk." + op + ": not done in time"
+                    + (reply instanceof Map<?, ?> r2 && r2.get("heldBy") != null ? ", held by " + r2.get("heldBy") : "")
+                    + ": " + reply);
         }
         return reply;
     }
@@ -121,7 +122,9 @@ final class BuiltinSteps {
             Map<String, Integer> out = new TreeMap<>();
             for (int i = 0; i < container.getContainerSize(); i++) {
                 ItemStack stack = container.getItem(i);
-                if (!stack.isEmpty()) out.merge(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount(), Integer::sum);
+                if (!stack.isEmpty())
+                    out.merge(
+                            BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount(), Integer::sum);
             }
             return out;
         });
@@ -137,20 +140,24 @@ final class BuiltinSteps {
     static BlockPos position(ScriptContext context, Object ref) {
         if (ref instanceof String handle) return context.named(handle);
         if (ref instanceof List<?> list && list.size() == 3) {
-            return context.plotOrFail().at(ScriptContext.ticks(list.get(0), "x"), ScriptContext.ticks(list.get(1), "y"),
-                    ScriptContext.ticks(list.get(2), "z"));
+            return context.plotOrFail()
+                    .at(
+                            ScriptContext.ticks(list.get(0), "x"),
+                            ScriptContext.ticks(list.get(1), "y"),
+                            ScriptContext.ticks(list.get(2), "z"));
         }
         if (ref instanceof Map<?, ?> m) {
             return new BlockPos(whole(m.get("x"), "x"), whole(m.get("y"), "y"), whole(m.get("z"), "z"));
         }
-        throw new IllegalArgumentException("a position is a handle's name, [x, y, z] in the plot, or {x, y, z}, not "
-                + Expectations.show(ref));
+        throw new IllegalArgumentException(
+                "a position is a handle's name, [x, y, z] in the plot, or {x, y, z}, not " + Expectations.show(ref));
     }
 
     private static Item item(Object id) {
         ResourceLocation location = id instanceof String s ? ResourceLocation.tryParse(s) : null;
         if (location == null) throw new IllegalArgumentException("an item is its id, not " + Expectations.show(id));
-        return BuiltInRegistries.ITEM.getOptional(location)
+        return BuiltInRegistries.ITEM
+                .getOptional(location)
                 .orElseThrow(() -> new IllegalArgumentException("no item '" + id + "' in this game"));
     }
 

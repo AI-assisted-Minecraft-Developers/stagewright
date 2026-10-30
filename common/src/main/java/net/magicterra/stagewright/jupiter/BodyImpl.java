@@ -60,8 +60,8 @@ class BodyImpl implements Body {
             ServerLevel level = GameImpl.level(player.server, dimension);
             player.setDeltaMovement(Vec3.ZERO);
             player.resetFallDistance();
-            player.teleportTo(level, feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, player.getYRot(),
-                    player.getXRot());
+            player.teleportTo(
+                    level, feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, player.getYRot(), player.getXRot());
         });
         return this;
     }
@@ -120,8 +120,8 @@ class BodyImpl implements Body {
         }
 
         /**
-         * Take over the bot a passed test kept under {@code name}, for {@code taker}: the same player, back on the
-         * tick list unless {@code parked}. One kept before a restart joins again where its save left it.
+         * Take over the bot a passed test kept under {@code name}, for {@code taker}: the same player, back on the tick
+         * list unless {@code parked}. One kept before a restart joins again where its save left it.
          */
         static BotImpl take(Game game, String name, boolean parked, String taker) {
             Handovers.Kept kept = Handovers.take(name);

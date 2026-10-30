@@ -65,9 +65,9 @@ public final class Detected {
     /**
      * Reflection rooted at the class the descriptor named.
      *
-     * <p>Both failures here fail the test, never abort it. A descriptor with no {@code probe} asked for one is a bug
-     * in the test. And a probe class missing while every condition held is the mod having moved its API, not the mod
-     * being absent — which is what {@link Probe#of}'s abort would claim.
+     * <p>Both failures here fail the test, never abort it. A descriptor with no {@code probe} asked for one is a bug in
+     * the test. And a probe class missing while every condition held is the mod having moved its API, not the mod being
+     * absent — which is what {@link Probe#of}'s abort would claim.
      */
     public Probe probe() {
         String className = descriptor.probeClass();
@@ -78,8 +78,8 @@ public final class Detected {
         }
         if (!Probe.hasClass(className)) {
             throw new IllegalStateException("the '" + name() + "' capability is available — every condition"
-                    + " in " + source() + " holds" + (mods().isEmpty() ? "" : ", and " + mods()
-                    + " is loaded") + " — but the class it names for probing, '" + className
+                    + " in " + source() + " holds" + (mods().isEmpty() ? "" : ", and " + mods() + " is loaded")
+                    + " — but the class it names for probing, '" + className
                     + "', is not in this runtime. The mod is here and has moved its API; fix the"
                     + " \"probe\" line in that descriptor rather than the mods folder.");
         }

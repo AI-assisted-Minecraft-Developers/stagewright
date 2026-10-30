@@ -8,16 +8,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
  * What an earlier version's ledger says it put in a {@code mods/} folder this project does not own.
  *
- * <p>The CLI points this at a modpack's server directory or a player's {@code .minecraft}, so every
- * jar in there is the pack's or the player's unless the ledger says an earlier run of ours put it
- * there.
+ * <p>The CLI points this at a modpack's server directory or a player's {@code .minecraft}, so every jar in there is the
+ * pack's or the player's unless the ledger says an earlier run of ours put it there.
  */
 class ModInstallTest {
 

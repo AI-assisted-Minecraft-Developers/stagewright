@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.stream.Stream;
-
 import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.supervise.AgentJar;
 import net.magicterra.stagewright.engine.supervise.Supervisor;
@@ -28,9 +27,9 @@ import org.junit.platform.engine.reporting.ReportEntry;
 
 /**
  * One scene: start its game (and the companion its topology names), select the scene's classes, relay what the game
- * reports, and when the game is gone report everything it did not as failed with the reason it stopped. A game that
- * had to be forced down after its run fails the scene itself, naming what held it up, and so does a joined client
- * that crashes, goes silent or leaves before the run is over.
+ * reports, and when the game is gone report everything it did not as failed with the reason it stopped. A game that had
+ * to be forced down after its run fails the scene itself, naming what held it up, and so does a joined client that
+ * crashes, goes silent or leaves before the run is over.
  */
 final class SceneRun {
 
@@ -85,8 +84,12 @@ final class SceneRun {
                 throw new IllegalStateException("scene '" + scene.name + "' starts from a save, but topology '"
                         + spec.topology() + "' keeps the world of the run before (cleanWorld is false)");
             }
-            listener.reportingEntryPublished(scene, ReportEntry.from("world", (declaration.from() == null ? ""
-                    : "from=" + declaration.from() + ", ") + declaration.world().describe()));
+            listener.reportingEntryPublished(
+                    scene,
+                    ReportEntry.from(
+                            "world",
+                            (declaration.from() == null ? "" : "from=" + declaration.from() + ", ")
+                                    + declaration.world().describe()));
             result = launch(spec, declaration, relay, loader);
         } catch (Exception e) {
             relay.closeOut(scene, "the scene could not start: " + e.getMessage());
@@ -114,7 +117,8 @@ final class SceneRun {
         SceneSetup.Restore files = SceneSetup.writeFiles(spec.primary().workingDirectory(), declaration.files());
         Path modsScratch = artifacts.resolve("scene-mods");
         try {
-            if (!declaration.excludedMods().isEmpty()) spec = withoutMods(spec, declaration.excludedMods(), modsScratch);
+            if (!declaration.excludedMods().isEmpty())
+                spec = withoutMods(spec, declaration.excludedMods(), modsScratch);
             // A run directory nothing else prepares, such as one the plugin generated: a dedicated server there needs
             // the EULA accepted and offline mode before it starts at all. Inside the put-back, like the scene's own.
             RunDirectory.provision(spec.primary().workingDirectory(), spec.server());
@@ -134,19 +138,29 @@ final class SceneRun {
     /** {@code spec} with both its games started without {@code exclude}, and a report entry saying which jars went. */
     private LaunchSpec withoutMods(LaunchSpec spec, List<String> exclude, Path scratch) throws IOException {
         SceneMods.Applied primary = SceneMods.apply(spec.primary(), exclude, scratch.resolve("primary"));
-        SceneMods.Applied companion = spec.companion() == null ? null
+        SceneMods.Applied companion = spec.companion() == null
+                ? null
                 : SceneMods.apply(spec.companion(), exclude, scratch.resolve("companion"));
         String report = "excluded " + primary.excluded();
         if (companion != null) report = "server: " + report + "; client: excluded " + companion.excluded();
-        String unmatched = companion == null ? unmatched("the game", primary)
+        String unmatched = companion == null
+                ? unmatched("the game", primary)
                 : unmatched("the server", primary) + unmatched("the client", companion);
         if (!unmatched.isEmpty()) {
             report += unmatched;
             System.out.println("[stagewright] scene " + scene.getDisplayName() + ": mods.exclude" + unmatched);
         }
         listener.reportingEntryPublished(scene, ReportEntry.from("mods", report));
-        return new LaunchSpec(spec.topology(), spec.gameDirectory(), spec.worldDirectory(), spec.cleanWorld(),
-                spec.timeoutMinutes(), spec.stallMinutes(), spec.server(), spec.leaks(), primary.process(),
+        return new LaunchSpec(
+                spec.topology(),
+                spec.gameDirectory(),
+                spec.worldDirectory(),
+                spec.cleanWorld(),
+                spec.timeoutMinutes(),
+                spec.stallMinutes(),
+                spec.server(),
+                spec.leaks(),
+                primary.process(),
                 companion == null ? null : companion.process());
     }
 
@@ -155,8 +169,9 @@ final class SceneRun {
         return applied.unmatched().isEmpty() ? "" : "; matched no mod of " + which + ": " + applied.unmatched();
     }
 
-    private TestExecutionResult supervise(LaunchSpec spec, SceneFile.World world, Relay relay, Path artifacts,
-                                          Path logs) throws IOException, InterruptedException {
+    private TestExecutionResult supervise(
+            LaunchSpec spec, SceneFile.World world, Relay relay, Path artifacts, Path logs)
+            throws IOException, InterruptedException {
         Path agentJar = AgentJar.stage(SceneRun.class, artifacts);
 
         List<String> classes = new ArrayList<>();
@@ -175,11 +190,12 @@ final class SceneRun {
         for (int round = 0; ; round++) {
             String suffix = round == 0 ? "" : "-round" + round;
             File gameLog = logs.resolve(scene.name + suffix + "-game.log").toFile();
-            File companionLog = logs.resolve(scene.name + suffix + "-companion.log").toFile();
+            File companionLog =
+                    logs.resolve(scene.name + suffix + "-companion.log").toFile();
             Process companion = null;
             // The joined client carries the agent too, reporting to a supervisor of its own: one serves one process.
             try (Supervisor supervisor = Supervisor.open();
-                 Supervisor joined = spec.companion() == null ? null : Supervisor.open()) {
+                    Supervisor joined = spec.companion() == null ? null : Supervisor.open()) {
                 supervisor.onTest(relay);
                 List<String> extra = new ArrayList<>(List.of(
                         supervisor.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS),
@@ -193,12 +209,15 @@ final class SceneRun {
                         "-Dstagewright.scene.world=" + world.runtimeJson()));
                 // Where the companion client writes its WorldDriver port, for the tests' Client.
                 if (spec.companion() != null) {
-                    extra.add("-Dstagewright.companion.dir=" + spec.companion().workingDirectory().toAbsolutePath());
+                    extra.add("-Dstagewright.companion.dir="
+                            + spec.companion().workingDirectory().toAbsolutePath());
                 }
                 Process game = start(spec.primary(), extra, gameLog);
                 if (joined != null) {
-                    companion = start(spec.companion(),
-                            List.of(joined.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS)), companionLog);
+                    companion = start(
+                            spec.companion(),
+                            List.of(joined.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS)),
+                            companionLog);
                 }
                 Duration total = Duration.ofMinutes(spec.timeoutMinutes());
                 Duration stall = spec.stallMinutes() == 0 ? total : Duration.ofMinutes(spec.stallMinutes());
@@ -207,13 +226,18 @@ final class SceneRun {
                 if (joined == null) {
                     ended = supervisor.await(game.toHandle(), limits);
                 } else {
-                    Supervisor.Ending ending = supervisor.await(game.toHandle(), limits, joined, companion.toHandle(),
-                            limits);
+                    Supervisor.Ending ending =
+                            supervisor.await(game.toHandle(), limits, joined, companion.toHandle(), limits);
                     if (ending.companion()) {
                         // The run cannot go on without its player: end the game, and say it was the client.
                         Supervisor.kill(game.toHandle());
-                        String why = describeCompanion(ending.ended(), joined.phase(), joined.ticks(),
-                                joined.crashReport(), joined.stacks(), companionLog);
+                        String why = describeCompanion(
+                                ending.ended(),
+                                joined.phase(),
+                                joined.ticks(),
+                                joined.crashReport(),
+                                joined.stacks(),
+                                companionLog);
                         listener.reportingEntryPublished(scene, ReportEntry.from("companion", why));
                         appendToLog(companionLog, "the joined client ended " + why);
                         relay.closeOut(scene, "the joined client ended " + why);
@@ -242,17 +266,23 @@ final class SceneRun {
                     listener.reportingEntryPublished(scene, ReportEntry.from("restart", "round " + (round + 1)));
                     continue;
                 }
-                String why = describe(ended, supervisor.phase(), supervisor.ticks(), supervisor.crashReport(),
-                        supervisor.stacks(), gameLog);
+                String why = describe(
+                        ended,
+                        supervisor.phase(),
+                        supervisor.ticks(),
+                        supervisor.crashReport(),
+                        supervisor.stacks(),
+                        gameLog);
                 relay.closeOut(scene, why);
                 if (ended == Supervisor.Ended.DONE && relay.ended()) {
                     // Every test passed or failed on its own; a game that would not end is the scene's failure.
-                    return forced.isEmpty() ? TestExecutionResult.successful()
-                            : TestExecutionResult.failed(new AssertionError(String.join("\n", forced)
-                                    + "\nits log is " + gameLog));
+                    return forced.isEmpty()
+                            ? TestExecutionResult.successful()
+                            : TestExecutionResult.failed(
+                                    new AssertionError(String.join("\n", forced) + "\nits log is " + gameLog));
                 }
-                return TestExecutionResult.failed(new AssertionError("the game ended " + why
-                        + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
+                return TestExecutionResult.failed(new AssertionError(
+                        "the game ended " + why + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
             } finally {
                 if (companion != null) Supervisor.kill(companion.toHandle());
             }
@@ -261,8 +291,10 @@ final class SceneRun {
 
     private static Process start(LaunchSpec.Process p, List<String> extra, File log) throws IOException {
         Files.createDirectories(p.workingDirectory());
-        ProcessBuilder builder = new ProcessBuilder(p.command(extra)).directory(p.workingDirectory().toFile())
-                .redirectErrorStream(true).redirectOutput(log);
+        ProcessBuilder builder = new ProcessBuilder(p.command(extra))
+                .directory(p.workingDirectory().toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(log);
         builder.environment().putAll(p.environment());
         return builder.start();
     }
@@ -271,8 +303,13 @@ final class SceneRun {
      * Why the game ended, for every test it did not finish. Where its own threads stood goes with it whenever the agent
      * had sampled them, which it does once nothing has moved for a while: for a stall that is the stuck frame.
      */
-    static String describe(Supervisor.Ended ended, String phase, long ticks, String crashReport,
-                           List<Supervisor.ThreadStack> stacks, File log) {
+    static String describe(
+            Supervisor.Ended ended,
+            String phase,
+            long ticks,
+            String crashReport,
+            List<Supervisor.ThreadStack> stacks,
+            File log) {
         String detail = switch (ended) {
             case DONE -> "after its run, but without reporting every test";
             case CRASHED -> "by crashing" + (crashReport == null ? "" : ": " + crashReport);
@@ -282,8 +319,12 @@ final class SceneRun {
             case NEVER_CONNECTED -> "without ever reaching its supervision agent";
             case PROCESS_DIED -> "by exiting without finishing its run";
         };
-        StringBuilder out = new StringBuilder("(").append(ended).append(") ").append(detail)
-                .append("; its log is ").append(log);
+        StringBuilder out = new StringBuilder("(")
+                .append(ended)
+                .append(") ")
+                .append(detail)
+                .append("; its log is ")
+                .append(log);
         if (ended != Supervisor.Ended.DONE && !stacks.isEmpty()) {
             out.append("\nwhere its threads were when it last stood still:");
             for (Supervisor.ThreadStack t : stacks) {
@@ -298,32 +339,41 @@ final class SceneRun {
      * Why the client joined to the game ended the run, which only a failure of the client's does. Its {@code DONE} is
      * the client giving up: it says so once it is out of the world, or never got into it, before the run was over.
      */
-    static String describeCompanion(Supervisor.Ended ended, String phase, long ticks, String crashReport,
-                                    List<Supervisor.ThreadStack> stacks, File log) {
+    static String describeCompanion(
+            Supervisor.Ended ended,
+            String phase,
+            long ticks,
+            String crashReport,
+            List<Supervisor.ThreadStack> stacks,
+            File log) {
         if (ended != Supervisor.Ended.DONE) return describe(ended, phase, ticks, crashReport, stacks, log);
-        return "(" + ended + ") by leaving the server before the run was over, in phase " + phase + "; its log is " + log;
+        return "(" + ended + ") by leaving the server before the run was over, in phase " + phase + "; its log is "
+                + log;
     }
 
     /**
-     * What held a game up after its run: the threads the agent named before it halted the JVM, or that the game did
-     * not end even then and was killed. Each thread with its top frames, the jars on them and the code that started it.
+     * What held a game up after its run: the threads the agent named before it halted the JVM, or that the game did not
+     * end even then and was killed. Each thread with its top frames, the jars on them and the code that started it.
      */
     static String forcedDown(int round, List<Supervisor.Leak> leaks, boolean exited, int graceSeconds) {
         StringBuilder out = new StringBuilder(round == 0 ? "the game" : "round " + round + "'s game");
         if (!exited) {
             out.append(" was still up ").append(graceSeconds + 10).append("s after its run and was killed");
         } else {
-            out.append(" had to be forced down: its JVM was still up ").append(graceSeconds)
+            out.append(" had to be forced down: its JVM was still up ")
+                    .append(graceSeconds)
                     .append("s after its run");
         }
         if (leaks.isEmpty()) {
-            return out.append(exited ? ", held by no thread the agent could name" : "").toString();
+            return out.append(exited ? ", held by no thread the agent could name" : "")
+                    .toString();
         }
         out.append(", held by ").append(leaks.size()).append(leaks.size() == 1 ? " thread:" : " threads:");
         for (Supervisor.Leak leak : leaks) {
             out.append("\n  ").append(leak.thread());
             List<String> stack = leak.stack();
-            for (int i = 0; i < Math.min(stack.size(), LEAK_FRAMES); i++) out.append("\n    at ").append(stack.get(i));
+            for (int i = 0; i < Math.min(stack.size(), LEAK_FRAMES); i++)
+                out.append("\n    at ").append(stack.get(i));
             if (!leak.jars().isEmpty()) out.append("\n    code from ").append(String.join(", ", leak.jars()));
             if (!leak.origin().isEmpty()) {
                 out.append("\n    started by ").append(leak.origin().get(0));
@@ -336,7 +386,10 @@ final class SceneRun {
     /** After the game's own output, which has ended with its process, so the log says why the run failed too. */
     private static void appendToLog(File log, String text) {
         try {
-            Files.writeString(log.toPath(), "\n[stagewright] " + text + "\n", StandardOpenOption.CREATE,
+            Files.writeString(
+                    log.toPath(),
+                    "\n[stagewright] " + text + "\n",
+                    StandardOpenOption.CREATE,
                     StandardOpenOption.APPEND);
         } catch (IOException e) {
             // The report entry and the scene's failure carry it as well.
@@ -344,9 +397,9 @@ final class SceneRun {
     }
 
     /**
-     * Put what applies at world creation into the game's {@code server.properties}, keeping everything else in it.
-     * A dedicated server reads these when it creates the world; a client hosting its own server does not read the
-     * file at all (docs/reference/scene-file.md says which settings reach which topology).
+     * Put what applies at world creation into the game's {@code server.properties}, keeping everything else in it. A
+     * dedicated server reads these when it creates the world; a client hosting its own server does not read the file at
+     * all (docs/reference/scene-file.md says which settings reach which topology).
      */
     static void writeServerProperties(Path file, SceneFile.World world) throws IOException {
         Map<String, String> wanted = new LinkedHashMap<>(world.serverProperties());
@@ -358,12 +411,14 @@ final class SceneRun {
         }
         // The packs a scene names come on top of those the game already starts with, never instead of them.
         if (!world.enablePacks().isEmpty()) {
-            wanted.put("initial-enabled-packs", merged(properties.getProperty("initial-enabled-packs", "vanilla"),
-                    world.enablePacks()));
+            wanted.put(
+                    "initial-enabled-packs",
+                    merged(properties.getProperty("initial-enabled-packs", "vanilla"), world.enablePacks()));
         }
         if (!world.disablePacks().isEmpty()) {
-            wanted.put("initial-disabled-packs", merged(properties.getProperty("initial-disabled-packs", ""),
-                    world.disablePacks()));
+            wanted.put(
+                    "initial-disabled-packs",
+                    merged(properties.getProperty("initial-disabled-packs", ""), world.disablePacks()));
         }
         if (wanted.isEmpty()) return;
         properties.putAll(wanted);

@@ -9,7 +9,6 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
-
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Step;
 import org.junit.jupiter.api.Test;
@@ -72,7 +71,8 @@ class JavaStepsTest {
         StringBuilder lines = new StringBuilder("# step classes\n");
         for (String c : classNames) lines.append(c).append('\n');
         Files.writeString(index, lines);
-        try (URLClassLoader loader = new URLClassLoader(new URL[] {dir.toUri().toURL()}, getClass().getClassLoader())) {
+        try (URLClassLoader loader =
+                new URLClassLoader(new URL[] {dir.toUri().toURL()}, getClass().getClassLoader())) {
             return JavaSteps.load(loader);
         }
     }
@@ -92,7 +92,8 @@ class JavaStepsTest {
         for (Class<?> bad : new Class<?>[] {Builtin.class, Instance.class, WrongParameter.class}) {
             assertThrows(IllegalArgumentException.class, () -> load(bad), bad.getSimpleName());
         }
-        IllegalArgumentException clash = assertThrows(IllegalArgumentException.class, () -> load(Good.class, Clash.class));
+        IllegalArgumentException clash =
+                assertThrows(IllegalArgumentException.class, () -> load(Good.class, Clash.class));
         assertTrue(clash.getMessage().contains("also taken"), clash.getMessage());
         assertThrows(IllegalArgumentException.class, () -> load(Good.class.getName() + "Missing"));
     }

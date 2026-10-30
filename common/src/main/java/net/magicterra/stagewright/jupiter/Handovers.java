@@ -1,5 +1,8 @@
 package net.magicterra.stagewright.jupiter;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -8,11 +11,6 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
 import net.magicterra.stagewright.StageWrightCommon;
 
 /**
@@ -20,9 +18,9 @@ import net.magicterra.stagewright.StageWrightCommon;
  * taken out by the test that claims it, and whatever is left is removed once the run's tests are over.
  *
  * <p>When a later round follows ({@link Rounds}), what is left is carried across the restart instead: the bots leave
- * the world, which saves each one's player data as a disconnect does, and their names and keepers go to
- * {@value #FILE} in the game's {@code stagewright/}. The next round reads that file, and a test there that claims one
- * of those names joins the bot again with no position, so it comes back where its save left it.
+ * the world, which saves each one's player data as a disconnect does, and their names and keepers go to {@value #FILE}
+ * in the game's {@code stagewright/}. The next round reads that file, and a test there that claims one of those names
+ * joins the bot again with no position, so it comes back where its save left it.
  */
 final class Handovers {
 
@@ -58,8 +56,8 @@ final class Handovers {
      * test's plots is released and the test fails, since the plot is put back under it. The exception to throw, or
      * null.
      */
-    static IllegalStateException endOfTest(Collection<BodyImpl.BotImpl> bots, Collection<PlotImpl> plots,
-                                           boolean failed) {
+    static IllegalStateException endOfTest(
+            Collection<BodyImpl.BotImpl> bots, Collection<PlotImpl> plots, boolean failed) {
         IllegalStateException misplaced = null;
         for (BodyImpl.BotImpl bot : bots) {
             if (!bot.kept()) continue;
@@ -88,19 +86,25 @@ final class Handovers {
     }
 
     /**
-     * Once, after the round's tests: removes the kept bots no test took, and when {@code restarting} writes which
-     * they were, with those still carried from before, so the next round may take them.
+     * Once, after the round's tests: removes the kept bots no test took, and when {@code restarting} writes which they
+     * were, with those still carried from before, so the next round may take them.
      */
     static void sweep(Path dir, boolean restarting) throws IOException {
         Map<String, String> carried = new LinkedHashMap<>();
         for (Kept kept : KEPT.values()) {
             if (restarting) {
-                StageWrightCommon.LOG.info("[{}] {} kept {}; it leaves for the restart and joins again where it"
-                        + " stood", StageWrightCommon.MOD_ID, kept.keeper(), kept.bot().name());
+                StageWrightCommon.LOG.info(
+                        "[{}] {} kept {}; it leaves for the restart and joins again where it" + " stood",
+                        StageWrightCommon.MOD_ID,
+                        kept.keeper(),
+                        kept.bot().name());
                 carried.put(kept.bot().name(), kept.keeper());
             } else {
-                StageWrightCommon.LOG.warn("[{}] {} kept {} for a later test, and none took it",
-                        StageWrightCommon.MOD_ID, kept.keeper(), kept.bot().name());
+                StageWrightCommon.LOG.warn(
+                        "[{}] {} kept {} for a later test, and none took it",
+                        StageWrightCommon.MOD_ID,
+                        kept.keeper(),
+                        kept.bot().name());
             }
             // Leaving saves its player data, which is what a later round's join reads.
             kept.bot().remove();
@@ -110,8 +114,11 @@ final class Handovers {
             if (restarting) {
                 carried.put(name, keeper);
             } else {
-                StageWrightCommon.LOG.warn("[{}] {} kept {} for a test after a restart, and none took it",
-                        StageWrightCommon.MOD_ID, keeper, name);
+                StageWrightCommon.LOG.warn(
+                        "[{}] {} kept {} for a test after a restart, and none took it",
+                        StageWrightCommon.MOD_ID,
+                        keeper,
+                        name);
             }
         });
         BEFORE_RESTART.clear();
@@ -123,7 +130,8 @@ final class Handovers {
         Path file = dir.resolve(FILE);
         if (!Files.isRegularFile(file)) return Map.of();
         try {
-            JsonObject o = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject o = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))
+                    .getAsJsonObject();
             Map<String, String> out = new LinkedHashMap<>();
             o.entrySet().forEach(e -> out.put(e.getKey(), e.getValue().getAsString()));
             return out;

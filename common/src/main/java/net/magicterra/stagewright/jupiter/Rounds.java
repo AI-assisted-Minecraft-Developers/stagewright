@@ -1,5 +1,8 @@
 package net.magicterra.stagewright.jupiter;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -12,20 +15,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
 import net.magicterra.stagewright.test.DependsOn;
 import org.junit.platform.engine.TestExecutionResult;
 
 /**
  * A scene's games one after another on the same world, for {@code afterRestart}. A test runs in round 0 unless it
- * depends on a test after a restart, which puts it one round after the latest of those; a test depending on one
- * without a restart runs in that one's round or later. Each game runs one round, {@value #PROPERTY}, records how its
- * tests ended in {@value #FILE} in the game's {@code stagewright/}, and asks for another game when a later round has
- * tests. The test engine outside deletes the file before a scene's first game.
+ * depends on a test after a restart, which puts it one round after the latest of those; a test depending on one without
+ * a restart runs in that one's round or later. Each game runs one round, {@value #PROPERTY}, records how its tests
+ * ended in {@value #FILE} in the game's {@code stagewright/}, and asks for another game when a later round has tests.
+ * The test engine outside deletes the file before a scene's first game.
  */
 final class Rounds {
 
@@ -69,7 +67,8 @@ final class Rounds {
             return;
         }
         try {
-            JsonObject o = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+            JsonObject o = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))
+                    .getAsJsonObject();
             Map<String, String> outcomes = new HashMap<>();
             o.entrySet().forEach(e -> outcomes.put(e.getKey(), e.getValue().getAsString()));
             before = Map.copyOf(outcomes);
@@ -125,7 +124,8 @@ final class Rounds {
         List<String> keys = new ArrayList<>();
         boolean afterRestart = false;
         try {
-            Class<?> type = Class.forName(ref.className(), false, Thread.currentThread().getContextClassLoader());
+            Class<?> type =
+                    Class.forName(ref.className(), false, Thread.currentThread().getContextClassLoader());
             for (Method m : type.getDeclaredMethods()) {
                 if (!m.getName().equals(ref.method())) continue;
                 DependsOn d = m.getAnnotation(DependsOn.class);

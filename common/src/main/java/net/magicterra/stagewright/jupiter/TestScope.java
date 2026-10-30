@@ -10,14 +10,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-
 import net.minecraft.server.MinecraftServer;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.opentest4j.MultipleFailuresError;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.api.parallel.ResourceAccessMode;
 import org.junit.jupiter.api.parallel.ResourceLock;
 import org.junit.platform.commons.support.AnnotationSupport;
+import org.opentest4j.MultipleFailuresError;
 
 /**
  * The test running on this thread: the locks it declared, and what its overrides must undo when it ends. Bound by
@@ -108,8 +107,8 @@ final class TestScope {
     /**
      * Run {@code work} on this thread as part of {@code scope}'s test, for a task the test hands the server thread:
      * what only reads the test or adds to it ({@link #bound}: a soft check, a capability's facet) works there, while
-     * what must be undone or given back when the test ends ({@link #current}) is still refused. Nests: the scope
-     * lent before is lent again after. With no scope, {@code work} runs as it is.
+     * what must be undone or given back when the test ends ({@link #current}) is still refused. Nests: the scope lent
+     * before is lent again after. With no scope, {@code work} runs as it is.
      */
     static <T> T lending(TestScope scope, Supplier<T> work) {
         if (scope == null) return work.get();
@@ -156,9 +155,9 @@ final class TestScope {
     }
 
     /**
-     * What the test's failed soft checks add up to, or null when none failed: the one failure itself, or every one
-     * of them under a heading that counts them. Taken once: whoever reports them first, {@link KnownIssueExtension}
-     * as the method returns or {@link GameExtension} after it, leaves nothing for the other.
+     * What the test's failed soft checks add up to, or null when none failed: the one failure itself, or every one of
+     * them under a heading that counts them. Taken once: whoever reports them first, {@link KnownIssueExtension} as the
+     * method returns or {@link GameExtension} after it, leaves nothing for the other.
      */
     synchronized AssertionError takeChecks() {
         if (failedChecks.isEmpty()) return null;

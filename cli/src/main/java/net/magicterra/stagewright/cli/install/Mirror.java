@@ -7,9 +7,9 @@ import java.util.Map;
 /**
  * Where else a download may be fetched from, tried before the original.
  *
- * <p>The original always stays in the list, last. BMCLAPI does not carry everything — measured, it
- * answers 500 for NeoForge's installer jar and 404 for Fabric's {@code .sha1} sidecars while serving
- * the jars beside them — so a mirror is a faster first try, never a replacement.
+ * <p>The original always stays in the list, last. BMCLAPI does not carry everything — measured, it answers 500 for
+ * NeoForge's installer jar and 404 for Fabric's {@code .sha1} sidecars while serving the jars beside them — so a mirror
+ * is a faster first try, never a replacement.
  */
 public enum Mirror {
     NONE(Map.of()),
@@ -25,6 +25,7 @@ public enum Mirror {
 
     /** NeoForge's maven serves releases under a path prefix the mirror does not repeat. */
     private static final String NEOFORGED_HOST = "maven.neoforged.net";
+
     private static final String NEOFORGED_PREFIX = "/releases";
 
     private final Map<String, String> hosts;

@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -32,7 +31,8 @@ class SceneSetupTest {
     private void zip(String resource, String... entries) throws IOException {
         Path file = temp.resolve("cp").resolve(resource);
         Files.createDirectories(file.getParent());
-        try (OutputStream out = Files.newOutputStream(file); ZipOutputStream zip = new ZipOutputStream(out)) {
+        try (OutputStream out = Files.newOutputStream(file);
+                ZipOutputStream zip = new ZipOutputStream(out)) {
             for (String e : entries) {
                 zip.putNextEntry(new ZipEntry(e));
                 zip.write(e.getBytes(StandardCharsets.UTF_8));
@@ -71,8 +71,10 @@ class SceneSetupTest {
     @Test
     void aZipWithNoLevelDatIsNoSave() throws IOException {
         zip("stagewright/junk.zip", "a.txt");
-        String message = assertThrows(IllegalStateException.class,
-                () -> SceneSetup.installSave("junk.zip", classPath(), temp.resolve("w"))).getMessage();
+        String message = assertThrows(
+                        IllegalStateException.class,
+                        () -> SceneSetup.installSave("junk.zip", classPath(), temp.resolve("w")))
+                .getMessage();
         assertTrue(message.contains("level.dat"), message);
     }
 
@@ -80,8 +82,8 @@ class SceneSetupTest {
     void filesArePutBackAsTheyWere(@TempDir Path game) throws IOException {
         Path existing = Files.createDirectories(game.resolve("config")).resolve("a.toml");
         Files.writeString(existing, "old");
-        SceneSetup.Restore restore = SceneSetup.writeFiles(game, Map.of("config/a.toml", "new",
-                "config/deep/b.toml", "made"));
+        SceneSetup.Restore restore =
+                SceneSetup.writeFiles(game, Map.of("config/a.toml", "new", "config/deep/b.toml", "made"));
         assertEquals("new", Files.readString(existing));
         assertEquals("made", Files.readString(game.resolve("config/deep/b.toml")));
         restore.run();

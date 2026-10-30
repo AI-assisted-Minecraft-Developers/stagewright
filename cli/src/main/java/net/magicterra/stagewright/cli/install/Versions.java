@@ -1,5 +1,8 @@
 package net.magicterra.stagewright.cli.install;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -9,10 +12,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 
 /** The {@code versions/} and {@code libraries/} layout every launcher shares. */
 public final class Versions {
@@ -34,8 +33,8 @@ public final class Versions {
         while (id != null) {
             Path file = json(installDir, id);
             if (!Files.isRegularFile(file)) {
-                throw new IllegalArgumentException("no version '" + id + "' is installed in "
-                        + installDir + " — expected " + file);
+                throw new IllegalArgumentException(
+                        "no version '" + id + "' is installed in " + installDir + " — expected " + file);
             }
             JsonObject data = read(file);
             out.add(data);
@@ -46,7 +45,8 @@ public final class Versions {
 
     static JsonObject read(Path file) {
         try {
-            return JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8)).getAsJsonObject();
+            return JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))
+                    .getAsJsonObject();
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read " + file, e);
         }
@@ -55,10 +55,9 @@ public final class Versions {
     /**
      * The libraries a launch uses, by identity, child first so a loader's pin beats vanilla's.
      *
-     * <p>Identity is {@code group:artifact:classifier}. Without the classifier,
-     * {@code org.lwjgl:lwjgl:3.3.3} hides {@code org.lwjgl:lwjgl:3.3.3:natives-windows} and the game dies
-     * at {@code GLFW.<clinit>} with "Failed to locate library: lwjgl.dll", which reads like a broken
-     * install rather than one missing jar.
+     * <p>Identity is {@code group:artifact:classifier}. Without the classifier, {@code org.lwjgl:lwjgl:3.3.3} hides
+     * {@code org.lwjgl:lwjgl:3.3.3:natives-windows} and the game dies at {@code GLFW.<clinit>} with "Failed to locate
+     * library: lwjgl.dll", which reads like a broken install rather than one missing jar.
      */
     public static List<JsonObject> libraries(List<JsonObject> chain) {
         Map<String, JsonObject> out = new LinkedHashMap<>();
@@ -85,8 +84,8 @@ public final class Versions {
         if (at >= 0) extension = name.substring(at + 1);
         String[] parts = stripExtension(name).split(":");
         String classifier = parts.length > 3 ? "-" + parts[3] : "";
-        return parts[0].replace('.', '/') + "/" + parts[1] + "/" + parts[2] + "/"
-                + parts[1] + "-" + parts[2] + classifier + "." + extension;
+        return parts[0].replace('.', '/') + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2]
+                + classifier + "." + extension;
     }
 
     public static Path libraryPath(Path installDir, String name) {

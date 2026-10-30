@@ -5,8 +5,8 @@ import net.minecraft.core.BlockPos;
 
 /**
  * The tanks in a block, as every tech mod exposes them. Registered as the capability {@code "fluids"}. See
- * {@link BlockInventory} for why this is one facet over a platform capability, where the implementation lives, and
- * what positions are.
+ * {@link BlockInventory} for why this is one facet over a platform capability, where the implementation lives, and what
+ * positions are.
  *
  * <p>Amounts are millibuckets — a bucket is 1000.
  */

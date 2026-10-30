@@ -30,15 +30,16 @@ import net.minecraft.world.item.ItemStack;
  *
  * <h2>Nothing here outlives the test</h2>
  *
- * The first write to a body's inventory snapshots the whole inventory, and {@link Game#afterTest} puts it back when
- * the test ends, passed or not; hunger likewise. A player shared by several tests would otherwise carry one test's
- * items into the next.
+ * The first write to a body's inventory snapshots the whole inventory, and {@link Game#afterTest} puts it back when the
+ * test ends, passed or not; hunger likewise. A player shared by several tests would otherwise carry one test's items
+ * into the next.
  */
 public final class Items {
 
     private final Game game;
     /** Bodies whose inventory, and whose hunger, this test has pinned for restoring. Touched on the test thread. */
     private final Set<String> pinned = new HashSet<>();
+
     private final Set<String> hungerPinned = new HashSet<>();
 
     Items(Game game) {
@@ -61,8 +62,9 @@ public final class Items {
         body.runOnServer(player -> {
             ItemStack stack = Ids.stack(itemId, count);
             if (!player.getInventory().add(stack)) {
-                throw new IllegalStateException("could not give " + count + " x '" + itemId + "' — " + body.name()
-                        + "'s inventory is full (" + stack.getCount() + " would not fit). Clear it first, or give less.");
+                throw new IllegalStateException(
+                        "could not give " + count + " x '" + itemId + "' — " + body.name() + "'s inventory is full ("
+                                + stack.getCount() + " would not fit). Clear it first, or give less.");
             }
         });
         return this;
@@ -194,8 +196,10 @@ public final class Items {
         });
     }
 
-    /** What is worn in a slot: {@code "head"}, {@code "chest"}, {@code "legs"}, {@code "feet"}, {@code "mainhand"} or
-     *  {@code "offhand"}. Empty string when the slot is bare. */
+    /**
+     * What is worn in a slot: {@code "head"}, {@code "chest"}, {@code "legs"}, {@code "feet"}, {@code "mainhand"} or
+     * {@code "offhand"}. Empty string when the slot is bare.
+     */
     public String worn(Body body, String slot) {
         EquipmentSlot equipmentSlot = equipmentSlot(slot);
         return body.onServer(player -> Ids.idOf(player.getItemBySlot(equipmentSlot)));
@@ -222,7 +226,8 @@ public final class Items {
             int selected = inventory.selected;
             // Copied out again on restore, so the snapshot survives being installed.
             return () -> {
-                for (int i = 0; i < size; i++) inventory.setItem(i, snapshot.get(i).copy());
+                for (int i = 0; i < size; i++)
+                    inventory.setItem(i, snapshot.get(i).copy());
                 inventory.selected = selected;
             };
         });
@@ -256,7 +261,7 @@ public final class Items {
         }
         List<String> names = new ArrayList<>();
         for (EquipmentSlot candidate : EquipmentSlot.values()) names.add(candidate.getName());
-        throw new IllegalStateException("'" + slot + "' is not an equipment slot — the slots are "
-                + String.join(", ", names));
+        throw new IllegalStateException(
+                "'" + slot + "' is not an equipment slot — the slots are " + String.join(", ", names));
     }
 }

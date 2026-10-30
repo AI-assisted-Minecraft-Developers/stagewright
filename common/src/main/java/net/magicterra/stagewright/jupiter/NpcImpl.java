@@ -3,7 +3,6 @@ package net.magicterra.stagewright.jupiter;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
-
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Npc;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
@@ -36,8 +35,8 @@ final class NpcImpl implements Npc {
     }
 
     /** Spawn and adopt in one server task; the mob and its roster entry go when {@code scope}'s test ends. */
-    static Npc spawn(Game game, TestScope scope, EntityType<? extends Mob> type, ResourceKey<Level> dimension,
-                     BlockPos feet) {
+    static Npc spawn(
+            Game game, TestScope scope, EntityType<? extends Mob> type, ResourceKey<Level> dimension, BlockPos feet) {
         NpcImpl npc = new NpcImpl(game, "sw_npc_" + NEXT.getAndIncrement());
         game.runOnServer(server -> {
             ServerLevel level = GameImpl.level(server, dimension);
@@ -49,13 +48,13 @@ final class NpcImpl implements Npc {
             }
             if (!(spawned instanceof Mob mob)) {
                 spawned.discard();
-                throw new IllegalArgumentException("a " + EntityType.getKey(type) + " is not a mob, so it cannot be a"
-                        + " body");
+                throw new IllegalArgumentException(
+                        "a " + EntityType.getKey(type) + " is not a mob, so it cannot be a" + " body");
             }
             if (Roster.adopt(mob, npc.name) instanceof Roster.Refusal refused) {
                 mob.discard();
-                throw new IllegalArgumentException("WorldDriver will not drive a " + EntityType.getKey(type) + ": "
-                        + refused.message());
+                throw new IllegalArgumentException(
+                        "WorldDriver will not drive a " + EntityType.getKey(type) + ": " + refused.message());
             }
             scope.onEnd(npc::remove);
         });
@@ -80,8 +79,8 @@ final class NpcImpl implements Npc {
         return game.onServer(server -> {
             Bot bot = BotRegistry.get(ref());
             if (bot == null || !(bot.entity() instanceof Mob mob) || !mob.isAlive()) {
-                throw new IllegalStateException(ref() + " is not a driven mob any more: it died, was removed or was"
-                        + " let go");
+                throw new IllegalStateException(
+                        ref() + " is not a driven mob any more: it died, was removed or was" + " let go");
             }
             return work.apply(mob);
         });

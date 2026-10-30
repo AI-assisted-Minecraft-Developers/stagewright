@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
 class YamlTestsTest {
@@ -29,7 +28,9 @@ class YamlTestsTest {
                     then:
                       - wait: 2
                 """);
-        assertEquals(List.of("first", "second"), tests.stream().map(YamlTests.Test::name).toList());
+        assertEquals(
+                List.of("first", "second"),
+                tests.stream().map(YamlTests.Test::name).toList());
         assertEquals("survival", tests.get(0).options().get("scene"));
         assertEquals(List.of("a", "b"), tests.get(1).options().get("scene"));
         assertEquals(List.of("first"), tests.get(1).options().get("dependsOn"));
@@ -41,14 +42,16 @@ class YamlTestsTest {
                 tests:
                   - name: x
                     stpes: []
-                """)).getMessage();
+                """))
+                .getMessage();
         assertTrue(unknownKey.contains("unknown key 'stpes'"), unknownKey);
         String twoVerbs = assertThrows(IllegalArgumentException.class, () -> YamlTests.read("t.yaml", """
                 tests:
                   - name: x
                     steps:
                       - { call: mc.a, wait: 3 }
-                """)).getMessage();
+                """))
+                .getMessage();
         assertTrue(twoVerbs.contains("a step does one thing"), twoVerbs);
         assertThrows(IllegalArgumentException.class, () -> YamlTests.read("t.yaml", """
                 tests:

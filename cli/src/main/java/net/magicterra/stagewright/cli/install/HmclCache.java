@@ -11,11 +11,10 @@ import java.util.UUID;
 /**
  * HMCL's content-addressed download cache: {@code <install>/cache/SHA-1/<first two>/<sha1>}.
  *
- * <p>Read and added to, never indexed. HMCL keeps two index files beside this directory —
- * {@code index.json} (libraries without a checksum, by name) and {@code etag.json} (remote metadata) —
- * and saves the first without a file lock, so writing it while HMCL is open could lose HMCL's own
- * entries. Nothing here needs either: every file this installer fetches has a known sha1, and HMCL
- * looks a library up by sha1 in this directory before it consults its index.
+ * <p>Read and added to, never indexed. HMCL keeps two index files beside this directory — {@code index.json} (libraries
+ * without a checksum, by name) and {@code etag.json} (remote metadata) — and saves the first without a file lock, so
+ * writing it while HMCL is open could lose HMCL's own entries. Nothing here needs either: every file this installer
+ * fetches has a known sha1, and HMCL looks a library up by sha1 in this directory before it consults its index.
  */
 final class HmclCache {
 
@@ -48,9 +47,8 @@ final class HmclCache {
     }
 
     /**
-     * Make {@code to} a copy of {@code from}: a hard link where the filesystem allows one, the way HMCL
-     * shares its cache, else a real copy. Written beside {@code to} and renamed over it, so a reader
-     * never sees half a file.
+     * Make {@code to} a copy of {@code from}: a hard link where the filesystem allows one, the way HMCL shares its
+     * cache, else a real copy. Written beside {@code to} and renamed over it, so a reader never sees half a file.
      */
     static void place(Path from, Path to) throws IOException {
         Files.createDirectories(to.getParent());

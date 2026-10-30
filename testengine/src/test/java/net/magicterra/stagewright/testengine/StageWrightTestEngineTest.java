@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.regex.Pattern;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,8 +43,21 @@ class StageWrightTestEngineTest {
         previous = System.getProperty(LaunchSpec.PROPERTY);
         Path specs = Files.createDirectories(temp.resolve("launches"));
         System.setProperty(LaunchSpec.PROPERTY, specs.toString());
-        for (String topology : List.of("pass", "assertFail", "crash", "undiscovered", "dynamic", "world",
-                "reqSkip", "otherSkip", "classSkip", "classSkipOther", "script", "restart", "leak", "leakReport")) {
+        for (String topology : List.of(
+                "pass",
+                "assertFail",
+                "crash",
+                "undiscovered",
+                "dynamic",
+                "world",
+                "reqSkip",
+                "otherSkip",
+                "classSkip",
+                "classSkipOther",
+                "script",
+                "restart",
+                "leak",
+                "leakReport")) {
             writeSpec(specs, topology, true);
         }
         writeSpec(specs, "worldDirty", false);
@@ -65,16 +77,23 @@ class StageWrightTestEngineTest {
         Files.writeString(specs.resolve(topology + ".json"), """
                 {"gameDirectory": %s, "cleanWorld": %s, "timeoutMinutes": 2, "stallMinutes": 0, "server": %s,%s
                  "primary": %s%s}
-                """.formatted(q(game.toString()), cleanWorld, topology.equals("world"),
-                topology.equals("leakReport") ? " \"leaks\": \"report\"," : "", process(topology, game),
-                companion == null ? "" : ", \"companion\": " + process(companion, game.resolve("client"))));
+                """.formatted(
+                        q(game.toString()),
+                        cleanWorld,
+                        topology.equals("world"),
+                        topology.equals("leakReport") ? " \"leaks\": \"report\"," : "",
+                        process(topology, game),
+                        companion == null ? "" : ", \"companion\": " + process(companion, game.resolve("client"))));
     }
 
     private static String process(String scenario, Path directory) {
         return """
-                {"java": %s, "jvmArgs": ["-cp", %s], "mainClass": %s, "args": [%s], "workingDirectory": %s}"""
-                .formatted(q(System.getProperty("java.home") + "/bin/java"), q(System.getProperty("java.class.path")),
-                        q(FakeGame.class.getName()), q(scenario), q(directory.toString()));
+                {"java": %s, "jvmArgs": ["-cp", %s], "mainClass": %s, "args": [%s], "workingDirectory": %s}""".formatted(
+                        q(System.getProperty("java.home") + "/bin/java"),
+                        q(System.getProperty("java.class.path")),
+                        q(FakeGame.class.getName()),
+                        q(scenario),
+                        q(directory.toString()));
     }
 
     @AfterEach
@@ -88,16 +107,23 @@ class StageWrightTestEngineTest {
     }
 
     private static EngineExecutionResults run(String fixture) {
-        return EngineTestKit.engine("stagewright").selectors(selectClass(FIXTURES + fixture)).execute();
+        return EngineTestKit.engine("stagewright")
+                .selectors(selectClass(FIXTURES + fixture))
+                .execute();
     }
 
     private static Throwable failure(Event event) {
-        return event.getPayload(TestExecutionResult.class).orElseThrow().getThrowable().orElseThrow();
+        return event.getPayload(TestExecutionResult.class)
+                .orElseThrow()
+                .getThrowable()
+                .orElseThrow();
     }
 
     private static Throwable failureOf(Events tests, String displayName) {
-        return tests.failed().stream().filter(e -> e.getTestDescriptor().getDisplayName().equals(displayName))
-                .map(StageWrightTestEngineTest::failure).findFirst()
+        return tests.failed().stream()
+                .filter(e -> e.getTestDescriptor().getDisplayName().equals(displayName))
+                .map(StageWrightTestEngineTest::failure)
+                .findFirst()
                 .orElseThrow(() -> new AssertionError("no failure for " + displayName));
     }
 
@@ -126,15 +152,21 @@ class StageWrightTestEngineTest {
         // The tests themselves passed; it is the scene that fails.
         assertEquals(2, r.testEvents().succeeded().count());
         assertEquals(0, r.testEvents().failed().count());
-        Event scene = containersFailed(r).stream().filter(e -> e.getTestDescriptor().getDisplayName().equals("leak"))
-                .findFirst().orElseThrow(() -> new AssertionError("the scene should fail"));
+        Event scene = containersFailed(r).stream()
+                .filter(e -> e.getTestDescriptor().getDisplayName().equals("leak"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("the scene should fail"));
         String message = failure(scene).getMessage();
         assertTrue(message.contains("had to be forced down") && message.contains("mod-pool-1"), message);
         assertTrue(message.contains("started by "), message);
         assertTrue(r.allEvents().reportingEntryPublished().stream()
-                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs().get("forcedDown"))
+                .map(e -> e.getPayload(ReportEntry.class)
+                        .orElseThrow()
+                        .getKeyValuePairs()
+                        .get("forcedDown"))
                 .anyMatch(v -> v != null && v.contains("mod-pool-1")));
-        Path log = temp.resolve("game-leak").resolve("stagewright").resolve("logs").resolve("leak-game.log");
+        Path log =
+                temp.resolve("game-leak").resolve("stagewright").resolve("logs").resolve("leak-game.log");
         assertTrue(Files.readString(log).contains("[stagewright] the game had to be forced down"), log.toString());
     }
 
@@ -150,12 +182,22 @@ class StageWrightTestEngineTest {
         }
         assertEquals(2, r.testEvents().succeeded().count());
         assertEquals(0, r.testEvents().failed().count());
-        assertEquals(0, containersFailed(r).count(), () -> String.valueOf(containersFailed(r).list()));
+        assertEquals(
+                0,
+                containersFailed(r).count(),
+                () -> String.valueOf(containersFailed(r).list()));
         assertTrue(r.allEvents().reportingEntryPublished().stream()
-                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs().get("forcedDown"))
-                .anyMatch(v -> v != null && v.contains("had to be forced down") && v.contains("mod-pool-1")
+                .map(e -> e.getPayload(ReportEntry.class)
+                        .orElseThrow()
+                        .getKeyValuePairs()
+                        .get("forcedDown"))
+                .anyMatch(v -> v != null
+                        && v.contains("had to be forced down")
+                        && v.contains("mod-pool-1")
                         && v.contains("started by ")));
-        Path log = temp.resolve("game-leakReport").resolve("stagewright").resolve("logs")
+        Path log = temp.resolve("game-leakReport")
+                .resolve("stagewright")
+                .resolve("logs")
                 .resolve("leakReport-game.log");
         assertTrue(Files.readString(log).contains("[stagewright] the game had to be forced down"), log.toString());
     }
@@ -163,8 +205,14 @@ class StageWrightTestEngineTest {
     @Test
     void aJoinedClientThatStaysChangesNothing() {
         EngineExecutionResults r = run("ClientStaysFixture");
-        assertEquals(2, r.testEvents().succeeded().count(), () -> String.valueOf(r.testEvents().failed().list()));
-        assertEquals(0, containersFailed(r).count(), () -> String.valueOf(containersFailed(r).list()));
+        assertEquals(
+                2,
+                r.testEvents().succeeded().count(),
+                () -> String.valueOf(r.testEvents().failed().list()));
+        assertEquals(
+                0,
+                containersFailed(r).count(),
+                () -> String.valueOf(containersFailed(r).list()));
     }
 
     @Test
@@ -184,14 +232,21 @@ class StageWrightTestEngineTest {
         assertTrue(message.contains("the joined client ended (PROCESS_DIED)"), message);
         assertTrue(message.contains("clientLeaves-companion.log"), message);
         Event scene = containersFailed(r).stream()
-                .filter(e -> e.getTestDescriptor().getDisplayName().equals("clientLeaves")).findFirst()
+                .filter(e -> e.getTestDescriptor().getDisplayName().equals("clientLeaves"))
+                .findFirst()
                 .orElseThrow(() -> new AssertionError("the scene should fail"));
-        assertTrue(failure(scene).getMessage().startsWith("the joined client ended (PROCESS_DIED)"),
+        assertTrue(
+                failure(scene).getMessage().startsWith("the joined client ended (PROCESS_DIED)"),
                 failure(scene).getMessage());
         assertTrue(r.allEvents().reportingEntryPublished().stream()
-                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs().get("companion"))
+                .map(e -> e.getPayload(ReportEntry.class)
+                        .orElseThrow()
+                        .getKeyValuePairs()
+                        .get("companion"))
                 .anyMatch(v -> v != null && v.contains("PROCESS_DIED")));
-        Path log = temp.resolve("game-clientLeaves").resolve("stagewright").resolve("logs")
+        Path log = temp.resolve("game-clientLeaves")
+                .resolve("stagewright")
+                .resolve("logs")
                 .resolve("clientLeaves-companion.log");
         assertTrue(Files.readString(log).contains("[stagewright] the joined client ended"), log.toString());
     }
@@ -206,8 +261,11 @@ class StageWrightTestEngineTest {
         assertEquals("expected 1 but was 2", t.getMessage());
         assertEquals("x.Y", t.getStackTrace()[0].getClassName());
         assertEquals(3, t.getStackTrace()[0].getLineNumber());
-        assertEquals(1, r.testEvents().succeeded().stream()
-                .filter(e -> e.getTestDescriptor().getDisplayName().equals("a()")).count());
+        assertEquals(
+                1,
+                r.testEvents().succeeded().stream()
+                        .filter(e -> e.getTestDescriptor().getDisplayName().equals("a()"))
+                        .count());
     }
 
     @Test
@@ -220,17 +278,23 @@ class StageWrightTestEngineTest {
             assertTrue(message.contains("PROCESS_DIED"), message);
         }
         assertTrue(containersFailed(r).count() >= 1, "the scene container should fail");
-        assertTrue(containersFailed(r).stream().anyMatch(e -> e.getTestDescriptor().getDisplayName().equals("crash")));
+        assertTrue(containersFailed(r).stream()
+                .anyMatch(e -> e.getTestDescriptor().getDisplayName().equals("crash")));
     }
 
     @Test
     void aRestartTheGameAsksForRunsTheNextRoundOnTheSameDirectory() {
         EngineExecutionResults r = run("RestartFixture");
-        assertEquals(0, r.testEvents().failed().count(), () -> String.valueOf(r.testEvents().failed().list()));
+        assertEquals(
+                0,
+                r.testEvents().failed().count(),
+                () -> String.valueOf(r.testEvents().failed().list()));
         assertEquals(2, r.testEvents().succeeded().count());
         assertEquals(0, containersFailed(r).count());
-        assertTrue(r.allEvents().reportingEntryPublished().stream()
-                .anyMatch(e -> e.toString().contains("round 1")), "the scene should report its restart");
+        assertTrue(
+                r.allEvents().reportingEntryPublished().stream()
+                        .anyMatch(e -> e.toString().contains("round 1")),
+                "the scene should report its restart");
     }
 
     @Test
@@ -274,8 +338,13 @@ class StageWrightTestEngineTest {
         Path properties = temp.resolve("game-world").resolve("server.properties");
         Files.writeString(properties, "server-port=1\n");
         EngineExecutionResults r = run("WorldBlockFixture");
-        assertEquals(2, r.testEvents().succeeded().count(), "tests: " + r.testEvents().failed().stream()
-                .map(e -> failure(e).getMessage()).toList());
+        assertEquals(
+                2,
+                r.testEvents().succeeded().count(),
+                "tests: "
+                        + r.testEvents().failed().stream()
+                                .map(e -> failure(e).getMessage())
+                                .toList());
         assertEquals(0, r.testEvents().failed().count());
         assertEquals("server-port=1\n", Files.readString(properties));
     }
@@ -292,13 +361,17 @@ class StageWrightTestEngineTest {
     void theSceneNodePublishesItsWorldAsAReportEntry() {
         EngineExecutionResults r = run("WorldBlockFixture");
         List<Event> published = r.allEvents().reportingEntryPublished().stream()
-                .filter(e -> e.getTestDescriptor().getDisplayName().equals("worldBlock")).toList();
+                .filter(e -> e.getTestDescriptor().getDisplayName().equals("worldBlock"))
+                .toList();
         String world = published.stream()
                 .flatMap(e -> e.getPayload(org.junit.platform.engine.reporting.ReportEntry.class).stream())
-                .map(entry -> entry.getKeyValuePairs().get("world")).filter(java.util.Objects::nonNull)
-                .findFirst().orElseThrow(() -> new AssertionError("no world entry on the scene: " + published));
-        assertTrue(world.contains("seed=5471") && world.contains("preset=minecraft:flat")
-                && world.contains("time=6000"), world);
+                .map(entry -> entry.getKeyValuePairs().get("world"))
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no world entry on the scene: " + published));
+        assertTrue(
+                world.contains("seed=5471") && world.contains("preset=minecraft:flat") && world.contains("time=6000"),
+                world);
     }
 
     /** How the engine descriptor itself finished. */
@@ -306,18 +379,22 @@ class StageWrightTestEngineTest {
         return r.containerEvents().finished().stream()
                 .filter(e -> e.getTestDescriptor().getParent().isEmpty())
                 .map(e -> e.getPayload(TestExecutionResult.class).orElseThrow())
-                .findFirst().orElseThrow(() -> new AssertionError("the engine descriptor never finished"));
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("the engine descriptor never finished"));
     }
 
     private static void assertEngineSuccessful(EngineExecutionResults r) {
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, engineResult(r).getStatus(),
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                engineResult(r).getStatus(),
                 () -> String.valueOf(engineResult(r).getThrowable().orElse(null)));
     }
 
     private static String skipReason(EngineExecutionResults r, String displayName) {
         return r.testEvents().skipped().stream()
                 .filter(e -> e.getTestDescriptor().getDisplayName().equals(displayName))
-                .map(e -> e.getPayload(String.class).orElse(null)).findFirst()
+                .map(e -> e.getPayload(String.class).orElse(null))
+                .findFirst()
                 .orElseThrow(() -> new AssertionError("not reported skipped: " + displayName));
     }
 
@@ -358,10 +435,18 @@ class StageWrightTestEngineTest {
     @Test
     void aClassLevelRequirementSkipDoesNotFailItsMethodsAsUndiscoveredButFailsTheEngine() {
         EngineExecutionResults r = run("ClassSkipFixture");
-        assertEquals(0, r.testEvents().failed().count(), () -> r.testEvents().failed().stream()
-                .map(e -> failure(e).getMessage()).toList().toString());
-        assertEquals(0, containersFailed(r).stream()
-                .filter(e -> e.getTestDescriptor().getParent().isPresent()).count());
+        assertEquals(
+                0,
+                r.testEvents().failed().count(),
+                () -> r.testEvents().failed().stream()
+                        .map(e -> failure(e).getMessage())
+                        .toList()
+                        .toString());
+        assertEquals(
+                0,
+                containersFailed(r).stream()
+                        .filter(e -> e.getTestDescriptor().getParent().isPresent())
+                        .count());
         TestExecutionResult engine = engineResult(r);
         assertEquals(TestExecutionResult.Status.FAILED, engine.getStatus());
         String message = engine.getThrowable().orElseThrow().getMessage();
@@ -371,8 +456,13 @@ class StageWrightTestEngineTest {
     @Test
     void aClassLevelSkipForAnyOtherReasonLeavesNothingFailed() {
         EngineExecutionResults r = run("ClassSkipOtherFixture");
-        assertEquals(0, r.testEvents().failed().count(), () -> r.testEvents().failed().stream()
-                .map(e -> failure(e).getMessage()).toList().toString());
+        assertEquals(
+                0,
+                r.testEvents().failed().count(),
+                () -> r.testEvents().failed().stream()
+                        .map(e -> failure(e).getMessage())
+                        .toList()
+                        .toString());
         assertEquals(0, containersFailed(r).count());
         assertEngineSuccessful(r);
     }
@@ -381,7 +471,8 @@ class StageWrightTestEngineTest {
     private static String sceneSkipReason(EngineExecutionResults r, String scene) {
         return r.containerEvents().skipped().stream()
                 .filter(e -> e.getTestDescriptor() instanceof Nodes.Scene s && s.name.equals(scene))
-                .map(e -> e.getPayload(String.class).orElse(null)).findFirst()
+                .map(e -> e.getPayload(String.class).orElse(null))
+                .findFirst()
                 .orElseThrow(() -> new AssertionError("scene not reported skipped: " + scene));
     }
 
@@ -434,13 +525,22 @@ class StageWrightTestEngineTest {
     @Test
     void scriptTestsAreFoundWithoutTheGameAndReportedFromIt() {
         EngineExecutionResults r = EngineTestKit.engine("stagewright")
-                .selectors(selectClasspathResource("stagewright/tests/arithmetic.js")).execute();
+                .selectors(selectClasspathResource("stagewright/tests/arithmetic.js"))
+                .execute();
         assertEquals(1, r.testEvents().succeeded().count());
-        assertEquals("adds", r.testEvents().succeeded().list().get(0).getTestDescriptor().getDisplayName());
+        assertEquals(
+                "adds",
+                r.testEvents().succeeded().list().get(0).getTestDescriptor().getDisplayName());
         // What the test recorded in the game is published here too.
-        assertEquals(List.of("2"), r.allEvents().reportingEntryPublished().stream()
-                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs().get("sum"))
-                .filter(java.util.Objects::nonNull).toList());
+        assertEquals(
+                List.of("2"),
+                r.allEvents().reportingEntryPublished().stream()
+                        .map(e -> e.getPayload(ReportEntry.class)
+                                .orElseThrow()
+                                .getKeyValuePairs()
+                                .get("sum"))
+                        .filter(java.util.Objects::nonNull)
+                        .toList());
         assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
     }
 
@@ -452,27 +552,33 @@ class StageWrightTestEngineTest {
         System.setOut(new java.io.PrintStream(printed, true, java.nio.charset.StandardCharsets.UTF_8));
         try {
             r = EngineTestKit.engine("stagewright")
-                    .selectors(selectClasspathResource("stagewright/tests/arithmetic.js")).execute();
+                    .selectors(selectClasspathResource("stagewright/tests/arithmetic.js"))
+                    .execute();
         } finally {
             System.setOut(out);
         }
         List<java.util.Map<String, String>> entries = r.allEvents().reportingEntryPublished().stream()
-                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs()).toList();
+                .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs())
+                .toList();
         assertTrue(entries.contains(java.util.Map.of("note", "two\nlines")), entries.toString());
         // A report entry cannot hold a blank value: the blank one names itself under a key of its own.
-        assertTrue(entries.contains(java.util.Map.of(StageWrightTestEngine.BLANK_RECORD, "none found")),
+        assertTrue(
+                entries.contains(java.util.Map.of(StageWrightTestEngine.BLANK_RECORD, "none found")),
                 entries.toString());
         String text = printed.toString(java.nio.charset.StandardCharsets.UTF_8);
-        assertTrue(text.contains("[stagewright] record script stagewright/tests/arithmetic.js#adds: note = two\\nlines"),
+        assertTrue(
+                text.contains("[stagewright] record script stagewright/tests/arithmetic.js#adds: note = two\\nlines"),
                 text);
-        assertTrue(text.contains("[stagewright] record script stagewright/tests/arithmetic.js#adds: none found = \n"),
+        assertTrue(
+                text.contains("[stagewright] record script stagewright/tests/arithmetic.js#adds: none found = \n"),
                 text);
     }
 
     @Test
     void yamlTestsTakeTheFilesSceneAndAreReportedTheSameWay() {
         EngineExecutionResults r = EngineTestKit.engine("stagewright")
-                .selectors(selectClasspathResource("stagewright/tests/declared.yaml")).execute();
+                .selectors(selectClasspathResource("stagewright/tests/declared.yaml"))
+                .execute();
         assertEquals(1, r.testEvents().succeeded().count());
         assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
     }
@@ -483,12 +589,19 @@ class StageWrightTestEngineTest {
      */
     private EngineExecutionResults runFiltered(String fixture, String pattern) {
         String root = System.getProperty(StageWrightTestEngine.TEST_ROOTS);
-        Path resources = Path.of(java.net.URI.create(getClass().getClassLoader()
-                .getResource("stagewright/tests/arithmetic.js").toString())).getParent().getParent().getParent();
+        Path resources = Path.of(java.net.URI.create(getClass()
+                        .getClassLoader()
+                        .getResource("stagewright/tests/arithmetic.js")
+                        .toString()))
+                .getParent()
+                .getParent()
+                .getParent();
         System.setProperty(StageWrightTestEngine.TEST_ROOTS, resources.toString());
         try {
-            return EngineTestKit.engine("stagewright").selectors(selectClass(FIXTURES + fixture))
-                    .filters(new GradleTestsFilter(pattern)).execute();
+            return EngineTestKit.engine("stagewright")
+                    .selectors(selectClass(FIXTURES + fixture))
+                    .filters(new GradleTestsFilter(pattern))
+                    .execute();
         } finally {
             if (root == null) System.clearProperty(StageWrightTestEngine.TEST_ROOTS);
             else System.setProperty(StageWrightTestEngine.TEST_ROOTS, root);
@@ -496,8 +609,11 @@ class StageWrightTestEngineTest {
     }
 
     private static List<String> scenesStarted(EngineExecutionResults r) {
-        return r.containerEvents().started().stream().map(Event::getTestDescriptor)
-                .filter(d -> d instanceof Nodes.Scene).map(TestDescriptor::getDisplayName).toList();
+        return r.containerEvents().started().stream()
+                .map(Event::getTestDescriptor)
+                .filter(d -> d instanceof Nodes.Scene)
+                .map(TestDescriptor::getDisplayName)
+                .toList();
     }
 
     @Test
@@ -505,7 +621,10 @@ class StageWrightTestEngineTest {
         EngineExecutionResults r = runFiltered("PassFixture", "*PassFixture");
         assertEquals(List.of("pass"), scenesStarted(r));
         assertEquals(2, r.testEvents().succeeded().count());
-        assertEquals(0, r.testEvents().failed().count(), () -> String.valueOf(r.testEvents().failed().list()));
+        assertEquals(
+                0,
+                r.testEvents().failed().count(),
+                () -> String.valueOf(r.testEvents().failed().list()));
         assertTrue(!Files.exists(temp.resolve("game-script").resolve("stagewright")), "no game for the script scene");
     }
 
@@ -514,8 +633,11 @@ class StageWrightTestEngineTest {
         EngineExecutionResults r = runFiltered("PassFixture", "*arithmetic*");
         assertEquals(List.of("script"), scenesStarted(r));
         // The game was given that file alone, or it would not have reported these two under it.
-        assertEquals(List.of("adds"), r.testEvents().succeeded().stream()
-                .map(e -> e.getTestDescriptor().getDisplayName()).toList());
+        assertEquals(
+                List.of("adds"),
+                r.testEvents().succeeded().stream()
+                        .map(e -> e.getTestDescriptor().getDisplayName())
+                        .toList());
         assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
         // The unreadable file and the YAML one were left out as well.
         assertEquals(1, r.testEvents().failed().count());
@@ -526,38 +648,51 @@ class StageWrightTestEngineTest {
         EngineExecutionResults r = runFiltered("PassFixture", "stagewright/tests/arithmetic.js.adds");
         assertEquals(List.of("script"), scenesStarted(r));
         assertEquals(1, r.testEvents().succeeded().count());
-        assertEquals(0, r.testEvents().failed().count(), () -> String.valueOf(r.testEvents().failed().list()));
+        assertEquals(
+                0,
+                r.testEvents().failed().count(),
+                () -> String.valueOf(r.testEvents().failed().list()));
     }
 
     @Test
     void scriptNodesNameTheirSceneAndFileAsTheClassAndTheTestAsTheMethod() {
         TestDescriptor test = EngineTestKit.engine("stagewright")
-                .selectors(selectClasspathResource("stagewright/tests/arithmetic.js")).execute()
-                .testEvents().succeeded().list().get(0).getTestDescriptor();
-        assertEquals(java.util.Optional.of(MethodSource.from("stagewright/tests/arithmetic.js", "adds")),
-                test.getSource());
+                .selectors(selectClasspathResource("stagewright/tests/arithmetic.js"))
+                .execute()
+                .testEvents()
+                .succeeded()
+                .list()
+                .get(0)
+                .getTestDescriptor();
+        assertEquals(
+                java.util.Optional.of(MethodSource.from("stagewright/tests/arithmetic.js", "adds")), test.getSource());
         TestDescriptor file = test.getParent().orElseThrow();
-        assertEquals(java.util.Optional.of(ClassSource.from("script/stagewright/tests/arithmetic.js")),
-                file.getSource());
-        assertEquals(java.util.Optional.of(ClassSource.from("script")), file.getParent().orElseThrow().getSource());
+        assertEquals(
+                java.util.Optional.of(ClassSource.from("script/stagewright/tests/arithmetic.js")), file.getSource());
+        assertEquals(
+                java.util.Optional.of(ClassSource.from("script")),
+                file.getParent().orElseThrow().getSource());
     }
 
     /** Gradle files a test's XML by the nearest class source above it: the scene and the class, not the class alone. */
     @Test
     void javaNodesNameTheirSceneAndClassAsTheClass() {
-        TestDescriptor test = run("PassFixture").testEvents().succeeded().list().get(0).getTestDescriptor();
+        TestDescriptor test =
+                run("PassFixture").testEvents().succeeded().list().get(0).getTestDescriptor();
         assertEquals(FIXTURES + "PassFixture", ((MethodSource) test.getSource().orElseThrow()).getClassName());
         TestDescriptor testClass = test.getParent().orElseThrow();
-        assertEquals(java.util.Optional.of(ClassSource.from("pass/" + FIXTURES + "PassFixture")),
-                testClass.getSource());
-        assertEquals(java.util.Optional.of(ClassSource.from("pass")), testClass.getParent().orElseThrow().getSource());
+        assertEquals(
+                java.util.Optional.of(ClassSource.from("pass/" + FIXTURES + "PassFixture")), testClass.getSource());
+        assertEquals(
+                java.util.Optional.of(ClassSource.from("pass")),
+                testClass.getParent().orElseThrow().getSource());
     }
 
     /**
      * What Gradle 8.14's JUnit Platform runner applies for {@code --tests} ({@code JUnitPlatformTestClassProcessor
      * .ClassMethodNameFilter}), for one fully qualified pattern: a node under a matching class is kept; a method source
-     * is matched as {@code class.method}; a class source without children as the class; any other source defers to
-     * the parent, and a node without a source is kept.
+     * is matched as {@code class.method}; a class source without children as the class; any other source defers to the
+     * parent, and a node without a source is kept.
      */
     private static final class GradleTestsFilter implements PostDiscoveryFilter {
         private final Pattern pattern;
@@ -578,12 +713,15 @@ class StageWrightTestEngineTest {
 
         private boolean matches(String className, String method) {
             return pattern.matcher(className).matches()
-                    || method != null && pattern.matcher(className + "." + method).matches();
+                    || method != null
+                            && pattern.matcher(className + "." + method).matches();
         }
 
         @Override
         public FilterResult apply(TestDescriptor descriptor) {
-            for (TestDescriptor d = descriptor; d.getParent().isPresent(); d = d.getParent().get()) {
+            for (TestDescriptor d = descriptor;
+                    d.getParent().isPresent();
+                    d = d.getParent().get()) {
                 if (d.getSource().orElse(null) instanceof ClassSource c && matches(c.getClassName(), null)) {
                     return FilterResult.included("class match");
                 }
@@ -595,15 +733,20 @@ class StageWrightTestEngineTest {
             TestSource source = d.getSource().orElse(null);
             if (source == null) return true;
             if (source instanceof MethodSource m) {
-                return matches(m.getClassName(), m.getMethodName()) || d.getParent()
-                        .flatMap(p -> p.getSource().filter(ClassSource.class::isInstance).map(ClassSource.class::cast))
-                        .filter(c -> matches(c.getClassName(), m.getMethodName())).isPresent();
+                return matches(m.getClassName(), m.getMethodName())
+                        || d.getParent()
+                                .flatMap(p -> p.getSource()
+                                        .filter(ClassSource.class::isInstance)
+                                        .map(ClassSource.class::cast))
+                                .filter(c -> matches(c.getClassName(), m.getMethodName()))
+                                .isPresent();
             }
             if (source instanceof ClassSource c) {
                 if (!checkingParent) {
                     for (TestDescriptor child : d.getChildren()) if (shouldRun(child, false)) return true;
                 }
-                return !d.getChildren().isEmpty() || matches(c.getClassName(), null)
+                return !d.getChildren().isEmpty()
+                        || matches(c.getClassName(), null)
                         || matches(c.getClassName(), d.getLegacyReportingName());
             }
             return d.getParent().isPresent() && shouldRun(d.getParent().get(), true);
@@ -613,8 +756,10 @@ class StageWrightTestEngineTest {
     @Test
     void aScriptWhoseTopLevelUsesTheGameFailsHere() {
         EngineExecutionResults r = EngineTestKit.engine("stagewright")
-                .selectors(selectClasspathResource("stagewright/tests/usesTheGame.js")).execute();
-        String message = failureOf(r.testEvents(), "stagewright/tests/usesTheGame.js").getMessage();
+                .selectors(selectClasspathResource("stagewright/tests/usesTheGame.js"))
+                .execute();
+        String message =
+                failureOf(r.testEvents(), "stagewright/tests/usesTheGame.js").getMessage();
         assertTrue(message.startsWith("stagewright/tests/usesTheGame.js:2: "), message);
         assertTrue(message.contains("cannot use the game"), message);
     }

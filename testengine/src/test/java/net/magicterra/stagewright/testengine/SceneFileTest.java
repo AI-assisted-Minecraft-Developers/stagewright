@@ -13,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -96,8 +95,19 @@ class SceneFileTest {
         assertFalse(w.mobSpawning());
         assertTrue(w.createsWorld());
 
-        assertEquals(Map.of("level-type", "minecraft:flat", "level-seed", "5471", "generate-structures", "false",
-                "gamemode", "survival", "difficulty", "easy"), w.serverProperties());
+        assertEquals(
+                Map.of(
+                        "level-type",
+                        "minecraft:flat",
+                        "level-seed",
+                        "5471",
+                        "generate-structures",
+                        "false",
+                        "gamemode",
+                        "survival",
+                        "difficulty",
+                        "easy"),
+                w.serverProperties());
 
         String json = w.runtimeJson();
         assertTrue(json.contains("\"keepInventory\":true"), json);
@@ -112,32 +122,40 @@ class SceneFileTest {
 
     @Test
     void thunderIsRainToo() throws IOException {
-        SceneFile.World w = load("topology: t\nworld:\n  weather: {thunder: true}\n").world();
+        SceneFile.World w =
+                load("topology: t\nworld:\n  weather: {thunder: true}\n").world();
         assertTrue(w.raining());
         assertTrue(w.thundering());
     }
 
     @Test
     void aTickOfTheDayIsTaken() throws IOException {
-        assertEquals(1234L, load("topology: t\nworld:\n  time: {at: 1234}\n").world().time());
+        assertEquals(
+                1234L, load("topology: t\nworld:\n  time: {at: 1234}\n").world().time());
     }
 
     @Test
     void namedTimesMapToTheirTicks() throws IOException {
-        assertEquals(1000L, load("topology: t\nworld:\n  time: {at: day}\n").world().time());
-        assertEquals(13000L, load("topology: t\nworld:\n  time: {at: night}\n").world().time());
+        assertEquals(
+                1000L, load("topology: t\nworld:\n  time: {at: day}\n").world().time());
+        assertEquals(
+                13000L,
+                load("topology: t\nworld:\n  time: {at: night}\n").world().time());
     }
 
     @Test
     void onlyRuntimeKeysDoNotCreateAWorld() throws IOException {
-        SceneFile.World w = load("topology: t\nworld:\n  gamerules: { doFireTick: false }\n").world();
+        SceneFile.World w = load("topology: t\nworld:\n  gamerules: { doFireTick: false }\n")
+                .world();
         assertFalse(w.createsWorld());
         assertTrue(w.serverProperties().isEmpty());
     }
 
     @Test
     void datapacksAloneCreateAWorld() throws IOException {
-        assertTrue(load("topology: t\nworld:\n  datapacks: { disable: [a] }\n").world().createsWorld());
+        assertTrue(load("topology: t\nworld:\n  datapacks: { disable: [a] }\n")
+                .world()
+                .createsWorld());
     }
 
     @Test
@@ -223,8 +241,10 @@ class SceneFileTest {
 
     @Test
     void modsExcludeNamesModsAndOnlyIsRefused() throws IOException {
-        assertEquals(List.of("farmersdelight", "jei-*.jar"),
-                load("topology: t\nmods: { exclude: [farmersdelight, jei-*.jar] }\n").excludedMods());
+        assertEquals(
+                List.of("farmersdelight", "jei-*.jar"),
+                load("topology: t\nmods: { exclude: [farmersdelight, jei-*.jar] }\n")
+                        .excludedMods());
         String message = refusal("topology: t\nmods: { only: [a] }\n");
         assertTrue(message.contains("only"), message);
     }

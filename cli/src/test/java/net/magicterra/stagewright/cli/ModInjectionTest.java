@@ -12,13 +12,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/**
- * Mods reach the loader without the pack's {@code mods/} changing — which may be a player's own.
- */
+/** Mods reach the loader without the pack's {@code mods/} changing — which may be a player's own. */
 class ModInjectionTest {
 
     @Test
@@ -34,10 +31,11 @@ class ModInjectionTest {
         assertEquals("--fml.mavenRoots", args.game().get(0));
         Path root = Path.of(args.game().get(1));
         assertEquals("--fml.mods", args.game().get(2));
-        assertEquals("stagewright.mods:mc_stagewright-neoforge:0,stagewright.mods:worlddriver_0.1_1.21.1:0",
+        assertEquals(
+                "stagewright.mods:mc_stagewright-neoforge:0,stagewright.mods:worlddriver_0.1_1.21.1:0",
                 args.game().get(3));
-        assertTrue(Files.isRegularFile(root.resolve(
-                "stagewright/mods/worlddriver_0.1_1.21.1/0/worlddriver_0.1_1.21.1-0.jar")));
+        assertTrue(Files.isRegularFile(
+                root.resolve("stagewright/mods/worlddriver_0.1_1.21.1/0/worlddriver_0.1_1.21.1-0.jar")));
         assertTrue(root.startsWith(gameDir.resolve("stagewright")), root.toString());
         try (Stream<Path> left = Files.list(mods)) {
             assertEquals(List.of(mods.resolve("jei.jar")), left.toList(), "mods/ is the pack's alone");
@@ -72,7 +70,8 @@ class ModInjectionTest {
 
         assertEquals("the pack's, same name", TestModJar.marker(mods.resolve("worlddriver-neoforge.jar")));
         assertTrue(Files.exists(mods.resolve(".stagewright-installed")));
-        assertTrue(log.stream().anyMatch(l -> l.startsWith("NOTE:") && l.contains("worlddriver-neoforge.jar")),
+        assertTrue(
+                log.stream().anyMatch(l -> l.startsWith("NOTE:") && l.contains("worlddriver-neoforge.jar")),
                 log.toString());
     }
 
@@ -81,14 +80,17 @@ class ModInjectionTest {
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));
         TestModJar.driver(mods.resolve("worlddriver.jar"), "last week's build");
-        Path mine = TestModJar.driver(Files.createDirectories(tmp.resolve("build")).resolve("worlddriver.jar"),
-                "today's build");
+        Path mine = TestModJar.driver(
+                Files.createDirectories(tmp.resolve("build")).resolve("worlddriver.jar"), "today's build");
 
         List<String> log = new java.util.ArrayList<>();
         ModInjection.prepare(gameDir, "fabric", List.of(mine), log::add);
 
-        assertTrue(log.stream().anyMatch(l -> l.startsWith("WARNING: using the pack's own")
-                && l.contains(mods.resolve("worlddriver.jar").toString())), log.toString());
+        assertTrue(
+                log.stream()
+                        .anyMatch(l -> l.startsWith("WARNING: using the pack's own")
+                                && l.contains(mods.resolve("worlddriver.jar").toString())),
+                log.toString());
     }
 
     @Test
@@ -118,9 +120,12 @@ class ModInjectionTest {
         TestModJar.driver(mods.resolve("driver.jar"), "driver");
 
         List<String> log = new java.util.ArrayList<>();
-        assertThrows(IllegalArgumentException.class, () -> ModInjection.prepare(gameDir, "neoforge", List.of(), log::add));
+        assertThrows(
+                IllegalArgumentException.class, () -> ModInjection.prepare(gameDir, "neoforge", List.of(), log::add));
 
-        assertTrue(log.stream().anyMatch(l -> l.startsWith("WARNING: " + stale + " is a StageWright build (0.1.0+1.21.1)")),
+        assertTrue(
+                log.stream()
+                        .anyMatch(l -> l.startsWith("WARNING: " + stale + " is a StageWright build (0.1.0+1.21.1)")),
                 log.toString());
     }
 
@@ -132,11 +137,14 @@ class ModInjectionTest {
         Path mine = TestModJar.driver(tmp.resolve("worlddriver-new.jar"), "today's build");
 
         List<String> log = new java.util.ArrayList<>();
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> ModInjection.prepare(gameDir, "fabric", List.of(mine), log::add));
+        IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class, () -> ModInjection.prepare(gameDir, "fabric", List.of(mine), log::add));
 
-        assertTrue(log.stream().anyMatch(l -> l.startsWith("WARNING: " + left + " is a WorldDriver build")
-                && l.contains("--mod " + mine)), log.toString());
+        assertTrue(
+                log.stream()
+                        .anyMatch(l -> l.startsWith("WARNING: " + left + " is a WorldDriver build")
+                                && l.contains("--mod " + mine)),
+                log.toString());
         assertTrue(e.getMessage().contains(left.toString()), e.getMessage());
     }
 
@@ -160,8 +168,8 @@ class ModInjectionTest {
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));
         TestModJar.driver(mods.resolve("worlddriver.jar"), "shipped");
-        Path mine = TestModJar.driver(Files.createDirectories(tmp.resolve("build")).resolve("worlddriver.jar"),
-                "mine");
+        Path mine =
+                TestModJar.driver(Files.createDirectories(tmp.resolve("build")).resolve("worlddriver.jar"), "mine");
 
         ModInjection.Arguments args = ModInjection.prepare(gameDir, "fabric", List.of(mine), l -> {});
 

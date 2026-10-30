@@ -18,23 +18,56 @@ public final class ShippedCapabilities {
 
     /** A player's inventory, hunger and effects. */
     public static final class Items implements CapabilityProvider {
-        @Override public String name() { return "items"; }
-        @Override public boolean availableIn(Game game) { return true; }
-        @Override public Object facet(Game game) { return new net.magicterra.stagewright.capability.Items(game); }
+        @Override
+        public String name() {
+            return "items";
+        }
+
+        @Override
+        public boolean availableIn(Game game) {
+            return true;
+        }
+
+        @Override
+        public Object facet(Game game) {
+            return new net.magicterra.stagewright.capability.Items(game);
+        }
     }
 
     /** Container menus, driven server-side. */
     public static final class Menus implements CapabilityProvider {
-        @Override public String name() { return "menus"; }
-        @Override public boolean availableIn(Game game) { return true; }
-        @Override public Object facet(Game game) { return new net.magicterra.stagewright.capability.Menus(game); }
+        @Override
+        public String name() {
+            return "menus";
+        }
+
+        @Override
+        public boolean availableIn(Game game) {
+            return true;
+        }
+
+        @Override
+        public Object facet(Game game) {
+            return new net.magicterra.stagewright.capability.Menus(game);
+        }
     }
 
     /** Equipment slots: vanilla armour always, Curios' slots when Curios is here. */
     public static final class Equipment implements CapabilityProvider {
-        @Override public String name() { return "equip"; }
-        @Override public boolean availableIn(Game game) { return true; }
-        @Override public Object facet(Game game) { return new Equip(game); }
+        @Override
+        public String name() {
+            return "equip";
+        }
+
+        @Override
+        public boolean availableIn(Game game) {
+            return true;
+        }
+
+        @Override
+        public Object facet(Game game) {
+            return new Equip(game);
+        }
     }
 
     /** Curios' accessory slots. The facet is the test's {@code equip}, so the two names share one restore. */
@@ -61,8 +94,10 @@ public final class ShippedCapabilities {
         }
     }
 
-    /** The FTB Quests book. Available means both that the mod is here AND that a quest file loaded — a server with
-     *  FTB Quests and no book answers every graph question with nothing. */
+    /**
+     * The FTB Quests book. Available means both that the mod is here AND that a quest file loaded — a server with FTB
+     * Quests and no book answers every graph question with nothing.
+     */
     public static final class FtbQuests implements CapabilityProvider {
 
         @Override

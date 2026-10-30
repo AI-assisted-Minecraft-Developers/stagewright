@@ -3,7 +3,6 @@ package net.magicterra.stagewright.cli;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
 /** What stops a client before it starts. The display rules themselves are the engine's DisplayTest. */

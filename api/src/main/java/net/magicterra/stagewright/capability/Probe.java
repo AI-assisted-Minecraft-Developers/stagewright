@@ -21,8 +21,8 @@ import org.opentest4j.TestAbortedException;
  * }
  * }</pre>
  *
- * <p>Calls run on the caller's thread; a test reaching into game state wraps them in {@link
- * net.magicterra.stagewright.test.Game#onServer}.
+ * <p>Calls run on the caller's thread; a test reaching into game state wraps them in
+ * {@link net.magicterra.stagewright.test.Game#onServer}.
  *
  * <h2>Why this is sound for mod classes and forbidden for Minecraft's</h2>
  *
@@ -37,8 +37,8 @@ import org.opentest4j.TestAbortedException;
  * never ends up holding a bare Minecraft object. Leaving the wrapper is explicit: {@link #asString()},
  * {@link #asInt()}, {@link #asDouble()}, {@link #asBoolean()}, {@link #isNull()}.
  *
- * <p>The same reflection appearing three times in a pack's tests is a {@link CapabilityProvider} waiting to be
- * written. This is a hatch, not an API.
+ * <p>The same reflection appearing three times in a pack's tests is a {@link CapabilityProvider} waiting to be written.
+ * This is a hatch, not an API.
  */
 public final class Probe {
 
@@ -78,8 +78,8 @@ public final class Probe {
     }
 
     private final Class<?> type;
-    private final Object instance;      // null for a static/unbound probe
-    private final Object value;         // for a probe wrapping a returned value
+    private final Object instance; // null for a static/unbound probe
+    private final Object value; // for a probe wrapping a returned value
     private final boolean wrapsValue;
 
     Probe(Class<?> type, Object instance) {
@@ -156,8 +156,10 @@ public final class Probe {
         return false;
     }
 
-    /** {@code String.valueOf} of the probed value, or {@code ""} for null. Deliberately not
-     *  {@code "null"}: a scene comparing strings should not have to distinguish those two. */
+    /**
+     * {@code String.valueOf} of the probed value, or {@code ""} for null. Deliberately not {@code "null"}: a scene
+     * comparing strings should not have to distinguish those two.
+     */
     public String asString() {
         Object v = wrapsValue ? value : instance;
         return v == null ? "" : String.valueOf(v);
@@ -180,8 +182,8 @@ public final class Probe {
     /**
      * The probed value as a list of probes, for a method returning a collection.
      *
-     * <p>Elements are wrapped like any other return value, so a list of a mod's objects stays walkable
-     * without any of them arriving bare.
+     * <p>Elements are wrapped like any other return value, so a list of a mod's objects stays walkable without any of
+     * them arriving bare.
      */
     public List<Probe> asList() {
         Object v = required("asList");
@@ -194,13 +196,15 @@ public final class Probe {
             for (Object element : array) out.add(new Probe(element));
             return out;
         }
-        throw new IllegalStateException("asList() on a " + v.getClass().getName() + ", which is neither an"
-                + " Iterable nor an array");
+        throw new IllegalStateException(
+                "asList() on a " + v.getClass().getName() + ", which is neither an" + " Iterable nor an array");
     }
 
-    /** The raw value, for handing straight back to another mod API. Deliberately last in this
-     *  class and deliberately not named {@code get}: a scene that calls a method on what this
-     *  returns has left the safety this class exists to provide. */
+    /**
+     * The raw value, for handing straight back to another mod API. Deliberately last in this class and deliberately not
+     * named {@code get}: a scene that calls a method on what this returns has left the safety this class exists to
+     * provide.
+     */
     public Object unwrapped() {
         return wrapsValue ? value : instance;
     }
@@ -236,8 +240,8 @@ public final class Probe {
             return new Probe(method.invoke(target, actual));
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause() == null ? e : e.getCause();
-            throw new IllegalStateException(type.getName() + "." + name + " threw "
-                    + cause.getClass().getName() + ": " + cause.getMessage());
+            throw new IllegalStateException(
+                    type.getName() + "." + name + " threw " + cause.getClass().getName() + ": " + cause.getMessage());
         } catch (IllegalAccessException e) {
             throw new IllegalStateException("cannot call " + type.getName() + "." + name + ": " + e);
         }
@@ -246,10 +250,9 @@ public final class Probe {
     /**
      * Find a method by name and argument count, listing the alternatives when there is no match.
      *
-     * <p>By count rather than by exact parameter types: a scene author reflecting into a mod does not
-     * know whether a parameter is declared as {@code List} or {@code Collection}, and making them
-     * find out is what turns this hatch into a decompiler session. Ambiguity between two same-arity
-     * overloads is reported rather than guessed.
+     * <p>By count rather than by exact parameter types: a scene author reflecting into a mod does not know whether a
+     * parameter is declared as {@code List} or {@code Collection}, and making them find out is what turns this hatch
+     * into a decompiler session. Ambiguity between two same-arity overloads is reported rather than guessed.
      */
     private Method find(String name, Object[] args, boolean wantStatic) {
         List<Method> matches = new ArrayList<>();
@@ -271,9 +274,10 @@ public final class Probe {
                 + args.length + " argument(s) on " + type.getName() + candidates(name));
     }
 
-    /** Near misses, so the fix is in the message rather than in a decompiler. Same rule as
-     *  {@link Ids}: a lookup that fails without naming the alternatives is a lookup the author has
-     *  to go elsewhere to answer. */
+    /**
+     * Near misses, so the fix is in the message rather than in a decompiler. Same rule as {@link Ids}: a lookup that
+     * fails without naming the alternatives is a lookup the author has to go elsewhere to answer.
+     */
     private String candidates(String name) {
         TreeSet<String> sameName = new TreeSet<>();
         TreeSet<String> allNames = new TreeSet<>();
@@ -329,8 +333,10 @@ public final class Probe {
                 + (names.isEmpty() ? "" : " — it declares " + String.join(", ", names)));
     }
 
-    /** Arguments arriving as probes are passed on as what they wrap, so a chain reads naturally
-     *  instead of making the author call unwrapped() at every hop. */
+    /**
+     * Arguments arriving as probes are passed on as what they wrap, so a chain reads naturally instead of making the
+     * author call unwrapped() at every hop.
+     */
     private static Object[] unwrapAll(Object[] args) {
         Object[] out = new Object[args.length];
         for (int i = 0; i < args.length; i++) out[i] = unwrap(args[i]);

@@ -1,11 +1,11 @@
 package net.magicterra.stagewright.harness;
 
+import static org.junit.jupiter.api.Assertions.*;
+
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class AgentBridgeTest {
 
@@ -41,13 +41,15 @@ class AgentBridgeTest {
         }
     }
 
-    @Test void aTestEventReachesTheAgent() {
+    @Test
+    void aTestEventReachesTheAgent() {
         AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), FakeControl.class.getName());
         bridge.test("{}");
         assertEquals(List.of("test:{}"), FakeControl.CALLS);
     }
 
-    @Test void anOlderAgentStillWorksAndJustLosesTheTestEvents() {
+    @Test
+    void anOlderAgentStillWorksAndJustLosesTheTestEvents() {
         AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), OlderControl.class.getName());
         assertTrue(bridge.attached());
         assertDoesNotThrow(() -> bridge.test("{}"));
@@ -55,11 +57,13 @@ class AgentBridgeTest {
         assertEquals(List.of("older-done"), FakeControl.CALLS);
     }
 
-    @BeforeEach void clear() {
+    @BeforeEach
+    void clear() {
         FakeControl.CALLS.clear();
     }
 
-    @Test void callsReachTheAgentByName() {
+    @Test
+    void callsReachTheAgentByName() {
         AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), FakeControl.class.getName());
         assertTrue(bridge.attached());
         bridge.phase("harness-ready");
@@ -68,7 +72,8 @@ class AgentBridgeTest {
         assertEquals(List.of("phase:harness-ready", "ticks:42", "done"), FakeControl.CALLS);
     }
 
-    @Test void aJvmWithoutAnAgentIsInertAndNeverThrows() {
+    @Test
+    void aJvmWithoutAnAgentIsInertAndNeverThrows() {
         AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), "no.such.Control");
         assertFalse(bridge.attached());
         assertDoesNotThrow(() -> {
@@ -79,12 +84,14 @@ class AgentBridgeTest {
         assertEquals(List.of(), FakeControl.CALLS);
     }
 
-    @Test void aClassWithTheWrongShapeIsTreatedAsNoAgent() {
+    @Test
+    void aClassWithTheWrongShapeIsTreatedAsNoAgent() {
         AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), String.class.getName());
         assertFalse(bridge.attached());
     }
 
-    @Test void thisTestJvmHasNoAgent() {
+    @Test
+    void thisTestJvmHasNoAgent() {
         assertFalse(AgentBridge.system().attached());
     }
 }

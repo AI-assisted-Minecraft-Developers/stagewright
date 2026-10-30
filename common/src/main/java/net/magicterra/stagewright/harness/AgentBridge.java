@@ -5,11 +5,10 @@ import java.lang.reflect.Method;
 /**
  * What the game tells the supervision agent, when the JVM was started with one.
  *
- * <p>The agent's jar is on the system class path and this mod is loaded by the loader's own class
- * loader, so nothing here may link against an agent class: the agent's {@code Control} class is
- * looked up by name in the system loader and called by reflection, with JDK types in every
- * signature. When the JVM has no agent — a game started by hand — the lookup fails once and every
- * call does nothing. See {@code docs/reference/supervision-protocol.md}.
+ * <p>The agent's jar is on the system class path and this mod is loaded by the loader's own class loader, so nothing
+ * here may link against an agent class: the agent's {@code Control} class is looked up by name in the system loader and
+ * called by reflection, with JDK types in every signature. When the JVM has no agent — a game started by hand — the
+ * lookup fails once and every call does nothing. See {@code docs/reference/supervision-protocol.md}.
  */
 public final class AgentBridge {
 
@@ -38,8 +37,10 @@ public final class AgentBridge {
     static AgentBridge bind(ClassLoader loader, String className) {
         try {
             Class<?> control = Class.forName(className, true, loader);
-            return new AgentBridge(control.getMethod("phase", String.class),
-                    control.getMethod("ticks", long.class), control.getMethod("done"),
+            return new AgentBridge(
+                    control.getMethod("phase", String.class),
+                    control.getMethod("ticks", long.class),
+                    control.getMethod("done"),
                     optional(control, "test", String.class));
         } catch (ReflectiveOperationException | LinkageError e) {
             return new AgentBridge(null, null, null, null);

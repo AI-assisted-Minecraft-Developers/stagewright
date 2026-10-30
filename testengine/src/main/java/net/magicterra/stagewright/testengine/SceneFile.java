@@ -9,52 +9,94 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 /**
- * A scene's declaration, {@code stagewright/scenes/<name>.yaml} on the test class path: the topology it runs in and
- * the world it runs on. The format is in {@code docs/reference/scene-file.md}. A key this version does not apply is
- * refused rather than run without.
+ * A scene's declaration, {@code stagewright/scenes/<name>.yaml} on the test class path: the topology it runs in and the
+ * world it runs on. The format is in {@code docs/reference/scene-file.md}. A key this version does not apply is refused
+ * rather than run without.
  *
- * @param from  {@code world.from}: a save to start from instead of a new world, a class path resource under
- *              {@code stagewright/}; null for a new world
+ * @param from {@code world.from}: a save to start from instead of a new world, a class path resource under
+ *     {@code stagewright/}; null for a new world
  * @param files {@code files}: text written into the game's directory before it starts, by path relative to it
  * @param excludedMods {@code mods.exclude}: mods the game starts without, each a mod id or a jar file name pattern
  */
-record SceneFile(String name, String topology, World world, String from, Map<String, String> files,
-                 List<String> excludedMods) {
+record SceneFile(
+        String name, String topology, World world, String from, Map<String, String> files, List<String> excludedMods) {
 
     static final String DIRECTORY = "stagewright/scenes/";
     /** What {@code world.from} is relative to on the test class path. */
     static final String ROOT = "stagewright/";
+
     private static final Set<String> TOP = Set.of("topology", "world", "files", "mods");
-    private static final Set<String> WORLD = Set.of("preset", "seed", "structures", "gamemode", "difficulty",
-            "gamerules", "datapacks", "time", "weather", "tickRate", "mobSpawning", "from");
+    private static final Set<String> WORLD = Set.of(
+            "preset",
+            "seed",
+            "structures",
+            "gamemode",
+            "difficulty",
+            "gamerules",
+            "datapacks",
+            "time",
+            "weather",
+            "tickRate",
+            "mobSpawning",
+            "from");
     private static final Set<String> GAMEMODES = Set.of("survival", "creative", "adventure", "spectator");
     private static final Set<String> DIFFICULTIES = Set.of("peaceful", "easy", "normal", "hard");
-    private static final Map<String, Long> NAMED_TIMES = Map.of("day", 1000L, "noon", 6000L, "night", 13000L,
-            "midnight", 18000L);
+    private static final Map<String, Long> NAMED_TIMES =
+            Map.of("day", 1000L, "noon", 6000L, "night", 13000L, "midnight", 18000L);
 
     /**
      * The world a scene runs on. The creation settings are null when not declared, and the game's own default then
      * holds; the rest always has a value, the quiet world unless declared: midnight with the clock stopped, clear and
      * staying clear, nothing spawning.
      */
-    record World(String preset, String seed, Boolean structures, String gamemode, String difficulty,
-                 List<String> enablePacks, List<String> disablePacks, Map<String, Object> gamerules,
-                 long time, boolean timeFrozen, boolean raining, boolean thundering, boolean weatherFrozen,
-                 Float tickRate, boolean mobSpawning) {
+    record World(
+            String preset,
+            String seed,
+            Boolean structures,
+            String gamemode,
+            String difficulty,
+            List<String> enablePacks,
+            List<String> disablePacks,
+            Map<String, Object> gamerules,
+            long time,
+            boolean timeFrozen,
+            boolean raining,
+            boolean thundering,
+            boolean weatherFrozen,
+            Float tickRate,
+            boolean mobSpawning) {
 
-        static final World QUIET = new World(null, null, null, null, null, List.of(), List.of(), Map.of(),
-                NAMED_TIMES.get("midnight"), true, false, false, true, null, false);
+        static final World QUIET = new World(
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(),
+                List.of(),
+                Map.of(),
+                NAMED_TIMES.get("midnight"),
+                true,
+                false,
+                false,
+                true,
+                null,
+                false);
 
         /** Whether anything here takes effect only when the world is created. */
         boolean createsWorld() {
-            return preset != null || seed != null || structures != null || gamemode != null || difficulty != null
-                    || !enablePacks.isEmpty() || !disablePacks.isEmpty();
+            return preset != null
+                    || seed != null
+                    || structures != null
+                    || gamemode != null
+                    || difficulty != null
+                    || !enablePacks.isEmpty()
+                    || !disablePacks.isEmpty();
         }
 
         /** {@code server.properties} entries for what applies at creation. */
@@ -75,15 +117,31 @@ record SceneFile(String name, String topology, World world, String from, Map<Str
             for (Map.Entry<String, Object> rule : gamerules.entrySet()) {
                 if (!first) out.append(',');
                 first = false;
-                out.append(quote(rule.getKey())).append(':').append(rule.getValue() instanceof Boolean b ? b.toString()
-                        : String.valueOf(((Number) rule.getValue()).longValue()));
+                out.append(quote(rule.getKey()))
+                        .append(':')
+                        .append(
+                                rule.getValue() instanceof Boolean b
+                                        ? b.toString()
+                                        : String.valueOf(((Number) rule.getValue()).longValue()));
             }
-            out.append("},\"time\":").append(time).append(",\"timeFrozen\":").append(timeFrozen)
-                    .append(",\"raining\":").append(raining).append(",\"thundering\":").append(thundering)
-                    .append(",\"weatherFrozen\":").append(weatherFrozen).append(",\"mobSpawning\":").append(mobSpawning);
+            out.append("},\"time\":")
+                    .append(time)
+                    .append(",\"timeFrozen\":")
+                    .append(timeFrozen)
+                    .append(",\"raining\":")
+                    .append(raining)
+                    .append(",\"thundering\":")
+                    .append(thundering)
+                    .append(",\"weatherFrozen\":")
+                    .append(weatherFrozen)
+                    .append(",\"mobSpawning\":")
+                    .append(mobSpawning);
             if (tickRate != null) out.append(",\"tickRate\":").append(tickRate);
-            out.append(",\"enablePacks\":").append(strings(enablePacks)).append(",\"disablePacks\":")
-                    .append(strings(disablePacks)).append('}');
+            out.append(",\"enablePacks\":")
+                    .append(strings(enablePacks))
+                    .append(",\"disablePacks\":")
+                    .append(strings(disablePacks))
+                    .append('}');
             return out.toString();
         }
 
@@ -108,8 +166,8 @@ record SceneFile(String name, String topology, World world, String from, Map<Str
         Object root;
         try (InputStream in = loader.getResourceAsStream(path)) {
             if (in == null) {
-                throw new IllegalStateException("scene '" + name + "' has no declaration: expected " + path
-                        + " on the test class path");
+                throw new IllegalStateException(
+                        "scene '" + name + "' has no declaration: expected " + path + " on the test class path");
             }
             root = new Yaml(new SafeConstructor(new LoaderOptions())).load(in);
         } catch (IOException e) {
@@ -127,7 +185,12 @@ record SceneFile(String name, String topology, World world, String from, Map<Str
             throw new IllegalStateException("scene '" + name + "': " + path + " starts from a save (world.from) and"
                     + " also says how to create its world, which only applies to a new one");
         }
-        return new SceneFile(name, topology, w, from, files(name, path + " files", map.get("files")),
+        return new SceneFile(
+                name,
+                topology,
+                w,
+                from,
+                files(name, path + " files", map.get("files")),
                 excludedMods(name, path + " mods", map.get("mods")));
     }
 
@@ -172,8 +235,8 @@ record SceneFile(String name, String topology, World world, String from, Map<Str
     private static void relative(String name, String at, String path) {
         Path p = Path.of(path).normalize();
         if (p.isAbsolute() || path.startsWith("/") || p.startsWith("..")) {
-            throw new IllegalStateException("scene '" + name + "': " + at + " is " + path
-                    + "; it is a relative path that stays inside");
+            throw new IllegalStateException(
+                    "scene '" + name + "': " + at + " is " + path + "; it is a relative path that stays inside");
         }
     }
 
@@ -189,8 +252,8 @@ record SceneFile(String name, String topology, World world, String from, Map<Str
         if (w.get("gamerules") != null) {
             mapping(name, at + ".gamerules", w.get("gamerules")).forEach((k, v) -> {
                 if (!(v instanceof Boolean) && !(v instanceof Integer) && !(v instanceof Long)) {
-                    throw new IllegalStateException("scene '" + name + "': " + at + ".gamerules." + k
-                            + " is " + v + "; a game rule is true, false or a whole number");
+                    throw new IllegalStateException("scene '" + name + "': " + at + ".gamerules." + k + " is " + v
+                            + "; a game rule is true, false or a whole number");
                 }
                 gamerules.put(String.valueOf(k), v);
             });
@@ -246,14 +309,27 @@ record SceneFile(String name, String topology, World world, String from, Map<Str
         if (preset != null && !(preset instanceof String)) {
             throw new IllegalStateException("scene '" + name + "': " + at + ".preset is a world preset id");
         }
-        return new World((String) preset, seed == null ? null : String.valueOf(seed), (Boolean) structures, gamemode,
-                difficulty, enable, disable, gamerules, time, timeFrozen, raining, thundering, weatherFrozen, tickRate,
+        return new World(
+                (String) preset,
+                seed == null ? null : String.valueOf(seed),
+                (Boolean) structures,
+                gamemode,
+                difficulty,
+                enable,
+                disable,
+                gamerules,
+                time,
+                timeFrozen,
+                raining,
+                thundering,
+                weatherFrozen,
+                tickRate,
                 bool(name, at + ".mobSpawning", w.get("mobSpawning"), q.mobSpawning()));
     }
 
     private static Map<?, ?> mapping(String name, String at, Object raw) {
-        if (!(raw instanceof Map<?, ?> map)) throw new IllegalStateException("scene '" + name + "': " + at
-                + " is not a mapping");
+        if (!(raw instanceof Map<?, ?> map))
+            throw new IllegalStateException("scene '" + name + "': " + at + " is not a mapping");
         return map;
     }
 
@@ -270,8 +346,8 @@ record SceneFile(String name, String topology, World world, String from, Map<Str
         Object value = map.get(key);
         if (value == null) return null;
         if (!allowed.contains(String.valueOf(value))) {
-            throw new IllegalStateException("scene '" + name + "': " + at + "." + key + " is " + value + "; it is one of "
-                    + new TreeSet<>(allowed));
+            throw new IllegalStateException("scene '" + name + "': " + at + "." + key + " is " + value
+                    + "; it is one of " + new TreeSet<>(allowed));
         }
         return String.valueOf(value);
     }
@@ -284,8 +360,8 @@ record SceneFile(String name, String topology, World world, String from, Map<Str
 
     private static List<String> strings(String name, String at, Object value) {
         if (value == null) return List.of();
-        if (!(value instanceof List<?> list)) throw new IllegalStateException("scene '" + name + "': " + at
-                + " is a list");
+        if (!(value instanceof List<?> list))
+            throw new IllegalStateException("scene '" + name + "': " + at + " is a list");
         List<String> out = new ArrayList<>();
         list.forEach(v -> out.add(String.valueOf(v)));
         return List.copyOf(out);

@@ -20,10 +20,10 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 
 /**
  * Injects the {@link Game}, leased {@link Plot}s and {@link Bot}s, the client's {@link Player} and the {@link Client}
- * itself, and binds each test method's {@link TestScope} so its
- * overrides are checked against its locks and undone when it ends. A bot the test keeps goes to {@link Handovers}
- * when the test's context closes, for the dependent that takes it. Registered for every test through Jupiter's
- * extension auto-detection (META-INF/services), which the in-game launcher turns on.
+ * itself, and binds each test method's {@link TestScope} so its overrides are checked against its locks and undone when
+ * it ends. A bot the test keeps goes to {@link Handovers} when the test's context closes, for the dependent that takes
+ * it. Registered for every test through Jupiter's extension auto-detection (META-INF/services), which the in-game
+ * launcher turns on.
  */
 public final class GameExtension implements ParameterResolver, BeforeEachCallback, AfterEachCallback {
 
@@ -41,7 +41,10 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
     @Override
     public boolean supportsParameter(ParameterContext parameter, ExtensionContext context) {
         Class<?> type = parameter.getParameter().getType();
-        return type == Game.class || type == Plot.class || type == Bot.class || type == Player.class
+        return type == Game.class
+                || type == Plot.class
+                || type == Bot.class
+                || type == Player.class
                 || type == Client.class;
     }
 
@@ -53,8 +56,8 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
         if (type == Player.class) return BodyImpl.player(g);
         if (type == Client.class) return ClientConnection.client(g);
         if (context.getTestMethod().isEmpty()) {
-            throw new ParameterResolutionException("a " + type.getSimpleName() + " is leased to one test: take it as a"
-                    + " test method parameter");
+            throw new ParameterResolutionException(
+                    "a " + type.getSimpleName() + " is leased to one test: take it as a" + " test method parameter");
         }
         if (type == Bot.class) {
             BodyImpl.BotImpl bot = bot(parameter, context, g);
@@ -63,12 +66,15 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
             context.getStore(NAMESPACE).put("bot." + parameter.getIndex(), bot);
             return bot;
         }
-        Vec3i size = parameter.findAnnotation(Plot.Size.class)
-                .map(s -> new Vec3i(s.x() > 0 ? s.x() : s.value(), s.y() > 0 ? s.y() : s.value(),
-                        s.z() > 0 ? s.z() : s.value()))
+        Vec3i size = parameter
+                .findAnnotation(Plot.Size.class)
+                .map(s -> new Vec3i(
+                        s.x() > 0 ? s.x() : s.value(), s.y() > 0 ? s.y() : s.value(), s.z() > 0 ? s.z() : s.value()))
                 .orElse(new Vec3i(PlotImpl.DEFAULT_SIZE, PlotImpl.DEFAULT_SIZE, PlotImpl.DEFAULT_SIZE));
-        ResourceKey<Level> dimension = parameter.findAnnotation(Plot.In.class)
-                .map(in -> ScriptHandles.dimension(in.value())).orElse(Level.OVERWORLD);
+        ResourceKey<Level> dimension = parameter
+                .findAnnotation(Plot.In.class)
+                .map(in -> ScriptHandles.dimension(in.value()))
+                .orElse(Level.OVERWORLD);
         PlotImpl plot;
         try {
             plot = PlotImpl.lease(g, size, parameter.isAnnotated(Plot.Centered.class), dimension);
@@ -83,15 +89,17 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
 
     /** A joined bot, or with {@code @Bot.Kept} the one a test this one depends on kept under the same name. */
     private static BodyImpl.BotImpl bot(ParameterContext parameter, ExtensionContext context, Game g) {
-        String name = parameter.findAnnotation(Bot.Name.class).map(Bot.Name::value).orElse(null);
+        String name =
+                parameter.findAnnotation(Bot.Name.class).map(Bot.Name::value).orElse(null);
         boolean parked = parameter.isAnnotated(Bot.Parked.class);
         boolean keep = parameter.isAnnotated(Bot.Keep.class);
         boolean kept = parameter.isAnnotated(Bot.Kept.class);
         if ((keep || kept) && name == null) {
-            throw new ParameterResolutionException("a bot kept for a later test, or taken from one, is named: give it"
-                    + " @Bot.Name");
+            throw new ParameterResolutionException(
+                    "a bot kept for a later test, or taken from one, is named: give it" + " @Bot.Name");
         }
-        String test = context.getRequiredTestClass().getSimpleName() + "#" + context.getRequiredTestMethod().getName();
+        String test = context.getRequiredTestClass().getSimpleName() + "#"
+                + context.getRequiredTestMethod().getName();
         BodyImpl.BotImpl bot;
         if (kept) {
             if (!context.getRequiredTestMethod().isAnnotationPresent(DependsOn.class)) {
@@ -111,8 +119,8 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
 
     @SuppressWarnings("unchecked")
     private static List<BodyImpl.BotImpl> bots(ExtensionContext context) {
-        return context.getStore(NAMESPACE).getOrComputeIfAbsent("bots", k -> new ArrayList<BodyImpl.BotImpl>(),
-                List.class);
+        return context.getStore(NAMESPACE)
+                .getOrComputeIfAbsent("bots", k -> new ArrayList<BodyImpl.BotImpl>(), List.class);
     }
 
     @SuppressWarnings("unchecked")
@@ -125,7 +133,9 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
     public void beforeEach(ExtensionContext context) throws InterruptedException {
         Dependencies.awaitUpstream(context);
         TestScope scope = TestScope.of(context);
-        scope.hold(!context.getConfigurationParameter(PARALLEL).map(Boolean::parseBoolean).orElse(false));
+        scope.hold(!context.getConfigurationParameter(PARALLEL)
+                .map(Boolean::parseBoolean)
+                .orElse(false));
         TestScope.bind(scope);
     }
 
@@ -142,7 +152,9 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
         }
         AssertionError checks = scope == null ? null : scope.takeChecks();
         // Decided here, before the store closes the bots: the outcome is only recorded after that.
-        IllegalStateException misplaced = Handovers.endOfTest(bots(context), plots(context),
+        IllegalStateException misplaced = Handovers.endOfTest(
+                bots(context),
+                plots(context),
                 checks != null || context.getExecutionException().isPresent());
         if (checks != null) {
             if (misplaced != null) checks.addSuppressed(misplaced);

@@ -20,14 +20,13 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Reports on this JVM to the process that started it, from its first instant to its last, and ends
- * it once the run is over. See {@code docs/design/supervision.md} for why this lives inside the game
- * instead of watching it from outside, and {@code docs/reference/supervision-protocol.md} for what
- * it says.
+ * Reports on this JVM to the process that started it, from its first instant to its last, and ends it once the run is
+ * over. See {@code docs/design/supervision.md} for why this lives inside the game instead of watching it from outside,
+ * and {@code docs/reference/supervision-protocol.md} for what it says.
  *
- * <p>Loaded with {@code -javaagent:<jar>=<host>:<port>:<token>[,grace=<seconds>]}. Anything wrong
- * with that argument is reported to standard error and leaves the JVM exactly as it would have been
- * without the agent: this must never be the reason a game does not start.
+ * <p>Loaded with {@code -javaagent:<jar>=<host>:<port>:<token>[,grace=<seconds>]}. Anything wrong with that argument is
+ * reported to standard error and leaves the JVM exactly as it would have been without the agent: this must never be the
+ * reason a game does not start.
  */
 public final class Agent {
 
@@ -120,10 +119,12 @@ public final class Agent {
 
     private void run() {
         if (!connect()) return;
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> send(Lines.event("exiting")),
-                "stagewright-agent-exit"));
-        send(Lines.event("hello").text("token", config.token()).number("pid", ProcessHandle.current().pid())
-                .text("agent", AGENT_VERSION).text("java", System.getProperty("java.version", "")));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> send(Lines.event("exiting")), "stagewright-agent-exit"));
+        send(Lines.event("hello")
+                .text("token", config.token())
+                .number("pid", ProcessHandle.current().pid())
+                .text("agent", AGENT_VERSION)
+                .text("java", System.getProperty("java.version", "")));
         while (true) {
             send(heartbeat());
             // A crashed game frequently does not exit, so this is how its supervisor stops waiting on it.
@@ -167,8 +168,8 @@ public final class Agent {
                 }
             }
         }
-        System.err.println("[stagewright-agent] cannot reach the supervisor at " + config.host() + ":"
-                + config.port() + "; running unsupervised");
+        System.err.println("[stagewright-agent] cannot reach the supervisor at " + config.host() + ":" + config.port()
+                + "; running unsupervised");
         return false;
     }
 
@@ -179,8 +180,10 @@ public final class Agent {
         } catch (Throwable ignored) {
             // No java.management in this layer: the heartbeat is still a heartbeat.
         }
-        Lines line = Lines.event("heartbeat").number("atMs", System.currentTimeMillis())
-                .text("phase", phase).number("ticks", ticks);
+        Lines line = Lines.event("heartbeat")
+                .number("atMs", System.currentTimeMillis())
+                .text("phase", phase)
+                .number("ticks", ticks);
         if (classes >= 0) line.number("classes", classes);
 
         // Where the threads that matter are, once nothing the supervisor can see has moved for a while:
@@ -199,7 +202,8 @@ public final class Agent {
     /** The game's own threads by name; the JDK's and the libraries' helpers would only bury them. */
     private List<Lines> sampleStacks() {
         List<Lines> sampled = new ArrayList<>();
-        for (Map.Entry<Thread, StackTraceElement[]> entry : Thread.getAllStackTraces().entrySet()) {
+        for (Map.Entry<Thread, StackTraceElement[]> entry :
+                Thread.getAllStackTraces().entrySet()) {
             String name = entry.getKey().getName();
             if (!name.equals("main") && !name.equals("Render thread") && !name.equals("Server thread")) continue;
             List<String> frames = new ArrayList<>();
@@ -224,12 +228,11 @@ public final class Agent {
     }
 
     /**
-     * The grace period is over and the JVM is still here: say what is holding it, then end it. The
-     * results are already complete — that is what {@code done} means — so nothing is lost.
+     * The grace period is over and the JVM is still here: say what is holding it, then end it. The results are already
+     * complete — that is what {@code done} means — so nothing is lost.
      */
     private void endJvm() {
-        send(Lines.event("leaked").number("graceMs", config.graceMillis())
-                .objects("threads", describeLiveThreads()));
+        send(Lines.event("leaked").number("graceMs", config.graceMillis()).objects("threads", describeLiveThreads()));
         // halt, not exit: shutdown hooks run on a JVM that did not stop when asked, and a mod's hook
         // may be the thing that is waiting.
         Runtime.getRuntime().halt(0);
@@ -271,16 +274,19 @@ public final class Agent {
                 String location = jars.get(typeOf(frame));
                 if (location != null) startedIn.add(location);
             }
-            described.add(new Lines().text("name", thread.getName()).texts("stack", frames)
-                    .texts("jars", new ArrayList<>(where)).texts("origin", started)
+            described.add(new Lines()
+                    .text("name", thread.getName())
+                    .texts("stack", frames)
+                    .texts("jars", new ArrayList<>(where))
+                    .texts("origin", started)
                     .texts("originJars", new ArrayList<>(startedIn)));
         }
         return described;
     }
 
     /**
-     * A thread of the recorder behind {@link ThreadOrigins}; the first is not a daemon. Here and not
-     * there, because asking must not link a class that needs {@code jdk.jfr}.
+     * A thread of the recorder behind {@link ThreadOrigins}; the first is not a daemon. Here and not there, because
+     * asking must not link a class that needs {@code jdk.jfr}.
      */
     static boolean isRecorderThread(String name) {
         return name.startsWith("JFR ");
@@ -345,8 +351,8 @@ public final class Agent {
             try {
                 return Long.parseLong(option.substring(prefix.length()));
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException(prefix.substring(0, prefix.length() - 1)
-                        + " is not a number of seconds: '" + option + "'");
+                throw new IllegalArgumentException(
+                        prefix.substring(0, prefix.length() - 1) + " is not a number of seconds: '" + option + "'");
             }
         }
     }

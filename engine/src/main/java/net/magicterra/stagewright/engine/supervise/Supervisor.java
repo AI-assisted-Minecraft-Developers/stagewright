@@ -17,21 +17,19 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-
 import net.magicterra.stagewright.engine.Json;
 
 /**
- * Listens for the agent in a game process and answers, from what it says, the questions a launcher
- * used to answer by reading files from outside: is the run over, is the game still alive, and why
- * has it not exited. See {@code docs/design/supervision.md}; the wire format is in
- * {@code docs/reference/supervision-protocol.md}.
+ * Listens for the agent in a game process and answers, from what it says, the questions a launcher used to answer by
+ * reading files from outside: is the run over, is the game still alive, and why has it not exited. See
+ * {@code docs/design/supervision.md}; the wire format is in {@code docs/reference/supervision-protocol.md}.
  *
- * <p>One supervisor serves one game process. It binds {@code 127.0.0.1} on a port of its own choosing
- * before the game starts and tells the game the address and a one-time token, so a game left over
- * from an earlier run cannot report into this one.
+ * <p>One supervisor serves one game process. It binds {@code 127.0.0.1} on a port of its own choosing before the game
+ * starts and tells the game the address and a one-time token, so a game left over from an earlier run cannot report
+ * into this one.
  *
- * <p>Nothing here decides whether a test passed — only whether the game is done, and what to say
- * when it stopped before it was.
+ * <p>Nothing here decides whether a test passed — only whether the game is done, and what to say when it stopped before
+ * it was.
  */
 public final class Supervisor implements AutoCloseable {
 
@@ -46,9 +44,9 @@ public final class Supervisor implements AutoCloseable {
         /** The process is alive and never connected: it did not get as far as the agent. */
         NEVER_CONNECTED,
         /**
-         * Alive and heartbeating, and nothing it reports has changed for longer than the limit: not its
-         * phase, not the server ticks delivered, not the count of classes loaded. Loading a pack moves
-         * the last, running a suite moves the second, so a game that moves none is stuck.
+         * Alive and heartbeating, and nothing it reports has changed for longer than the limit: not its phase, not the
+         * server ticks delivered, not the count of classes loaded. Loading a pack moves the last, running a suite moves
+         * the second, so a game that moves none is stuck.
          */
         STALLED,
         /** The agent reported a crash report written since it started, or the caller's probe said so. */
@@ -58,13 +56,12 @@ public final class Supervisor implements AutoCloseable {
     }
 
     /**
-     * A thread that kept the JVM up after the run was over, the jars its stack runs through, and who
-     * started it. The stack of a parked pool worker is all JDK; {@code origin} is the code that started
-     * the thread (outside the JDK, innermost first) and {@code originJars} where that code came from.
-     * Both are empty when the JVM could not say.
+     * A thread that kept the JVM up after the run was over, the jars its stack runs through, and who started it. The
+     * stack of a parked pool worker is all JDK; {@code origin} is the code that started the thread (outside the JDK,
+     * innermost first) and {@code originJars} where that code came from. Both are empty when the JVM could not say.
      */
-    public record Leak(String thread, List<String> stack, List<String> jars, List<String> origin,
-                       List<String> originJars) {
+    public record Leak(
+            String thread, List<String> stack, List<String> jars, List<String> origin, List<String> originJars) {
         public Leak(String thread, List<String> stack, List<String> jars) {
             this(thread, stack, jars, List.of(), List.of());
         }
@@ -131,16 +128,19 @@ public final class Supervisor implements AutoCloseable {
     }
 
     /**
-     * The JVM argument that attaches the agent to a game and points it back here. It goes where a
-     * {@code -D} goes: before the loader's argument file, where the JVM rather than the launcher
-     * reads it.
+     * The JVM argument that attaches the agent to a game and points it back here. It goes where a {@code -D} goes:
+     * before the loader's argument file, where the JVM rather than the launcher reads it.
      */
     public String agentArgument(Path agentJar, int graceSeconds) {
-        return "-javaagent:" + agentJar.toAbsolutePath() + "=" + InetAddress.getLoopbackAddress().getHostAddress()
-                + ":" + port() + ":" + token + ",grace=" + graceSeconds;
+        return "-javaagent:" + agentJar.toAbsolutePath() + "="
+                + InetAddress.getLoopbackAddress().getHostAddress() + ":" + port() + ":" + token + ",grace="
+                + graceSeconds;
     }
 
-    /** As above, and the agent starts attaching thread stacks to its heartbeats after {@code idleSeconds} without movement. */
+    /**
+     * As above, and the agent starts attaching thread stacks to its heartbeats after {@code idleSeconds} without
+     * movement.
+     */
     public String agentArgument(Path agentJar, int graceSeconds, int idleSeconds) {
         return agentArgument(agentJar, graceSeconds) + ",idle=" + idleSeconds;
     }
@@ -148,17 +148,17 @@ public final class Supervisor implements AutoCloseable {
     /**
      * Wait until the run is over, or cannot become over.
      *
-     * <p>Whether the game said it was done is checked before whether it is alive: a game that says so
-     * and exits in the same second is done, not dead.
+     * <p>Whether the game said it was done is checked before whether it is alive: a game that says so and exits in the
+     * same second is done, not dead.
      */
     public Ended await(ProcessHandle game, Limits limits) throws InterruptedException {
         return await(game, limits, () -> null);
     }
 
     /**
-     * As {@link #await(ProcessHandle, Limits)}, asking {@code probe} at every poll for an ending the
-     * supervisor cannot see itself. It is asked after {@code DONE} and before the rest, so a crash
-     * report written while the run was still going outranks a process that has since gone.
+     * As {@link #await(ProcessHandle, Limits)}, asking {@code probe} at every poll for an ending the supervisor cannot
+     * see itself. It is asked after {@code DONE} and before the rest, so a crash report written while the run was still
+     * going outranks a process that has since gone.
      */
     public Ended await(ProcessHandle game, Limits limits, Supplier<Ended> probe) throws InterruptedException {
         game.onExit().thenRun(this::wake);
@@ -182,8 +182,9 @@ public final class Supervisor implements AutoCloseable {
      * <p>A companion's ending is answered only once the game has not ended either within the drain that follows: a
      * server that crashes or halts drops its client, and then the server's ending is the cause and the answer.
      */
-    public Ending await(ProcessHandle game, Limits limits, Supervisor joined, ProcessHandle companion,
-                        Limits companionLimits) throws InterruptedException {
+    public Ending await(
+            ProcessHandle game, Limits limits, Supervisor joined, ProcessHandle companion, Limits companionLimits)
+            throws InterruptedException {
         game.onExit().thenRun(this::wake);
         companion.onExit().thenRun(this::wake);
         while (true) {
@@ -208,9 +209,9 @@ public final class Supervisor implements AutoCloseable {
     }
 
     /**
-     * What {@link #await} would answer right now, or null when the run is still going. For a caller
-     * watching more than one game from one loop, such as a server and the client joined to it.
-     * Measured from when this supervisor was opened, which is when the game was started.
+     * What {@link #await} would answer right now, or null when the run is still going. For a caller watching more than
+     * one game from one loop, such as a server and the client joined to it. Measured from when this supervisor was
+     * opened, which is when the game was started.
      */
     public Ended peek(ProcessHandle game, Limits limits) {
         synchronized (lock) {
@@ -250,8 +251,8 @@ public final class Supervisor implements AutoCloseable {
     }
 
     /**
-     * After {@link Ended#DONE}: wait for the process to end by itself or by the agent. False when it
-     * is still there at the end of {@code wait}, and the caller should {@link #kill} it.
+     * After {@link Ended#DONE}: wait for the process to end by itself or by the agent. False when it is still there at
+     * the end of {@code wait}, and the caller should {@link #kill} it.
      */
     public boolean awaitExit(ProcessHandle game, Duration wait) throws InterruptedException {
         try {
@@ -292,8 +293,8 @@ public final class Supervisor implements AutoCloseable {
     }
 
     /**
-     * Where the game's own threads were at the latest heartbeat, which the agent only attaches once
-     * nothing has moved for a while. Empty while the game is moving.
+     * Where the game's own threads were at the latest heartbeat, which the agent only attaches once nothing has moved
+     * for a while. Empty while the game is moving.
      */
     public List<ThreadStack> stacks() {
         synchronized (lock) {
@@ -330,9 +331,9 @@ public final class Supervisor implements AutoCloseable {
     /**
      * Stop a game and everything it started.
      *
-     * <p>The descendants are collected before the parent dies, because once it does the tree is no
-     * longer walkable from here — and a child left behind holds the port, so the next run on that box
-     * fails to bind and reads as a bug in the pack rather than as yesterday's run never having ended.
+     * <p>The descendants are collected before the parent dies, because once it does the tree is no longer walkable from
+     * here — and a child left behind holds the port, so the next run on that box fails to bind and reads as a bug in
+     * the pack rather than as yesterday's run never having ended.
      */
     public static void kill(ProcessHandle game) throws InterruptedException {
         if (!game.isAlive()) return;
@@ -381,11 +382,11 @@ public final class Supervisor implements AutoCloseable {
         }
     }
 
-    private volatile Consumer<Map<String, Object>> testListener = event -> { };
+    private volatile Consumer<Map<String, Object>> testListener = event -> {};
 
     /**
-     * Receive each {@code test} event's {@code data}, in the order the game sent them, on the thread that reads
-     * the game's connection. Set it before the game starts; an event that arrives earlier is not kept.
+     * Receive each {@code test} event's {@code data}, in the order the game sent them, on the thread that reads the
+     * game's connection. Set it before the game starts; an event that arrives earlier is not kept.
      */
     public void onTest(Consumer<Map<String, Object>> listener) {
         testListener = listener;
@@ -394,8 +395,9 @@ public final class Supervisor implements AutoCloseable {
     @SuppressWarnings("unchecked")
     private void read(Socket socket) {
         boolean mine = false;
-        try (socket; BufferedReader in = new BufferedReader(
-                new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
+        try (socket;
+                BufferedReader in =
+                        new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = in.readLine()) != null) {
                 Map<String, Object> event = parse(line);
@@ -494,8 +496,11 @@ public final class Supervisor implements AutoCloseable {
                     if (event.get("threads") instanceof List<?> threads) {
                         for (Object thread : threads) {
                             if (!(thread instanceof Map<?, ?> t)) continue;
-                            leaks.add(new Leak(String.valueOf(t.get("name")), strings(t.get("stack")),
-                                    strings(t.get("jars")), strings(t.get("origin")),
+                            leaks.add(new Leak(
+                                    String.valueOf(t.get("name")),
+                                    strings(t.get("stack")),
+                                    strings(t.get("jars")),
+                                    strings(t.get("origin")),
                                     strings(t.get("originJars"))));
                         }
                     }

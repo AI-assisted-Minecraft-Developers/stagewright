@@ -6,10 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.TreeMap;
-
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.junit.jupiter.api.Test;
@@ -62,8 +61,8 @@ class PlotLayoutTest {
         assertEquals(192, PlotLayout.floorY(200, -64, 320, 128));
         assertEquals(-64, PlotLayout.floorY(200, -64, 320, 384));
         assertEquals(128, PlotLayout.floorY(200, 0, 256, 128));
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> PlotLayout.floorY(200, 0, 256, 300));
+        IllegalArgumentException e =
+                assertThrows(IllegalArgumentException.class, () -> PlotLayout.floorY(200, 0, 256, 300));
         assertTrue(e.getMessage().contains("from y 0 to 255"), e.getMessage());
     }
 

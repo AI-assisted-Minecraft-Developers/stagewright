@@ -1,29 +1,27 @@
 package net.magicterra.stagewright.jupiter;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.function.BooleanSupplier;
-
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BooleanSupplier;
 import net.magicterra.stagewright.test.Game;
-import net.minecraft.core.BlockPos;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
-import net.magicterra.worlddriver.api.thread.ServerThreadGuard;
 import net.magicterra.worlddriver.api.registry.Scripting;
+import net.magicterra.worlddriver.api.thread.ServerThreadGuard;
+import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.extension.ExtensionContext.Store.CloseableResource;
 import org.junit.platform.engine.TestDescriptor;
 
 /**
- * The {@code t} a script test's body receives: the Java test context's verbs, as plain functions over plain values,
- * and the same verbs in Java for a YAML test's steps. Waits count server ticks and block the test thread.
+ * The {@code t} a script test's body receives: the Java test context's verbs, as plain functions over plain values, and
+ * the same verbs in Java for a YAML test's steps. Waits count server ticks and block the test thread.
  */
 final class ScriptContext {
 
@@ -39,6 +37,7 @@ final class ScriptContext {
     private final List<CloseableResource> leases = new ArrayList<>();
     /** Positions the test's steps named with {@code as}. */
     private final Map<String, BlockPos> handles = new LinkedHashMap<>();
+
     private Map<String, Object> script;
     /** What turned the refusals of {@code t.call} and the handles into script errors; null until the script asks. */
     private CatchableErrors errors;
@@ -94,8 +93,8 @@ final class ScriptContext {
             });
         }
         // An abort skips the test from any of t's functions, catch or not.
-        script.replaceAll((name, value) -> value instanceof Scripting.Function f ? CatchableErrors.carryingAborts(f)
-                : value);
+        script.replaceAll(
+                (name, value) -> value instanceof Scripting.Function f ? CatchableErrors.carryingAborts(f) : value);
         // What t.call and the handles refuse, a script can catch; a failed t.expect or wait it still cannot.
         Scripting scripting = GameImpl.scripting(game);
         if (scripting != null) {
@@ -127,8 +126,14 @@ final class ScriptContext {
         AssertionError checks = scope == null ? null : scope.takeChecks();
         // A kept bot goes to a later test only when this one passed and it stands outside the test's plots.
         IllegalStateException misplaced = Handovers.endOfTest(
-                leases.stream().filter(BodyImpl.BotImpl.class::isInstance).map(BodyImpl.BotImpl.class::cast).toList(),
-                leases.stream().filter(PlotImpl.class::isInstance).map(PlotImpl.class::cast).toList(),
+                leases.stream()
+                        .filter(BodyImpl.BotImpl.class::isInstance)
+                        .map(BodyImpl.BotImpl.class::cast)
+                        .toList(),
+                leases.stream()
+                        .filter(PlotImpl.class::isInstance)
+                        .map(PlotImpl.class::cast)
+                        .toList(),
                 failure != null || checks != null);
         if (misplaced != null) {
             if (failure == null) failure = misplaced;
@@ -210,7 +215,8 @@ final class ScriptContext {
     static Object route(ApiRegistry registry, String usage, Object[] args) {
         String method = string(args, 0, usage + "(method, params)");
         JsonElement params = args.length > 1 && args[1] != null ? tree(args[1]) : new JsonObject();
-        if (!params.isJsonObject()) throw new IllegalArgumentException(usage + "(" + method + "): params must be an object");
+        if (!params.isJsonObject())
+            throw new IllegalArgumentException(usage + "(" + method + "): params must be an object");
         // A Game's registry already waits as long as a test may for a busy server: see GameImpl.registry.
         return GSON.fromJson(registry.route(method, params.getAsJsonObject()), Object.class);
     }
@@ -252,8 +258,8 @@ final class ScriptContext {
     BlockPos named(String name) {
         BlockPos pos = handles.get(name);
         if (pos == null) {
-            throw new IllegalArgumentException("no handle '" + name + "': a place step names one with as; named so far: "
-                    + handles.keySet());
+            throw new IllegalArgumentException(
+                    "no handle '" + name + "': a place step names one with as; named so far: " + handles.keySet());
         }
         return pos;
     }
@@ -305,8 +311,8 @@ final class ScriptContext {
 
     /**
      * Check {@code condition} now and once a tick after, until it has held {@code run} checks in a row; fail after
-     * {@code within} ticks. Checked on the test thread rather than the server's, as {@link Game#await} does: a
-     * script's condition usually calls WorldDriver, and a call that waits for the server must not be made on it.
+     * {@code within} ticks. Checked on the test thread rather than the server's, as {@link Game#await} does: a script's
+     * condition usually calls WorldDriver, and a call that waits for the server must not be made on it.
      */
     void poll(BooleanSupplier condition, int within, int run, String as) {
         int streak = 0;
@@ -345,13 +351,34 @@ final class ScriptContext {
     private Object expect(Object... args) {
         Object actual = args.length > 0 ? args[0] : null;
         Map<String, Object> ops = new LinkedHashMap<>();
-        ops.put("equals", (Scripting.Function) a -> { Expectations.equals(actual, arg(a)); return null; });
-        ops.put("contains", (Scripting.Function) a -> { Expectations.contains(actual, arg(a)); return null; });
-        ops.put("isEmpty", (Scripting.Function) a -> { Expectations.isEmpty(actual); return null; });
-        ops.put("gt", (Scripting.Function) a -> { Expectations.gt(actual, arg(a)); return null; });
-        ops.put("lt", (Scripting.Function) a -> { Expectations.lt(actual, arg(a)); return null; });
-        ops.put("atLeast", (Scripting.Function) a -> { Expectations.atLeast(actual, arg(a)); return null; });
-        ops.put("atMost", (Scripting.Function) a -> { Expectations.atMost(actual, arg(a)); return null; });
+        ops.put("equals", (Scripting.Function) a -> {
+            Expectations.equals(actual, arg(a));
+            return null;
+        });
+        ops.put("contains", (Scripting.Function) a -> {
+            Expectations.contains(actual, arg(a));
+            return null;
+        });
+        ops.put("isEmpty", (Scripting.Function) a -> {
+            Expectations.isEmpty(actual);
+            return null;
+        });
+        ops.put("gt", (Scripting.Function) a -> {
+            Expectations.gt(actual, arg(a));
+            return null;
+        });
+        ops.put("lt", (Scripting.Function) a -> {
+            Expectations.lt(actual, arg(a));
+            return null;
+        });
+        ops.put("atLeast", (Scripting.Function) a -> {
+            Expectations.atLeast(actual, arg(a));
+            return null;
+        });
+        ops.put("atMost", (Scripting.Function) a -> {
+            Expectations.atMost(actual, arg(a));
+            return null;
+        });
         return ops;
     }
 
@@ -386,8 +413,11 @@ final class ScriptContext {
         String name = string(args, 0, "t.record(name, value)");
         if (name.isBlank()) throw new IllegalArgumentException("t.record(name, value): the name must not be blank");
         Object value = args.length > 1 ? args[1] : null;
-        Records.publish(test.getUniqueId().toString(), Records.label(test.getSource().orElse(null),
-                test.getDisplayName()), name, value instanceof String s ? s : GSON.toJson(value));
+        Records.publish(
+                test.getUniqueId().toString(),
+                Records.label(test.getSource().orElse(null), test.getDisplayName()),
+                name,
+                value instanceof String s ? s : GSON.toJson(value));
         return null;
     }
 
@@ -395,8 +425,9 @@ final class ScriptContext {
     private static JsonElement tree(Object v) {
         return switch (v) {
             case null -> JsonNull.INSTANCE;
-            case Number n when n.doubleValue() == Math.rint(n.doubleValue()) && Math.abs(n.doubleValue()) < 0x1p53 ->
-                    new JsonPrimitive(n.longValue());
+            case Number n
+            when n.doubleValue() == Math.rint(n.doubleValue()) && Math.abs(n.doubleValue()) < 0x1p53 ->
+                new JsonPrimitive(n.longValue());
             case Number n -> new JsonPrimitive(n);
             case Boolean b -> new JsonPrimitive(b);
             case String s -> new JsonPrimitive(s);
@@ -410,8 +441,9 @@ final class ScriptContext {
                 map.forEach((k, value) -> out.add(String.valueOf(k), tree(value)));
                 yield out;
             }
-            default -> throw new IllegalArgumentException("t.call: a " + v.getClass().getSimpleName()
-                    + " cannot be sent as a parameter");
+            default ->
+                throw new IllegalArgumentException(
+                        "t.call: a " + v.getClass().getSimpleName() + " cannot be sent as a parameter");
         };
     }
 

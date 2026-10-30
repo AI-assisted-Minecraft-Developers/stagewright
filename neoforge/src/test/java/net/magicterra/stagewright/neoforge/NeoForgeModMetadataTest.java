@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.electronwill.nightconfig.core.Config;
+import com.electronwill.nightconfig.toml.TomlParser;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Files;
@@ -13,17 +15,13 @@ import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import com.electronwill.nightconfig.core.Config;
-import com.electronwill.nightconfig.toml.TomlParser;
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.Test;
 
 /**
- * The neoforge.mods.toml processResources writes into the jar, against gradle.properties. Every
- * value both state must come from the property: a literal drifts from the Fabric jar the next time
- * the property changes.
+ * The neoforge.mods.toml processResources writes into the jar, against gradle.properties. Every value both state must
+ * come from the property: a literal drifts from the Fabric jar the next time the property changes.
  */
 class NeoForgeModMetadataTest {
 
@@ -63,7 +61,10 @@ class NeoForgeModMetadataTest {
     private static Config dependency(String modId) {
         List<Config> deps = META.get(List.of("dependencies", prop("mod_id")));
         assertNotNull(deps, "no [[dependencies." + prop("mod_id") + "]]");
-        return deps.stream().filter(d -> modId.equals(d.get("modId"))).findFirst().orElse(null);
+        return deps.stream()
+                .filter(d -> modId.equals(d.get("modId")))
+                .findFirst()
+                .orElse(null);
     }
 
     @Test
@@ -100,10 +101,10 @@ class NeoForgeModMetadataTest {
         String laterCompatible = major + "." + minor + "." + (Integer.parseInt(v.group(3)) + 1);
         String earlierLine = major == 0 ? "0." + (minor - 1) + ".9" : (major - 1) + ".9.9";
         // Maven orders alpha.N below the snapshot and the release, as Gradle and SemVer do.
-        List<String> accepted = new java.util.ArrayList<>(List.of(built, base, base + "-snapshot+1.21.1",
-                laterCompatible + "+1.21.1"));
-        List<String> refused = new java.util.ArrayList<>(List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1",
-                nextBreaking + "-alpha.1+1.21.1"));
+        List<String> accepted =
+                new java.util.ArrayList<>(List.of(built, base, base + "-snapshot+1.21.1", laterCompatible + "+1.21.1"));
+        List<String> refused = new java.util.ArrayList<>(
+                List.of(earlierLine, nextBreaking, nextBreaking + "+1.21.1", nextBreaking + "-alpha.1+1.21.1"));
         // A numbered pin is the floor: the next build is in, the one before it is out.
         Matcher n = Pattern.compile("-alpha\\.(\\d+)(?:\\+|$)").matcher(built);
         if (n.find()) {

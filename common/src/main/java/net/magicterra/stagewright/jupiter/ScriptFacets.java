@@ -10,7 +10,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-
 import net.magicterra.stagewright.test.Body;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.worlddriver.api.registry.Scripting;
@@ -19,10 +18,10 @@ import net.minecraft.core.BlockPos;
 /**
  * A capability facet as a script test sees it: an object of its public methods by name, since a script handles only
  * plain values. Overloads are told apart by argument count, then by which converts. Arguments arrive as plain values
- * and are converted to what the method takes — a number to its numeric type, {@code {x, y, z}} to a {@link BlockPos},
- * a {@code t.player()} or {@code t.bot()} handle to its {@link Body}. A result comes back plain: a list or map as one,
- * a position as {@code {x, y, z}}, the facet itself (a chained call) as this same object, any other object wrapped
- * the same way.
+ * and are converted to what the method takes — a number to its numeric type, {@code {x, y, z}} to a {@link BlockPos}, a
+ * {@code t.player()} or {@code t.bot()} handle to its {@link Body}. A result comes back plain: a list or map as one, a
+ * position as {@code {x, y, z}}, the facet itself (a chained call) as this same object, any other object wrapped the
+ * same way.
  */
 final class ScriptFacets {
 
@@ -32,14 +31,16 @@ final class ScriptFacets {
 
     static Map<String, Object> wrap(Game game, Object target) {
         if (target.getClass().getName().startsWith("net.minecraft.")) {
-            throw new IllegalArgumentException("a facet handed a script a " + target.getClass().getName()
-                    + ": Minecraft's method names differ between runtimes, so a facet must answer plain values");
+            throw new IllegalArgumentException(
+                    "a facet handed a script a " + target.getClass().getName()
+                            + ": Minecraft's method names differ between runtimes, so a facet must answer plain values");
         }
         Map<String, List<Method>> byName = new TreeMap<>();
         for (Method m : target.getClass().getMethods()) {
             if (m.getDeclaringClass() == Object.class || Modifier.isStatic(m.getModifiers())) continue;
             Method callable = callable(m);
-            if (callable != null) byName.computeIfAbsent(m.getName(), k -> new ArrayList<>()).add(callable);
+            if (callable != null)
+                byName.computeIfAbsent(m.getName(), k -> new ArrayList<>()).add(callable);
         }
         Map<String, Object> out = new LinkedHashMap<>();
         byName.forEach((name, methods) -> out.put(name, (Scripting.Function) args -> {
@@ -51,8 +52,8 @@ final class ScriptFacets {
             }
             List<String> shapes = new ArrayList<>();
             for (Method m : methods) shapes.add(signature(m));
-            throw new IllegalArgumentException(name + " takes " + String.join(" or ", shapes) + ", not "
-                    + args.length + " argument(s) like " + Expectations.show(List.of(args)));
+            throw new IllegalArgumentException(name + " takes " + String.join(" or ", shapes) + ", not " + args.length
+                    + " argument(s) like " + Expectations.show(List.of(args)));
         }));
         return out;
     }
@@ -126,7 +127,9 @@ final class ScriptFacets {
             if (type == Body.class && map.get("name") instanceof String name && map.get("ref") instanceof String) {
                 return new BodyImpl(game, name);
             }
-            if (type == BlockPos.class && map.get("x") instanceof Number x && map.get("y") instanceof Number y
+            if (type == BlockPos.class
+                    && map.get("x") instanceof Number x
+                    && map.get("y") instanceof Number y
                     && map.get("z") instanceof Number z) {
                 return new BlockPos(x.intValue(), y.intValue(), z.intValue());
             }
@@ -135,7 +138,10 @@ final class ScriptFacets {
     }
 
     private static Object plain(Game game, Object v) {
-        if (v == null || v instanceof Boolean || v instanceof String || v instanceof Number
+        if (v == null
+                || v instanceof Boolean
+                || v instanceof String
+                || v instanceof Number
                 || v instanceof Scripting.Function) {
             return v;
         }

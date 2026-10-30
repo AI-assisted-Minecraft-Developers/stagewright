@@ -16,7 +16,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
-
 import net.magicterra.stagewright.capability.Mods;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.KnownIssue;
@@ -41,8 +40,8 @@ import org.junit.platform.launcher.core.LauncherFactory;
 
 /**
  * {@link Requires} and {@link KnownIssue} end to end, through an inner launcher configured as {@link JupiterRun}
- * configures the in-game one (extension auto-detection on). The samples are disabled in the outer run and enabled
- * only while the inner launcher runs.
+ * configures the in-game one (extension auto-detection on). The samples are disabled in the outer run and enabled only
+ * while the inner launcher runs.
  */
 class RequiresAndKnownIssueTest {
 
@@ -216,16 +215,21 @@ class RequiresAndKnownIssueTest {
             if (!id.isTest()) return;
             String name = name(id);
             if (name != null) {
-                finished.put(name, new Finished(result.getStatus(),
-                        result.getThrowable().map(Throwable::getMessage).orElse(null),
-                        result.getThrowable().map(Throwable::getCause).orElse(null)));
+                finished.put(
+                        name,
+                        new Finished(
+                                result.getStatus(),
+                                result.getThrowable().map(Throwable::getMessage).orElse(null),
+                                result.getThrowable().map(Throwable::getCause).orElse(null)));
             }
         }
     }
 
     /** A game whose server is dedicated or not, whatever it is asked. */
     private static Game gameOn(boolean dedicated) {
-        return (Game) Proxy.newProxyInstance(Game.class.getClassLoader(), new Class<?>[] {Game.class},
+        return (Game) Proxy.newProxyInstance(
+                Game.class.getClassLoader(),
+                new Class<?>[] {Game.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "onServer" -> dedicated;
                     case "runOnServer" -> {
@@ -310,9 +314,13 @@ class RequiresAndKnownIssueTest {
     @Test
     void onADedicatedGameDedicatedRunsAndIntegratedIsSkippedNamingIt() {
         Recorder r = run(true, Capabilities.class);
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("Capabilities#dedicated").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("Capabilities#dedicated").status());
         assertTrue(didRun("Capabilities#dedicated"));
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("Capabilities#unannotated").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("Capabilities#unannotated").status());
         assertSkippedRequiring(r, "Capabilities#integrated", "INTEGRATED_SERVER");
         assertFalse(didRun("Capabilities#integrated"));
     }
@@ -325,15 +333,21 @@ class RequiresAndKnownIssueTest {
 
         System.setProperty(AWAIT, "true");
         Recorder with = run(true, Capabilities.class);
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, with.finished.get("Capabilities#client").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                with.finished.get("Capabilities#client").status());
         assertTrue(didRun("Capabilities#client"));
     }
 
     @Test
     void onAnIntegratedGameClientRunsAndDedicatedIsSkipped() {
         Recorder r = run(false, Capabilities.class);
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("Capabilities#client").status());
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("Capabilities#integrated").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("Capabilities#client").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("Capabilities#integrated").status());
         assertSkippedRequiring(r, "Capabilities#dedicated", "DEDICATED_SERVER");
     }
 
@@ -355,7 +369,9 @@ class RequiresAndKnownIssueTest {
     void modsAreRequiredByIdAgainstTheInstalledList() {
         Mods.install(Map.of("present", "1"));
         Recorder r = run(true, ModsSample.class);
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("ModsSample#present").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("ModsSample#present").status());
         assertSkippedRequiring(r, "ModsSample#absent", "mod absent");
         assertFalse(didRun("ModsSample#absent"));
     }

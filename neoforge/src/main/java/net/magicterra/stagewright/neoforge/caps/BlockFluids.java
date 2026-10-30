@@ -17,8 +17,8 @@ import net.neoforged.neoforge.fluids.FluidStack;
 import net.neoforged.neoforge.fluids.capability.IFluidHandler;
 
 /**
- * The tanks in a block, through the fluid-handler capability. Every tank, pipe, boiler and reactor in every tech mod
- * is built on it, which makes it the second of the two seams (with {@link BlockItems}) a modded process runs through.
+ * The tanks in a block, through the fluid-handler capability. Every tank, pipe, boiler and reactor in every tech mod is
+ * built on it, which makes it the second of the two seams (with {@link BlockItems}) a modded process runs through.
  *
  * <pre>{@code
  * Fluids tanks = game.capability("fluids", Fluids.class);
@@ -48,8 +48,11 @@ public final class BlockFluids implements Fluids {
 
     @Override
     public String fluid(BlockPos pos, int tank) {
-        return at(pos, handlers -> BuiltInRegistries.FLUID.getKey(
-                require(pos, handlers).getFluidInTank(tank).getFluid()).toString());
+        return at(
+                pos,
+                handlers -> BuiltInRegistries.FLUID
+                        .getKey(require(pos, handlers).getFluidInTank(tank).getFluid())
+                        .toString());
     }
 
     @Override
@@ -109,7 +112,8 @@ public final class BlockFluids implements Fluids {
             require(pos, handlers);
             FluidStack stack = new FluidStack(fluid(fluidId), amount);
             for (IFluidHandler handler : handlers) {
-                int gave = handler.drain(stack, IFluidHandler.FluidAction.EXECUTE).getAmount();
+                int gave =
+                        handler.drain(stack, IFluidHandler.FluidAction.EXECUTE).getAmount();
                 if (gave > 0) return gave;
             }
             return 0;

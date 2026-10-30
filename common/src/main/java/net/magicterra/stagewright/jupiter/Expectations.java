@@ -11,8 +11,8 @@ import java.util.stream.Collectors;
 /**
  * The assertion operators script tests share, over plain values (null, booleans, numbers, strings, lists, string-keyed
  * maps). Numbers compare as numbers whatever their Java type, so a script's {@code 7} equals a method's {@code 7L}.
- * Each operator throws an {@link AssertionError} saying what it saw; a collection is shown by its first
- * {@value #SHOWN} items.
+ * Each operator throws an {@link AssertionError} saying what it saw; a collection is shown by its first {@value #SHOWN}
+ * items.
  */
 final class Expectations {
 
@@ -29,12 +29,13 @@ final class Expectations {
         boolean holds = switch (actual) {
             case List<?> list -> list.stream().anyMatch(item -> same(item, expected));
             case String s when expected instanceof String part -> s.contains(part);
-            case Map<?, ?> map when expected instanceof Map<?, ?> part ->
-                    part.entrySet().stream().allMatch(e -> map.containsKey(e.getKey())
-                            && same(map.get(e.getKey()), e.getValue()));
+            case Map<?, ?> map
+            when expected instanceof Map<?, ?> part ->
+                part.entrySet().stream()
+                        .allMatch(e -> map.containsKey(e.getKey()) && same(map.get(e.getKey()), e.getValue()));
             case Map<?, ?> map -> map.containsKey(String.valueOf(expected));
-            case null, default -> throw new AssertionError("contains needs a list, string or map, but was "
-                    + show(actual));
+            case null, default ->
+                throw new AssertionError("contains needs a list, string or map, but was " + show(actual));
         };
         if (!holds) fail("expected " + show(actual) + " to contain " + show(expected));
     }
@@ -51,27 +52,32 @@ final class Expectations {
     }
 
     static void gt(Object actual, Object bound) {
-        if (!(number(actual, "gt") > number(bound, "gt"))) fail("expected more than " + show(bound) + " but was " + show(actual));
+        if (!(number(actual, "gt") > number(bound, "gt")))
+            fail("expected more than " + show(bound) + " but was " + show(actual));
     }
 
     static void lt(Object actual, Object bound) {
-        if (!(number(actual, "lt") < number(bound, "lt"))) fail("expected less than " + show(bound) + " but was " + show(actual));
+        if (!(number(actual, "lt") < number(bound, "lt")))
+            fail("expected less than " + show(bound) + " but was " + show(actual));
     }
 
     static void atLeast(Object actual, Object bound) {
-        if (!(number(actual, "atLeast") >= number(bound, "atLeast"))) fail("expected at least " + show(bound) + " but was " + show(actual));
+        if (!(number(actual, "atLeast") >= number(bound, "atLeast")))
+            fail("expected at least " + show(bound) + " but was " + show(actual));
     }
 
     static void atMost(Object actual, Object bound) {
-        if (!(number(actual, "atMost") <= number(bound, "atMost"))) fail("expected at most " + show(bound) + " but was " + show(actual));
+        if (!(number(actual, "atMost") <= number(bound, "atMost")))
+            fail("expected at most " + show(bound) + " but was " + show(actual));
     }
 
-    static final Set<String> OPERATORS = Set.of("equals", "contains", "empty", "gt", "lt", "atLeast", "atMost", "anyOf", "allOf");
+    static final Set<String> OPERATORS =
+            Set.of("equals", "contains", "empty", "gt", "lt", "atLeast", "atMost", "anyOf", "allOf");
 
     /**
-     * A YAML test's {@code expect}: an operator's name alone ({@code empty}), or a map whose keys are operators, applied
-     * to {@code actual}, or field paths ({@code result.count}), each holding an expectation of that field. A failure
-     * names the field it was about.
+     * A YAML test's {@code expect}: an operator's name alone ({@code empty}), or a map whose keys are operators,
+     * applied to {@code actual}, or field paths ({@code result.count}), each holding an expectation of that field. A
+     * failure names the field it was about.
      */
     static void expect(Object actual, Object spec) {
         expect(actual, spec, "");
@@ -83,8 +89,8 @@ final class Expectations {
             return;
         }
         if (!(spec instanceof Map<?, ?> map) || map.isEmpty()) {
-            throw new IllegalArgumentException(at(where) + "an expectation is an operator's name or a map of them, not "
-                    + show(spec));
+            throw new IllegalArgumentException(
+                    at(where) + "an expectation is an operator's name or a map of them, not " + show(spec));
         }
         for (Map.Entry<?, ?> e : map.entrySet()) {
             String key = String.valueOf(e.getKey());
@@ -100,8 +106,10 @@ final class Expectations {
                 case "contains" -> contains(actual, arg);
                 case "empty" -> {
                     if (Boolean.FALSE.equals(arg)) {
-                        if (actual == null || (actual instanceof Collection<?> c && c.isEmpty())
-                                || (actual instanceof Map<?, ?> m && m.isEmpty()) || "".equals(actual)) {
+                        if (actual == null
+                                || (actual instanceof Collection<?> c && c.isEmpty())
+                                || (actual instanceof Map<?, ?> m && m.isEmpty())
+                                || "".equals(actual)) {
                             fail("expected something but was " + show(actual));
                         }
                     } else {
@@ -198,12 +206,19 @@ final class Expectations {
         return switch (v) {
             case null -> "null";
             case String s -> '"' + s + '"';
-            case Number n when n.doubleValue() == Math.rint(n.doubleValue()) && !Double.isInfinite(n.doubleValue()) ->
-                    String.valueOf(n.longValue());
-            case List<?> list -> list.stream().limit(SHOWN).map(Expectations::show)
-                    .collect(Collectors.joining(", ", "[", list.size() > SHOWN ? ", …]" : "]"));
-            case Map<?, ?> map -> map.entrySet().stream().limit(SHOWN).map(e -> e.getKey() + ": " + show(e.getValue()))
-                    .collect(Collectors.joining(", ", "{", map.size() > SHOWN ? ", …}" : "}"));
+            case Number n
+            when n.doubleValue() == Math.rint(n.doubleValue()) && !Double.isInfinite(n.doubleValue()) ->
+                String.valueOf(n.longValue());
+            case List<?> list ->
+                list.stream()
+                        .limit(SHOWN)
+                        .map(Expectations::show)
+                        .collect(Collectors.joining(", ", "[", list.size() > SHOWN ? ", …]" : "]"));
+            case Map<?, ?> map ->
+                map.entrySet().stream()
+                        .limit(SHOWN)
+                        .map(e -> e.getKey() + ": " + show(e.getValue()))
+                        .collect(Collectors.joining(", ", "{", map.size() > SHOWN ? ", …}" : "}"));
             default -> String.valueOf(v);
         };
     }

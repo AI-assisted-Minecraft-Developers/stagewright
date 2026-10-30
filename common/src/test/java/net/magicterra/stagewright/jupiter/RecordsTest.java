@@ -2,12 +2,10 @@ package net.magicterra.stagewright.jupiter;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.platform.engine.support.descriptor.ClasspathResourceSource;
 import org.junit.platform.engine.support.descriptor.MethodSource;
@@ -40,9 +38,11 @@ class RecordsTest {
 
     @Test
     void theLogNamesAScriptTestByFileAndAJavaTestByClassAndMethod() {
-        assertEquals("stagewright/tests/crops.js#cropDrying",
+        assertEquals(
+                "stagewright/tests/crops.js#cropDrying",
                 Records.label(ClasspathResourceSource.from("stagewright/tests/crops.js"), "cropDrying"));
-        assertEquals("com.example.FurnaceTest#smelts",
+        assertEquals(
+                "com.example.FurnaceTest#smelts",
                 Records.label(MethodSource.from("com.example.FurnaceTest", "smelts", ""), "smelts()"));
         assertEquals("a\\nb", Records.oneLine("a\nb"));
     }

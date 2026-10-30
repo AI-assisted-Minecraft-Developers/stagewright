@@ -5,9 +5,9 @@ import net.magicterra.stagewright.test.Game;
 /**
  * SPI seam for wiring in a capability Minecraft does not have.
  *
- * <p>The test API covers the vanilla server. Everything a modpack is actually about lives outside it — Curios'
- * slots, FTB Quests' graph, Mekanism's chemical tanks, Create's stress network, AE2's ME grid — and without a seam,
- * every one of those costs a StageWright release and a version bump for everybody. This is the seam.
+ * <p>The test API covers the vanilla server. Everything a modpack is actually about lives outside it — Curios' slots,
+ * FTB Quests' graph, Mekanism's chemical tanks, Create's stress network, AE2's ME grid — and without a seam, every one
+ * of those costs a StageWright release and a version bump for everybody. This is the seam.
  *
  * <p>Discovered via {@link java.util.ServiceLoader}
  * (META-INF/services/net.magicterra.stagewright.capability.CapabilityProvider), so a mod ships its own adapter in its
@@ -24,6 +24,7 @@ import net.magicterra.stagewright.test.Game;
  * <pre>{@code
  * game.capability("mymod:rituals", Rituals.class).consecrate(x, y, z);   // Java
  * }</pre>
+ *
  * <pre>{@code
  * t.capability('mymod:rituals').consecrate(x, y, z);                     // a script test
  * }</pre>
@@ -39,9 +40,9 @@ import net.magicterra.stagewright.test.Game;
  * <h2>The facet's own surface must be script-safe</h2>
  *
  * <p>Tests call facets from a test thread, and script tests call them by name: Minecraft's names differ between a
- * mojmap runtime and a production Fabric one. So a facet's parameters and return values must be StageWright types
- * (such as {@link net.magicterra.stagewright.test.Body}), string ids, or primitives — never an {@code ItemStack}. And
- * every operation touching game state must hop to the server thread itself, through {@link Game#onServer} or
+ * mojmap runtime and a production Fabric one. So a facet's parameters and return values must be StageWright types (such
+ * as {@link net.magicterra.stagewright.test.Body}), string ids, or primitives — never an {@code ItemStack}. And every
+ * operation touching game state must hop to the server thread itself, through {@link Game#onServer} or
  * {@link net.magicterra.stagewright.test.Body#onServer}.
  *
  * @see Game#capability(String)
@@ -59,15 +60,15 @@ public interface CapabilityProvider {
     String name();
 
     /**
-     * Whether this capability works in this game. Called more than once, possibly from several test threads at
-     * once, so it must be cheap, thread-safe and free of side effects. A provider whose class loaded at all can
-     * usually return {@code true} — the class loading IS the probe.
+     * Whether this capability works in this game. Called more than once, possibly from several test threads at once, so
+     * it must be cheap, thread-safe and free of side effects. A provider whose class loaded at all can usually return
+     * {@code true} — the class loading IS the probe.
      */
     boolean availableIn(Game game);
 
     /**
-     * The object tests call. Resolved once per test and reused, so an adapter registering
-     * {@link Game#afterTest} does not register it several times over.
+     * The object tests call. Resolved once per test and reused, so an adapter registering {@link Game#afterTest} does
+     * not register it several times over.
      */
     Object facet(Game game);
 

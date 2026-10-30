@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -24,8 +23,13 @@ class ClientLaunchTest {
                                "game": ["--username", "${auth_player_name}"]}}
                 """);
 
-        ClientLaunch.Parts parts = ClientLaunch.parts(install, install.resolve("game"), "1.21.1",
-                List.of("-Djava.library.path=/mine"), List.of(), "StageWright");
+        ClientLaunch.Parts parts = ClientLaunch.parts(
+                install,
+                install.resolve("game"),
+                "1.21.1",
+                List.of("-Djava.library.path=/mine"),
+                List.of(),
+                "StageWright");
         int versions = parts.jvm().indexOf("-cp");
         int ours = parts.jvm().indexOf("-Djava.library.path=/mine");
         assertTrue(versions >= 0 && versions < ours, parts.jvm().toString());

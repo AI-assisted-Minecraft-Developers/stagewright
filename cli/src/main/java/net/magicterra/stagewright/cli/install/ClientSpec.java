@@ -4,9 +4,9 @@ package net.magicterra.stagewright.cli.install;
  * What {@code --client} asks for: {@code neoforge:<mc>:<version>}, {@code fabric:<mc>:<version>} or
  * {@code vanilla:<mc>}.
  *
- * <p>Always an exact loader version. A game directory that has had several loaders installed into it
- * is the normal case, and picking "the newest" there has already chosen a {@code 21.5.34-beta} over
- * the {@code 21.1.248} a pack actually boots.
+ * <p>Always an exact loader version. A game directory that has had several loaders installed into it is the normal
+ * case, and picking "the newest" there has already chosen a {@code 21.5.34-beta} over the {@code 21.1.248} a pack
+ * actually boots.
  */
 public record ClientSpec(String loader, String minecraft, String loaderVersion) {
 
@@ -47,7 +47,6 @@ public record ClientSpec(String loader, String minecraft, String loaderVersion) 
 
     @Override
     public String toString() {
-        return loaderVersion == null ? loader + ":" + minecraft
-                : loader + ":" + minecraft + ":" + loaderVersion;
+        return loaderVersion == null ? loader + ":" + minecraft : loader + ":" + minecraft + ":" + loaderVersion;
     }
 }

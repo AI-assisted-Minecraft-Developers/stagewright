@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
-
 import net.magicterra.stagewright.test.DependsOn;
 import net.magicterra.stagewright.test.Game;
 import org.junit.jupiter.api.AfterEach;
@@ -47,8 +46,8 @@ import org.junit.platform.launcher.core.LauncherFactory;
 
 /**
  * {@link DependsOn} end to end: sample classes run through an inner launcher configured as {@link JupiterRun}
- * configures the in-game one. The samples are disabled in the outer run and enabled only while the inner launcher
- * runs ({@link #inLauncher}).
+ * configures the in-game one. The samples are disabled in the outer run and enabled only while the inner launcher runs
+ * ({@link #inLauncher}).
  */
 class DependenciesTest {
 
@@ -173,6 +172,7 @@ class DependenciesTest {
 
     /** Wall-clock marks (nanoTime) by name, and a flag the cross-class samples hand over. */
     private static final Map<String, Long> MARKS = new ConcurrentHashMap<>();
+
     private static final Set<String> THREADS = ConcurrentHashMap.newKeySet();
     private static final AtomicBoolean FLAG = new AtomicBoolean();
     private static final AtomicInteger COUNT = new AtomicInteger();
@@ -398,15 +398,18 @@ class DependenciesTest {
         public void executionFinished(TestIdentifier id, TestExecutionResult result) {
             String name = name(id);
             if (name != null) {
-                finished.put(name, new Finished(result.getStatus(),
-                        result.getThrowable().map(Throwable::getMessage).orElse(null)));
+                finished.put(
+                        name,
+                        new Finished(
+                                result.getStatus(),
+                                result.getThrowable().map(Throwable::getMessage).orElse(null)));
             }
         }
     }
 
     private static Game stubGame() {
-        return (Game) Proxy.newProxyInstance(Game.class.getClassLoader(), new Class<?>[] {Game.class},
-                (proxy, method, args) -> {
+        return (Game) Proxy.newProxyInstance(
+                Game.class.getClassLoader(), new Class<?>[] {Game.class}, (proxy, method, args) -> {
                     // GameExtension's afterEach restores the test's overrides through the server thread; there
                     // are none here, so running the work with no server is enough.
                     switch (method.getName()) {
@@ -493,14 +496,16 @@ class DependenciesTest {
         Recorder r = run(Ordering.class);
         assertEquals(List.of("Ordering#a", "Ordering#b", "Ordering#c"), r.started);
         for (String name : r.started) {
-            assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get(name).status(), name);
+            assertEquals(
+                    TestExecutionResult.Status.SUCCESSFUL, r.finished.get(name).status(), name);
         }
     }
 
     @Test
     void failureAbortsDependentsTransitively() {
         Recorder r = run(Failing.class);
-        assertEquals(TestExecutionResult.Status.FAILED, r.finished.get("Failing#a").status());
+        assertEquals(
+                TestExecutionResult.Status.FAILED, r.finished.get("Failing#a").status());
 
         Finished b = r.finished.get("Failing#b");
         assertNotNull(b);
@@ -545,8 +550,12 @@ class DependenciesTest {
         // Second is selected before First; the class order must still put First ahead.
         Recorder r = run(Second.class, First.class);
         assertEquals(List.of("First#first", "Second#second"), r.started);
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("First#first").status());
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("Second#second").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("First#first").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("Second#second").status());
     }
 
     // ---- parallel cases ------------------------------------------------------------------------------------
@@ -555,18 +564,23 @@ class DependenciesTest {
     @Timeout(60)
     void parallelWaitsForUpstreamInAnotherClass() {
         Recorder r = runParallel(SlowDownstream.class, SlowUpstream.class);
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("SlowUpstream#upstream").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("SlowUpstream#upstream").status());
         Finished d = r.finished.get("SlowDownstream#downstream");
         assertNotNull(d);
         assertEquals(TestExecutionResult.Status.SUCCESSFUL, d.status(), d.message());
-        assertTrue(MARKS.get("downstream.start") >= MARKS.get("upstream.end"), "downstream began before upstream ended");
+        assertTrue(
+                MARKS.get("downstream.start") >= MARKS.get("upstream.end"), "downstream began before upstream ended");
     }
 
     @Test
     @Timeout(60)
     void parallelFailedUpstreamAbortsDependent() {
         Recorder r = runParallel(FailingDownstream.class, FailingUpstream.class);
-        assertEquals(TestExecutionResult.Status.FAILED, r.finished.get("FailingUpstream#upstream").status());
+        assertEquals(
+                TestExecutionResult.Status.FAILED,
+                r.finished.get("FailingUpstream#upstream").status());
         Finished d = r.finished.get("FailingDownstream#downstream");
         assertNotNull(d);
         assertEquals(TestExecutionResult.Status.ABORTED, d.status(), d.message());
@@ -615,7 +629,9 @@ class DependenciesTest {
     @Timeout(60)
     void parallelIntraClassDependencyUnderSharedLockDoesNotDeadlock() {
         Recorder r = runParallel(Locked.class);
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("Locked#b").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("Locked#b").status());
         Finished a = r.finished.get("Locked#a");
         assertNotNull(a);
         assertEquals(TestExecutionResult.Status.SUCCESSFUL, a.status(), a.message());
@@ -627,7 +643,8 @@ class DependenciesTest {
     void parallelRunsIndependentTestsOfAPlainClassConcurrently() {
         Recorder r = runParallel(Plain.class);
         for (String name : List.of("Plain#one", "Plain#two", "Plain#three")) {
-            assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get(name).status(), name);
+            assertEquals(
+                    TestExecutionResult.Status.SUCCESSFUL, r.finished.get(name).status(), name);
         }
         assertTrue(THREADS.size() > 1, "all tests ran on one thread: " + THREADS);
     }
@@ -707,8 +724,8 @@ class DependenciesTest {
         Dependencies.scripts(Map.of(LOOP, List.of(CyclicThroughScript.class.getName() + "#x")));
         inLauncher = true;
         try {
-            List<String> cycles = Dependencies.prepare(LauncherFactory.create().discover(
-                    request(CyclicThroughScript.class)));
+            List<String> cycles =
+                    Dependencies.prepare(LauncherFactory.create().discover(request(CyclicThroughScript.class)));
             assertEquals(1, cycles.size(), cycles.toString());
             assertTrue(cycles.get(0).contains(LOOP) && cycles.get(0).contains("#x"), cycles.get(0));
         } finally {
@@ -721,7 +738,8 @@ class DependenciesTest {
         Dependencies.scripts(Map.of(SETUP, List.of(MID), MID, List.of(SETUP)));
         inLauncher = true;
         try {
-            assertTrue(Dependencies.prepare(LauncherFactory.create().discover(request(Plain.class))).isEmpty());
+            assertTrue(Dependencies.prepare(LauncherFactory.create().discover(request(Plain.class)))
+                    .isEmpty());
         } finally {
             inLauncher = false;
         }
@@ -744,7 +762,9 @@ class DependenciesTest {
         holding.await();
         Recorder r = runParallel(LockedWithScripts.class);
         script.join();
-        assertEquals(TestExecutionResult.Status.SUCCESSFUL, r.finished.get("LockedWithScripts#overrides").status());
+        assertEquals(
+                TestExecutionResult.Status.SUCCESSFUL,
+                r.finished.get("LockedWithScripts#overrides").status());
         assertTrue(MARKS.get("locked.start") >= MARKS.get("script.end"), "ran while a script test held its lock");
     }
 }

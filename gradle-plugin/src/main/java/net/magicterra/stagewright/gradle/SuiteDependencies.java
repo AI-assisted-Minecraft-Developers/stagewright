@@ -3,7 +3,6 @@ package net.magicterra.stagewright.gradle;
 import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
-
 import org.codehaus.groovy.runtime.InvokerHelper;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
@@ -20,9 +19,9 @@ import org.gradle.api.tasks.SourceSet;
 
 /**
  * What a suite with a loader project needs on its classpaths, as defaults of two configurations of the plugin's own:
- * StageWright's loader mod and WorldDriver's in {@value #RUNTIME}, on the generated runs only and remapped by loom
- * like any {@code mod*} dependency, and what the tests compile against in {@value #COMPILE}. A build that declares
- * anything in either replaces that configuration's defaults; repositories are the build's own (gradle-plugin.md).
+ * StageWright's loader mod and WorldDriver's in {@value #RUNTIME}, on the generated runs only and remapped by loom like
+ * any {@code mod*} dependency, and what the tests compile against in {@value #COMPILE}. A build that declares anything
+ * in either replaces that configuration's defaults; repositories are the build's own (gradle-plugin.md).
  *
  * <p>Loom remaps mod dependencies when its project is evaluated, before this plugin's own hooks there, so
  * {@value #RUNTIME} is added to every loom project as loom is applied, empty unless that project is a suite's loader,
@@ -35,6 +34,7 @@ final class SuiteDependencies {
     static final String RUNTIME = "modStagewrightTestRuntime";
     /** {@value #RUNTIME}'s counterpart under ModDevGradle, which needs no remapping: NeoForge runs in Mojang names. */
     static final String MOD_DEV_RUNTIME = "stagewrightTestRuntime";
+
     static final String COMPILE = "stagewrightTestCompile";
     private static final String[] LOOM_PLUGINS = {"dev.architectury.loom", "fabric-loom", "net.fabricmc.fabric-loom"};
     private static final String MOD_DEV_PLUGIN = "net.neoforged.moddev";
@@ -59,18 +59,22 @@ final class SuiteDependencies {
     }
 
     /**
-     * Puts the plugin's configurations under the run source set: {@value #COMPILE} compile-only, since at run time
-     * both apis are inside the mods, and under ModDevGradle {@value #MOD_DEV_RUNTIME} runtime-only.
+     * Puts the plugin's configurations under the run source set: {@value #COMPILE} compile-only, since at run time both
+     * apis are inside the mods, and under ModDevGradle {@value #MOD_DEV_RUNTIME} runtime-only.
      */
     static void attach(Project loader, StageWrightTestSuite suite, SourceSet source) {
         Configuration runtime = loader.getConfigurations().findByName(MOD_DEV_RUNTIME);
         if (runtime != null) {
-            loader.getConfigurations().getByName(source.getRuntimeOnlyConfigurationName()).extendsFrom(runtime);
+            loader.getConfigurations()
+                    .getByName(source.getRuntimeOnlyConfigurationName())
+                    .extendsFrom(runtime);
         }
         if (!suite.getTestDependencies().getOrElse(true)) return;
         Configuration compile = loader.getConfigurations().findByName(COMPILE);
         if (compile == null) return;
-        loader.getConfigurations().getByName(source.getCompileOnlyConfigurationName()).extendsFrom(compile);
+        loader.getConfigurations()
+                .getByName(source.getCompileOnlyConfigurationName())
+                .extendsFrom(compile);
     }
 
     private static void runtimeMods(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
@@ -80,22 +84,30 @@ final class SuiteDependencies {
         if (remaps.findByName(RUNTIME) != null) return;
         Provider<SourceSet> source = project.provider(() -> {
             StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
-            return suite != null ? GeneratedRuns.sourceSet(project, suite)
-                    : project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets()
+            return suite != null
+                    ? GeneratedRuns.sourceSet(project, suite)
+                    : project.getExtensions()
+                            .getByType(JavaPluginExtension.class)
+                            .getSourceSets()
                             .getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         });
-        InvokerHelper.invokeMethod(loom, "addRemapConfiguration", new Object[] {RUNTIME, (Action<Object>) settings -> {
-            property(settings, "getSourceSet").set(source);
-            property(settings, "getTargetConfigurationName").set(source.map(SourceSet::getRuntimeOnlyConfigurationName));
-            property(settings, "getOnCompileClasspath").set(false);
-            property(settings, "getOnRuntimeClasspath").set(true);
-            property(settings, "getPublishingMode").set(publishingMode(settings, "NONE"));
-        }});
+        InvokerHelper.invokeMethod(loom, "addRemapConfiguration", new Object[] {
+            RUNTIME,
+            (Action<Object>) settings -> {
+                property(settings, "getSourceSet").set(source);
+                property(settings, "getTargetConfigurationName")
+                        .set(source.map(SourceSet::getRuntimeOnlyConfigurationName));
+                property(settings, "getOnCompileClasspath").set(false);
+                property(settings, "getOnRuntimeClasspath").set(true);
+                property(settings, "getPublishingMode").set(publishingMode(settings, "NONE"));
+            }
+        });
         project.getConfigurations().named(RUNTIME).configure(c -> {
             c.setDescription("The mods StageWright's generated runs get: StageWright's and WorldDriver's by default.");
             // Transitive, unlike loom's own, so a mod a build declares here brings the mods its POM names.
             c.setTransitive(true);
-            // On the configuration too, for what a build declares there: loom resolves it alone, so nothing inherits it.
+            // On the configuration too, for what a build declares there: loom resolves it alone, so nothing inherits
+            // it.
             for (String group : PROJECT_GROUPS) c.exclude(Map.of("group", group));
             runtimeDefaults(project, c, tests, suite -> loaderName(loom, project, suite));
         });
@@ -122,17 +134,23 @@ final class SuiteDependencies {
      * on each dependency, not on the configuration: a configuration's exclusions pass to every configuration extending
      * it, and under ModDevGradle that is the run's classpath, which then loses NeoForge's DevLaunch.
      */
-    private static void runtimeDefaults(Project project, Configuration c,
-                                        NamedDomainObjectContainer<StageWrightTestSuite> tests,
-                                        Function<StageWrightTestSuite, String> loaderOf) {
+    private static void runtimeDefaults(
+            Project project,
+            Configuration c,
+            NamedDomainObjectContainer<StageWrightTestSuite> tests,
+            Function<StageWrightTestSuite, String> loaderOf) {
         c.defaultDependencies(deps -> {
             StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
             if (suite == null) return;
             String loader = loaderOf.apply(suite);
             add(project, deps, "net.magicterra:mc_stagewright-" + loader + ":" + PluginVersion.get(), null);
             if (suite.getIncludeWorldDriver().getOrElse(true)) {
-                ExternalModuleDependency worldDriver = add(project, deps, "net.magicterra:worlddriver-" + loader + ":"
-                        + suite.getWorldDriverVersion().get(), null);
+                ExternalModuleDependency worldDriver = add(
+                        project,
+                        deps,
+                        "net.magicterra:worlddriver-" + loader + ":"
+                                + suite.getWorldDriverVersion().get(),
+                        null);
                 for (String group : PROJECT_GROUPS) worldDriver.exclude(Map.of("group", group));
             }
         });
@@ -150,9 +168,15 @@ final class SuiteDependencies {
                 if (suite == null) return;
                 // Its POM names WorldDriver's api, at the build StageWright was built against; which one the tests get,
                 // if any, is includeWorldDriver's and worldDriverVersion's to say, so the default brings it only below.
-                add(project, deps, "net.magicterra:mc_stagewright-api:" + PluginVersion.get(), "dev").setTransitive(false);
+                add(project, deps, "net.magicterra:mc_stagewright-api:" + PluginVersion.get(), "dev")
+                        .setTransitive(false);
                 if (suite.getIncludeWorldDriver().getOrElse(true)) {
-                    add(project, deps, "net.magicterra:worlddriver-api:" + suite.getWorldDriverVersion().get(), "dev");
+                    add(
+                            project,
+                            deps,
+                            "net.magicterra:worlddriver-api:"
+                                    + suite.getWorldDriverVersion().get(),
+                            "dev");
                 }
                 deps.add(project.getDependencies().platform("org.junit:junit-bom:" + PluginVersion.junit()));
                 deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-api"));
@@ -163,7 +187,8 @@ final class SuiteDependencies {
 
     /**
      * Refuses a WorldDriver outside the line StageWright links against, which would otherwise fail only once a game
-     * starts. The range's bounds are versions Gradle orders as the loaders do (the stagewright.version plugin in build-logic).
+     * starts. The range's bounds are versions Gradle orders as the loaders do (the stagewright.version plugin in
+     * build-logic).
      */
     private static void constrainWorldDriver(Project project, String configuration, String... modules) {
         for (String module : modules) {
@@ -175,10 +200,10 @@ final class SuiteDependencies {
         }
     }
 
-    private static ExternalModuleDependency add(Project project, DependencySet deps, String coordinates,
-                                                String classifier) {
-        ExternalModuleDependency dependency = (ExternalModuleDependency) project.getDependencies()
-                .create(classifier == null ? coordinates : coordinates + ":" + classifier);
+    private static ExternalModuleDependency add(
+            Project project, DependencySet deps, String coordinates, String classifier) {
+        ExternalModuleDependency dependency = (ExternalModuleDependency)
+                project.getDependencies().create(classifier == null ? coordinates : coordinates + ":" + classifier);
         // A build published to mavenLocal keeps its version while its contents move, and loom keys its remapped
         // copy on the coordinates: without this a republished StageWright never reaches the run.
         dependency.setChanging(true);
@@ -214,7 +239,8 @@ final class SuiteDependencies {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Object publishingMode(Object settings, String name) {
         try {
-            Class type = settings.getClass().getClassLoader()
+            Class type = settings.getClass()
+                    .getClassLoader()
                     .loadClass("net.fabricmc.loom.api.RemapConfigurationSettings$PublishingMode");
             return Enum.valueOf(type, name.toUpperCase(Locale.ROOT));
         } catch (ClassNotFoundException e) {

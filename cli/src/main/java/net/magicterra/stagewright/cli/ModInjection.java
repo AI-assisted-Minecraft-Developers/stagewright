@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
-
 import net.magicterra.stagewright.cli.install.Sha1;
 import net.magicterra.stagewright.engine.ModInstall;
 import net.magicterra.stagewright.engine.RunDirectory;
@@ -21,16 +20,14 @@ import net.magicterra.stagewright.engine.RunDirectory;
 /**
  * Hands the mods a scene run needs to the loader directly, leaving the pack's {@code mods/} alone.
  *
- * <p>The pack's mods folder may be a player's own, and a jar copied into it stays loaded in their
- * everyday game until something takes it out again. Both loaders have a supported way to load a mod
- * from elsewhere instead: Fabric reads {@code -Dfabric.addMods}, and NeoForge's FML resolves
- * {@code --fml.mods} coordinates against {@code --fml.mavenRoots} — the locator it lists as
- * "maven libs". The jars are staged under the run's own {@code stagewright/} directory.
+ * <p>The pack's mods folder may be a player's own, and a jar copied into it stays loaded in their everyday game until
+ * something takes it out again. Both loaders have a supported way to load a mod from elsewhere instead: Fabric reads
+ * {@code -Dfabric.addMods}, and NeoForge's FML resolves {@code --fml.mods} coordinates against {@code --fml.mavenRoots}
+ * — the locator it lists as "maven libs". The jars are staged under the run's own {@code stagewright/} directory.
  *
- * <p>StageWright's own jar rides inside this one (about 100 KB per loader, cheaper than the paragraph
- * of instructions it replaces). Anything else — a driver mod whose verbs the scenes call, a pack's own
- * mod under test — comes in through {@code --mod}, because a framework that shipped a copy of its
- * consumers would have the dependency backwards.
+ * <p>StageWright's own jar rides inside this one (about 100 KB per loader, cheaper than the paragraph of instructions
+ * it replaces). Anything else — a driver mod whose verbs the scenes call, a pack's own mod under test — comes in
+ * through {@code --mod}, because a framework that shipped a copy of its consumers would have the dependency backwards.
  */
 final class ModInjection {
 
@@ -41,9 +38,11 @@ final class ModInjection {
 
     /** Where the build stages the loader jars inside this fat jar. */
     private static final String RESOURCE_DIR = "/mods/";
+
     private static final String FRAMEWORK = "mc_stagewright-";
     /** Any version will do: FML only needs a coordinate that resolves to the file. */
     private static final String VERSION = "0";
+
     private static final String GROUP = "stagewright.mods";
 
     private ModInjection() {}
@@ -51,10 +50,10 @@ final class ModInjection {
     /**
      * Stage the framework and {@code extras} for {@code loader} and say how to load them.
      *
-     * <p>Nothing in the pack's mods/ is touched — not even what an older CLI copied there, because
-     * its ledger kept only names and a pack may since have put its own jar under one. Where the pack
-     * already has StageWright, or a jar named like an extra, that copy loads instead of ours (two
-     * would be a duplicate mod), and the log says which file that is and whether its bytes match.
+     * <p>Nothing in the pack's mods/ is touched — not even what an older CLI copied there, because its ledger kept only
+     * names and a pack may since have put its own jar under one. Where the pack already has StageWright, or a jar named
+     * like an extra, that copy loads instead of ours (two would be a duplicate mod), and the log says which file that
+     * is and whether its bytes match.
      */
     static Arguments prepare(Path gameDir, String loader, List<Path> extras, Consumer<String> log) {
         requireLoader(loader);
@@ -97,8 +96,7 @@ final class ModInjection {
         return switch (loader) {
             case "fabric" -> fabric(jars, log);
             case "neoforge" -> neoforge(jars, staged, log);
-            default -> throw new IllegalArgumentException("StageWright runs on neoforge or fabric,"
-                    + " not " + loader);
+            default -> throw new IllegalArgumentException("StageWright runs on neoforge or fabric," + " not " + loader);
         };
     }
 
@@ -114,10 +112,10 @@ final class ModInjection {
     }
 
     private static Arguments fabric(List<Path> jars, Consumer<String> log) {
-        List<String> paths = jars.stream().map(p -> p.toAbsolutePath().toString()).toList();
+        List<String> paths =
+                jars.stream().map(p -> p.toAbsolutePath().toString()).toList();
         log.accept("loading " + names(jars) + " through -Dfabric.addMods");
-        return new Arguments(List.of("-Dfabric.addMods=" + String.join(File.pathSeparator, paths)),
-                List.of());
+        return new Arguments(List.of("-Dfabric.addMods=" + String.join(File.pathSeparator, paths)), List.of());
     }
 
     /** Each jar laid out as {@code stagewright.mods:<name>:0} in a maven directory of its own. */
@@ -127,7 +125,9 @@ final class ModInjection {
         try {
             for (Path jar : jars) {
                 String artifact = artifactName(jar);
-                Path target = root.resolve(GROUP.replace('.', '/')).resolve(artifact).resolve(VERSION)
+                Path target = root.resolve(GROUP.replace('.', '/'))
+                        .resolve(artifact)
+                        .resolve(VERSION)
                         .resolve(artifact + "-" + VERSION + ".jar");
                 Files.createDirectories(target.getParent());
                 Files.copy(jar, target, StandardCopyOption.REPLACE_EXISTING);
@@ -137,8 +137,13 @@ final class ModInjection {
             throw new UncheckedIOException("cannot stage mods under " + root, e);
         }
         log.accept("loading " + names(jars) + " through --fml.mods");
-        return new Arguments(List.of(), List.of("--fml.mavenRoots", root.toAbsolutePath().toString(),
-                "--fml.mods", String.join(",", coordinates)));
+        return new Arguments(
+                List.of(),
+                List.of(
+                        "--fml.mavenRoots",
+                        root.toAbsolutePath().toString(),
+                        "--fml.mods",
+                        String.join(",", coordinates)));
     }
 
     /** A jar's file name as a maven artifact id: no extension, nothing a coordinate cannot hold. */
@@ -149,16 +154,16 @@ final class ModInjection {
     }
 
     /**
-     * Unpack the loader jar this CLI carries. Named without its version, as the build stages it, so
-     * nothing here has to know which version it carries and an upgrade is a rebuild rather than an edit.
+     * Unpack the loader jar this CLI carries. Named without its version, as the build stages it, so nothing here has to
+     * know which version it carries and an upgrade is a rebuild rather than an edit.
      */
     private static Path unpackFramework(String loader, Path staged) {
         String name = FRAMEWORK + loader + ".jar";
         String resource = RESOURCE_DIR + name;
         try (InputStream in = ModInjection.class.getResourceAsStream(resource)) {
             if (in == null) {
-                throw new IllegalStateException("this CLI carries no StageWright build for '" + loader
-                        + "' (looked for " + resource + ")");
+                throw new IllegalStateException(
+                        "this CLI carries no StageWright build for '" + loader + "' (looked for " + resource + ")");
             }
             Files.createDirectories(staged);
             Path out = staged.resolve(name);
@@ -176,8 +181,10 @@ final class ModInjection {
      * game would get both). Such a jar is easily left behind by an earlier way of running the tests.
      */
     static void warnOtherHarnessJars(Path gameDir, String loader, Path ours, List<Path> extras, Consumer<String> log) {
-        List<Path> extraDrivers = extras.stream().filter(Files::isRegularFile)
-                .filter(p -> DriverRequirement.declaredVersion(p, loader, "worlddriver") != null).toList();
+        List<Path> extraDrivers = extras.stream()
+                .filter(Files::isRegularFile)
+                .filter(p -> DriverRequirement.declaredVersion(p, loader, "worlddriver") != null)
+                .toList();
         for (Path jar : DriverRequirement.jars(gameDir.resolve("mods"))) {
             String framework = DriverRequirement.declaredVersion(jar, loader, "mc_testkit");
             if (framework != null && !sha1(jar).equals(sha1(ours))) {
@@ -193,7 +200,8 @@ final class ModInjection {
                 if (extra.getFileName().equals(jar.getFileName())) continue;
                 log.accept("WARNING: " + jar + " is a WorldDriver build (" + driver + "), and --mod " + extra
                         + " is another (" + DriverRequirement.declaredVersion(extra, loader, "worlddriver") + "). A"
-                        + " game loads one WorldDriver: take " + jar.getFileName() + " out of mods/ to test the other.");
+                        + " game loads one WorldDriver: take " + jar.getFileName()
+                        + " out of mods/ to test the other.");
             }
         }
     }
@@ -203,8 +211,8 @@ final class ModInjection {
         String packSha1 = sha1(pack);
         String skippedSha1 = sha1(skipped);
         if (packSha1.equals(skippedSha1)) {
-            return "using the pack's own " + pack + " (sha1 " + packSha1.substring(0, 8) + "), the same"
-                    + " bytes as " + skippedName;
+            return "using the pack's own " + pack + " (sha1 " + packSha1.substring(0, 8) + "), the same" + " bytes as "
+                    + skippedName;
         }
         return "WARNING: using the pack's own " + pack + " (sha1 " + packSha1.substring(0, 8) + "), not "
                 + skippedName + " (sha1 " + skippedSha1.substring(0, 8) + ") — they differ, so this run"
@@ -220,7 +228,8 @@ final class ModInjection {
     }
 
     private static String names(List<Path> jars) {
-        return String.join(", ", jars.stream().map(p -> p.getFileName().toString()).toList());
+        return String.join(
+                ", ", jars.stream().map(p -> p.getFileName().toString()).toList());
     }
 
     private static void deleteTree(Path root) {

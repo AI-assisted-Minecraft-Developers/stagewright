@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 import java.util.Map;
-
 import net.magicterra.worlddriver.api.call.CallContext;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Baseline;
@@ -25,14 +24,16 @@ class HarnessServiceTest {
     }
 
     private Object read(String key) {
-        var values = assertInstanceOf(TestHarnessContracts.Values.class, settings(new TestHarnessContracts.Read(List.of(key))));
+        var values = assertInstanceOf(
+                TestHarnessContracts.Values.class, settings(new TestHarnessContracts.Read(List.of(key))));
         return values.get(key);
     }
 
     @Test
     void aPinRestoresWhatItSavedWhateverWasWrittenAfterIt() {
         Object before = read("autoEat");
-        var pin = assertInstanceOf(TestHarnessContracts.Pinned.class, settings(TestHarnessContracts.Pin.of(Baseline.CURRENT)));
+        var pin = assertInstanceOf(
+                TestHarnessContracts.Pinned.class, settings(TestHarnessContracts.Pin.of(Baseline.CURRENT)));
         settings(TestHarnessContracts.Write.of(Map.of("autoEat", !(Boolean) before)));
         assertEquals(!(Boolean) before, read("autoEat"));
         settings(new TestHarnessContracts.Unpin(pin.pin()));
@@ -41,7 +42,8 @@ class HarnessServiceTest {
 
     @Test
     void theTestBaselineTurnsBreakingOff() {
-        var pin = assertInstanceOf(TestHarnessContracts.Pinned.class, settings(TestHarnessContracts.Pin.of(Baseline.TEST)));
+        var pin = assertInstanceOf(
+                TestHarnessContracts.Pinned.class, settings(TestHarnessContracts.Pin.of(Baseline.TEST)));
         try {
             assertEquals(false, read("allowBreak"));
         } finally {
@@ -52,8 +54,8 @@ class HarnessServiceTest {
     @Test
     void anUntimedPinLiftsTheWallClockBudgetsAndUnpinPutsThemBack() {
         Object before = read("pathfinder.maxMs");
-        var pin = assertInstanceOf(TestHarnessContracts.Pinned.class,
-                settings(new TestHarnessContracts.Pin(Baseline.CURRENT, true)));
+        var pin = assertInstanceOf(
+                TestHarnessContracts.Pinned.class, settings(new TestHarnessContracts.Pin(Baseline.CURRENT, true)));
         assertEquals(Long.MAX_VALUE / 2, read("pathfinder.maxMs"));
         assertEquals(Long.MAX_VALUE / 2, read("pathfinder.sliceMs"));
         settings(new TestHarnessContracts.Unpin(pin.pin()));
@@ -68,7 +70,8 @@ class HarnessServiceTest {
 
     @Test
     void theTickListIsTheServerThreads() {
-        ApiException e = assertThrows(ApiException.class,
+        ApiException e = assertThrows(
+                ApiException.class,
                 () -> ApiRegistry.await(harness.bots(TestHarnessContracts.Tick.once(), CallContext.standalone()), 0));
         assertEquals(ApiError.Code.CAPABILITY_UNAVAILABLE, e.error().code());
     }

@@ -12,13 +12,13 @@ import java.util.stream.Stream;
 /**
  * The crash reports a game writes while it runs.
  *
- * <p>Names, not timestamps, and snapshotted when the agent starts: a game directory is reused between
- * runs and its {@code crash-reports/} accumulates, so "is there a report" is always yes. "Is there one
- * that was not here when this JVM started" is the question with an answer. A report copied in carries
- * whatever time the copy gave it, which is why modification times are not asked.
+ * <p>Names, not timestamps, and snapshotted when the agent starts: a game directory is reused between runs and its
+ * {@code crash-reports/} accumulates, so "is there a report" is always yes. "Is there one that was not here when this
+ * JVM started" is the question with an answer. A report copied in carries whatever time the copy gave it, which is why
+ * modification times are not asked.
  *
- * <p>Polled by the agent's own loop, once a heartbeat: a listing of a folder that holds tens of files
- * at most, and no second thread for the one thing that can already be noticed within a second.
+ * <p>Polled by the agent's own loop, once a heartbeat: a listing of a folder that holds tens of files at most, and no
+ * second thread for the one thing that can already be noticed within a second.
  */
 final class CrashReports {
 
@@ -49,7 +49,8 @@ final class CrashReports {
         Set<String> out = new HashSet<>();
         if (!Files.isDirectory(directory)) return out;
         try (Stream<Path> files = Files.list(directory)) {
-            files.filter(Files::isRegularFile).forEach(p -> out.add(p.getFileName().toString()));
+            files.filter(Files::isRegularFile)
+                    .forEach(p -> out.add(p.getFileName().toString()));
         } catch (IOException e) {
             // Unreadable is treated as empty: this only ever adds a reason to stop waiting, and a
             // listing failure is not worth losing the agent's other reports over.

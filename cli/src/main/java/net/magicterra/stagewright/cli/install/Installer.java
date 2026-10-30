@@ -1,5 +1,8 @@
 package net.magicterra.stagewright.cli.install;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.URI;
@@ -14,25 +17,19 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
-
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
 import net.magicterra.stagewright.cli.install.Downloader.Artifact;
 
 /**
- * Installs a client — vanilla, then its loader, then everything the resulting version names — into a
- * directory laid out the way the official launcher lays out {@code .minecraft}.
+ * Installs a client — vanilla, then its loader, then everything the resulting version names — into a directory laid out
+ * the way the official launcher lays out {@code .minecraft}.
  *
- * <p>Idempotent: a second install of the same {@link ClientSpec} verifies what is there and fetches
- * nothing. Installs into one directory are serialised on {@code .stagewright.lock}, because two runs
- * starting together would otherwise both run NeoForge's installer into the same libraries.
+ * <p>Idempotent: a second install of the same {@link ClientSpec} verifies what is there and fetches nothing. Installs
+ * into one directory are serialised on {@code .stagewright.lock}, because two runs starting together would otherwise
+ * both run NeoForge's installer into the same libraries.
  */
 public final class Installer {
 
-    private static final URI MANIFEST =
-            URI.create("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json");
+    private static final URI MANIFEST = URI.create("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json");
     private static final String LIBRARIES = "https://libraries.minecraft.net/";
     private static final String ASSETS = "https://resources.download.minecraft.net/";
     private static final String NEOFORGE_MAVEN = "https://maven.neoforged.net/releases/";
@@ -58,9 +55,9 @@ public final class Installer {
     /** Install {@code spec} and return the version id to launch. */
     public String install(ClientSpec spec) throws IOException, InterruptedException {
         Files.createDirectories(installDir);
-        try (FileChannel channel = FileChannel.open(installDir.resolve(".stagewright.lock"),
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             FileLock ignored = lock(channel)) {
+        try (FileChannel channel = FileChannel.open(
+                        installDir.resolve(".stagewright.lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                FileLock ignored = lock(channel)) {
             JsonObject vanilla = vanilla(spec.minecraft());
             String id = switch (spec.loader()) {
                 case "neoforge" -> neoforge(spec);
@@ -93,26 +90,31 @@ public final class Installer {
         Path json = Versions.json(installDir, minecraft);
         JsonObject entry = null;
         try {
-            JsonObject manifest = JsonParser.parseString(downloader.text(MANIFEST)).getAsJsonObject();
+            JsonObject manifest =
+                    JsonParser.parseString(downloader.text(MANIFEST)).getAsJsonObject();
             for (JsonElement element : manifest.getAsJsonArray("versions")) {
                 JsonObject version = element.getAsJsonObject();
                 if (minecraft.equals(version.get("id").getAsString())) entry = version;
             }
             if (entry == null) {
-                throw new IllegalArgumentException("Minecraft " + minecraft
-                        + " is not in Mojang's version manifest");
+                throw new IllegalArgumentException("Minecraft " + minecraft + " is not in Mojang's version manifest");
             }
         } catch (IOException e) {
             // Offline with the version already here is a rerun, not a failure.
             if (!Files.isRegularFile(json)) throw e;
-            log.accept("cannot reach Mojang's version manifest (" + e.getMessage()
-                    + ") — using the " + minecraft + " already installed");
+            log.accept("cannot reach Mojang's version manifest (" + e.getMessage() + ") — using the " + minecraft
+                    + " already installed");
         }
         // Checked against the manifest's sha1 rather than trusted by name: Mojang rewrites old version
         // files in place (1.21.1's changed on 2026-09-22), and the official launcher replaces them.
         if (entry != null) {
-            downloader.fetch(new Artifact(URI.create(entry.get("url").getAsString()), json,
-                    entry.get("sha1").getAsString(), -1, false, false));
+            downloader.fetch(new Artifact(
+                    URI.create(entry.get("url").getAsString()),
+                    json,
+                    entry.get("sha1").getAsString(),
+                    -1,
+                    false,
+                    false));
         }
         JsonObject data = Versions.read(json);
         JsonObject client = data.getAsJsonObject("downloads").getAsJsonObject("client");
@@ -121,28 +123,28 @@ public final class Installer {
     }
 
     /**
-     * NeoForge's own installer, run as a child process — its processors (deobfuscation, binary
-     * patches) are the part of an install that is actually hard, and it already does them.
+     * NeoForge's own installer, run as a child process — its processors (deobfuscation, binary patches) are the part of
+     * an install that is actually hard, and it already does them.
      *
-     * <p>Run into a staging directory inside the install directory, never into the install directory
-     * itself: the installer refuses to run without a {@code launcher_profiles.json} and ADDS a profile
-     * to the one it finds, which in a real {@code .minecraft} would put a NeoForge entry into the
-     * user's own launcher. Staging inside rather than under the system temp directory keeps the
-     * vanilla files hard-linkable into it and the finished libraries renamable out of it.
+     * <p>Run into a staging directory inside the install directory, never into the install directory itself: the
+     * installer refuses to run without a {@code launcher_profiles.json} and ADDS a profile to the one it finds, which
+     * in a real {@code .minecraft} would put a NeoForge entry into the user's own launcher. Staging inside rather than
+     * under the system temp directory keeps the vanilla files hard-linkable into it and the finished libraries
+     * renamable out of it.
      */
     private String neoforge(ClientSpec spec) throws IOException, InterruptedException {
         String version = spec.loaderVersion();
         String id = spec.versionId();
         // The patched client jar is a processor output: no version file names it, so its presence is
         // what says a previous install ran to the end rather than dying mid-processor.
-        Path patched = installDir.resolve("libraries/net/neoforged/neoforge/" + version
-                + "/neoforge-" + version + "-client.jar");
+        Path patched = installDir.resolve(
+                "libraries/net/neoforged/neoforge/" + version + "/neoforge-" + version + "-client.jar");
         if (Files.isRegularFile(Versions.json(installDir, id)) && Files.isRegularFile(patched)) {
             return id;
         }
 
-        URI url = URI.create(NEOFORGE_MAVEN + "net/neoforged/neoforge/" + version
-                + "/neoforge-" + version + "-installer.jar");
+        URI url = URI.create(
+                NEOFORGE_MAVEN + "net/neoforged/neoforge/" + version + "/neoforge-" + version + "-installer.jar");
         String sha1;
         try {
             sha1 = sidecar(url);
@@ -153,8 +155,8 @@ public final class Installer {
         // A failed install leaves its staging directory to be read; under the lock, nothing else is
         // using one, so the next install is where it goes.
         try (Stream<Path> stale = Files.list(installDir)) {
-            for (Path old : stale.filter(p -> p.getFileName().toString()
-                    .startsWith(STAGING_PREFIX)).toList()) {
+            for (Path old : stale.filter(p -> p.getFileName().toString().startsWith(STAGING_PREFIX))
+                    .toList()) {
                 deleteTree(old);
             }
         }
@@ -182,8 +184,8 @@ public final class Installer {
                     .start();
             int code = process.waitFor();
             if (code != 0 || !Files.isRegularFile(Versions.json(staging, id))) {
-                throw new IOException("NeoForge's installer failed (exit " + code + ") — its log is "
-                        + installerLog + "; the staging directory is kept until the next install");
+                throw new IOException("NeoForge's installer failed (exit " + code + ") — its log is " + installerLog
+                        + "; the staging directory is kept until the next install");
             }
 
             merge(staging.resolve("libraries"), installDir.resolve("libraries"));
@@ -221,8 +223,8 @@ public final class Installer {
         try {
             profile = downloader.text(url);
         } catch (FileNotFoundException e) {
-            throw new IllegalArgumentException("Fabric has no loader " + spec.loaderVersion()
-                    + " for Minecraft " + spec.minecraft() + " — no " + url);
+            throw new IllegalArgumentException("Fabric has no loader " + spec.loaderVersion() + " for Minecraft "
+                    + spec.minecraft() + " — no " + url);
         }
         String id = JsonParser.parseString(profile).getAsJsonObject().get("id").getAsString();
         Path json = Versions.json(installDir, id);
@@ -279,9 +281,13 @@ public final class Installer {
             JsonObject object = entry.getValue().getAsJsonObject();
             String hash = object.get("hash").getAsString();
             String relative = hash.substring(0, 2) + "/" + hash;
-            objects.add(new Artifact(URI.create(ASSETS + relative),
-                    installDir.resolve("assets/objects/" + relative), hash,
-                    object.get("size").getAsLong(), true, false));
+            objects.add(new Artifact(
+                    URI.create(ASSETS + relative),
+                    installDir.resolve("assets/objects/" + relative),
+                    hash,
+                    object.get("size").getAsLong(),
+                    true,
+                    false));
         }
         int fetched = downloader.fetchAll(objects);
         log.accept("assets: " + objects.size() + " in place, " + fetched + " downloaded");
@@ -290,15 +296,16 @@ public final class Installer {
     /**
      * The launched version's own copy of the game jar.
      *
-     * <p>NeoForge's JVM arguments carry {@code -DignoreList=client-extra,${version_name}.jar}, which keeps
-     * exactly a jar named after the LAUNCHED version off the module path. Put {@code 1.21.1.jar} on the
-     * classpath instead and it becomes an automatic module exporting the same packages as NeoForge's
-     * patched {@code minecraft} module — a ResolutionException naming some JFR event package.
+     * <p>NeoForge's JVM arguments carry {@code -DignoreList=client-extra,${version_name}.jar}, which keeps exactly a
+     * jar named after the LAUNCHED version off the module path. Put {@code 1.21.1.jar} on the classpath instead and it
+     * becomes an automatic module exporting the same packages as NeoForge's patched {@code minecraft} module — a
+     * ResolutionException naming some JFR event package.
      */
     private void gameJar(String id, JsonObject vanilla) throws IOException {
         JsonObject client = vanilla.getAsJsonObject("downloads").getAsJsonObject("client");
         Path target = Versions.jar(installDir, id);
-        if (!Sha1.matches(target, client.get("sha1").getAsString(), client.get("size").getAsLong())) {
+        if (!Sha1.matches(
+                target, client.get("sha1").getAsString(), client.get("size").getAsLong())) {
             HmclCache.place(Versions.jar(installDir, vanilla.get("id").getAsString()), target);
         }
     }
@@ -315,15 +322,20 @@ public final class Installer {
         }
     }
 
-    private static Artifact artifact(JsonObject download, Path target, boolean trustSize,
-                                     boolean cacheable) {
-        return new Artifact(URI.create(download.get("url").getAsString()), target,
-                string(download, "sha1"), size(download), trustSize, cacheable);
+    private static Artifact artifact(JsonObject download, Path target, boolean trustSize, boolean cacheable) {
+        return new Artifact(
+                URI.create(download.get("url").getAsString()),
+                target,
+                string(download, "sha1"),
+                size(download),
+                trustSize,
+                cacheable);
     }
 
     private static String string(JsonObject object, String key) {
         return object.has(key) && !object.get(key).getAsString().isBlank()
-                ? object.get(key).getAsString() : null;
+                ? object.get(key).getAsString()
+                : null;
     }
 
     private static long size(JsonObject object) {

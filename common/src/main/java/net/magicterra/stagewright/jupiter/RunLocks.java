@@ -25,8 +25,8 @@ final class RunLocks {
     private RunLocks() {}
 
     /**
-     * Block until the test holds every lock it named, {@code true} meaning read-write, and the isolation lock;
-     * closing the answer gives them back, on the same thread.
+     * Block until the test holds every lock it named, {@code true} meaning read-write, and the isolation lock; closing
+     * the answer gives them back, on the same thread.
      */
     static AutoCloseable hold(Map<String, Boolean> locks, boolean alone) {
         List<Lock> held = new ArrayList<>();
