@@ -3,7 +3,6 @@
 // by hand sets it to 0; without it the build is <base>-snapshot+<minecraft>, which is never published
 // to the Nexus. `alpha` and lowercase `snapshot` are the forms Gradle, Fabric and NeoForge order alike
 // (docs/reference/publishing.md, Versions).
-def base = '0.1.0'
 def buildNumber = providers.environmentVariable('BUILD_NUMBER').orNull
 // Refused rather than spliced in: `alpha.<n>` has to be a SemVer numeric identifier, digits with no
 // leading zero, for the version to be valid SemVer and order by run number.
@@ -13,13 +12,14 @@ if (buildNumber != null && !(buildNumber ==~ /0|[1-9][0-9]*/)) {
 }
 def prerelease = buildNumber != null ? "alpha.${buildNumber}" : 'snapshot'
 
-// The Minecraft line is the root gradle.properties' own.
+// The base version and the Minecraft line are the root gradle.properties' own.
 def rootProperties = new Properties()
 new File(buildscript.sourceFile.parentFile.parentFile, 'gradle.properties').withInputStream { rootProperties.load(it) }
-ext.stagewrightVersion = "${base}-${prerelease}+${rootProperties.minecraft_version}".toString()
+ext.stagewrightVersion = "${rootProperties.mod_base_version}-${prerelease}+${rootProperties.minecraft_version}".toString()
 ext.junitVersion = rootProperties.junit_version
-// -Pworlddriver_version as the root build takes it, so the plugin pairs with the loader jars built beside it.
-ext.worlddriverVersion = (findProperty('worlddriver_version') ?: rootProperties.worlddriver_version).toString()
+// The WorldDriver StageWright builds against, not a version of its own; -Pworlddriver_version as the root
+// build takes it, so the plugin pairs with the loader jars built beside it.
+ext.worlddriverDependency = (findProperty('worlddriver_version') ?: rootProperties.worlddriver_version).toString()
 
 // WorldDriver is required and must be a release StageWright links against:
 // the line of worlddriver_version up to its next breaking release (the next minor while it is 0.x).
@@ -30,11 +30,11 @@ ext.worlddriverVersion = (findProperty('worlddriver_version') ?: rootProperties.
 // order it at or above the release. A numbered build raises the floor to itself: StageWright links
 // against what that build added, so an older one is refused too (docs/reference/publishing.md, Versions).
 ext.worlddriverVersionRange = {
-    def m = worlddriverVersion =~ /^(\d+)\.(\d+)\.(\d+)/
-    if (!m.find()) throw new GradleException("worlddriver_version is not major.minor.patch: '$worlddriverVersion'")
+    def m = worlddriverDependency =~ /^(\d+)\.(\d+)\.(\d+)/
+    if (!m.find()) throw new GradleException("worlddriver_version is not major.minor.patch: '$worlddriverDependency'")
     int major = m.group(1) as int
     int minor = m.group(2) as int
-    def numbered = worlddriverVersion =~ /^\d+\.\d+\.\d+-alpha\.\d+(?=\+|$)/
+    def numbered = worlddriverDependency =~ /^\d+\.\d+\.\d+-alpha\.\d+(?=\+|$)/
     def floor = numbered.find() ? numbered.group() : "${m.group()}-alpha.0"
     "[${floor},${major == 0 ? "0.${minor + 1}.0" : "${major + 1}.0.0"}-alpha.0)".toString()
 }()

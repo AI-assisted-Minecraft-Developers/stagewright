@@ -63,7 +63,7 @@ def versionResource = tasks.register('generateVersionResource') {
     def out = layout.buildDirectory.file('generated-resources/stagewright-plugin.properties')
     def v = stagewrightVersion
     def junit = junitVersion
-    def worlddriver = worlddriverVersion
+    def worlddriver = worlddriverDependency
     def worlddriverRange = worlddriverVersionRange
     outputs.file(out)
     inputs.property('version', v)

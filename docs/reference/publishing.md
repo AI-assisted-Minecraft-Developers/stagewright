@@ -51,7 +51,7 @@ that is where a consumer finds it, with `mavenLocal()` listed first in both bloc
 One version, for every artifact of all three builds: `<base>-alpha.<n>+<minecraft>`, such as
 `0.1.0-alpha.42+1.21.1`.
 
-- `<base>` is in `gradle/version.gradle`.
+- `<base>` is `mod_base_version` from `gradle.properties`.
 - `<n>` is the CI run number, taken from `BUILD_NUMBER`. Run numbers start at 1, which leaves `0` to the builds
   published by hand (see below). A value that is not a whole number without leading zeros stops the build.
 - `<minecraft>` is `minecraft_version` from `gradle.properties`.

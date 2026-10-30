@@ -90,7 +90,7 @@ class NeoForgeModMetadataTest {
         assertEquals("BOTH", wd.get("side"));
 
         VersionRange range = VersionRange.createFromVersionSpec(wd.get("versionRange"));
-        String built = System.getProperty("stagewright.worlddriverVersion", prop("worlddriver_version"));
+        String built = System.getProperty("stagewright.worlddriverDependency", prop("worlddriver_version"));
         Matcher v = Pattern.compile("^(\\d+)\\.(\\d+)\\.(\\d+)").matcher(built);
         assertTrue(v.find(), built);
         int major = Integer.parseInt(v.group(1));
