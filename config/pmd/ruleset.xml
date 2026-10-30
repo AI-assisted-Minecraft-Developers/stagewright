@@ -1,15 +1,15 @@
 <?xml version="1.0"?>
-<ruleset name="minecraft-mod"
+<ruleset name="lint"
          xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
     <description>
-        PMD's own quickstart ruleset without the rules below it drops, plus the rules below it adds. Suppress one
-        finding with @SuppressWarnings("PMD.RuleName") and a comment saying why.
+        PMD's own quickstart ruleset, less the rules below it excludes, plus the rules after it. Suppress
+        one finding with @SuppressWarnings("PMD.RuleName") and a comment saying why.
     </description>
 
     <rule ref="rulesets/java/quickstart.xml">
-        <!-- Not wanted here. -->
+        <!-- Not wanted. -->
         <exclude name="AvoidUsingVolatile"/>
         <exclude name="AvoidCatchingGenericException"/>
         <exclude name="AssignmentInOperand"/>
@@ -28,48 +28,52 @@
         <exclude name="AvoidDollarSigns"/>
     </rule>
 
-    <!-- The game owns its levels, servers and client, and closes them itself. -->
+    <!-- The game owns its levels, its server and its client: code that is handed one must not close it. -->
     <rule ref="category/java/errorprone.xml/CloseResource">
         <properties>
             <property name="allowedResourceTypes"
-                      value="java.io.ByteArrayOutputStream|java.io.ByteArrayInputStream|java.io.StringWriter|java.io.CharArrayWriter|java.util.stream.Stream|java.util.stream.IntStream|java.util.stream.LongStream|java.util.stream.DoubleStream|net.minecraft.world.level.Level|net.minecraft.server.level.ServerLevel|net.minecraft.client.multiplayer.ClientLevel|net.minecraft.client.Minecraft|net.minecraft.server.MinecraftServer"/>
+                      value="java.io.ByteArrayOutputStream,java.io.ByteArrayInputStream,java.io.StringWriter,java.io.CharArrayWriter,java.util.stream.Stream,java.util.stream.IntStream,java.util.stream.LongStream,java.util.stream.DoubleStream,net.minecraft.world.level.Level,net.minecraft.server.level.ServerLevel,net.minecraft.client.multiplayer.ClientLevel,net.minecraft.client.Minecraft,net.minecraft.server.MinecraftServer"/>
         </properties>
     </rule>
 
-    <!-- Mixin members carry a modid$ prefix by convention. -->
+    <!-- Mixin members carry a `modid$` prefix by convention. -->
     <rule ref="category/java/codestyle.xml/AvoidDollarSigns">
         <properties>
             <property name="violationSuppressXPath"
-                      value="./ancestor-or-self::ClassDeclaration[pmd-java:hasAnnotation('org.spongepowered.asm.mixin.Mixin')]"/>
+                      value="./ancestor-or-self::*[pmd-java:hasAnnotation('org.spongepowered.asm.mixin.Mixin')]"/>
         </properties>
     </rule>
 
-    <rule ref="category/java/codestyle.xml/ConfusingTernary"/>
-    <rule ref="category/java/codestyle.xml/UseDiamondOperator"/>
-    <rule ref="category/java/bestpractices.xml/UseTryWithResources"/>
-    <rule ref="category/java/codestyle.xml/UseUnderscoresInNumericLiterals"/>
-    <rule ref="category/java/errorprone.xml/MissingSerialVersionUID"/>
-    <rule ref="category/java/codestyle.xml/EmptyMethodInAbstractClassShouldBeAbstract"/>
-    <rule ref="category/java/bestpractices.xml/UseVarargs"/>
-    <rule ref="category/java/codestyle.xml/PrematureDeclaration"/>
-    <rule ref="category/java/design.xml/PublicMemberInNonPublicType"/>
-    <rule ref="category/java/bestpractices.xml/SystemPrintln"/>
-    <rule ref="category/java/performance.xml/InsufficientStringBufferDeclaration"/>
-    <rule ref="category/java/design.xml/CollapsibleIfStatements"/>
-    <rule ref="category/java/design.xml/AvoidThrowingRawExceptionTypes"/>
-    <rule ref="category/java/bestpractices.xml/UnusedAssignment"/>
-    <rule ref="category/java/design.xml/SwitchDensity"/>
-    <rule ref="category/java/codestyle.xml/UnnecessaryCast"/>
-    <rule ref="category/java/design.xml/SignatureDeclareThrowsException"/>
-    <rule ref="category/java/codestyle.xml/UnnecessaryBoxing"/>
-    <rule ref="category/java/performance.xml/AppendCharacterWithChar"/>
     <rule ref="category/java/bestpractices.xml/ArrayIsStoredDirectly"/>
-    <rule ref="category/java/performance.xml/UseArraysAsList"/>
-    <rule ref="category/java/codestyle.xml/UseShortArrayInitializer"/>
-    <rule ref="category/java/performance.xml/ConsecutiveLiteralAppends"/>
     <rule ref="category/java/bestpractices.xml/AvoidPrintStackTrace"/>
-    <rule ref="category/java/performance.xml/InefficientStringBuffering"/>
-    <rule ref="category/java/errorprone.xml/AvoidFieldNameMatchingTypeName"/>
+    <rule ref="category/java/bestpractices.xml/SystemPrintln"/>
     <rule ref="category/java/bestpractices.xml/UnnecessaryVarargsArrayCreation"/>
+    <rule ref="category/java/bestpractices.xml/UnusedAssignment"/>
+    <rule ref="category/java/bestpractices.xml/UseTryWithResources"/>
+    <rule ref="category/java/bestpractices.xml/UseVarargs"/>
+
+    <rule ref="category/java/codestyle.xml/ConfusingTernary"/>
+    <rule ref="category/java/codestyle.xml/EmptyMethodInAbstractClassShouldBeAbstract"/>
+    <rule ref="category/java/codestyle.xml/PrematureDeclaration"/>
+    <rule ref="category/java/codestyle.xml/UnnecessaryBoxing"/>
+    <rule ref="category/java/codestyle.xml/UnnecessaryCast"/>
+    <rule ref="category/java/codestyle.xml/UseDiamondOperator"/>
+    <rule ref="category/java/codestyle.xml/UseShortArrayInitializer"/>
+    <rule ref="category/java/codestyle.xml/UseUnderscoresInNumericLiterals"/>
+
+    <rule ref="category/java/design.xml/AvoidThrowingRawExceptionTypes"/>
+    <rule ref="category/java/design.xml/CollapsibleIfStatements"/>
+    <rule ref="category/java/design.xml/PublicMemberInNonPublicType"/>
+    <rule ref="category/java/design.xml/SignatureDeclareThrowsException"/>
+    <rule ref="category/java/design.xml/SwitchDensity"/>
+
+    <rule ref="category/java/errorprone.xml/AvoidFieldNameMatchingTypeName"/>
+    <rule ref="category/java/errorprone.xml/MissingSerialVersionUID"/>
     <rule ref="category/java/errorprone.xml/ReplaceJavaUtilDate"/>
+
+    <rule ref="category/java/performance.xml/AppendCharacterWithChar"/>
+    <rule ref="category/java/performance.xml/ConsecutiveLiteralAppends"/>
+    <rule ref="category/java/performance.xml/InefficientStringBuffering"/>
+    <rule ref="category/java/performance.xml/InsufficientStringBufferDeclaration"/>
+    <rule ref="category/java/performance.xml/UseArraysAsList"/>
 </ruleset>

@@ -6,8 +6,9 @@
     Checkstyle's google_checks.xml (Checkstyle 14.3.0) without the checks that judge layout, which
     Spotless's formatter owns: indentation, whitespace, braces placement, wrapping, line length,
     blank lines, import order and javadoc layout. What is left judges what a formatter cannot fix:
-    naming, javadoc content, braces presence, switch defaults and the like. Added to it: JavaNCSS with its
-    default limits, DeclarationOrder, ParameterNumber and MultipleStringLiterals.
+    naming, javadoc content, braces presence, switch defaults and the like. Added: JavaNCSS with its
+    default limits, DeclarationOrder (fields before methods), ParameterNumber (at most 10) and
+    MultipleStringLiterals (a string written four or more times in one file).
 
     Suppress one finding with @SuppressWarnings("checkstyle:<check name in lower case>") and a comment
     saying why, or in config/checkstyle/suppressions.xml.
@@ -239,7 +240,6 @@
     </module>
 
     <module name="JavaNCSS"/>
-    <!-- Fields first, then constructors and methods; access order inside each group is not judged. -->
     <module name="DeclarationOrder">
       <property name="ignoreModifiers" value="true"/>
       <property name="ignoreConstructors" value="true"/>
@@ -247,7 +247,6 @@
     <module name="ParameterNumber">
       <property name="max" value="10"/>
     </module>
-    <!-- A string written four or more times in one file. -->
     <module name="MultipleStringLiterals">
       <property name="allowedDuplicates" value="3"/>
     </module>

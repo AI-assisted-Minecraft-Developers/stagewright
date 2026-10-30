@@ -1,8 +1,10 @@
 <?xml version="1.0"?>
 <!DOCTYPE suppressions PUBLIC
-          "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
-          "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
 <suppressions>
-  <!-- Mixin members carry a modid$ prefix by convention, so no naming check applies under a mixin package. -->
-  <suppress checks="Name$" files="[\\/]mixin[\\/]"/>
+  <!-- Mixin members carry a `modid$` prefix by convention, so the naming checks do not apply in a
+       mixin package. Only the naming checks: everything else still judges mixins. -->
+  <suppress files="[/\\]mixin[/\\]"
+            checks="^(TypeName|GoogleNonConstantFieldName|ParameterName|LambdaParameterName|CatchParameterName|RecordComponentName|LocalVariableName|LocalFinalVariableName|PatternVariableName|ClassTypeParameterName|RecordTypeParameterName|MethodTypeParameterName|InterfaceTypeParameterName|AbbreviationAsWordInName|GoogleMethodName)$"/>
 </suppressions>
