@@ -23,18 +23,22 @@ public final class RecipesContracts {
     /** Ceiling on how deep a closure walk may go when {@code maxDepth} is omitted. */
     public static final int DEFAULT_MAX_DEPTH = 64;
 
+    /** The requests {@code mc.test.recipes} takes, told apart by {@code op}. */
     @Tag("op")
     @Named("TestRecipesParams")
     public sealed interface RecipesOp permits Producing, Ingredients, ClosureOf, Uncraftable, Audit, Count {}
 
+    /** Asks which recipes make an item. */
     @Variant("producing")
     public record Producing(
             @Doc("Item whose makers are wanted.") @ResourceId
             String item) implements RecipesOp {}
 
+    /** Asks for one recipe's slots and result. */
     @Variant("ingredients")
     public record Ingredients(@Doc("Recipe id.") @ResourceId String recipe) implements RecipesOp {}
 
+    /** Asks for every ingredient of an item, down to the raw materials. */
     @Variant("closure")
     public record ClosureOf(
             @Doc("Item whose whole ingredient tree is walked.") @ResourceId
@@ -47,12 +51,15 @@ public final class RecipesContracts {
             Optional<@Range(min = 1, max = 256) Integer> maxDepth)
             implements RecipesOp {}
 
+    /** Asks for every recipe with a slot nothing registered can fill. */
     @Variant("uncraftable")
     public record Uncraftable() implements RecipesOp {}
 
+    /** Asks for each grid recipe to be laid out and assembled from its own ingredients. */
     @Variant("audit")
     public record Audit() implements RecipesOp {}
 
+    /** Asks how many recipes are loaded, in all and per type. */
     @Variant("count")
     public record Count() implements RecipesOp {}
 
@@ -69,14 +76,17 @@ public final class RecipesContracts {
     @Named("TestRecipeSlot")
     public record Slot(@Length(max = 4096) List<@ResourceId String> accepts) {}
 
+    /** The answers {@code mc.test.recipes} gives, one per {@link RecipesOp} variant. */
     @Tag("op")
     @Named("TestRecipesReply")
     public sealed interface RecipesReply
             permits ProducedBy, IngredientsOf, Closure, UncraftableRecipes, AuditReport, Counted {}
 
+    /** The recipe ids that make an item. */
     @Variant("producing")
     public record ProducedBy(@Length(max = 4096) List<@ResourceId String> recipes) implements RecipesReply {}
 
+    /** A recipe's result and its non-empty ingredient slots. */
     @Variant("ingredients")
     public record IngredientsOf(
             @Doc("Result item id; empty for a dynamic recipe that declares none.") @Length(max = 256)
@@ -89,6 +99,7 @@ public final class RecipesContracts {
             List<Slot> slots)
             implements RecipesReply {}
 
+    /** The result of a closure walk; the lists are a prefix of the full closure when {@code truncated} is set. */
     @Variant("closure")
     public record Closure(
             @Doc("The item asked about.") @ResourceId String root,
@@ -119,6 +130,7 @@ public final class RecipesContracts {
             boolean truncated)
             implements RecipesReply {}
 
+    /** The recipes with a slot nothing registered can fill. */
     @Variant("uncraftable")
     public record UncraftableRecipes(
             @Doc("Total, even when the list below is cut.") @Range(min = 0)
@@ -128,6 +140,7 @@ public final class RecipesContracts {
             List<@ResourceId String> recipes)
             implements RecipesReply {}
 
+    /** The totals of an audit, and the recipes that did not make what they declare. */
     @Variant("audit")
     public record AuditReport(
             @Doc("Every recipe loaded: attempted plus skipped.") @Range(min = 0)
@@ -154,6 +167,7 @@ public final class RecipesContracts {
             List<@Length(max = 1024) String> failures)
             implements RecipesReply {}
 
+    /** The number of recipes loaded, in all and per recipe type. */
     @Variant("count")
     public record Counted(
             @Doc("Every recipe loaded.") @Range(min = 0) int total,

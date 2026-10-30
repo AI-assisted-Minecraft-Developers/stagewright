@@ -102,6 +102,7 @@ public interface Plot {
     @Target(ElementType.PARAMETER)
     @interface In {
 
+        /** The dimension id the plot is leased in, such as {@code "minecraft:the_nether"}. */
         String value();
     }
 }

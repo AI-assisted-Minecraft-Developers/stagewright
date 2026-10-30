@@ -17,16 +17,19 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 public final class LootContracts {
     private LootContracts() {}
 
+    /** The requests {@code mc.test.loot} takes, told apart by {@code op}. */
     @Tag("op")
     @Named("TestLootParams")
     public sealed interface LootOp permits Exists, Roll, ListTables {}
 
+    /** Names every loot table registered, or those of one namespace. */
     @Variant("list")
     public record ListTables(
             @Doc("Only the tables of this namespace, e.g. minecraft. Omitted: every table.")
             Optional<@Length(min = 1, max = 64) String> namespace)
             implements LootOp {}
 
+    /** Asks whether one loot table is registered. */
     @Variant("exists")
     public record Exists(
             @Doc("Loot table id, e.g. minecraft:chests/simple_dungeon.") @ResourceId
@@ -51,10 +54,12 @@ public final class LootContracts {
             @Doc("Items of it produced, stack sizes summed.") @Range(min = 0)
             long total) {}
 
+    /** The answers {@code mc.test.loot} gives, one per {@link LootOp} variant. */
     @Tag("op")
     @Named("TestLootReply")
     public sealed interface LootReply permits Existence, Rolled, TableList {}
 
+    /** The loot table ids registered, or those of one namespace. */
     @Variant("list")
     public record TableList(
             @Doc("Tables registered (in the namespace, when one was named), even when the list below is cut.")
@@ -65,12 +70,14 @@ public final class LootContracts {
             List<@ResourceId String> tables)
             implements LootReply {}
 
+    /** Whether a loot table is registered. */
     @Variant("exists")
     public record Existence(
             @Doc("False for an unregistered id, which the game answers with an empty stand-in table rather than null.")
             boolean exists)
             implements LootReply {}
 
+    /** What rolling a table gave: how many rolls came up empty, and what the rest produced. */
     @Variant("roll")
     public record Rolled(
             @Doc("Rolls made.") @Range(min = 1) int times,

@@ -16,13 +16,16 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 public final class ModsContracts {
     private ModsContracts() {}
 
+    /** The requests {@code mc.test.mods} takes, told apart by {@code op}. */
     @Tag("op")
     @Named("TestModsParams")
     public sealed interface ModsOp permits ListMods, Has {}
 
+    /** Asks for every mod this game loaded. */
     @Variant("list")
     public record ListMods() implements ModsOp {}
 
+    /** Asks whether one mod id is loaded. */
     @Variant("has")
     public record Has(
             @Doc("Mod id, e.g. worlddriver.") @Length(min = 1, max = 128)
@@ -36,10 +39,12 @@ public final class ModsContracts {
             @Doc("As the loader reports it.") @Length(max = 256)
             String version) {}
 
+    /** The answers {@code mc.test.mods} gives, one per {@link ModsOp} variant. */
     @Tag("op")
     @Named("TestModsReply")
     public sealed interface ModsReply permits ModList, Present {}
 
+    /** Every mod loaded, with its version. */
     @Variant("list")
     public record ModList(
             @Doc("Mods loaded, the loader, Minecraft and Java included where the loader lists them.") @Range(min = 0)
@@ -49,6 +54,7 @@ public final class ModsContracts {
             List<Mod> mods)
             implements ModsReply {}
 
+    /** Whether the asked mod is loaded, and its version when it is. */
     @Variant("has")
     public record Present(
             boolean has,

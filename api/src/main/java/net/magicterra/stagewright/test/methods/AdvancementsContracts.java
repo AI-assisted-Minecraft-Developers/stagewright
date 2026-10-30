@@ -18,16 +18,19 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 public final class AdvancementsContracts {
     private AdvancementsContracts() {}
 
+    /** The requests {@code mc.test.advancements} takes, told apart by {@code op}. */
     @Tag("op")
     @Named("TestAdvancementsParams")
     public sealed interface AdvancementsOp permits Grant, Revoke, Progress, ListAdvancements {}
 
+    /** Names every advancement loaded, or those of one namespace. */
     @Variant("list")
     public record ListAdvancements(
             @Doc("Only the advancements of this namespace, e.g. minecraft. Omitted: every advancement.")
             Optional<@Length(min = 1, max = 64) String> namespace)
             implements AdvancementsOp {}
 
+    /** Awards every unmet criterion of an advancement to a server player. */
     @Variant("grant")
     public record Grant(
             @Doc("A server player, e.g. player:steve.") @BotRef
@@ -36,6 +39,7 @@ public final class AdvancementsContracts {
             @Doc("Advancement id.") @ResourceId String id)
             implements AdvancementsOp {}
 
+    /** Takes every met criterion of an advancement back from a server player. */
     @Variant("revoke")
     public record Revoke(
             @Doc("A server player, e.g. player:steve.") @BotRef
@@ -44,6 +48,7 @@ public final class AdvancementsContracts {
             @Doc("Advancement id.") @ResourceId String id)
             implements AdvancementsOp {}
 
+    /** Reads how far a server player has got through an advancement. */
     @Variant("progress")
     public record Progress(
             @Doc("A server player, e.g. player:steve.") @BotRef
@@ -52,10 +57,12 @@ public final class AdvancementsContracts {
             @Doc("Advancement id.") @ResourceId String id)
             implements AdvancementsOp {}
 
+    /** The answers {@code mc.test.advancements} gives, one per {@link AdvancementsOp} variant. */
     @Tag("op")
     @Named("TestAdvancementsReply")
     public sealed interface AdvancementsReply permits Granted, Revoked, Progressed, AdvancementList {}
 
+    /** The advancement ids loaded, or those of one namespace. */
     @Variant("list")
     public record AdvancementList(
             @Doc("Advancements loaded (in the namespace, when one was named), even when the list below is cut.")
@@ -66,6 +73,7 @@ public final class AdvancementsContracts {
             List<@ResourceId String> advancements)
             implements AdvancementsReply {}
 
+    /** What a grant changed: whether the advancement is now complete, and the criteria it awarded. */
     @Variant("grant")
     public record Granted(
             @Doc("Whether the advancement is now complete.") boolean done,
@@ -75,6 +83,7 @@ public final class AdvancementsContracts {
             List<@Length(max = 256) String> awarded)
             implements AdvancementsReply {}
 
+    /** What a revoke took back: whether the advancement is still complete, and the criteria removed. */
     @Variant("revoke")
     public record Revoked(
             @Doc("Whether the advancement is still complete; false after a revoke.")
@@ -84,6 +93,7 @@ public final class AdvancementsContracts {
             List<@Length(max = 256) String> revoked)
             implements AdvancementsReply {}
 
+    /** Where a player stands on an advancement: complete, and which criteria are done and which remain. */
     @Variant("progress")
     public record Progressed(
             boolean done,

@@ -18,10 +18,12 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 public final class ChunksContracts {
     private ChunksContracts() {}
 
+    /** The requests {@code mc.test.chunks} takes, told apart by {@code op}. */
     @Tag("op")
     @Named("TestChunksParams")
     public sealed interface ChunksOp permits Unload, Reload {}
 
+    /** Drops a chunk from memory and waits until it and its entities are gone. */
     @Variant("unload")
     public record Unload(
             @Doc("Any block of the chunk.") BlockPosition pos,
@@ -33,6 +35,7 @@ public final class ChunksContracts {
             int withinTicks)
             implements ChunksOp {}
 
+    /** Forces a chunk loaded and waits until its entities are read back. */
     @Variant("reload")
     public record Reload(
             @Doc("Any block of the chunk.") BlockPosition pos,
@@ -44,10 +47,12 @@ public final class ChunksContracts {
             int withinTicks)
             implements ChunksOp {}
 
+    /** The answers {@code mc.test.chunks} gives, one per {@link ChunksOp} variant. */
     @Tag("op")
     @Named("TestChunksReply")
     public sealed interface ChunksReply permits Unloaded, Reloaded {}
 
+    /** Whether the chunk left memory, how long that took, and what held it when it did not. */
     @Variant("unload")
     public record Unloaded(
             int chunkX,
@@ -60,6 +65,7 @@ public final class ChunksContracts {
             @Doc("When not done, what still held it.") Optional<@Length(max = 256) String> heldBy)
             implements ChunksReply {}
 
+    /** Whether the chunk and its entities are back, how long that took, and how many entities it holds. */
     @Variant("reload")
     public record Reloaded(
             int chunkX,

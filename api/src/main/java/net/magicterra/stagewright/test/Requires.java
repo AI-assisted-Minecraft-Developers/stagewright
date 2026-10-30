@@ -22,6 +22,7 @@ public @interface Requires {
     /** Mod ids that must be loaded. */
     String[] mods() default {};
 
+    /** The kinds of game a test can require. */
     enum Capability {
         /** A real client is connected: the integrated server's own, or the one a topology joins to its server. */
         CLIENT,

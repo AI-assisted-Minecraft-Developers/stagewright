@@ -18,26 +18,31 @@ import net.magicterra.worlddriver.api.schema.annotation.Variant;
 public final class StructuresContracts {
     private StructuresContracts() {}
 
+    /** The requests {@code mc.test.structures} takes, told apart by {@code op}. */
     @Tag("op")
     @Named("TestStructuresParams")
     public sealed interface StructuresOp permits Registered, At, Locate, ListStructures {}
 
+    /** Names every structure registered, or those of one namespace. */
     @Variant("list")
     public record ListStructures(
             @Doc("Only the structures of this namespace, e.g. minecraft. Omitted: every structure.")
             Optional<@Length(min = 1, max = 64) String> namespace)
             implements StructuresOp {}
 
+    /** Asks whether one structure id is registered. */
     @Variant("registered")
     public record Registered(
             @Doc("Structure id, e.g. minecraft:village_plains.") @ResourceId
             String id) implements StructuresOp {}
 
+    /** Asks which generated structures cover a block. */
     @Variant("at")
     public record At(
             BlockPosition pos,
             @Doc("Omitted: minecraft:overworld.") Optional<@ResourceId String> dimension) implements StructuresOp {}
 
+    /** Searches for the nearest structure of one id, starting from a position. */
     @Variant("locate")
     public record Locate(
             @ResourceId String id,
@@ -50,10 +55,12 @@ public final class StructuresContracts {
             @Doc("Omitted: minecraft:overworld.") Optional<@ResourceId String> dimension)
             implements StructuresOp {}
 
+    /** The answers {@code mc.test.structures} gives, one per {@link StructuresOp} variant. */
     @Tag("op")
     @Named("TestStructuresReply")
     public sealed interface StructuresReply permits IsRegistered, Covering, Located, StructureList {}
 
+    /** The structure ids registered, or those of one namespace. */
     @Variant("list")
     public record StructureList(
             @Doc("Structures registered (in the namespace, when one was named), even when the list below is cut.")
@@ -64,9 +71,11 @@ public final class StructuresContracts {
             List<@ResourceId String> structures)
             implements StructuresReply {}
 
+    /** Whether a structure is registered. */
     @Variant("registered")
     public record IsRegistered(boolean registered) implements StructuresReply {}
 
+    /** The structures with a generated piece containing the block. */
     @Variant("at")
     public record Covering(
             @Doc("Structures with a generated piece containing the block, sorted. Only loaded chunks are asked, "
@@ -75,6 +84,7 @@ public final class StructuresContracts {
             List<@ResourceId String> structures)
             implements StructuresReply {}
 
+    /** Where the search found a structure, if anywhere, and what the search cost. */
     @Variant("locate")
     public record Located(
             @Doc("False when none lies within chunkRadius.") boolean found,
