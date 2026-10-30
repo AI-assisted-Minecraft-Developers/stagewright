@@ -98,10 +98,20 @@ public final class Perf {
         return this;
     }
 
+    /** The warmup ticks, as {@link #warmup(int)} set them. */
+    public int warmup() {
+        return warmup;
+    }
+
     /** Ticks in one window, at least 2; 600 by default. */
     public Perf sample(int ticks) {
         this.sample = ticks;
         return this;
+    }
+
+    /** The ticks in one window, as {@link #sample(int)} set them. */
+    public int sample() {
+        return sample;
     }
 
     /** Windows per phase, whose median is reported; 3 by default. */
@@ -110,19 +120,13 @@ public final class Perf {
         return this;
     }
 
-    public List<Phase> phaseList() {
-        return List.copyOf(phases);
-    }
-
-    public int warmup() {
-        return warmup;
-    }
-
-    public int sample() {
-        return sample;
-    }
-
+    /** The windows per phase, as {@link #repeat(int)} set them. */
     public int repeat() {
         return repeat;
+    }
+
+    /** The phases in the order they were added. */
+    public List<Phase> phaseList() {
+        return List.copyOf(phases);
     }
 }
