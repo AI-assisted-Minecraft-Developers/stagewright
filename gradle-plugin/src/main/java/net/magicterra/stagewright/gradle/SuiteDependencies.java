@@ -11,8 +11,6 @@ import org.gradle.api.NamedDomainObjectCollection;
 import org.gradle.api.NamedDomainObjectContainer;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
-import org.gradle.api.artifacts.Dependency;
-import org.gradle.api.artifacts.DependencyResolveDetails;
 import org.gradle.api.artifacts.DependencySet;
 import org.gradle.api.artifacts.ExternalModuleDependency;
 import org.gradle.api.plugins.JavaPluginExtension;
@@ -95,19 +93,18 @@ final class SuiteDependencies {
         }});
         project.getConfigurations().named(RUNTIME).configure(c -> {
             c.setDescription("The mods StageWright's generated runs get: StageWright's and WorldDriver's by default.");
-            // Transitive, unlike loom's own, so WorldDriver brings the Architectury it is built against.
+            // Transitive, unlike loom's own, so a mod a build declares here brings the mods its POM names.
             c.setTransitive(true);
             // On the configuration too, for what a build declares there: loom resolves it alone, so nothing inherits it.
             for (String group : PROJECT_GROUPS) c.exclude(Map.of("group", group));
             runtimeDefaults(project, c, tests, suite -> loaderName(loom, project, suite));
-            c.getResolutionStrategy().eachDependency(details -> alignToProject(project, details));
         });
         constrainWorldDriver(project, RUNTIME, "worlddriver-fabric", "worlddriver-neoforge");
     }
 
     /**
      * Under ModDevGradle, a plain configuration the run source set's runtime classpath extends: the mods are on the
-     * same classpath as the project's own, so Gradle settles a shared Architectury there without help.
+     * same classpath as the project's own, so Gradle settles a library both declare without help.
      */
     private static void modDevRuntime(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
         if (project.getConfigurations().findByName(MOD_DEV_RUNTIME) != null) return;
@@ -175,26 +172,6 @@ final class SuiteDependencies {
                 c.because("StageWright " + PluginVersion.get() + " links against this WorldDriver line;"
                         + " set worldDriverVersion to a build in it");
             });
-        }
-    }
-
-    /**
-     * WorldDriver's Architectury, moved to the version the project declares elsewhere if it does: the project's own
-     * is on the runs' classpath too, and two versions of one mod stop the game.
-     */
-    private static void alignToProject(Project project, DependencyResolveDetails details) {
-        var requested = details.getRequested();
-        if (!"dev.architectury".equals(requested.getGroup())) return;
-        for (Configuration c : project.getConfigurations()) {
-            if (c.getName().equals(RUNTIME)) continue;
-            for (Dependency d : c.getDependencies()) {
-                if (requested.getGroup().equals(d.getGroup()) && requested.getName().equals(d.getName())
-                        && d.getVersion() != null) {
-                    details.useVersion(d.getVersion());
-                    details.because("the project declares this version");
-                    return;
-                }
-            }
         }
     }
 

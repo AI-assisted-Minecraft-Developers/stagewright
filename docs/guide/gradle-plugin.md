@@ -89,7 +89,7 @@ coordinate there without the plugin's help:
 
 | Configuration | Defaults |
 |---|---|
-| `modStagewrightTestRuntime` under loom, `stagewrightTestRuntime` under ModDevGradle | StageWright's loader mod and WorldDriver's, with what WorldDriver's POM brings: the Architectury API |
+| `modStagewrightTestRuntime` under loom, `stagewrightTestRuntime` under ModDevGradle | StageWright's loader mod and WorldDriver's; neither POM names a dependency |
 | `stagewrightTestCompile` | StageWright's api and WorldDriver's (`:dev`, Mojang names), and JUnit Jupiter's api |
 
 ```groovy
@@ -135,8 +135,7 @@ plugin's own, `modStagewrightTestRuntime`, on the run source set: remapped like 
 present in the generated runs and in any other run of that source set, absent from `runClient`. Nothing
 goes in `modLocalRuntime`. It is transitive except for the loader's own groups — `net.fabricmc`,
 `net.fabricmc.fabric-api`, `net.neoforged` — which are the project's: a second Fabric Loader stops the
-game. When the project declares the Architectury API itself, WorldDriver's is moved to that version, so
-the runs carry one.
+game.
 
 Loom keeps a remapped mod under its coordinates, not its contents, so a snapshot republished to
 mavenLocal under the same version would reach the runs as the build before. As it is applied, the plugin
