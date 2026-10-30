@@ -47,6 +47,11 @@ ext.junitPlatformJars = [
     'org.apiguardian:apiguardian-api:1.1.2',
 ]
 
+// For the formatter's own dependencies; the subprojects declare theirs below.
+repositories {
+    mavenCentral()
+}
+
 allprojects {
     group = rootProject.maven_group
     version = rootProject.stagewrightVersion
