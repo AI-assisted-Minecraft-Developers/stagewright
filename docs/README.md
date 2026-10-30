@@ -33,6 +33,7 @@ so they are stated as literal names, keys and codes.
 | [Launch spec](reference/launch-spec.md) | The file that tells the test engine how to start one topology's games, and what the engine adds to the command. |
 | [Supervision protocol](reference/supervision-protocol.md) | What the agent in a game's JVM sends its supervisor, the conclusions drawn from it, the test events it carries, and how the mod talks to the agent. |
 | [Publishing and artifacts](reference/publishing.md) | What is published, which coordinate to depend on for which job, the order to publish in from nothing, and why the wrong coordinate fails to link rather than failing to resolve. |
+| [Code style and static checks](reference/code-style.md) | Which tool owns layout and which judges the rest, where each is configured, how to silence one finding, and the module boundaries the tests check. |
 
 ## Design — why it is shaped this way
 
