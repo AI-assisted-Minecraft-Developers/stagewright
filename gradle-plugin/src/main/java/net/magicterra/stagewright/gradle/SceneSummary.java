@@ -16,14 +16,17 @@ import org.gradle.api.tasks.testing.TestResult;
 final class SceneSummary implements TestListener {
 
     @Override
-    public void beforeSuite(TestDescriptor suite) {}
+    public void beforeSuite(TestDescriptor suite) {
+        // Nothing to do before a suite: the summary is written once the suite's results are known.
+    }
 
     @Override
     public void afterSuite(TestDescriptor suite, TestResult result) {
         if (!isScene(suite)) {
             return;
         }
-        StringBuilder line = new StringBuilder("[stagewright] ")
+        StringBuilder line = new StringBuilder(64)
+                .append("[stagewright] ")
                 .append(suite.getClassName())
                 .append(": ")
                 .append(result.getSuccessfulTestCount())
@@ -37,10 +40,14 @@ final class SceneSummary implements TestListener {
     }
 
     @Override
-    public void beforeTest(TestDescriptor test) {}
+    public void beforeTest(TestDescriptor test) {
+        // Nothing to do before a test: only scenes are summarized, and only when they finish.
+    }
 
     @Override
-    public void afterTest(TestDescriptor test, TestResult result) {}
+    public void afterTest(TestDescriptor test, TestResult result) {
+        // Nothing to do after a test: its outcome is counted in the scene's suite summary.
+    }
 
     static boolean isScene(TestDescriptor suite) {
         if (suite.getClassName() == null) {

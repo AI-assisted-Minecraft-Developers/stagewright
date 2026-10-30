@@ -52,30 +52,16 @@ final class GeneratedRuns {
                 && suite.getTopologies().get().isEmpty();
     }
 
-    /** Declare the suite's runs in its loader project, once that project is evaluated. */
-    static void declare(Project plugin, StageWrightTestSuite suite) {
-        Project loader = loader(plugin, suite);
-        // The plugin's own project is in its afterEvaluate already, and another one nested there would be one level
-        // too deep: ModDevGradle wires DevLaunch onto a run's classpath from an afterEvaluate of its own, which
-        // Gradle then drops without a word, and the game dies on ClassNotFoundException: net.neoforged.devlaunch.Main.
-        if (loader == plugin || loader.getState().getExecuted()) {
-            declareNow(loader, suite);
-        } else {
-            loader.afterEvaluate(p -> declareNow(p, suite));
-        }
-    }
-
     /** The topologies the generated runs give the suite. */
     static List<SuiteLaunch> launches(Project plugin, StageWrightTestSuite suite) {
         Project loader = loader(plugin, suite);
         String path = loader.getPath().equals(":") ? "" : loader.getPath();
         int timeout = suite.getTimeoutMinutes().getOrElse(StageWrightPlugin.DEFAULT_TIMEOUT_MINUTES);
-        String leaks =
-                SuiteLaunch.leaks(suite.getLeaks().getOrNull(), "stagewright test suite '" + suite.getName() + "'");
+        String leaks = SuiteLaunch.leaks(suite.getLeaks().getOrNull(), suiteLabel(suite));
         List<SuiteLaunch> launches = new ArrayList<>();
         launches.add(new SuiteLaunch(
                 DEDICATED_SERVER,
-                path + ":" + taskName(suite, "DedicatedServer"),
+                launchTask(path, suite, "DedicatedServer"),
                 null,
                 loader.file(runDir(suite, "dedicated-server")),
                 true,
@@ -85,8 +71,8 @@ final class GeneratedRuns {
                 leaks));
         launches.add(new SuiteLaunch(
                 DEDICATED_SERVER_WITH_CLIENT,
-                path + ":" + taskName(suite, "DedicatedServerWithClient"),
-                path + ":" + taskName(suite, "JoiningClient"),
+                launchTask(path, suite, "DedicatedServerWithClient"),
+                launchTask(path, suite, "JoiningClient"),
                 loader.file(runDir(suite, "with-client")),
                 true,
                 timeout,
@@ -95,7 +81,7 @@ final class GeneratedRuns {
                 leaks));
         launches.add(new SuiteLaunch(
                 INTEGRATED_SERVER,
-                path + ":" + taskName(suite, "IntegratedServer"),
+                launchTask(path, suite, "IntegratedServer"),
                 null,
                 loader.file(runDir(suite, "integrated-server")),
                 true,
@@ -110,8 +96,8 @@ final class GeneratedRuns {
         String path = suite.getLoaderProject().get();
         Project loader = plugin.getRootProject().findProject(path);
         if (loader == null) {
-            throw new GradleException("stagewright test suite '" + suite.getName() + "' names loaderProject '" + path
-                    + "', which is not a project in this build");
+            throw new GradleException(
+                    suiteLabel(suite) + " names loaderProject '" + path + "', which is not a project in this build");
         }
         return loader;
     }
@@ -120,7 +106,7 @@ final class GeneratedRuns {
         Object loom = loader.getExtensions().findByName("loom");
         Object modDev = loom == null ? loader.getExtensions().findByName(MOD_DEV) : null;
         if (loom == null && modDev == null) {
-            throw new GradleException("stagewright test suite '" + suite.getName() + "' names loaderProject '"
+            throw new GradleException(suiteLabel(suite) + " names loaderProject '"
                     + loader.getPath() + "', which applies neither loom (Fabric Loom or Architectury Loom) nor"
                     + " ModDevGradle. Under another loader plugin, declare the runs there and map them with"
                     + " topologies instead");
@@ -182,6 +168,21 @@ final class GeneratedRuns {
                 source);
     }
 
+    /** Declare the suite's runs in its loader project, once that project is evaluated. */
+    // Identity on purpose: the plugin's own project has already run its afterEvaluate, so it is declared at once.
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
+    static void declare(Project plugin, StageWrightTestSuite suite) {
+        Project loader = loader(plugin, suite);
+        // The plugin's own project is in its afterEvaluate already, and another one nested there would be one level
+        // too deep: ModDevGradle wires DevLaunch onto a run's classpath from an afterEvaluate of its own, which
+        // Gradle then drops without a word, and the game dies on ClassNotFoundException: net.neoforged.devlaunch.Main.
+        if (loader == plugin || loader.getState().getExecuted()) {
+            declareNow(loader, suite);
+        } else {
+            loader.afterEvaluate(p -> declareNow(p, suite));
+        }
+    }
+
     private static void declare(
             Project loader,
             NamedDomainObjectContainer<Object> runs,
@@ -193,8 +194,8 @@ final class GeneratedRuns {
             StageWrightTestSuite suite,
             SourceSet source) {
         if (runs.findByName(name) != null) {
-            throw new GradleException("stagewright test suite '" + suite.getName() + "' would declare the run '" + name
-                    + "', which the build already declares");
+            throw new GradleException(
+                    suiteLabel(suite) + " would declare the run '" + name + "', which the build already declares");
         }
         boolean loom = loader.getExtensions().findByName("loom") != null;
         runs.create(name, run -> {
@@ -276,6 +277,8 @@ final class GeneratedRuns {
      * The project's mod holding {@code main}, which the tests' copy stands in for. The project's own {@code main}, by
      * identity: a mod may hold another project's source set, and every project's main is named {@code main}.
      */
+    // Identity on purpose: a mod's source set is the project's own main only if it is that very object.
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     private static Object host(Project loader, StageWrightTestSuite suite, Iterable<Object> mods, Object copy) {
         SourceSet main = loader.getExtensions()
                 .getByType(JavaPluginExtension.class)
@@ -291,7 +294,7 @@ final class GeneratedRuns {
                 }
             }
         }
-        throw new GradleException("stagewright test suite '" + suite.getName() + "': " + loader.getPath()
+        throw new GradleException(suiteLabel(suite) + ": " + loader.getPath()
                 + " declares no mod in neoForge.mods holding sourceSets.main, for the tests to join");
     }
 
@@ -328,13 +331,15 @@ final class GeneratedRuns {
         String name = suite.getRunSourceSet().getOrElse(TESTMOD);
         SourceSet set = sets.findByName(name);
         if (set == null) {
-            throw new GradleException("stagewright test suite '" + suite.getName() + "': " + loader.getPath()
-                    + " has no source set '" + name + "' to start its runs from (has: " + sets.getNames() + ")");
+            throw new GradleException(suiteLabel(suite) + ": " + loader.getPath() + " has no source set '" + name
+                    + "' to start its runs from (has: " + sets.getNames() + ")");
         }
         return set;
     }
 
     /** The suite generating runs in {@code project}, or null. */
+    // Identity on purpose: the project object Gradle hands in is the one the loader lookup returns.
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     static StageWrightTestSuite suiteOf(Project project, Iterable<StageWrightTestSuite> suites) {
         for (StageWrightTestSuite suite : suites) {
             if (generates(suite) && loader(project, suite) == project) {
@@ -342,6 +347,16 @@ final class GeneratedRuns {
             }
         }
         return null;
+    }
+
+    /** The suite as the build names it in an error message. */
+    private static String suiteLabel(StageWrightTestSuite suite) {
+        return "stagewright test suite '" + suite.getName() + "'";
+    }
+
+    /** The full path of a generated run's task, {@code what} naming the run. */
+    private static String launchTask(String path, StageWrightTestSuite suite, String what) {
+        return path + ":" + taskName(suite, what);
     }
 
     private static String runName(StageWrightTestSuite suite, String what) {

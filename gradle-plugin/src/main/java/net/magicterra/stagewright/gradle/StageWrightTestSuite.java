@@ -20,15 +20,16 @@ import org.gradle.api.provider.Property;
  * }
  * }</pre>
  *
- * With {@link #getLoaderProject()} the plugin declares the suite's runs in that project's loom or ModDevGradle, one per
- * topology a scene may name, and the loader plugin still builds each launch. With {@link #getTopologies()} instead the
- * suite borrows topologies the build declares. Each suite gets a {@code stagewrightTest<Name>} task running the outer
- * test engine; see docs/design/test-engine.md.
+ * <p>With {@link #getLoaderProject()} the plugin declares the suite's runs in that project's loom or ModDevGradle, one
+ * per topology a scene may name, and the loader plugin still builds each launch. With {@link #getTopologies()} instead
+ * the suite borrows topologies the build declares. Each suite gets a {@code stagewrightTest<Name>} task running the
+ * outer test engine; see docs/design/test-engine.md.
  */
 public abstract class StageWrightTestSuite implements Named {
 
     private final String name;
 
+    /** Called by Gradle with the name the suite is declared under. */
     @javax.inject.Inject
     public StageWrightTestSuite(String name) {
         this.name = name;

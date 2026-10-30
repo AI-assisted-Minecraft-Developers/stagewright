@@ -14,6 +14,8 @@ import org.gradle.api.artifacts.Configuration;
  * Fabric one. Under ModDevGradle nothing is added. Added as the configuration resolves, so that the projects are the
  * ones the suites name by then, whatever order the build configured them in.
  */
+// JUnit is the framework's own name; the run-of-capitals rule would force a spelling nobody searches for.
+@SuppressWarnings("checkstyle:abbreviationaswordinname")
 final class DevJUnitRuntime {
 
     private static final String[] MODULES = {
@@ -24,6 +26,8 @@ final class DevJUnitRuntime {
 
     private DevJUnitRuntime() {}
 
+    // The identity test is on purpose: it asks whether this configuration is the one target() found for the project.
+    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     static void install(
             Project plugin,
             NamedDomainObjectContainer<StageWrightTestSuite> tests,

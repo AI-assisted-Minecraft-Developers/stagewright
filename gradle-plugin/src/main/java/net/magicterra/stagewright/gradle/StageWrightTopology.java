@@ -26,6 +26,7 @@ public abstract class StageWrightTopology implements Named {
 
     private final String name;
 
+    /** Called by Gradle with the name the topology is declared under. */
     // @Inject even though the container passes the name explicitly: Gradle instantiates managed
     // types through its own injector, and from 9.x it refuses any constructor that is not annotated
     // rather than falling back to a plain reflective call.

@@ -78,6 +78,7 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
     @Internal
     abstract ListProperty<Entry> getEntries();
 
+    /** Gradle instantiates the task; its outputs are never up to date, so every build rewrites them. */
     public StageWrightLaunchSpecsTask() {
         // The files hold paths and classpath argfiles that depend on state Gradle does not track.
         getOutputs().upToDateWhen(t -> false);

@@ -337,8 +337,8 @@ public class StageWrightPlugin implements Plugin<Project> {
     }
 
     /**
-     * v1 boundary: classpath wiring only — testmod sees main's output plus main's own compile and runtime classpaths,
-     * and nothing else changes.
+     * Classpath wiring only, the v1 boundary: testmod sees main's output plus main's own compile and runtime
+     * classpaths, and nothing else changes.
      */
     private void registerTestmodSourceSet(Project project, StageWrightExtension ext) {
         SourceSet testmod = project.getExtensions()

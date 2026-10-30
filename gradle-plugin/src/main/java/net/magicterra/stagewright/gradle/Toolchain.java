@@ -159,6 +159,8 @@ interface Toolchain {
          * <p>Walks the hierarchy rather than asking for public methods: loom keeps its run directory behind a
          * {@code protected abstract} getter, which {@code getMethod} cannot see at all.
          */
+        // Opening the getter is the point: loom's run directory getter is protected, and no public API reaches it.
+        @SuppressWarnings("PMD.AvoidAccessibilityAlteration")
         static Object read(JavaExec run, String getter) {
             Method method = find(run, getter);
             if (method == null) {

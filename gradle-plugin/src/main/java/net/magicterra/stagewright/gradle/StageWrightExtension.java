@@ -26,8 +26,8 @@ import org.gradle.api.tasks.SourceSet;
  * }
  * }</pre>
  *
- * A topology runs nothing by itself: a test suite in {@code tests} maps the topology names its scenes declare to these,
- * and its {@code stagewrightTest<Suite>} task launches them.
+ * <p>A topology runs nothing by itself: a test suite in {@code tests} maps the topology names its scenes declare to
+ * these, and its {@code stagewrightTest<Suite>} task launches them.
  *
  * <p><b>On the names.</b> All three run scenes on a SERVER; what differs is which server, and whether a real client is
  * attached to it — {@code integratedServer} is the one inside a game client, {@code dedicatedServerWithClient} is a
@@ -40,6 +40,7 @@ public abstract class StageWrightExtension {
     private final NamedDomainObjectContainer<StageWrightTestSuite> tests;
     private SourceSet testmodSourceSetRef;
 
+    /** Called by Gradle with the containers it creates for this extension. */
     @javax.inject.Inject
     public StageWrightExtension(
             NamedDomainObjectContainer<StageWrightTopology> topologies,
@@ -53,14 +54,17 @@ public abstract class StageWrightExtension {
         return tests;
     }
 
+    /** Configures the test suites in place, as {@code tests { ... }} does in a build script. */
     public void tests(Action<? super NamedDomainObjectContainer<StageWrightTestSuite>> action) {
         action.execute(tests);
     }
 
+    /** The topologies the build declares, by name. */
     public NamedDomainObjectContainer<StageWrightTopology> getTopologies() {
         return topologies;
     }
 
+    /** Configures the topologies in place, as {@code topologies { ... }} does in a build script. */
     public void topologies(Action<? super NamedDomainObjectContainer<StageWrightTopology>> action) {
         action.execute(topologies);
     }
