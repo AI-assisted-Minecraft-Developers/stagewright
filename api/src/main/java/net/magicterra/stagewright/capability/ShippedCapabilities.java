@@ -11,6 +11,8 @@ import net.magicterra.stagewright.test.Game;
  * parties NOT to copy: they live in the harness jar, present in every run whether or not those mods are, so their
  * classes must load in a runtime that has neither.
  */
+// A namespace for the nested ServiceLoader providers; nothing ever instantiates the outer class.
+@SuppressWarnings("PMD.MissingStaticMethodInNonInstantiatableClass")
 public final class ShippedCapabilities {
 
     // Public because ServiceLoader instantiates the nested classes reflectively.
