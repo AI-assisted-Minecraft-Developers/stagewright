@@ -15,6 +15,9 @@
 //   - no rhino/netty wiring. Those are worlddriver's embedded runtime libraries.
 //   - the `dev` classifier publication is kept VERBATIM, because the dependency runs both
 //     ways: worlddriver's testmod compiles against mc_stagewright-api:dev.
+//
+// What every module shares is in build-logic's convention plugins, which each module applies itself:
+// stagewright.module (all of them) and stagewright.mod (the four Minecraft-side ones).
 plugins {
     // :stagewright-fabric builds with Fabric Loom; api, common and neoforge with ModDevGradle. The same versions
     // as WorldDriver's build; Loom 1.13 is the newest that runs on Gradle 8. See docs/reference/publishing.md.
@@ -22,158 +25,19 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.141' apply false
     // Shadow 9: 8.x unpacks the nested jars ModDevGradle's jarJar adds to the NeoForge jar.
     id 'com.gradleup.shadow' version '9.2.2' apply false
-    // build-logic's convention plugins; license, nexus and lint go on each subproject below.
+    // The version every module reads from this project (stagewrightVersion, worlddriverVersionRange, ...), and the
+    // formatter for the files at the repository root.
     id 'stagewright.version'
-    id 'stagewright.license' apply false
-    id 'stagewright.nexus' apply false
     id 'stagewright.lint'
 }
 
-// worlddriverVersionRange, the WorldDriver line both loaders' metadata declare, is in the stagewright.version
-// convention plugin (build-logic), which the engine and Gradle plugin builds apply too.
-
-// The JUnit Platform the in-game runner uses, each jar named: Loom's `include` is not transitive, and the
-// NeoForge jarJar takes each one alone.
-// Jupiter 5.x ships with Platform 1.x of the same minor and patch.
-def junitPlatformVersion = rootProject.junit_version.replaceFirst(/^5\./, '1.')
-ext.junitPlatformJars = [
-    "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}",
-    "org.junit.platform:junit-platform-engine:${junitPlatformVersion}",
-    "org.junit.platform:junit-platform-commons:${junitPlatformVersion}",
-    "org.junit.platform:junit-platform-reporting:${junitPlatformVersion}",
-    "org.junit.jupiter:junit-jupiter-engine:${rootProject.junit_version}",
-    "org.junit.jupiter:junit-jupiter-api:${rootProject.junit_version}",
-    'org.opentest4j:opentest4j:1.3.0',
-    'org.apiguardian:apiguardian-api:1.1.2',
-]
-
-// For the formatter's own dependencies; the subprojects declare theirs below.
+// For the formatter's own dependencies.
 repositories {
     mavenCentral()
 }
 
-allprojects {
-    group = rootProject.maven_group
-    version = rootProject.stagewrightVersion
-}
-
-subprojects {
-    // Before the pure-JVM early return below: those two modules publish too.
-    apply plugin: 'stagewright.license'
-    apply plugin: 'stagewright.lint'
-    def module = project
-    plugins.withId('maven-publish') {
-        module.apply plugin: 'stagewright.nexus'
-    }
-
-    // The command-line runner is pure JVM — it carries the two loader jars as resources and runs on a
-    // machine with no Minecraft classpath — so it stays out of the Loom and ModDevGradle pipeline.
-    if (project.name == 'stagewright-cli') return
-
-        // java-library for the `api` configuration, which ModDevGradle does not add.
-        apply plugin: 'java-library'
-    apply plugin: project.name == 'stagewright-fabric' ? 'fabric-loom' : 'net.neoforged.moddev'
-    apply plugin: 'maven-publish'
-
-    base {
-        archivesName = "$rootProject.archives_name-$project.name"
-    }
-
-    repositories {
-        // stagewright-common compiles against net.magicterra:worlddriver-common:<v>:dev, which
-        // worlddriver's CI publishes to the Nexus below. mavenLocal comes first, so a worlddriver
-        // published locally for development is found without it.
-        mavenLocal()
-        maven {
-            name = 'gardelNexus'
-            url = 'https://nexus.gardel.top/repository/maven-releases'
-            content { includeGroup 'net.magicterra' }
-        }
-        mavenCentral()
-        // Rhino (KubeJS fork), compile-only, for the JavaScript scene loader. Not on Maven Central.
-        // Fenced to its own group: Gradle takes the first repository that answers, and a third-party
-        // host whose parking page answers 200 to any path would otherwise serve bogus POMs for every
-        // artifact not found earlier.
-        maven {
-            name = 'latvian-releases'
-            url = 'https://maven.latvian.dev/releases'
-            content { includeGroup 'dev.latvian.mods' }
-        }
-    }
-
-    java {
-        withSourcesJar()
-        // Compiles and runs the game on 21 whatever JDK runs Gradle itself.
-        toolchain.languageVersion = JavaLanguageVersion.of(21)
-    }
-
-    tasks.withType(JavaCompile).configureEach {
-        it.options.release = 21
-    }
-
-    publishing {
-        publications {
-            mavenJava(MavenPublication) {
-                // The artifacts are each module's own, attached below once its script has named them.
-
-                // No <dependency> entries, because a mod jar NESTS its runtime deps via Jar-in-Jar: a
-                // consumer resolving the raw POM would end up with a second copy of something the jar
-                // already carries. The first external consumer hit exactly this. A module keeps the
-                // `api` dependencies it lists in ext.pomKeeps ('group:artifact'); see
-                // docs/reference/publishing.md.
-                pom.withXml {
-                    def keep = module.findProperty('pomKeeps') ?: []
-                    def kept = module.configurations.api.dependencies.findAll {
-                        "${it.group}:${it.name}".toString() in keep
-                    }
-                    if (kept.isEmpty()) return
-                        def block = asNode().appendNode('dependencies')
-                    kept.each { d ->
-                        def node = block.appendNode('dependency')
-                        node.appendNode('groupId', d.group)
-                        node.appendNode('artifactId', d.name)
-                        node.appendNode('version', d.version)
-                        def classifier = d instanceof ModuleDependency ? d.artifacts.find()?.classifier : null
-                        if (classifier) node.appendNode('classifier', classifier)
-                        node.appendNode('scope', 'compile')
-                    }
-                }
-            }
-        }
-
-        // artifactId must be resolved AFTER the subproject's own build script has run: this
-        // subprojects{} block executes BEFORE child scripts, so an eager archivesName.get()
-        // here would capture the root default instead of each module's override.
-        //
-        // Each module's script names its jars: `shippedJar`, the plain artifact (intermediary on Fabric;
-        // api's and common's are remapped by :stagewright-fabric, which has the mappings), `devJar`, the `dev`
-        // classifier in Mojang names, which worlddriver's testmod compiles against for api, and
-        // `devShadowJar`, a loader's whole mod in Mojang names.
-        afterEvaluate {
-            publishing.publications.named('mavenJava') {
-                artifactId = base.archivesName.get()
-                if (project.ext.has('shippedJar')) artifact(project.ext.shippedJar)
-                artifact(project.ext.devJar) { classifier = 'dev' }
-                if (project.ext.has('devShadowJar')) artifact(project.ext.devShadowJar) {
-                    classifier = 'dev-shadow'
-                }
-                artifact(project.ext.has('sourcesJarTask') ? project.ext.sourcesJarTask : tasks.named('sourcesJar')) {
-                    classifier = 'sources'
-                }
-            }
-        }
-
-        // Gradle consumers prefer .module metadata over the POM, and the runtimeElements
-        // variant would leak the dependencies the POM deliberately strips.
-        tasks.withType(GenerateModuleMetadata).configureEach {
-            enabled = false
-        }
-
-        repositories {
-            mavenLocal()
-        }
-    }
-}
+group = maven_group
+version = stagewrightVersion
 
 // ---- Release order ----
 // The bootstrap sequence is the one in the header of this file. It is written out, with the

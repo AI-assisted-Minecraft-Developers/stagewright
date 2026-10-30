@@ -1,3 +1,10 @@
+plugins {
+    // java-library for the `api` configuration, which ModDevGradle does not add.
+    id 'java-library'
+    id 'net.neoforged.moddev'
+    id 'stagewright.mod'
+}
+
 neoForge {
     // Vanilla in Mojang names, the one NeoForge $neoforge_version is built on.
     neoFormVersion = rootProject.neoform_version

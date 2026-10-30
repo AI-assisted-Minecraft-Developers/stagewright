@@ -1,0 +1,126 @@
+// A Minecraft-side module of the root build (api, common, fabric, neoforge). Applied after `java-library` and the
+// module's loader plugin (Fabric Loom or ModDevGradle), which each module's own plugins {} block names first.
+pluginManager.apply('maven-publish')
+pluginManager.apply('stagewright.module')
+
+def module = project
+
+// The JUnit Platform the in-game runner uses, each jar named: Loom's `include` is not transitive, and the
+// NeoForge jarJar takes each one alone.
+// Jupiter 5.x ships with Platform 1.x of the same minor and patch.
+def junitPlatformVersion = rootProject.junit_version.replaceFirst(/^5\./, '1.')
+ext.junitPlatformJars = [
+    "org.junit.platform:junit-platform-launcher:${junitPlatformVersion}",
+    "org.junit.platform:junit-platform-engine:${junitPlatformVersion}",
+    "org.junit.platform:junit-platform-commons:${junitPlatformVersion}",
+    "org.junit.platform:junit-platform-reporting:${junitPlatformVersion}",
+    "org.junit.jupiter:junit-jupiter-engine:${rootProject.junit_version}",
+    "org.junit.jupiter:junit-jupiter-api:${rootProject.junit_version}",
+    'org.opentest4j:opentest4j:1.3.0',
+    'org.apiguardian:apiguardian-api:1.1.2',
+]
+
+base {
+    archivesName = "$rootProject.archives_name-$project.name"
+}
+
+repositories {
+    // stagewright-common compiles against net.magicterra:worlddriver-common:<v>:dev, which
+    // worlddriver's CI publishes to the Nexus below. mavenLocal comes first, so a worlddriver
+    // published locally for development is found without it.
+    mavenLocal()
+    maven {
+        name = 'gardelNexus'
+        url = 'https://nexus.gardel.top/repository/maven-releases'
+        content { includeGroup 'net.magicterra' }
+    }
+    mavenCentral()
+    // Rhino (KubeJS fork), compile-only, for the JavaScript scene loader. Not on Maven Central.
+    // Fenced to its own group: Gradle takes the first repository that answers, and a third-party
+    // host whose parking page answers 200 to any path would otherwise serve bogus POMs for every
+    // artifact not found earlier.
+    maven {
+        name = 'latvian-releases'
+        url = 'https://maven.latvian.dev/releases'
+        content { includeGroup 'dev.latvian.mods' }
+    }
+}
+
+java {
+    withSourcesJar()
+    // Compiles and runs the game on 21 whatever JDK runs Gradle itself.
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            // The artifacts are each module's own, attached below once its script has named them.
+
+            // No <dependency> entries, because a mod jar NESTS its runtime deps via Jar-in-Jar: a
+            // consumer resolving the raw POM would end up with a second copy of something the jar
+            // already carries. The first external consumer hit exactly this. A module keeps the
+            // `api` dependencies it lists in ext.pomKeeps ('group:artifact'); see
+            // docs/reference/publishing.md.
+            pom.withXml {
+                def keep = module.findProperty('pomKeeps') ?: []
+                def kept = module.configurations.api.dependencies.findAll {
+                    "${it.group}:${it.name}".toString() in keep
+                }
+                if (kept.isEmpty()) {
+                    return
+                }
+                def block = asNode().appendNode('dependencies')
+                kept.each { d ->
+                    def node = block.appendNode('dependency')
+                    node.appendNode('groupId', d.group)
+                    node.appendNode('artifactId', d.name)
+                    node.appendNode('version', d.version)
+                    def classifier = d instanceof ModuleDependency ? d.artifacts.find()?.classifier : null
+                    if (classifier) {
+                        node.appendNode('classifier', classifier)
+                    }
+                    node.appendNode('scope', 'compile')
+                }
+            }
+        }
+    }
+
+    // artifactId must be resolved AFTER the module's own build script has run: this plugin is
+    // applied BEFORE the rest of that script, so an eager archivesName.get() here would capture
+    // the default instead of the module's override.
+    //
+    // Each module's script names its jars: `shippedJar`, the plain artifact (intermediary on Fabric;
+    // api's and common's are remapped by :stagewright-fabric, which has the mappings), `devJar`, the `dev`
+    // classifier in Mojang names, which worlddriver's testmod compiles against for api, and
+    // `devShadowJar`, a loader's whole mod in Mojang names.
+    afterEvaluate {
+        publishing.publications.named('mavenJava') {
+            artifactId = base.archivesName.get()
+            if (project.ext.has('shippedJar')) {
+                artifact(project.ext.shippedJar)
+            }
+            artifact(project.ext.devJar) { classifier = 'dev' }
+            if (project.ext.has('devShadowJar')) {
+                artifact(project.ext.devShadowJar) { classifier = 'dev-shadow' }
+            }
+            artifact(project.ext.has('sourcesJarTask') ? project.ext.sourcesJarTask : tasks.named('sourcesJar')) {
+                classifier = 'sources'
+            }
+        }
+    }
+
+    // Gradle consumers prefer .module metadata over the POM, and the runtimeElements
+    // variant would leak the dependencies the POM deliberately strips.
+    tasks.withType(GenerateModuleMetadata).configureEach {
+        enabled = false
+    }
+
+    repositories {
+        mavenLocal()
+    }
+}

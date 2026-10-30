@@ -1,4 +1,8 @@
 plugins {
+    // java-library for the `api` configuration, which ModDevGradle does not add.
+    id 'java-library'
+    id 'net.neoforged.moddev'
+    id 'stagewright.mod'
     id 'com.gradleup.shadow'
 }
 
@@ -27,7 +31,7 @@ dependencies {
     shadowBundle "org.yaml:snakeyaml:$rootProject.snakeyaml_version"
 
     // The JUnit Platform the in-game test runner uses, nested (Jar-in-Jar) as libraries.
-    rootProject.junitPlatformJars.each { jarJar(it) { transitive = false } }
+    junitPlatformJars.each { jarJar(it) { transitive = false } }
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'

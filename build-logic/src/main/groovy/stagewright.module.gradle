@@ -1,0 +1,10 @@
+// Every module of the root build (api, common, fabric, neoforge, cli): the repository-wide version, the license
+// terms on every jar and POM, the formatter and lint, and the Nexus for whatever it publishes.
+group = rootProject.maven_group
+version = rootProject.stagewrightVersion
+
+pluginManager.apply('stagewright.license')
+pluginManager.apply('stagewright.lint')
+plugins.withId('maven-publish') {
+    pluginManager.apply('stagewright.nexus')
+}

@@ -1,7 +1,11 @@
 // A single executable jar a modpack author can run with the JVM they already have.
+//
+// Pure JVM: it carries the two loader jars as resources and runs on a machine with no Minecraft classpath, so it
+// takes stagewright.module alone and stays out of the Loom and ModDevGradle pipeline (stagewright.mod).
 plugins {
     id 'application'
     id 'maven-publish'
+    id 'stagewright.module'
 }
 
 java {
