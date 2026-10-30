@@ -43,7 +43,10 @@ public final class Agent {
     private final Instrumentation instrumentation;
     private final Object wake = new Object();
 
+    // Never read again: holding it keeps the connection reachable for the life of the agent.
+    @SuppressWarnings("PMD.UnusedPrivateField")
     private volatile Socket socket;
+
     private volatile BufferedWriter out;
     private volatile String phase = "starting";
     private volatile long ticks;
@@ -64,6 +67,12 @@ public final class Agent {
         return running;
     }
 
+    /**
+     * The JVM calls this before {@code main} with the {@code -javaagent} options. A bad option is reported on standard
+     * error and the JVM starts unobserved.
+     */
+    // Standard error is the only channel open before the supervisor connects, and the game's log reads it.
+    @SuppressWarnings("PMD.SystemPrintln")
     public static void premain(String args, Instrumentation instrumentation) {
         Config config;
         try {
@@ -160,6 +169,8 @@ public final class Agent {
         }
     }
 
+    // The candidate is closed on failure, and kept as the live socket on success.
+    @SuppressWarnings({"PMD.CloseResource", "PMD.SystemPrintln"})
     private boolean connect() {
         for (int attempt = 0; attempt < CONNECT_ATTEMPTS; attempt++) {
             Socket candidate = new Socket();
@@ -206,11 +217,13 @@ public final class Agent {
         // the evidence it needs to say what a stuck game is stuck on, which it cannot read from outside.
         long now = System.nanoTime();
         String signature = phase + "|" + ticks + "|" + classes;
-        if (!signature.equals(lastSignature)) {
+        if (signature.equals(lastSignature)) {
+            if (now - lastChangeNanos >= config.idleMillis() * 1_000_000L) {
+                line.objects("stacks", sampleStacks());
+            }
+        } else {
             lastSignature = signature;
             lastChangeNanos = now;
-        } else if (now - lastChangeNanos >= config.idleMillis() * 1_000_000L) {
-            line.objects("stacks", sampleStacks());
         }
         return line;
     }
@@ -235,6 +248,8 @@ public final class Agent {
     }
 
     /** One line out. A broken connection ends the sending and nothing else: the game carries on. */
+    // The writer wraps the connection that connect() opened, which is closed with the agent.
+    @SuppressWarnings("PMD.CloseResource")
     private synchronized void send(Lines line) {
         BufferedWriter writer = out;
         if (writer == null) {
@@ -267,7 +282,7 @@ public final class Agent {
         ThreadOrigins recorded = origins;
         for (Map.Entry<Thread, StackTraceElement[]> entry : all.entrySet()) {
             Thread thread = entry.getKey();
-            if (thread.isDaemon() || !thread.isAlive() || thread == Thread.currentThread()) {
+            if (thread.isDaemon() || !thread.isAlive() || thread.equals(Thread.currentThread())) {
                 continue;
             }
             // The thread the JVM parks to wait for the others: it is the symptom, not a holder.
@@ -359,6 +374,8 @@ public final class Agent {
 
     record Config(String host, int port, String token, long graceMillis, long idleMillis) {
 
+        private static final String QUOTE = "'";
+
         static Config parse(String args) {
             if (args == null || args.isBlank()) {
                 throw new IllegalArgumentException("expected <host>:<port>:<token>[,grace=<s>][,idle=<s>]");
@@ -366,13 +383,13 @@ public final class Agent {
             String[] parts = args.split(",");
             String[] address = parts[0].split(":", 3);
             if (address.length != 3 || address[0].isEmpty() || address[2].isEmpty()) {
-                throw new IllegalArgumentException("expected <host>:<port>:<token>, not '" + parts[0] + "'");
+                throw new IllegalArgumentException("expected <host>:<port>:<token>, not " + QUOTE + parts[0] + QUOTE);
             }
             int port;
             try {
                 port = Integer.parseInt(address[1]);
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("port is not a number: '" + address[1] + "'");
+                throw new IllegalArgumentException("port is not a number: " + QUOTE + address[1] + QUOTE, e);
             }
             long grace = 30;
             long idle = 20;
@@ -383,7 +400,7 @@ public final class Agent {
                 } else if (option.startsWith("idle=")) {
                     idle = seconds(option, "idle=");
                 } else {
-                    throw new IllegalArgumentException("unknown option '" + option + "'");
+                    throw new IllegalArgumentException("unknown option " + QUOTE + option + QUOTE);
                 }
             }
             return new Config(address[0], port, address[2], grace * 1_000, idle * 1_000);
@@ -394,7 +411,9 @@ public final class Agent {
                 return Long.parseLong(option.substring(prefix.length()));
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException(
-                        prefix.substring(0, prefix.length() - 1) + " is not a number of seconds: '" + option + "'");
+                        prefix.substring(0, prefix.length() - 1) + " is not a number of seconds: " + QUOTE + option
+                                + QUOTE,
+                        e);
             }
         }
     }

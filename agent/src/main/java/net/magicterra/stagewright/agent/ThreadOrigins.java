@@ -34,6 +34,8 @@ final class ThreadOrigins {
     }
 
     /** Start recording, or null when this JVM cannot. */
+    // The stream is stored in the recorder and closed by releaseIfAlone(), not by this method.
+    @SuppressWarnings("PMD.CloseResource")
     static ThreadOrigins start() {
         try {
             RecordingStream stream = new RecordingStream();
@@ -101,6 +103,8 @@ final class ThreadOrigins {
      * when every other non-daemon thread is gone lets the JVM do what it was about to. {@code DestroyJavaVM} is the JVM
      * waiting for exactly this, not a thread of the game's.
      */
+    // The root group is the only way to see every thread, the JVM's included; nothing here changes a group.
+    @SuppressWarnings("PMD.AvoidThreadGroup")
     boolean releaseIfAlone() {
         ThreadGroup root = Thread.currentThread().getThreadGroup();
         while (root.getParent() != null) {
@@ -109,17 +113,20 @@ final class ThreadOrigins {
         Thread[] all = new Thread[root.activeCount() + 32];
         int count = root.enumerate(all, true);
         for (int i = 0; i < count; i++) {
-            Thread thread = all[i];
-            if (thread == null || thread.isDaemon() || !thread.isAlive()) {
-                continue;
+            if (holdsJvmUp(all[i])) {
+                return false;
             }
-            if (thread.getName().equals("DestroyJavaVM") || Agent.isRecorderThread(thread.getName())) {
-                continue;
-            }
-            return false;
         }
         stream.close();
         return true;
+    }
+
+    /** Whether a thread keeps the JVM up: non-daemon, alive, and neither the JVM's own waiter nor a recorder reader. */
+    private static boolean holdsJvmUp(Thread thread) {
+        if (thread == null || thread.isDaemon() || !thread.isAlive()) {
+            return false;
+        }
+        return !thread.getName().equals("DestroyJavaVM") && !Agent.isRecorderThread(thread.getName());
     }
 
     /** The frames that started the thread with this id, or empty when it was not seen starting. */

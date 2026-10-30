@@ -8,7 +8,10 @@ import java.util.List;
  */
 final class Lines {
 
+    // A builder is the object's whole state, and it lives exactly as long as the Lines it builds.
+    @SuppressWarnings("PMD.AvoidStringBufferField")
     private final StringBuilder out = new StringBuilder("{");
+
     private boolean first = true;
 
     static Lines event(String name) {
