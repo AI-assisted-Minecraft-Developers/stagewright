@@ -88,7 +88,9 @@ public final class BlockFluids implements Fluids {
             FluidStack stack = new FluidStack(fluid(fluidId), amount);
             for (IFluidHandler handler : handlers) {
                 int took = handler.fill(stack, IFluidHandler.FluidAction.EXECUTE);
-                if (took > 0) return took;
+                if (took > 0) {
+                    return took;
+                }
             }
             return 0;
         });
@@ -100,7 +102,9 @@ public final class BlockFluids implements Fluids {
             require(pos, handlers);
             FluidStack stack = new FluidStack(fluid(fluidId), 1);
             for (IFluidHandler handler : handlers) {
-                if (handler.fill(stack, IFluidHandler.FluidAction.SIMULATE) > 0) return true;
+                if (handler.fill(stack, IFluidHandler.FluidAction.SIMULATE) > 0) {
+                    return true;
+                }
             }
             return false;
         });
@@ -114,7 +118,9 @@ public final class BlockFluids implements Fluids {
             for (IFluidHandler handler : handlers) {
                 int gave =
                         handler.drain(stack, IFluidHandler.FluidAction.EXECUTE).getAmount();
-                if (gave > 0) return gave;
+                if (gave > 0) {
+                    return gave;
+                }
             }
             return 0;
         });
@@ -128,10 +134,14 @@ public final class BlockFluids implements Fluids {
     private static List<IFluidHandler> handlers(ServerLevel level, BlockPos pos) {
         List<IFluidHandler> out = new ArrayList<>();
         IFluidHandler noSide = level.getCapability(Capabilities.FluidHandler.BLOCK, pos, null);
-        if (noSide != null) out.add(noSide);
+        if (noSide != null) {
+            out.add(noSide);
+        }
         for (Direction side : Direction.values()) {
             IFluidHandler sided = level.getCapability(Capabilities.FluidHandler.BLOCK, pos, side);
-            if (sided != null && out.stream().noneMatch(known -> known == sided)) out.add(sided);
+            if (sided != null && out.stream().noneMatch(known -> known == sided)) {
+                out.add(sided);
+            }
         }
         return out;
     }

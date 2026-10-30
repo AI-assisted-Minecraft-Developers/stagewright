@@ -32,7 +32,9 @@ final class StaleRemaps {
     static void evict(Project root) {
         Map<String, Long> published =
                 published(new File(System.getProperty("user.home"), ".m2/repository/" + GROUP_PATH));
-        if (published.isEmpty()) return;
+        if (published.isEmpty()) {
+            return;
+        }
         // Longest name first: `stagewright-neoforge` is a suffix of `mc_stagewright-neoforge`.
         List<String> modules = published.keySet().stream()
                 .sorted(Comparator.comparingInt(String::length).reversed())
@@ -42,12 +44,16 @@ final class StaleRemaps {
             for (String cache : new String[] {".gradle/loom-cache", "build/loom-cache"}) {
                 for (File stale : jars(new File(p.getProjectDir(), cache))) {
                     String path = stale.getAbsolutePath().replace('\\', '/');
-                    if (!path.contains(GROUP_PATH) && !stale.getName().contains("net.magicterra")) continue;
+                    if (!path.contains(GROUP_PATH) && !stale.getName().contains("net.magicterra")) {
+                        continue;
+                    }
                     String module = modules.stream()
                             .filter(stale.getName()::contains)
                             .findFirst()
                             .orElse(null);
-                    if (module == null || stale.lastModified() >= published.get(module)) continue;
+                    if (module == null || stale.lastModified() >= published.get(module)) {
+                        continue;
+                    }
                     root.getLogger()
                             .lifecycle(
                                     "[stagewright] dropping a {} remap older than its publish: {}",
@@ -55,7 +61,9 @@ final class StaleRemaps {
                                     stale.getName());
                     // Checked: a delete that quietly fails logs the fix and runs the stale code anyway. A daemon that
                     // still has the jar open from the build that remapped it cannot unlink it on Windows.
-                    if (!stale.delete()) held.add(stale);
+                    if (!stale.delete()) {
+                        held.add(stale);
+                    }
                 }
             }
         }
@@ -71,16 +79,22 @@ final class StaleRemaps {
     private static Map<String, Long> published(File groupDir) {
         Map<String, Long> newest = new HashMap<>();
         File[] modules = groupDir.listFiles(File::isDirectory);
-        if (modules == null) return newest;
+        if (modules == null) {
+            return newest;
+        }
         for (File module : modules) {
             long at = jars(module).stream().mapToLong(File::lastModified).max().orElse(0L);
-            if (at > 0L) newest.put(module.getName(), at);
+            if (at > 0L) {
+                newest.put(module.getName(), at);
+            }
         }
         return newest;
     }
 
     private static List<File> jars(File dir) {
-        if (!dir.isDirectory()) return List.of();
+        if (!dir.isDirectory()) {
+            return List.of();
+        }
         try (Stream<Path> walk = Files.walk(dir.toPath())) {
             return walk.filter(f -> f.toString().endsWith(".jar") && Files.isRegularFile(f))
                     .map(Path::toFile)

@@ -69,8 +69,12 @@ class FabricModMetadataTest {
         String max = m.group(3).trim();
         assertEquals(min.isEmpty() ? null : Version.parse(min), got.getMin(), key + " lower bound");
         assertEquals(max.isEmpty() ? null : Version.parse(max), got.getMax(), key + " upper bound");
-        if (!min.isEmpty()) assertEquals(m.group(1).equals("["), got.isMinInclusive(), key + " lower inclusivity");
-        if (!max.isEmpty()) assertEquals(m.group(4).equals("]"), got.isMaxInclusive(), key + " upper inclusivity");
+        if (!min.isEmpty()) {
+            assertEquals(m.group(1).equals("["), got.isMinInclusive(), key + " lower inclusivity");
+        }
+        if (!max.isEmpty()) {
+            assertEquals(m.group(4).equals("]"), got.isMaxInclusive(), key + " upper inclusivity");
+        }
     }
 
     @Test
@@ -102,7 +106,9 @@ class FabricModMetadataTest {
     private static boolean matches(JsonElement value, String version) throws VersionParsingException {
         List<JsonElement> terms = value.isJsonArray() ? value.getAsJsonArray().asList() : List.of(value);
         for (JsonElement t : terms) {
-            if (VersionPredicate.parse(t.getAsString()).test(Version.parse(version))) return true;
+            if (VersionPredicate.parse(t.getAsString()).test(Version.parse(version))) {
+                return true;
+            }
         }
         return false;
     }
@@ -133,7 +139,9 @@ class FabricModMetadataTest {
         if (n.find()) {
             int pinned = Integer.parseInt(n.group(1));
             covered.add(base + "-alpha." + (pinned + 1) + "+1.21.1");
-            if (pinned > 0) refused.add(base + "-alpha." + (pinned - 1) + "+1.21.1");
+            if (pinned > 0) {
+                refused.add(base + "-alpha." + (pinned - 1) + "+1.21.1");
+            }
         }
         for (String version : covered) {
             assertTrue(matches(required, version), "required range should cover " + version);

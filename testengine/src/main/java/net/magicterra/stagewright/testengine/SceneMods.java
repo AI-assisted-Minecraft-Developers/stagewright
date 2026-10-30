@@ -55,8 +55,14 @@ final class SceneMods {
         List<Path> modsFolder = jars(gameDir.resolve("mods"));
         Set<Path> classPath = classPathJars(process);
         List<Mod> mods = new ArrayList<>();
-        for (Path jar : modsFolder) mods.add(read(jar));
-        for (Path jar : classPath) if (!modsFolder.contains(jar)) mods.add(read(jar));
+        for (Path jar : modsFolder) {
+            mods.add(read(jar));
+        }
+        for (Path jar : classPath) {
+            if (!modsFolder.contains(jar)) {
+                mods.add(read(jar));
+            }
+        }
         mods.removeIf(m -> m.ids().isEmpty());
 
         List<Mod> excluded = new ArrayList<>();
@@ -66,13 +72,21 @@ final class SceneMods {
             List<Mod> matched = mods.stream()
                     .filter(m -> m.ids().contains(name) || glob.matches(m.jar().getFileName()))
                     .toList();
-            if (matched.isEmpty()) unmatched.add(name);
-            for (Mod m : matched) if (!excluded.contains(m)) excluded.add(m);
+            if (matched.isEmpty()) {
+                unmatched.add(name);
+            }
+            for (Mod m : matched) {
+                if (!excluded.contains(m)) {
+                    excluded.add(m);
+                }
+            }
         }
         List<String> report = excluded.stream()
                 .map(m -> m.jar().getFileName() + " " + m.ids())
                 .toList();
-        if (excluded.isEmpty()) return new Applied(process, report, unmatched);
+        if (excluded.isEmpty()) {
+            return new Applied(process, report, unmatched);
+        }
 
         if (isFabric(process, mods)) {
             Set<String> ids = new LinkedHashSet<>();
@@ -91,9 +105,13 @@ final class SceneMods {
             gone.add(m.jar().toAbsolutePath().normalize().toString());
         }
         List<String> jvm = new ArrayList<>();
-        for (String arg : process.jvmArgs()) jvm.add(filterArgument(arg, gone, scratch, process.workingDirectory()));
+        for (String arg : process.jvmArgs()) {
+            jvm.add(filterArgument(arg, gone, scratch, process.workingDirectory()));
+        }
         List<String> args = new ArrayList<>();
-        for (String arg : process.args()) args.add(filterArgument(arg, gone, scratch, process.workingDirectory()));
+        for (String arg : process.args()) {
+            args.add(filterArgument(arg, gone, scratch, process.workingDirectory()));
+        }
         if (excluded.stream().anyMatch(m -> modsFolder.contains(m.jar()))) {
             Path view = gameDirectoryWithout(gameDir, excluded, scratch.resolve("game"));
             args = withGameDir(args, view);
@@ -105,14 +123,17 @@ final class SceneMods {
     static Path gameDirectory(LaunchSpec.Process process) {
         List<String> args = process.args();
         for (int i = 0; i + 1 < args.size(); i++) {
-            if (args.get(i).equals("--gameDir"))
+            if (args.get(i).equals("--gameDir")) {
                 return process.workingDirectory().resolve(args.get(i + 1)).normalize();
+            }
         }
         return process.workingDirectory();
     }
 
     private static List<Path> jars(Path folder) throws IOException {
-        if (!Files.isDirectory(folder)) return List.of();
+        if (!Files.isDirectory(folder)) {
+            return List.of();
+        }
         try (Stream<Path> list = Files.list(folder)) {
             return list.filter(p -> p.getFileName().toString().endsWith(".jar") && Files.isRegularFile(p))
                     .sorted()
@@ -123,15 +144,21 @@ final class SceneMods {
     /** Every jar a path list in the JVM arguments or their argument files names: class path and legacy class path. */
     private static Set<Path> classPathJars(LaunchSpec.Process process) throws IOException {
         Set<Path> jars = new LinkedHashSet<>();
-        for (String arg : process.jvmArgs()) collectJars(arg, process.workingDirectory(), jars, 0);
+        for (String arg : process.jvmArgs()) {
+            collectJars(arg, process.workingDirectory(), jars, 0);
+        }
         return jars;
     }
 
     private static void collectJars(String text, Path cwd, Set<Path> jars, int depth) throws IOException {
-        if (depth > 3) return;
+        if (depth > 3) {
+            return;
+        }
         if (text.startsWith("@")) {
             Path file = cwd.resolve(text.substring(1));
-            if (Files.isRegularFile(file)) collectJars(Files.readString(file), cwd, jars, depth + 1);
+            if (Files.isRegularFile(file)) {
+                collectJars(Files.readString(file), cwd, jars, depth + 1);
+            }
             return;
         }
         Matcher m = PATH_LIST.matcher(text);
@@ -147,7 +174,9 @@ final class SceneMods {
             for (String part : list.split(Pattern.quote(File.pathSeparator))) {
                 if (part.endsWith(".jar")) {
                     Path jar = cwd.resolve(part).normalize();
-                    if (Files.isRegularFile(jar)) jars.add(jar);
+                    if (Files.isRegularFile(jar)) {
+                        jars.add(jar);
+                    }
                 }
             }
         }
@@ -156,7 +185,9 @@ final class SceneMods {
     /** The file a {@code -D…file=<path>} property names, such as ModDevGradle's {@code legacyClassPath.file}. */
     private static String fileProperty(String token) {
         int eq = token.indexOf('=');
-        if (!token.startsWith("-D") || eq < 0 || !token.substring(0, eq).endsWith(".file")) return null;
+        if (!token.startsWith("-D") || eq < 0 || !token.substring(0, eq).endsWith(".file")) {
+            return null;
+        }
         return token.substring(eq + 1);
     }
 
@@ -167,7 +198,9 @@ final class SceneMods {
     static String filterArgument(String arg, Set<String> gone, Path scratch, Path cwd) throws IOException {
         if (arg.startsWith("@")) {
             Path file = cwd.resolve(arg.substring(1));
-            if (!Files.isRegularFile(file)) return arg;
+            if (!Files.isRegularFile(file)) {
+                return arg;
+            }
             return "@" + rewrite(file, gone, scratch, cwd);
         }
         String file = fileProperty(arg);
@@ -180,7 +213,9 @@ final class SceneMods {
     private static Path rewrite(Path file, Set<String> gone, Path scratch, Path cwd) throws IOException {
         String text = Files.readString(file);
         String filtered = filterText(text, gone, scratch, cwd);
-        if (filtered.equals(text)) return file;
+        if (filtered.equals(text)) {
+            return file;
+        }
         Path copy = scratch.resolve(uniqueName(scratch, file.getFileName().toString()));
         Files.writeString(copy, filtered, StandardCharsets.UTF_8);
         return copy;
@@ -188,7 +223,9 @@ final class SceneMods {
 
     private static String uniqueName(Path dir, String name) {
         String candidate = name;
-        for (int i = 1; Files.exists(dir.resolve(candidate)); i++) candidate = i + "-" + name;
+        for (int i = 1; Files.exists(dir.resolve(candidate)); i++) {
+            candidate = i + "-" + name;
+        }
         return candidate;
     }
 
@@ -208,7 +245,9 @@ final class SceneMods {
                 List<String> kept = new ArrayList<>();
                 for (String part : list.split(Pattern.quote(File.pathSeparator), -1)) {
                     if (!gone.contains(part)
-                            && !gone.contains(cwd.resolve(part).normalize().toString())) kept.add(part);
+                            && !gone.contains(cwd.resolve(part).normalize().toString())) {
+                        kept.add(part);
+                    }
                 }
                 replaced = head + String.join(File.pathSeparator, kept);
             }
@@ -227,15 +266,18 @@ final class SceneMods {
         try (Stream<Path> entries = Files.list(real)) {
             for (Path entry : entries.toList()) {
                 String name = entry.getFileName().toString();
-                if (name.equals("mods") || name.equals("stagewright")) continue;
+                if (name.equals("mods") || name.equals("stagewright")) {
+                    continue;
+                }
                 Files.createSymbolicLink(view.resolve(name), entry.toAbsolutePath());
             }
         }
         Set<Path> gone = new LinkedHashSet<>();
         excluded.forEach(m -> gone.add(m.jar()));
         for (Path jar : jars(real.resolve("mods"))) {
-            if (!gone.contains(jar))
+            if (!gone.contains(jar)) {
                 Files.createSymbolicLink(view.resolve("mods").resolve(jar.getFileName()), jar.toAbsolutePath());
+            }
         }
         return view;
     }
@@ -254,12 +296,18 @@ final class SceneMods {
 
     /** Whether the game runs Fabric: its main class is Fabric's, or a Fabric Loader jar is on its class path. */
     private static boolean isFabric(LaunchSpec.Process process, List<Mod> mods) throws IOException {
-        if (process.mainClass() != null && process.mainClass().startsWith("net.fabricmc.")) return true;
+        if (process.mainClass() != null && process.mainClass().startsWith("net.fabricmc.")) {
+            return true;
+        }
         for (String arg : process.jvmArgs()) {
-            if (arg.startsWith("-Dfabric.dli.main=net.fabricmc.")) return true;
+            if (arg.startsWith("-Dfabric.dli.main=net.fabricmc.")) {
+                return true;
+            }
         }
         for (Path jar : classPathJars(process)) {
-            if (jar.getFileName().toString().startsWith("fabric-loader-")) return true;
+            if (jar.getFileName().toString().startsWith("fabric-loader-")) {
+                return true;
+            }
         }
         // A pack started by a script that names neither: its mods say which loader they were written for.
         return !mods.isEmpty() && mods.stream().allMatch(Mod::fabric);
@@ -274,13 +322,19 @@ final class SceneMods {
             if (json != null) {
                 fabric = true;
                 Matcher m = MOD_ID_JSON.matcher(text(zip, json));
-                if (m.find()) ids.add(m.group(1));
+                if (m.find()) {
+                    ids.add(m.group(1));
+                }
             }
             for (String toml : List.of("META-INF/neoforge.mods.toml", "META-INF/mods.toml")) {
                 ZipEntry e = zip.getEntry(toml);
-                if (e == null) continue;
+                if (e == null) {
+                    continue;
+                }
                 Matcher m = MOD_ID_TOML.matcher(text(zip, e));
-                while (m.find()) ids.add(m.group(1));
+                while (m.find()) {
+                    ids.add(m.group(1));
+                }
             }
         } catch (IOException e) {
             // Not a zip: no mod.
@@ -299,9 +353,13 @@ final class SceneMods {
     }
 
     static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) return;
+        if (!Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
         try (Stream<Path> walk = Files.walk(root)) {
-            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) Files.delete(p);
+            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(p);
+            }
         }
     }
 }

@@ -48,7 +48,9 @@ final class ClientConnection {
 
     static synchronized Client client(Game game) {
         boolean dedicated = game.onServer(MinecraftServer::isDedicatedServer);
-        if (!dedicated) return game::registry;
+        if (!dedicated) {
+            return game::registry;
+        }
         String dir = System.getProperty(COMPANION_DIR);
         if (dir == null || !Boolean.getBoolean(JupiterRun.AWAIT_PLAYER)) {
             throw new ParameterResolutionException("no real client is joined to this dedicated server, so there is"
@@ -71,7 +73,9 @@ final class ClientConnection {
 
     /** As the server stops: the connection goes with the run. */
     static synchronized void close() {
-        if (rpc != null) rpc.close();
+        if (rpc != null) {
+            rpc.close();
+        }
         rpc = null;
         remote = null;
     }
@@ -85,7 +89,9 @@ final class ClientConnection {
         ApiRegistry registry = new ApiRegistry();
         for (ApiBatch batch : local.snapshot().batches().values()) {
             List<ApiMethod<?, ?>> methods = new ArrayList<>();
-            for (ApiMethod<?, ?> method : batch.methods()) methods.add(forward(method.spec(), rpc));
+            for (ApiMethod<?, ?> method : batch.methods()) {
+                methods.add(forward(method.spec(), rpc));
+            }
             registry.registerBatch(new ApiBatch(batch.owner(), batch.id(), methods));
         }
         return registry;

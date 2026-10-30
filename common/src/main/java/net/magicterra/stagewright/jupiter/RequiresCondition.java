@@ -25,7 +25,9 @@ public final class RequiresCondition implements ExecutionCondition {
         Requires requires = element == null
                 ? null
                 : AnnotationSupport.findAnnotation(element, Requires.class).orElse(null);
-        if (requires == null) return ConditionEvaluationResult.enabled("no @Requires");
+        if (requires == null) {
+            return ConditionEvaluationResult.enabled("no @Requires");
+        }
         List<String> missing = missing(requires.value(), requires.mods());
         return missing.isEmpty()
                 ? ConditionEvaluationResult.enabled("this game has what @Requires names")
@@ -47,7 +49,9 @@ public final class RequiresCondition implements ExecutionCondition {
                     case DEDICATED_SERVER -> dedicated;
                     case INTEGRATED_SERVER -> !dedicated;
                 };
-                if (!has) missing.add(c.name());
+                if (!has) {
+                    missing.add(c.name());
+                }
             }
         }
         if (mods.length > 0) {
@@ -56,7 +60,11 @@ public final class RequiresCondition implements ExecutionCondition {
                         + " never installed the mod list");
             }
             Set<String> loaded = Mods.installedIds();
-            for (String mod : mods) if (!loaded.contains(mod)) missing.add("mod " + mod);
+            for (String mod : mods) {
+                if (!loaded.contains(mod)) {
+                    missing.add("mod " + mod);
+                }
+            }
         }
         return missing;
     }

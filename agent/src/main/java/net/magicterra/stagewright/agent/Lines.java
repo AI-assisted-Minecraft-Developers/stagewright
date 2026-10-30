@@ -37,7 +37,9 @@ final class Lines {
         key(key);
         out.append('[');
         for (int i = 0; i < values.size(); i++) {
-            if (i > 0) out.append(',');
+            if (i > 0) {
+                out.append(',');
+            }
             quote(values.get(i));
         }
         out.append(']');
@@ -49,7 +51,9 @@ final class Lines {
         key(key);
         out.append('[');
         for (int i = 0; i < values.size(); i++) {
-            if (i > 0) out.append(',');
+            if (i > 0) {
+                out.append(',');
+            }
             out.append(values.get(i).build());
         }
         out.append(']');
@@ -68,7 +72,9 @@ final class Lines {
     }
 
     private void key(String key) {
-        if (!first) out.append(',');
+        if (!first) {
+            out.append(',');
+        }
         first = false;
         quote(key);
         out.append(':');
@@ -85,8 +91,11 @@ final class Lines {
                 case '\r' -> out.append("\\r");
                 case '\t' -> out.append("\\t");
                 default -> {
-                    if (c < 0x20) out.append(String.format("\\u%04x", (int) c));
-                    else out.append(c);
+                    if (c < 0x20) {
+                        out.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        out.append(c);
+                    }
                 }
             }
         }

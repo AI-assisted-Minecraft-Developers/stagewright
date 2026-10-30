@@ -62,16 +62,21 @@ final class JavaSteps {
         for (String className : classes) {
             for (Method method : type(className, loader, INDEX).getMethods()) {
                 Step step = method.getAnnotation(Step.class);
-                if (step == null) continue;
+                if (step == null) {
+                    continue;
+                }
                 String where = "@Step(\"" + step.value() + "\") " + method;
-                if (!Modifier.isStatic(method.getModifiers()))
+                if (!Modifier.isStatic(method.getModifiers())) {
                     throw new IllegalArgumentException(where + " is not static");
+                }
                 if (BuiltinSteps.NAMES.contains(step.value())) {
                     throw new IllegalArgumentException(where + ": the name is a built-in step's");
                 }
                 arguments(method);
                 Method other = byName.putIfAbsent(step.value(), method);
-                if (other != null) throw new IllegalArgumentException(where + ": the name is also taken by " + other);
+                if (other != null) {
+                    throw new IllegalArgumentException(where + ": the name is also taken by " + other);
+                }
             }
         }
         return new JavaSteps(byName);
@@ -108,16 +113,24 @@ final class JavaSteps {
         Class<?>[] types = method.getParameterTypes();
         Object[] values = new Object[types.length];
         for (int i = 0; i < types.length; i++) {
-            if (types[i] == Game.class) values[i] = game;
-            else if (types[i] == Map.class) values[i] = args == null ? Map.of() : asMap(args, method);
-            else values[i] = args;
+            if (types[i] == Game.class) {
+                values[i] = game;
+            } else if (types[i] == Map.class) {
+                values[i] = args == null ? Map.of() : asMap(args, method);
+            } else {
+                values[i] = args;
+            }
         }
         Object result;
         try {
             result = method.invoke(null, values);
         } catch (InvocationTargetException e) {
-            if (e.getCause() instanceof RuntimeException r) throw r;
-            if (e.getCause() instanceof Error r) throw r;
+            if (e.getCause() instanceof RuntimeException r) {
+                throw r;
+            }
+            if (e.getCause() instanceof Error r) {
+                throw r;
+            }
             throw new IllegalStateException(e.getCause());
         } catch (IllegalAccessException e) {
             throw new IllegalArgumentException(method + " is not accessible", e);
@@ -136,7 +149,9 @@ final class JavaSteps {
     }
 
     private static Map<?, ?> asMap(Object args, Method method) {
-        if (args instanceof Map<?, ?> m) return m;
+        if (args instanceof Map<?, ?> m) {
+            return m;
+        }
         throw new IllegalArgumentException(method + " takes its arguments as a map, not " + Expectations.show(args));
     }
 
@@ -149,9 +164,12 @@ final class JavaSteps {
     }
 
     private static boolean plain(Object value) {
-        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean)
+        if (value == null || value instanceof String || value instanceof Number || value instanceof Boolean) {
             return true;
-        if (value instanceof List<?> list) return list.stream().allMatch(JavaSteps::plain);
+        }
+        if (value instanceof List<?> list) {
+            return list.stream().allMatch(JavaSteps::plain);
+        }
         if (value instanceof Map<?, ?> map) {
             return map.keySet().stream().allMatch(String.class::isInstance)
                     && map.values().stream().allMatch(JavaSteps::plain);

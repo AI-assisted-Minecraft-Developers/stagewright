@@ -70,7 +70,9 @@ class ScriptOnServerTest {
                 yield null;
             }
             default -> {
-                if (method.isDefault()) yield InvocationHandler.invokeDefault(proxy, method, args);
+                if (method.isDefault()) {
+                    yield InvocationHandler.invokeDefault(proxy, method, args);
+                }
                 throw new UnsupportedOperationException(method.getName());
             }
         };
@@ -145,7 +147,9 @@ class ScriptOnServerTest {
     }
 
     private static String rootMessage(Throwable t) {
-        while (t.getCause() != null && t.getCause() != t) t = t.getCause();
+        while (t.getCause() != null && t.getCause() != t) {
+            t = t.getCause();
+        }
         return t.getMessage();
     }
 }

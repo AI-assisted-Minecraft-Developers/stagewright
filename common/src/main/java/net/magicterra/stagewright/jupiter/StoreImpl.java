@@ -58,7 +58,9 @@ final class StoreImpl implements Store {
     }
 
     private JsonObject values() {
-        if (values != null) return values;
+        if (values != null) {
+            return values;
+        }
         try {
             values = Files.isRegularFile(file)
                     ? JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))

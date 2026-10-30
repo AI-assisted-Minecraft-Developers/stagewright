@@ -110,7 +110,9 @@ class NeoForgeModMetadataTest {
         if (n.find()) {
             int pinned = Integer.parseInt(n.group(1));
             accepted.add(base + "-alpha." + (pinned + 1) + "+1.21.1");
-            if (pinned > 0) refused.add(base + "-alpha." + (pinned - 1) + "+1.21.1");
+            if (pinned > 0) {
+                refused.add(base + "-alpha." + (pinned - 1) + "+1.21.1");
+            }
         }
         for (String version : accepted) {
             assertTrue(range.containsVersion(new DefaultArtifactVersion(version)), "range should accept " + version);

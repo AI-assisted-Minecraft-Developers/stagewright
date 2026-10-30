@@ -21,7 +21,9 @@ final class Expectations {
     private Expectations() {}
 
     static void equals(Object actual, Object expected) {
-        if (!same(actual, expected)) fail("expected " + show(expected) + " but was " + show(actual));
+        if (!same(actual, expected)) {
+            fail("expected " + show(expected) + " but was " + show(actual));
+        }
     }
 
     /** A list holding an equal item, a string holding the substring, a map holding every entry of a map given. */
@@ -37,7 +39,9 @@ final class Expectations {
             case null, default ->
                 throw new AssertionError("contains needs a list, string or map, but was " + show(actual));
         };
-        if (!holds) fail("expected " + show(actual) + " to contain " + show(expected));
+        if (!holds) {
+            fail("expected " + show(actual) + " to contain " + show(expected));
+        }
     }
 
     static void isEmpty(Object actual) {
@@ -48,27 +52,33 @@ final class Expectations {
             case String s -> s.isEmpty();
             default -> throw new AssertionError("isEmpty needs a list, string or map, but was " + show(actual));
         };
-        if (!empty) fail("expected nothing but was " + show(actual) + sizeOf(actual));
+        if (!empty) {
+            fail("expected nothing but was " + show(actual) + sizeOf(actual));
+        }
     }
 
     static void gt(Object actual, Object bound) {
-        if (!(number(actual, "gt") > number(bound, "gt")))
+        if (!(number(actual, "gt") > number(bound, "gt"))) {
             fail("expected more than " + show(bound) + " but was " + show(actual));
+        }
     }
 
     static void lt(Object actual, Object bound) {
-        if (!(number(actual, "lt") < number(bound, "lt")))
+        if (!(number(actual, "lt") < number(bound, "lt"))) {
             fail("expected less than " + show(bound) + " but was " + show(actual));
+        }
     }
 
     static void atLeast(Object actual, Object bound) {
-        if (!(number(actual, "atLeast") >= number(bound, "atLeast")))
+        if (!(number(actual, "atLeast") >= number(bound, "atLeast"))) {
             fail("expected at least " + show(bound) + " but was " + show(actual));
+        }
     }
 
     static void atMost(Object actual, Object bound) {
-        if (!(number(actual, "atMost") <= number(bound, "atMost")))
+        if (!(number(actual, "atMost") <= number(bound, "atMost"))) {
             fail("expected at most " + show(bound) + " but was " + show(actual));
+        }
     }
 
     static final Set<String> OPERATORS =
@@ -94,8 +104,11 @@ final class Expectations {
         }
         for (Map.Entry<?, ?> e : map.entrySet()) {
             String key = String.valueOf(e.getKey());
-            if (OPERATORS.contains(key)) apply(key, actual, e.getValue(), where);
-            else expect(field(actual, key, where), e.getValue(), where.isEmpty() ? key : where + "." + key);
+            if (OPERATORS.contains(key)) {
+                apply(key, actual, e.getValue(), where);
+            } else {
+                expect(field(actual, key, where), e.getValue(), where.isEmpty() ? key : where + "." + key);
+            }
         }
     }
 
@@ -133,18 +146,24 @@ final class Expectations {
                     fail("none of anyOf held: " + String.join("; ", misses));
                 }
                 case "allOf" -> {
-                    for (Object each : alternatives(arg, op)) expect(actual, each, "");
+                    for (Object each : alternatives(arg, op)) {
+                        expect(actual, each, "");
+                    }
                 }
                 default -> throw new IllegalArgumentException("no operator '" + op + "'; there are " + OPERATORS);
             }
         } catch (AssertionError e) {
-            if (where.isEmpty()) throw e;
+            if (where.isEmpty()) {
+                throw e;
+            }
             throw new AssertionError(at(where) + e.getMessage(), e.getCause());
         }
     }
 
     private static List<?> alternatives(Object arg, String op) {
-        if (arg instanceof List<?> list && !list.isEmpty()) return list;
+        if (arg instanceof List<?> list && !list.isEmpty()) {
+            return list;
+        }
         throw new IllegalArgumentException(op + " takes a list of expectations, not " + show(arg));
     }
 
@@ -168,18 +187,30 @@ final class Expectations {
 
     /** Equal as plain values: numbers by value, lists in order, maps by their entries. */
     static boolean same(Object a, Object b) {
-        if (a instanceof Number x && b instanceof Number y) return x.doubleValue() == y.doubleValue();
+        if (a instanceof Number x && b instanceof Number y) {
+            return x.doubleValue() == y.doubleValue();
+        }
         if (a instanceof List<?> x && b instanceof List<?> y) {
-            if (x.size() != y.size()) return false;
+            if (x.size() != y.size()) {
+                return false;
+            }
             Iterator<?> i = x.iterator();
             Iterator<?> j = y.iterator();
-            while (i.hasNext()) if (!same(i.next(), j.next())) return false;
+            while (i.hasNext()) {
+                if (!same(i.next(), j.next())) {
+                    return false;
+                }
+            }
             return true;
         }
         if (a instanceof Map<?, ?> x && b instanceof Map<?, ?> y) {
-            if (x.size() != y.size()) return false;
+            if (x.size() != y.size()) {
+                return false;
+            }
             for (Map.Entry<?, ?> e : x.entrySet()) {
-                if (!y.containsKey(e.getKey()) || !same(e.getValue(), y.get(e.getKey()))) return false;
+                if (!y.containsKey(e.getKey()) || !same(e.getValue(), y.get(e.getKey()))) {
+                    return false;
+                }
             }
             return true;
         }
@@ -198,7 +229,9 @@ final class Expectations {
     }
 
     private static double number(Object v, String operator) {
-        if (v instanceof Number n) return n.doubleValue();
+        if (v instanceof Number n) {
+            return n.doubleValue();
+        }
         throw new AssertionError(operator + " compares numbers, but was given " + show(v));
     }
 

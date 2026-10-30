@@ -20,7 +20,9 @@ final class SceneSummary implements TestListener {
 
     @Override
     public void afterSuite(TestDescriptor suite, TestResult result) {
-        if (!isScene(suite)) return;
+        if (!isScene(suite)) {
+            return;
+        }
         StringBuilder line = new StringBuilder("[stagewright] ")
                 .append(suite.getClassName())
                 .append(": ")
@@ -28,8 +30,9 @@ final class SceneSummary implements TestListener {
                 .append(" passed, ")
                 .append(result.getSkippedTestCount())
                 .append(" skipped");
-        if (result.getFailedTestCount() > 0)
+        if (result.getFailedTestCount() > 0) {
             line.append(", ").append(result.getFailedTestCount()).append(" failed");
+        }
         Logging.getLogger(SceneSummary.class).lifecycle(line.toString());
     }
 
@@ -40,9 +43,13 @@ final class SceneSummary implements TestListener {
     public void afterTest(TestDescriptor test, TestResult result) {}
 
     static boolean isScene(TestDescriptor suite) {
-        if (suite.getClassName() == null) return false;
+        if (suite.getClassName() == null) {
+            return false;
+        }
         for (TestDescriptor p = suite.getParent(); p != null; p = p.getParent()) {
-            if (p.getClassName() != null) return false;
+            if (p.getClassName() != null) {
+                return false;
+            }
         }
         return true;
     }

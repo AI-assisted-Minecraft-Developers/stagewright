@@ -148,10 +148,18 @@ public final class Probe {
     /** Whether this value is an instance of a named class, by name so no import is needed. */
     public boolean isA(String className) {
         Object v = wrapsValue ? value : instance;
-        if (v == null) return false;
+        if (v == null) {
+            return false;
+        }
         for (Class<?> c = v.getClass(); c != null; c = c.getSuperclass()) {
-            if (c.getName().equals(className)) return true;
-            for (Class<?> i : c.getInterfaces()) if (i.getName().equals(className)) return true;
+            if (c.getName().equals(className)) {
+                return true;
+            }
+            for (Class<?> i : c.getInterfaces()) {
+                if (i.getName().equals(className)) {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -175,7 +183,9 @@ public final class Probe {
 
     public boolean asBoolean() {
         Object v = required("asBoolean");
-        if (v instanceof Boolean b) return b;
+        if (v instanceof Boolean b) {
+            return b;
+        }
         throw new IllegalStateException("asBoolean() on a " + v.getClass().getName() + " (" + v + ")");
     }
 
@@ -189,11 +199,15 @@ public final class Probe {
         Object v = required("asList");
         List<Probe> out = new ArrayList<>();
         if (v instanceof Iterable<?> it) {
-            for (Object element : it) out.add(new Probe(element));
+            for (Object element : it) {
+                out.add(new Probe(element));
+            }
             return out;
         }
         if (v instanceof Object[] array) {
-            for (Object element : array) out.add(new Probe(element));
+            for (Object element : array) {
+                out.add(new Probe(element));
+            }
             return out;
         }
         throw new IllegalStateException(
@@ -218,7 +232,9 @@ public final class Probe {
 
     private double number(String what) {
         Object v = required(what);
-        if (v instanceof Number n) return n.doubleValue();
+        if (v instanceof Number n) {
+            return n.doubleValue();
+        }
         throw new IllegalStateException(what + "() on a " + v.getClass().getName() + " (" + v + ")");
     }
 
@@ -257,14 +273,24 @@ public final class Probe {
     private Method find(String name, Object[] args, boolean wantStatic) {
         List<Method> matches = new ArrayList<>();
         for (Method m : allMethods()) {
-            if (!m.getName().equals(name)) continue;
-            if (Modifier.isStatic(m.getModifiers()) != wantStatic) continue;
-            if (m.getParameterCount() == args.length) matches.add(m);
+            if (!m.getName().equals(name)) {
+                continue;
+            }
+            if (Modifier.isStatic(m.getModifiers()) != wantStatic) {
+                continue;
+            }
+            if (m.getParameterCount() == args.length) {
+                matches.add(m);
+            }
         }
-        if (matches.size() == 1) return matches.get(0);
+        if (matches.size() == 1) {
+            return matches.get(0);
+        }
         if (matches.size() > 1) {
             List<String> shapes = new ArrayList<>();
-            for (Method m : matches) shapes.add(signature(m));
+            for (Method m : matches) {
+                shapes.add(signature(m));
+            }
             throw new IllegalStateException(type.getName() + " has " + matches.size() + " methods called '"
                     + name + "' taking " + args.length + " argument(s) and this cannot tell them"
                     + " apart: " + String.join(", ", shapes) + ". A capability adapter can; that is"
@@ -282,15 +308,21 @@ public final class Probe {
         TreeSet<String> sameName = new TreeSet<>();
         TreeSet<String> allNames = new TreeSet<>();
         for (Method m : allMethods()) {
-            if (m.getDeclaringClass() == Object.class) continue;
+            if (m.getDeclaringClass() == Object.class) {
+                continue;
+            }
             allNames.add(m.getName());
-            if (m.getName().equals(name)) sameName.add(signature(m));
+            if (m.getName().equals(name)) {
+                sameName.add(signature(m));
+            }
         }
         if (!sameName.isEmpty()) {
             return " — it does declare " + String.join(", ", sameName)
                     + ", so the name is right and the argument count is not";
         }
-        if (allNames.isEmpty()) return " — and it declares no methods of its own at all";
+        if (allNames.isEmpty()) {
+            return " — and it declares no methods of its own at all";
+        }
         List<String> shown = new ArrayList<>(allNames).subList(0, Math.min(allNames.size(), 12));
         return " — what it does declare: " + String.join(", ", shown)
                 + (allNames.size() > shown.size() ? " (+" + (allNames.size() - shown.size()) + " more)" : "");
@@ -299,9 +331,13 @@ public final class Probe {
     private List<Method> allMethods() {
         List<Method> out = new ArrayList<>();
         for (Class<?> c = type; c != null; c = c.getSuperclass()) {
-            for (Method m : c.getDeclaredMethods()) out.add(m);
+            for (Method m : c.getDeclaredMethods()) {
+                out.add(m);
+            }
             for (Class<?> i : c.getInterfaces()) {
-                for (Method m : i.getDeclaredMethods()) out.add(m);
+                for (Method m : i.getDeclaredMethods()) {
+                    out.add(m);
+                }
             }
         }
         return out;
@@ -309,7 +345,9 @@ public final class Probe {
 
     private static String signature(Method m) {
         List<String> params = new ArrayList<>();
-        for (Class<?> p : m.getParameterTypes()) params.add(p.getSimpleName());
+        for (Class<?> p : m.getParameterTypes()) {
+            params.add(p.getSimpleName());
+        }
         return m.getName() + "(" + String.join(", ", params) + ")";
     }
 
@@ -327,7 +365,9 @@ public final class Probe {
         }
         TreeSet<String> names = new TreeSet<>();
         for (Class<?> c = type; c != null; c = c.getSuperclass()) {
-            for (Field f : c.getDeclaredFields()) names.add(f.getName());
+            for (Field f : c.getDeclaredFields()) {
+                names.add(f.getName());
+            }
         }
         throw new IllegalStateException("no field '" + name + "' on " + type.getName()
                 + (names.isEmpty() ? "" : " — it declares " + String.join(", ", names)));
@@ -339,7 +379,9 @@ public final class Probe {
      */
     private static Object[] unwrapAll(Object[] args) {
         Object[] out = new Object[args.length];
-        for (int i = 0; i < args.length; i++) out[i] = unwrap(args[i]);
+        for (int i = 0; i < args.length; i++) {
+            out[i] = unwrap(args[i]);
+        }
         return out;
     }
 

@@ -16,7 +16,9 @@ public final class Sha1 {
         MessageDigest digest = digest();
         byte[] buffer = new byte[1 << 16];
         try (InputStream in = Files.newInputStream(file)) {
-            for (int n; (n = in.read(buffer)) > 0; ) digest.update(buffer, 0, n);
+            for (int n; (n = in.read(buffer)) > 0; ) {
+                digest.update(buffer, 0, n);
+            }
         }
         return HexFormat.of().formatHex(digest.digest());
     }
@@ -27,8 +29,12 @@ public final class Sha1 {
 
     /** Whether {@code file} exists and is what {@code sha1}/{@code size} say; either may be unknown. */
     static boolean matches(Path file, String sha1, long size) throws IOException {
-        if (!Files.isRegularFile(file)) return false;
-        if (size >= 0 && Files.size(file) != size) return false;
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        if (size >= 0 && Files.size(file) != size) {
+            return false;
+        }
         return sha1 == null || sha1.equalsIgnoreCase(of(file));
     }
 

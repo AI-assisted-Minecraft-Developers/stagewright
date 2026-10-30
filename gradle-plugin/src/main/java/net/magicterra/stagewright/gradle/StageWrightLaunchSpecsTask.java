@@ -94,7 +94,9 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
                     .add("topology", entry.topology)
                     .add("gameDirectory", entry.gameDirectory.getAbsolutePath());
             String world = worldDirectory(entry.primary.jvmArgs());
-            if (world != null) json.add("worldDirectory", world);
+            if (world != null) {
+                json.add("worldDirectory", world);
+            }
             json.add("cleanWorld", entry.cleanWorld)
                     .add("timeoutMinutes", entry.timeoutMinutes)
                     .add("stallMinutes", entry.stallMinutes)
@@ -137,7 +139,11 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
                     tokens = List.of();
                 }
             }
-            for (String t : tokens) if (t.startsWith(prefix)) found = "saves/" + t.substring(prefix.length());
+            for (String t : tokens) {
+                if (t.startsWith(prefix)) {
+                    found = "saves/" + t.substring(prefix.length());
+                }
+            }
         }
         return found;
     }
@@ -154,7 +160,9 @@ public abstract class StageWrightLaunchSpecsTask extends DefaultTask {
         JsonObject environment = new JsonObject();
         Map<String, String> inherited = System.getenv();
         for (Map.Entry<String, String> e : launch.environment().entrySet()) {
-            if (!e.getValue().equals(inherited.get(e.getKey()))) environment.add(e.getKey(), e.getValue());
+            if (!e.getValue().equals(inherited.get(e.getKey()))) {
+                environment.add(e.getKey(), e.getValue());
+            }
         }
         return new JsonObject()
                 .add("java", launch.javaExecutable())

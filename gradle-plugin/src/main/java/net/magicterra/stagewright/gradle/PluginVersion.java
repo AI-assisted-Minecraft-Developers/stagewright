@@ -33,11 +33,15 @@ final class PluginVersion {
 
     private static String property(String key) {
         try (InputStream in = PluginVersion.class.getResourceAsStream(RESOURCE)) {
-            if (in == null) throw new IllegalStateException(RESOURCE + " is missing from the plugin jar");
+            if (in == null) {
+                throw new IllegalStateException(RESOURCE + " is missing from the plugin jar");
+            }
             Properties properties = new Properties();
             properties.load(in);
             String value = properties.getProperty(key);
-            if (value == null) throw new IllegalStateException(RESOURCE + " has no " + key);
+            if (value == null) {
+                throw new IllegalStateException(RESOURCE + " has no " + key);
+            }
             return value;
         } catch (IOException e) {
             throw new UncheckedIOException(e);

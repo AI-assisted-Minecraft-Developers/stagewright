@@ -60,7 +60,9 @@ public final class Capabilities {
     public List<String> available() {
         List<String> out = new ArrayList<>();
         for (Map.Entry<String, CapabilityProvider> e : found().providers().entrySet()) {
-            if (e.getValue().availableIn(game)) out.add(e.getKey());
+            if (e.getValue().availableIn(game)) {
+                out.add(e.getKey());
+            }
         }
         out.sort(String::compareTo);
         return out;
@@ -93,7 +95,9 @@ public final class Capabilities {
      */
     public CapabilityProvider require(String name) {
         CapabilityProvider provider = found().providers().get(name);
-        if (provider == null || !provider.availableIn(game)) throw new TestAbortedException(reasonFor(name, provider));
+        if (provider == null || !provider.availableIn(game)) {
+            throw new TestAbortedException(reasonFor(name, provider));
+        }
         return provider;
     }
 
@@ -103,7 +107,9 @@ public final class Capabilities {
      * nothing is here at all (the framework's own service file did not make it into the jar).
      */
     private String reasonFor(String name, CapabilityProvider provider) {
-        if (provider != null) return provider.absentReason();
+        if (provider != null) {
+            return provider.absentReason();
+        }
         Found f = found();
         String head = "this test needs the '" + name + "' capability, which nothing in this run offers";
         String failures = f.loadFailures().isEmpty()
@@ -128,9 +134,13 @@ public final class Capabilities {
 
     private static Found found() {
         Found f = found;
-        if (f != null) return f;
+        if (f != null) {
+            return f;
+        }
         synchronized (Capabilities.class) {
-            if (found == null) found = discover();
+            if (found == null) {
+                found = discover();
+            }
             return found;
         }
     }
@@ -168,8 +178,12 @@ public final class Capabilities {
 
         // Descriptors after the ServiceLoader pass, and pack files after built-ins: later wins here, unlike the clash
         // above, so a pack whose fork moved a class can correct a built-in without waiting for a release.
-        for (CapabilityDescriptor descriptor : builtInDescriptors()) providers.put(descriptor.name(), descriptor);
-        for (CapabilityDescriptor descriptor : packDescriptors()) providers.put(descriptor.name(), descriptor);
+        for (CapabilityDescriptor descriptor : builtInDescriptors()) {
+            providers.put(descriptor.name(), descriptor);
+        }
+        for (CapabilityDescriptor descriptor : packDescriptors()) {
+            providers.put(descriptor.name(), descriptor);
+        }
 
         // Never written after this, so the threads that read it through the volatile need no further guard.
         return new Found(java.util.Collections.unmodifiableMap(providers), List.copyOf(failed));
@@ -181,7 +195,9 @@ public final class Capabilities {
      */
     private static List<CapabilityDescriptor> builtInDescriptors() {
         try (InputStream in = Capabilities.class.getResourceAsStream(BUILT_IN_RESOURCE)) {
-            if (in == null) return List.of();
+            if (in == null) {
+                return List.of();
+            }
             try (Reader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
                 return parseAll(JsonParser.parseReader(reader), BUILT_IN_RESOURCE);
             }
@@ -193,7 +209,9 @@ public final class Capabilities {
     /** The pack's own, in name order so a collision between two files resolves the same way on every machine. */
     private static List<CapabilityDescriptor> packDescriptors() {
         Path dir = PackFiles.capabilities();
-        if (!Files.isDirectory(dir)) return List.of();
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
         List<Path> files = new ArrayList<>();
         try (Stream<Path> walk = Files.list(dir)) {
             walk.filter(p -> p.getFileName().toString().endsWith(".json")).forEach(files::add);

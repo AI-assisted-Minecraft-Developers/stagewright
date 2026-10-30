@@ -64,7 +64,9 @@ public final class BlockItems implements BlockInventory {
             List<String> out = new ArrayList<>();
             for (int slot = 0; slot < handler.getSlots(); slot++) {
                 ItemStack stack = handler.getStackInSlot(slot);
-                if (!stack.isEmpty()) out.add(slot + "=" + stack.getCount() + " " + idOf(stack));
+                if (!stack.isEmpty()) {
+                    out.add(slot + "=" + stack.getCount() + " " + idOf(stack));
+                }
             }
             return out;
         });
@@ -78,9 +80,13 @@ public final class BlockItems implements BlockInventory {
             ItemStack stack = new ItemStack(item(itemId), amount);
             int leftover = amount;
             for (IItemHandler handler : handlers) {
-                if (slot >= handler.getSlots()) continue;
+                if (slot >= handler.getSlots()) {
+                    continue;
+                }
                 int remaining = handler.insertItem(slot, stack, false).getCount();
-                if (remaining < amount) return remaining;
+                if (remaining < amount) {
+                    return remaining;
+                }
                 leftover = remaining;
             }
             return leftover;
@@ -94,7 +100,9 @@ public final class BlockItems implements BlockInventory {
             ItemStack stack = new ItemStack(item(itemId), 1);
             for (IItemHandler handler : handlers) {
                 if (slot < handler.getSlots()
-                        && handler.insertItem(slot, stack, true).isEmpty()) return true;
+                        && handler.insertItem(slot, stack, true).isEmpty()) {
+                    return true;
+                }
             }
             return false;
         });
@@ -105,9 +113,13 @@ public final class BlockItems implements BlockInventory {
         return at(pos, handlers -> {
             require(pos, handlers);
             for (IItemHandler handler : handlers) {
-                if (slot >= handler.getSlots()) continue;
+                if (slot >= handler.getSlots()) {
+                    continue;
+                }
                 int got = handler.extractItem(slot, amount, false).getCount();
-                if (got > 0) return got;
+                if (got > 0) {
+                    return got;
+                }
             }
             return 0;
         });
@@ -121,10 +133,14 @@ public final class BlockItems implements BlockInventory {
     private static List<IItemHandler> handlers(ServerLevel level, BlockPos pos) {
         List<IItemHandler> out = new ArrayList<>();
         IItemHandler noSide = level.getCapability(Capabilities.ItemHandler.BLOCK, pos, null);
-        if (noSide != null) out.add(noSide);
+        if (noSide != null) {
+            out.add(noSide);
+        }
         for (Direction side : Direction.values()) {
             IItemHandler sided = level.getCapability(Capabilities.ItemHandler.BLOCK, pos, side);
-            if (sided != null && out.stream().noneMatch(known -> known == sided)) out.add(sided);
+            if (sided != null && out.stream().noneMatch(known -> known == sided)) {
+                out.add(sided);
+            }
         }
         return out;
     }

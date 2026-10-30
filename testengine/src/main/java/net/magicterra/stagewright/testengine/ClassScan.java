@@ -54,12 +54,16 @@ final class ClassScan {
      */
     static Optional<Scanned> scan(String className, ClassLoader loader) throws IOException {
         Reading top = read(className, loader);
-        if (top == null || top.skip || top.scenes.isEmpty()) return Optional.empty();
+        if (top == null || top.skip || top.scenes.isEmpty()) {
+            return Optional.empty();
+        }
         Map<String, Method> methods = new LinkedHashMap<>(top.methods);
         // Inherited tests run in the subclass too; an override with the same signature is the subclass's.
         for (String parent = top.superName; parent != null && !parent.equals("java.lang.Object"); ) {
             Reading up = read(parent, loader);
-            if (up == null) break;
+            if (up == null) {
+                break;
+            }
             up.methods.forEach(methods::putIfAbsent);
             parent = up.superName;
         }
@@ -72,7 +76,9 @@ final class ClassScan {
 
     private static Reading read(String className, ClassLoader loader) throws IOException {
         try (InputStream in = loader.getResourceAsStream(className.replace('.', '/') + ".class")) {
-            if (in == null) return null;
+            if (in == null) {
+                return null;
+            }
             Reading reading = new Reading();
             new ClassReader(in)
                     .accept(reading, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
@@ -111,16 +117,24 @@ final class ClassScan {
 
         @Override
         public AnnotationVisitor visitAnnotation(String descriptor, boolean visible) {
-            if (descriptor.equals(NESTED)) skip = true;
-            if (descriptor.equals(SCENE)) return values(scenes);
-            if (descriptor.equals(DISPLAY_NAME)) return value(v -> displayName = v);
+            if (descriptor.equals(NESTED)) {
+                skip = true;
+            }
+            if (descriptor.equals(SCENE)) {
+                return values(scenes);
+            }
+            if (descriptor.equals(DISPLAY_NAME)) {
+                return value(v -> displayName = v);
+            }
             return null;
         }
 
         @Override
         public MethodVisitor visitMethod(
                 int access, String name, String descriptor, String signature, String[] exceptions) {
-            if ((access & (Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE | Opcodes.ACC_SYNTHETIC)) != 0) return null;
+            if ((access & (Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE | Opcodes.ACC_SYNTHETIC)) != 0) {
+                return null;
+            }
             String parameters = parameters(descriptor);
             return new MethodVisitor(Opcodes.ASM9) {
                 boolean testable;
@@ -133,13 +147,17 @@ final class ClassScan {
                         testable = true;
                         container = !annotation.equals(TEST);
                     }
-                    if (annotation.equals(DISPLAY_NAME)) return value(v -> display = v);
+                    if (annotation.equals(DISPLAY_NAME)) {
+                        return value(v -> display = v);
+                    }
                     return null;
                 }
 
                 @Override
                 public void visitEnd() {
-                    if (!testable) return;
+                    if (!testable) {
+                        return;
+                    }
                     Method m = new Method(name, parameters, Optional.ofNullable(display), container);
                     methods.put(m.key(), m);
                 }
@@ -170,7 +188,9 @@ final class ClassScan {
         return new AnnotationVisitor(Opcodes.ASM9) {
             @Override
             public void visit(String name, Object value) {
-                if ("value".equals(name)) into.accept(String.valueOf(value));
+                if ("value".equals(name)) {
+                    into.accept(String.valueOf(value));
+                }
             }
         };
     }

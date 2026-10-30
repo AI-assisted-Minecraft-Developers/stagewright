@@ -86,8 +86,9 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
                         + ", but this one is " + size.getX() + " × " + size.getY() + " × " + size.getZ());
             }
         }
-        if (size.getY() < 1)
+        if (size.getY() < 1) {
             throw new IllegalArgumentException("a plot is at least 1 tall, but this one is " + size.getY());
+        }
         int floorY = game.onServer(server -> {
             ServerLevel level = GameImpl.level(server, dimension);
             return PlotLayout.floorY(BASE_Y, level.getMinBuildHeight(), level.getMaxBuildHeight(), size.getY());
@@ -283,8 +284,11 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
             for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
                 ChunkPos pos = new ChunkPos(cx, cz);
-                if (load) chunks.addRegionTicket(TICKET, pos, TICKET_DISTANCE, lease);
-                else chunks.removeRegionTicket(TICKET, pos, TICKET_DISTANCE, lease);
+                if (load) {
+                    chunks.addRegionTicket(TICKET, pos, TICKET_DISTANCE, lease);
+                } else {
+                    chunks.removeRegionTicket(TICKET, pos, TICKET_DISTANCE, lease);
+                }
             }
         }
     }
@@ -304,7 +308,9 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
             for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
                 if (level.getChunkSource().getChunkNow(cx, cz) == null
-                        || !level.areEntitiesLoaded(ChunkPos.asLong(cx, cz))) return false;
+                        || !level.areEntitiesLoaded(ChunkPos.asLong(cx, cz))) {
+                    return false;
+                }
             }
         }
         return true;
@@ -317,10 +323,13 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         for (BlockPos pos :
                 BlockPos.betweenClosed(box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ())) {
             // No neighbour updates and no drops: the plot is emptied, not mined.
-            if (!level.getBlockState(pos).isAir())
+            if (!level.getBlockState(pos).isAir()) {
                 level.setBlock(pos, air, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
+            }
         }
         AABB area = AABB.of(box);
-        for (Entity e : level.getEntities((Entity) null, area, e -> !(e instanceof Player))) e.discard();
+        for (Entity e : level.getEntities((Entity) null, area, e -> !(e instanceof Player))) {
+            e.discard();
+        }
     }
 }

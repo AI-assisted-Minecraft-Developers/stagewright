@@ -73,8 +73,11 @@ class RequiresAndKnownIssueTest {
 
     @AfterEach
     void restoreGlobals() throws Exception {
-        if (previousAwait == null) System.clearProperty(AWAIT);
-        else System.setProperty(AWAIT, previousAwait);
+        if (previousAwait == null) {
+            System.clearProperty(AWAIT);
+        } else {
+            System.setProperty(AWAIT, previousAwait);
+        }
         staticField(Mods.class, "installed").set(null, previousMods);
         staticField(GameExtension.class, "game").set(null, previousGame);
     }
@@ -207,12 +210,16 @@ class RequiresAndKnownIssueTest {
         @Override
         public void executionSkipped(TestIdentifier id, String reason) {
             String name = name(id);
-            if (name != null) skipped.put(name, reason);
+            if (name != null) {
+                skipped.put(name, reason);
+            }
         }
 
         @Override
         public void executionFinished(TestIdentifier id, TestExecutionResult result) {
-            if (!id.isTest()) return;
+            if (!id.isTest()) {
+                return;
+            }
             String name = name(id);
             if (name != null) {
                 finished.put(

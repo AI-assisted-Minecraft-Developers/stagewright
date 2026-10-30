@@ -67,12 +67,16 @@ public final class ScriptTestEngine implements TestEngine {
         }
         for (ClasspathResourceSelector selector : request.getSelectorsByType(ClasspathResourceSelector.class)) {
             String resource = selector.getClasspathResourceName();
-            if (resource.endsWith(".js")) engine.addChild(File.load(engine, resource, steps, javaStepsError));
+            if (resource.endsWith(".js")) {
+                engine.addChild(File.load(engine, resource, steps, javaStepsError));
+            }
         }
         // YAML after JavaScript: a YAML step may be one a script registers.
         for (ClasspathResourceSelector selector : request.getSelectorsByType(ClasspathResourceSelector.class)) {
             String resource = selector.getClasspathResourceName();
-            if (isYaml(resource)) engine.addChild(File.load(engine, resource, steps, javaStepsError));
+            if (isYaml(resource)) {
+                engine.addChild(File.load(engine, resource, steps, javaStepsError));
+            }
         }
         keepThisRound(engine);
         discovered = engine;
@@ -94,7 +98,9 @@ public final class ScriptTestEngine implements TestEngine {
         Rounds.scripts(upstream);
         for (TestDescriptor child : engine.getChildren()) {
             for (TestDescriptor t : new ArrayList<>(child.getChildren())) {
-                if (Rounds.of(((Test) t).key()) != Rounds.current()) child.removeChild(t);
+                if (Rounds.of(((Test) t).key()) != Rounds.current()) {
+                    child.removeChild(t);
+                }
             }
         }
     }
@@ -105,11 +111,17 @@ public final class ScriptTestEngine implements TestEngine {
      */
     Map<String, List<String>> discoveredTests() {
         Map<String, List<String>> tests = new LinkedHashMap<>();
-        if (discovered == null) return tests;
+        if (discovered == null) {
+            return tests;
+        }
         for (TestDescriptor child : discovered.getChildren()) {
             File file = (File) child;
-            if (file.loadError != null) continue;
-            for (TestDescriptor t : file.getChildren()) tests.put(((Test) t).key(), ((Test) t).dependsOn());
+            if (file.loadError != null) {
+                continue;
+            }
+            for (TestDescriptor t : file.getChildren()) {
+                tests.put(((Test) t).key(), ((Test) t).dependsOn());
+            }
         }
         return tests;
     }
@@ -129,11 +141,15 @@ public final class ScriptTestEngine implements TestEngine {
                 continue;
             }
             loaded.add(file);
-            for (TestDescriptor test : file.getChildren()) tests.add((Test) test);
+            for (TestDescriptor test : file.getChildren()) {
+                tests.add((Test) test);
+            }
         }
         ScriptScheduler.run(
                 tests, request.getConfigurationParameters(), (test, scheduler) -> test.execute(listener, scheduler));
-        for (File file : loaded) listener.executionFinished(file, TestExecutionResult.successful());
+        for (File file : loaded) {
+            listener.executionFinished(file, TestExecutionResult.successful());
+        }
         listener.executionFinished(engine, TestExecutionResult.successful());
     }
 
@@ -186,7 +202,9 @@ public final class ScriptTestEngine implements TestEngine {
                     return file;
                 }
                 Scripting scripting = GameImpl.scripting(GameExtension.game());
-                if (scripting == null) throw new IllegalStateException("WorldDriver is not up, so no script can run");
+                if (scripting == null) {
+                    throw new IllegalStateException("WorldDriver is not up, so no script can run");
+                }
                 Map<String, Object> globals = Map.of(
                         "test", (Scripting.Function) file::register,
                         "step", (Scripting.Function) file::registerStep);
@@ -200,7 +218,9 @@ public final class ScriptTestEngine implements TestEngine {
         private static String source(String resource) {
             ClassLoader loader = Thread.currentThread().getContextClassLoader();
             try (InputStream in = loader.getResourceAsStream(resource)) {
-                if (in == null) throw new IllegalArgumentException("no " + resource + " on the game's class path");
+                if (in == null) {
+                    throw new IllegalArgumentException("no " + resource + " on the game's class path");
+                }
                 return new String(in.readAllBytes(), StandardCharsets.UTF_8);
             } catch (IOException e) {
                 throw new IllegalStateException("could not read " + resource, e);
@@ -228,7 +248,9 @@ public final class ScriptTestEngine implements TestEngine {
                             "test '" + name + "': unknown option '" + key + "'; known: " + OPTIONS);
                 }
             }
-            if (!inThisScene(options.get("scene"))) return;
+            if (!inThisScene(options.get("scene"))) {
+                return;
+            }
             UniqueId id = getUniqueId().append("test", name);
             if (getChildren().stream().anyMatch(c -> c.getUniqueId().equals(id))) {
                 throw new IllegalArgumentException("test '" + name + "' is registered twice in " + resource);
@@ -261,7 +283,9 @@ public final class ScriptTestEngine implements TestEngine {
         /** Whether a test naming {@code scenes} runs in this game: every test does when no scene was chosen. */
         private static boolean inThisScene(Object scenes) {
             String scene = System.getProperty(SCENE);
-            if (scene == null) return true;
+            if (scene == null) {
+                return true;
+            }
             return scenes instanceof List<?> list ? list.contains(scene) : scene.equals(scenes);
         }
 
@@ -473,7 +497,9 @@ public final class ScriptTestEngine implements TestEngine {
                                 + knownIssue + "': if the issue is fixed, remove the option"))
                         : TestExecutionResult.aborted(new IllegalStateException("known issue: " + knownIssue, failure));
             }
-            if (failure == null) return TestExecutionResult.successful();
+            if (failure == null) {
+                return TestExecutionResult.successful();
+            }
             // Matched by name: in a Fabric development game the class may come from another loader.
             return failure.getClass().getName().equals("org.opentest4j.TestAbortedException")
                     ? TestExecutionResult.aborted(failure)

@@ -12,7 +12,9 @@ public final class DriverRuntime {
 
     public static ApiRegistry requireApi() {
         ApiRegistry api = WorldDriver.registry();
-        if (api == null) throw new IllegalStateException("StageWright: WorldDriver API is not ready");
+        if (api == null) {
+            throw new IllegalStateException("StageWright: WorldDriver API is not ready");
+        }
         return api;
     }
 
@@ -22,9 +24,13 @@ public final class DriverRuntime {
      */
     public static void registerVerbs() {
         ApiRegistry api = requireApi();
-        if (api == registeredApi) return;
+        if (api == registeredApi) {
+            return;
+        }
         synchronized (DriverRuntime.class) {
-            if (api == registeredApi) return;
+            if (api == registeredApi) {
+                return;
+            }
             TestMethods.register(api);
             registeredApi = api;
         }

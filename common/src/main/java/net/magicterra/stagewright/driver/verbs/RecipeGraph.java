@@ -59,7 +59,9 @@ final class RecipeGraph {
         for (RecipeHolder<?> holder : level.getRecipeManager().getRecipes()) {
             byId.put(holder.id().toString(), holder);
             ItemStack result = resultOf(holder.value());
-            if (result.isEmpty()) continue; // dynamic recipe
+            if (result.isEmpty()) {
+                continue; // dynamic recipe
+            }
             byResult.computeIfAbsent(idOf(result), k -> new ArrayList<>())
                     .add(holder.id().toString());
         }
@@ -73,7 +75,9 @@ final class RecipeGraph {
         RecipeHolder<?> holder = holder(recipeId);
         ItemStack result = resultOf(holder.value());
         List<Slot> slots = new ArrayList<>();
-        for (List<String> accepts : slotsOf(holder)) slots.add(new Slot(accepts));
+        for (List<String> accepts : slotsOf(holder)) {
+            slots.add(new Slot(accepts));
+        }
         return new IngredientsOf(idOf(result), result.isEmpty() ? 0 : result.getCount(), slots);
     }
 
@@ -81,7 +85,9 @@ final class RecipeGraph {
         List<String> out = new ArrayList<>();
         for (Map.Entry<String, RecipeHolder<?>> entry : byId.entrySet()) {
             for (Ingredient ingredient : ingredientsIn(entry.getValue().value())) {
-                if (ingredient.isEmpty()) continue;
+                if (ingredient.isEmpty()) {
+                    continue;
+                }
                 if (acceptedBy(ingredient).isEmpty()) {
                     out.add(entry.getKey());
                     break;
@@ -207,7 +213,9 @@ final class RecipeGraph {
                 if (slots.isEmpty()) {
                     opaque.add(recipeId);
                     for (String next : mentionedBy(byId.get(recipeId))) {
-                        if (seen.contains(next)) continue;
+                        if (seen.contains(next)) {
+                            continue;
+                        }
                         if (seen.size() >= maxNodes) {
                             truncated = true;
                             continue;
@@ -225,7 +233,9 @@ final class RecipeGraph {
                     }
                     for (String next : accepted) {
                         declared.add(next);
-                        if (seen.contains(next)) continue;
+                        if (seen.contains(next)) {
+                            continue;
+                        }
                         if (seen.size() >= maxNodes) {
                             truncated = true;
                             continue;
@@ -308,7 +318,9 @@ final class RecipeGraph {
     private static List<List<String>> slotsOf(RecipeHolder<?> holder) {
         List<List<String>> out = new ArrayList<>();
         for (Ingredient ingredient : ingredientsIn(holder.value())) {
-            if (ingredient.isEmpty()) continue;
+            if (ingredient.isEmpty()) {
+                continue;
+            }
             out.add(acceptedBy(ingredient));
         }
         return out;
@@ -318,7 +330,9 @@ final class RecipeGraph {
         List<String> out = new ArrayList<>();
         for (ItemStack stack : ingredient.getItems()) {
             String id = idOf(stack);
-            if (!id.isEmpty() && !out.contains(id)) out.add(id);
+            if (!id.isEmpty() && !out.contains(id)) {
+                out.add(id);
+            }
         }
         return out;
     }
@@ -329,7 +343,9 @@ final class RecipeGraph {
     }
 
     private boolean isDynamic(CraftingRecipe recipe) {
-        if (recipe.isSpecial()) return true;
+        if (recipe.isSpecial()) {
+            return true;
+        }
         return ingredientsIn(recipe).isEmpty() || resultOf(recipe).isEmpty();
     }
 
@@ -340,15 +356,23 @@ final class RecipeGraph {
             // An empty ingredient is a blank cell in a shaped recipe and must stay blank, or the shape changes.
             grid.add(accepted.length == 0 ? ItemStack.EMPTY : accepted[0].copy());
         }
-        if (grid.isEmpty()) return "";
+        if (grid.isEmpty()) {
+            return "";
+        }
         // A shaped recipe's ingredients are its rectangle read row by row, so its own width is the only one that
         // reconstructs it. A shapeless one has no shape: at most three per row, as in a crafting table.
         int width = recipe instanceof ShapedRecipe shaped ? shaped.getWidth() : Math.min(3, grid.size());
         int height = recipe instanceof ShapedRecipe shaped ? shaped.getHeight() : (grid.size() + 2) / 3;
-        while (grid.size() < width * height) grid.add(ItemStack.EMPTY);
-        if (grid.size() > width * height) return ""; // cannot be laid out; not a craft failure
+        while (grid.size() < width * height) {
+            grid.add(ItemStack.EMPTY);
+        }
+        if (grid.size() > width * height) {
+            return ""; // cannot be laid out; not a craft failure
+        }
         CraftingInput input = CraftingInput.of(width, height, grid);
-        if (!recipe.matches(input, level)) return "";
+        if (!recipe.matches(input, level)) {
+            return "";
+        }
         ItemStack made = recipe.assemble(input, level.registryAccess());
         return made.isEmpty() ? "" : idOf(made);
     }
@@ -363,7 +387,9 @@ final class RecipeGraph {
         } catch (RuntimeException e) {
             return List.of();
         }
-        if (json == null) return List.of();
+        if (json == null) {
+            return List.of();
+        }
 
         Set<String> strings = new LinkedHashSet<>();
         harvest(null, json, strings);
@@ -373,13 +399,19 @@ final class RecipeGraph {
         for (String text : strings) {
             if (text.startsWith("#")) {
                 for (String id : itemsInTag(text.substring(1))) {
-                    if (!id.equals(result)) out.add(id);
+                    if (!id.equals(result)) {
+                        out.add(id);
+                    }
                 }
                 continue;
             }
             ResourceLocation location = ResourceLocation.tryParse(text);
-            if (location == null || !BuiltInRegistries.ITEM.containsKey(location)) continue;
-            if (!location.toString().equals(result)) out.add(location.toString());
+            if (location == null || !BuiltInRegistries.ITEM.containsKey(location)) {
+                continue;
+            }
+            if (!location.toString().equals(result)) {
+                out.add(location.toString());
+            }
         }
         return List.copyOf(out);
     }
@@ -390,7 +422,9 @@ final class RecipeGraph {
                 harvest(entry.getKey(), entry.getValue(), out);
             }
         } else if (json.isJsonArray()) {
-            for (JsonElement element : json.getAsJsonArray()) harvest(key, element, out);
+            for (JsonElement element : json.getAsJsonArray()) {
+                harvest(key, element, out);
+            }
         } else if (json.isJsonPrimitive() && json.getAsJsonPrimitive().isString()) {
             String text = json.getAsString();
             out.add("tag".equals(key) && !text.startsWith("#") ? "#" + text : text);
@@ -399,7 +433,9 @@ final class RecipeGraph {
 
     private static List<String> itemsInTag(String tagId) {
         ResourceLocation location = ResourceLocation.tryParse(tagId);
-        if (location == null) return List.of();
+        if (location == null) {
+            return List.of();
+        }
         List<String> out = new ArrayList<>();
         for (Holder<Item> holder : BuiltInRegistries.ITEM.getTagOrEmpty(TagKey.create(Registries.ITEM, location))) {
             out.add(idOf(holder.value()));

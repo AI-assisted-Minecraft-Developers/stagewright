@@ -34,7 +34,9 @@ public final class Json {
     }
 
     private static Object toJava(JsonValue value) {
-        if (value == null || value.isNull()) return null;
+        if (value == null || value.isNull()) {
+            return null;
+        }
         if (value.isObject()) {
             Map<String, Object> out = new LinkedHashMap<>();
             JsonObject object = value.asObject();
@@ -45,12 +47,20 @@ public final class Json {
         }
         if (value.isArray()) {
             List<Object> out = new ArrayList<>();
-            for (JsonValue item : value.asArray()) out.add(toJava(item));
+            for (JsonValue item : value.asArray()) {
+                out.add(toJava(item));
+            }
             return out;
         }
-        if (value.isString()) return value.asString();
-        if (value.isBoolean()) return value.asBoolean();
-        if (value.isNumber()) return value.asDouble();
+        if (value.isString()) {
+            return value.asString();
+        }
+        if (value.isBoolean()) {
+            return value.asBoolean();
+        }
+        if (value.isNumber()) {
+            return value.asDouble();
+        }
         return value.toString();
     }
 }

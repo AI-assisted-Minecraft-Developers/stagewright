@@ -41,7 +41,9 @@ final class ThreadOrigins {
             stream.enable("jdk.ThreadStart").withStackTrace();
             stream.enable("jdk.ThreadEnd");
             stream.onEvent("jdk.ThreadStart", event -> {
-                if (event.getThread("eventThread") == null || recorder.origins.size() >= CAP) return;
+                if (event.getThread("eventThread") == null || recorder.origins.size() >= CAP) {
+                    return;
+                }
                 List<String> frames = outsideTheJdk(event.getStackTrace());
                 if (!frames.isEmpty()) {
                     recorder.origins.put(event.getThread("eventThread").getJavaThreadId(), frames);
@@ -63,12 +65,20 @@ final class ThreadOrigins {
     /** {@code class.method} for the frames that start a thread outside the JDK and this agent, innermost first. */
     private static List<String> outsideTheJdk(RecordedStackTrace trace) {
         List<String> frames = new ArrayList<>();
-        if (trace == null) return frames;
+        if (trace == null) {
+            return frames;
+        }
         for (RecordedFrame frame : trace.getFrames()) {
-            if (frames.size() >= FRAMES) break;
-            if (frame.getMethod() == null || frame.getMethod().getType() == null) continue;
+            if (frames.size() >= FRAMES) {
+                break;
+            }
+            if (frame.getMethod() == null || frame.getMethod().getType() == null) {
+                continue;
+            }
             String type = frame.getMethod().getType().getName();
-            if (isJdk(type) || type.startsWith("net.magicterra.stagewright.agent.")) continue;
+            if (isJdk(type) || type.startsWith("net.magicterra.stagewright.agent.")) {
+                continue;
+            }
             frames.add(type + "." + frame.getMethod().getName());
         }
         return frames;
@@ -76,7 +86,9 @@ final class ThreadOrigins {
 
     private static boolean isJdk(String type) {
         for (String prefix : JDK) {
-            if (type.startsWith(prefix)) return true;
+            if (type.startsWith(prefix)) {
+                return true;
+            }
         }
         return false;
     }
@@ -91,13 +103,19 @@ final class ThreadOrigins {
      */
     boolean releaseIfAlone() {
         ThreadGroup root = Thread.currentThread().getThreadGroup();
-        while (root.getParent() != null) root = root.getParent();
+        while (root.getParent() != null) {
+            root = root.getParent();
+        }
         Thread[] all = new Thread[root.activeCount() + 32];
         int count = root.enumerate(all, true);
         for (int i = 0; i < count; i++) {
             Thread thread = all[i];
-            if (thread == null || thread.isDaemon() || !thread.isAlive()) continue;
-            if (thread.getName().equals("DestroyJavaVM") || Agent.isRecorderThread(thread.getName())) continue;
+            if (thread == null || thread.isDaemon() || !thread.isAlive()) {
+                continue;
+            }
+            if (thread.getName().equals("DestroyJavaVM") || Agent.isRecorderThread(thread.getName())) {
+                continue;
+            }
             return false;
         }
         stream.close();

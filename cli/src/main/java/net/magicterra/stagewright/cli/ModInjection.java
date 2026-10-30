@@ -77,7 +77,9 @@ final class ModInjection {
         } else {
             // A copy with other bytes was warned about above.
             for (Path pack : packs) {
-                if (sha1(pack).equals(sha1(ours))) log.accept(usingThePacks(pack, ours, "this CLI's StageWright"));
+                if (sha1(pack).equals(sha1(ours))) {
+                    log.accept(usingThePacks(pack, ours, "this CLI's StageWright"));
+                }
             }
         }
         for (Path extra : extras) {
@@ -92,7 +94,9 @@ final class ModInjection {
             jars.add(extra);
         }
 
-        if (jars.isEmpty()) return Arguments.NONE;
+        if (jars.isEmpty()) {
+            return Arguments.NONE;
+        }
         return switch (loader) {
             case "fabric" -> fabric(jars, log);
             case "neoforge" -> neoforge(jars, staged, log);
@@ -149,7 +153,9 @@ final class ModInjection {
     /** A jar's file name as a maven artifact id: no extension, nothing a coordinate cannot hold. */
     static String artifactName(Path jar) {
         String name = jar.getFileName().toString();
-        if (name.endsWith(".jar")) name = name.substring(0, name.length() - 4);
+        if (name.endsWith(".jar")) {
+            name = name.substring(0, name.length() - 4);
+        }
         return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", "_");
     }
 
@@ -194,10 +200,14 @@ final class ModInjection {
                         + " ships StageWright on purpose.");
             }
             String driver = DriverRequirement.declaredVersion(jar, loader, "worlddriver");
-            if (driver == null) continue;
+            if (driver == null) {
+                continue;
+            }
             for (Path extra : extraDrivers) {
                 // One of the same name is not loaded at all; the pack's copy is, as prepare says.
-                if (extra.getFileName().equals(jar.getFileName())) continue;
+                if (extra.getFileName().equals(jar.getFileName())) {
+                    continue;
+                }
                 log.accept("WARNING: " + jar + " is a WorldDriver build (" + driver + "), and --mod " + extra
                         + " is another (" + DriverRequirement.declaredVersion(extra, loader, "worlddriver") + "). A"
                         + " game loads one WorldDriver: take " + jar.getFileName()
@@ -233,9 +243,13 @@ final class ModInjection {
     }
 
     private static void deleteTree(Path root) {
-        if (!Files.exists(root)) return;
+        if (!Files.exists(root)) {
+            return;
+        }
         try (Stream<Path> walk = Files.walk(root)) {
-            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(p);
+            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(p);
+            }
         } catch (IOException e) {
             throw new UncheckedIOException("cannot clear " + root, e);
         }

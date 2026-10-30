@@ -59,9 +59,13 @@ public final class RunOptions {
      * value without firing its callbacks.
      */
     public static void apply(Options options, File file) {
-        if (!ClientDirector.directed()) return;
+        if (!ClientDirector.directed()) {
+            return;
+        }
         // The file's own lines are captured once; a second load re-applies the run's values over them.
-        if (original == null) original = keyLines(file.toPath());
+        if (original == null) {
+            original = keyLines(file.toPath());
+        }
         options.pauseOnLostFocus = false;
         options.onboardAccessibility = false;
         options.narrator().set(NarratorStatus.OFF);
@@ -73,7 +77,9 @@ public final class RunOptions {
     /** After {@code Options.save}: the run's four values out of the file, the player's back in. */
     public static void restoreFile(File file) {
         Map<String, String> saved = original;
-        if (saved == null) return;
+        if (saved == null) {
+            return;
+        }
         Path path = file.toPath();
         try {
             List<String> out = new ArrayList<>();
@@ -98,11 +104,15 @@ public final class RunOptions {
 
     private static Map<String, String> keyLines(Path file) {
         Map<String, String> out = new LinkedHashMap<>();
-        if (!Files.isRegularFile(file)) return out;
+        if (!Files.isRegularFile(file)) {
+            return out;
+        }
         try {
             for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
                 String key = key(line);
-                if (key != null) out.put(key, line);
+                if (key != null) {
+                    out.put(key, line);
+                }
             }
         } catch (IOException e) {
             StageWrightCommon.LOG.warn("[{}] could not read {}: {}", StageWrightCommon.MOD_ID, file, e.toString());
@@ -112,7 +122,9 @@ public final class RunOptions {
 
     private static String key(String line) {
         int colon = line.indexOf(':');
-        if (colon < 0) return null;
+        if (colon < 0) {
+            return null;
+        }
         String key = line.substring(0, colon);
         return KEYS.contains(key) ? key : null;
     }

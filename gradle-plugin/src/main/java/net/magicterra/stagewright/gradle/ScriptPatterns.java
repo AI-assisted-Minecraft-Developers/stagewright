@@ -27,7 +27,9 @@ final class ScriptPatterns implements Action<Task> {
     /** {@code patterns} with each one that names a script path starting with {@code *}. */
     static Set<String> reachingScripts(Set<String> patterns) {
         Set<String> out = new LinkedHashSet<>();
-        for (String p : patterns) out.add(p.contains("/") && !p.startsWith("*") ? "*" + p : p);
+        for (String p : patterns) {
+            out.add(p.contains("/") && !p.startsWith("*") ? "*" + p : p);
+        }
         return out;
     }
 

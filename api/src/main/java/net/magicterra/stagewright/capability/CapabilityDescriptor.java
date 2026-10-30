@@ -150,13 +150,17 @@ public final class CapabilityDescriptor implements CapabilityProvider {
      */
     private String missing() {
         for (String mod : mods) {
-            if (!Mods.loaded(mod)) return "the mod '" + mod + "' is not loaded";
+            if (!Mods.loaded(mod)) {
+                return "the mod '" + mod + "' is not loaded";
+            }
         }
         if (!anyMods.isEmpty() && !Mods.any(anyMods.toArray(new String[0]))) {
             return "none of the mods " + anyMods + " is loaded";
         }
         for (String className : classes) {
-            if (!Probe.hasClass(className)) return "the class '" + className + "' is not in this JVM";
+            if (!Probe.hasClass(className)) {
+                return "the class '" + className + "' is not in this JVM";
+            }
         }
         for (String item : items) {
             if (!Ids.registered(BuiltInRegistries.ITEM, item, "item")) {
@@ -177,11 +181,21 @@ public final class CapabilityDescriptor implements CapabilityProvider {
      */
     private String missingSummary() {
         List<String> parts = new ArrayList<>();
-        if (!mods.isEmpty()) parts.add("mods " + mods);
-        if (!anyMods.isEmpty()) parts.add("any of " + anyMods);
-        if (!classes.isEmpty()) parts.add("classes " + classes);
-        if (!items.isEmpty()) parts.add("items " + items);
-        if (!blocks.isEmpty()) parts.add("blocks " + blocks);
+        if (!mods.isEmpty()) {
+            parts.add("mods " + mods);
+        }
+        if (!anyMods.isEmpty()) {
+            parts.add("any of " + anyMods);
+        }
+        if (!classes.isEmpty()) {
+            parts.add("classes " + classes);
+        }
+        if (!items.isEmpty()) {
+            parts.add("items " + items);
+        }
+        if (!blocks.isEmpty()) {
+            parts.add("blocks " + blocks);
+        }
         return "it wants " + String.join(", ", parts);
     }
 
@@ -205,7 +219,9 @@ public final class CapabilityDescriptor implements CapabilityProvider {
 
     private static String string(JsonObject json, String key, String source) {
         JsonElement e = json.get(key);
-        if (e == null || e.isJsonNull()) return null;
+        if (e == null || e.isJsonNull()) {
+            return null;
+        }
         if (!e.isJsonPrimitive()) {
             throw new IllegalStateException("'" + key + "' in " + source + " must be a string");
         }
@@ -214,7 +230,9 @@ public final class CapabilityDescriptor implements CapabilityProvider {
 
     private static List<String> strings(JsonObject json, String key, String source) {
         JsonElement e = json.get(key);
-        if (e == null || e.isJsonNull()) return List.of();
+        if (e == null || e.isJsonNull()) {
+            return List.of();
+        }
         List<String> out = new ArrayList<>();
         if (e.isJsonPrimitive()) { // one entry may be written bare
             out.add(e.getAsString());

@@ -164,11 +164,17 @@ public final class Supervisor implements AutoCloseable {
         game.onExit().thenRun(this::wake);
         synchronized (lock) {
             while (true) {
-                if (done) return Ended.DONE;
+                if (done) {
+                    return Ended.DONE;
+                }
                 Ended external = probe.get();
-                if (external != null) return external;
+                if (external != null) {
+                    return external;
+                }
                 Ended ended = evaluate(game, limits);
-                if (ended != null) return ended;
+                if (ended != null) {
+                    return ended;
+                }
                 lock.wait(POLL_MS);
             }
         }
@@ -189,13 +195,17 @@ public final class Supervisor implements AutoCloseable {
         companion.onExit().thenRun(this::wake);
         while (true) {
             Ended own = peek(game, limits);
-            if (own != null) return new Ending(own, false);
+            if (own != null) {
+                return new Ending(own, false);
+            }
             Ended theirs = joined.peek(companion, companionLimits);
             if (theirs != null) {
                 long deadline = System.nanoTime() + DRAIN_NANOS;
                 while (System.nanoTime() < deadline) {
                     own = peek(game, limits);
-                    if (own != null) return new Ending(own, false);
+                    if (own != null) {
+                        return new Ending(own, false);
+                    }
                     synchronized (lock) {
                         lock.wait(POLL_MS);
                     }
@@ -221,16 +231,24 @@ public final class Supervisor implements AutoCloseable {
 
     /** The endings the supervisor can see for itself. The lock is held. */
     private Ended evaluate(ProcessHandle game, Limits limits) {
-        if (done) return Ended.DONE;
+        if (done) {
+            return Ended.DONE;
+        }
         // Before the process is asked about: a crashed game often stays up, and one that has gone since
         // still crashed rather than merely died.
-        if (crashReport != null) return Ended.CRASHED;
+        if (crashReport != null) {
+            return Ended.CRASHED;
+        }
         long now = System.nanoTime();
         if (!game.isAlive()) {
             // Its last lines may still be in flight. Once the connection has closed they have all been
             // read; a game that never connected has none to wait for.
-            if (exitSeenNanos == 0) exitSeenNanos = now;
-            if (!connected || connectionClosed || now - exitSeenNanos >= DRAIN_NANOS) return Ended.PROCESS_DIED;
+            if (exitSeenNanos == 0) {
+                exitSeenNanos = now;
+            }
+            if (!connected || connectionClosed || now - exitSeenNanos >= DRAIN_NANOS) {
+                return Ended.PROCESS_DIED;
+            }
         } else if (!connected && now - openedNanos >= nanos(limits.connect())) {
             return Ended.NEVER_CONNECTED;
         } else if (connected && now - lastBeatNanos >= nanos(limits.heartbeat())) {
@@ -260,7 +278,9 @@ public final class Supervisor implements AutoCloseable {
         } catch (java.util.concurrent.TimeoutException e) {
             return false;
         } catch (java.util.concurrent.ExecutionException e) {
-            if (game.isAlive()) return false;
+            if (game.isAlive()) {
+                return false;
+            }
         }
         // The agent's last line, `leaked`, goes out just before it halts the JVM: read what is left of the
         // connection, so that leaks() and forcedDown() answer for the whole run.
@@ -268,7 +288,9 @@ public final class Supervisor implements AutoCloseable {
             long deadline = System.nanoTime() + DRAIN_NANOS;
             while (connected && !connectionClosed) {
                 long left = deadline - System.nanoTime();
-                if (left <= 0) break;
+                if (left <= 0) {
+                    break;
+                }
                 TimeUnit.NANOSECONDS.timedWait(lock, left);
             }
         }
@@ -336,7 +358,9 @@ public final class Supervisor implements AutoCloseable {
      * the pack rather than as yesterday's run never having ended.
      */
     public static void kill(ProcessHandle game) throws InterruptedException {
-        if (!game.isAlive()) return;
+        if (!game.isAlive()) {
+            return;
+        }
         List<ProcessHandle> descendants = game.descendants().toList();
         game.destroy();
         try {
@@ -345,7 +369,9 @@ public final class Supervisor implements AutoCloseable {
             game.destroyForcibly();
         }
         for (ProcessHandle child : descendants) {
-            if (child.isAlive()) child.destroyForcibly();
+            if (child.isAlive()) {
+                child.destroyForcibly();
+            }
         }
         try {
             game.onExit().get(20, TimeUnit.SECONDS);
@@ -401,12 +427,18 @@ public final class Supervisor implements AutoCloseable {
             String line;
             while ((line = in.readLine()) != null) {
                 Map<String, Object> event = parse(line);
-                if (event == null) continue;
+                if (event == null) {
+                    continue;
+                }
                 if (!mine) {
                     // The first line must be a hello that carries our token, and only one game counts.
-                    if (!"hello".equals(event.get("event")) || !token.equals(event.get("token"))) return;
+                    if (!"hello".equals(event.get("event")) || !token.equals(event.get("token"))) {
+                        return;
+                    }
                     synchronized (lock) {
-                        if (connected) return;
+                        if (connected) {
+                            return;
+                        }
                         connected = true;
                     }
                     mine = true;
@@ -450,7 +482,9 @@ public final class Supervisor implements AutoCloseable {
             lastBeatNanos = now;
             switch (String.valueOf(event.get("event"))) {
                 case "hello" -> {
-                    if (event.get("pid") instanceof Number n) agentPid = n.longValue();
+                    if (event.get("pid") instanceof Number n) {
+                        agentPid = n.longValue();
+                    }
                     lastProgressNanos = now;
                 }
                 case "heartbeat" -> {
@@ -467,7 +501,9 @@ public final class Supervisor implements AutoCloseable {
                         classes = n.longValue();
                         moved = true;
                     }
-                    if (moved) lastProgressNanos = now;
+                    if (moved) {
+                        lastProgressNanos = now;
+                    }
                     if (event.get("stacks") instanceof List<?> sampled) {
                         List<ThreadStack> latest = new ArrayList<>();
                         for (Object one : sampled) {
@@ -487,7 +523,9 @@ public final class Supervisor implements AutoCloseable {
                     }
                 }
                 case "crash" -> {
-                    if (crashReport == null) crashReport = String.valueOf(event.get("report"));
+                    if (crashReport == null) {
+                        crashReport = String.valueOf(event.get("report"));
+                    }
                 }
                 case "done" -> done = true;
                 case "exiting" -> exiting = true;
@@ -495,7 +533,9 @@ public final class Supervisor implements AutoCloseable {
                     forcedDown = true;
                     if (event.get("threads") instanceof List<?> threads) {
                         for (Object thread : threads) {
-                            if (!(thread instanceof Map<?, ?> t)) continue;
+                            if (!(thread instanceof Map<?, ?> t)) {
+                                continue;
+                            }
                             leaks.add(new Leak(
                                     String.valueOf(t.get("name")),
                                     strings(t.get("stack")),
@@ -516,7 +556,9 @@ public final class Supervisor implements AutoCloseable {
     private static List<String> strings(Object value) {
         List<String> out = new ArrayList<>();
         if (value instanceof List<?> list) {
-            for (Object item : list) out.add(String.valueOf(item));
+            for (Object item : list) {
+                out.add(String.valueOf(item));
+            }
         }
         return out;
     }

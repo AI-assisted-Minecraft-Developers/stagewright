@@ -30,12 +30,18 @@ public final class KnownIssueExtension implements InvocationInterceptor {
             invocation.proceed();
         } catch (Throwable t) {
             AssertionError checks = scope == null ? null : scope.takeChecks();
-            if (checks != null) t.addSuppressed(checks);
-            if (isAbort(t)) throw t;
+            if (checks != null) {
+                t.addSuppressed(checks);
+            }
+            if (isAbort(t)) {
+                throw t;
+            }
             throw abort("known issue: " + known.value(), t);
         }
         AssertionError checks = scope == null ? null : scope.takeChecks();
-        if (checks != null) throw abort("known issue: " + known.value(), checks);
+        if (checks != null) {
+            throw abort("known issue: " + known.value(), checks);
+        }
         throw new AssertionFailedError("passed although marked @KnownIssue(\"" + known.value()
                 + "\"): if the issue is fixed, remove the annotation");
     }
@@ -51,7 +57,9 @@ public final class KnownIssueExtension implements InvocationInterceptor {
 
     private static boolean isAbort(Throwable t) {
         for (Class<?> c = t.getClass(); c != null; c = c.getSuperclass()) {
-            if (c.getName().equals(ABORTED)) return true;
+            if (c.getName().equals(ABORTED)) {
+                return true;
+            }
         }
         return false;
     }

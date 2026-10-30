@@ -34,7 +34,9 @@ final class HmclCache {
         Path cached = file(sha1);
         // Verified, not trusted: another launcher wrote it, and a truncated file here would otherwise
         // be linked into every install that asks for it.
-        if (!Sha1.matches(cached, sha1, size)) return false;
+        if (!Sha1.matches(cached, sha1, size)) {
+            return false;
+        }
         place(cached, target);
         return true;
     }
@@ -42,7 +44,9 @@ final class HmclCache {
     /** Offer a verified file to the cache. Content-addressed, so an existing entry is already this file. */
     void store(Path verified, String sha1) throws IOException {
         Path cached = file(sha1);
-        if (Files.isRegularFile(cached)) return;
+        if (Files.isRegularFile(cached)) {
+            return;
+        }
         place(verified, cached);
     }
 

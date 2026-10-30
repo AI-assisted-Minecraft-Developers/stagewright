@@ -67,9 +67,13 @@ public final class StageWrightTestEngine implements TestEngine {
         // What was asked for: whole classes, or particular methods of a class, optionally in one scene only.
         Map<String, Predicate<ClassScan.Method>> wanted = new LinkedHashMap<>();
         Map<String, Set<String>> scenesOf = new LinkedHashMap<>();
-        for (ClassSelector s : request.getSelectorsByType(ClassSelector.class)) wanted.put(s.getClassName(), m -> true);
+        for (ClassSelector s : request.getSelectorsByType(ClassSelector.class)) {
+            wanted.put(s.getClassName(), m -> true);
+        }
         for (ClasspathRootSelector s : request.getSelectorsByType(ClasspathRootSelector.class)) {
-            for (String name : classesUnder(Path.of(s.getClasspathRoot()))) wanted.put(name, m -> true);
+            for (String name : classesUnder(Path.of(s.getClasspathRoot()))) {
+                wanted.put(name, m -> true);
+            }
         }
         for (MethodSelector s : request.getSelectorsByType(MethodSelector.class)) {
             String name = s.getMethodName();
@@ -83,17 +87,23 @@ public final class StageWrightTestEngine implements TestEngine {
         Map<String, Predicate<String>> wantedScripts = new LinkedHashMap<>();
         if (!request.getSelectorsByType(ClassSelector.class).isEmpty()) {
             for (String root : System.getProperty(TEST_ROOTS, "").split(java.io.File.pathSeparator)) {
-                if (root.isBlank()) continue;
-                for (String script : ScriptScan.scriptsUnder(Path.of(root))) wantedScripts.put(script, t -> true);
+                if (root.isBlank()) {
+                    continue;
+                }
+                for (String script : ScriptScan.scriptsUnder(Path.of(root))) {
+                    wantedScripts.put(script, t -> true);
+                }
             }
         }
         for (ClasspathRootSelector s : request.getSelectorsByType(ClasspathRootSelector.class)) {
-            for (String script : ScriptScan.scriptsUnder(Path.of(s.getClasspathRoot())))
+            for (String script : ScriptScan.scriptsUnder(Path.of(s.getClasspathRoot()))) {
                 wantedScripts.put(script, t -> true);
+            }
         }
         for (ClasspathResourceSelector s : request.getSelectorsByType(ClasspathResourceSelector.class)) {
-            if (ScriptScan.isScript(s.getClasspathResourceName()))
+            if (ScriptScan.isScript(s.getClasspathResourceName())) {
                 wantedScripts.put(s.getClasspathResourceName(), t -> true);
+            }
         }
         for (UniqueIdSelector s : request.getSelectorsByType(UniqueIdSelector.class)) {
             selectById(s.getUniqueId(), uniqueId, wanted, scenesOf, wantedScripts);
@@ -107,10 +117,14 @@ public final class StageWrightTestEngine implements TestEngine {
             } catch (IOException e) {
                 throw new UncheckedIOException("could not read " + entry.getKey(), e);
             }
-            if (scanned.isEmpty()) continue;
+            if (scanned.isEmpty()) {
+                continue;
+            }
             for (String sceneName : scanned.get().scenes()) {
                 Set<String> only = scenesOf.get(entry.getKey());
-                if (only != null && !only.contains(sceneName)) continue;
+                if (only != null && !only.contains(sceneName)) {
+                    continue;
+                }
                 Nodes.Scene scene = scenes.computeIfAbsent(sceneName, n -> new Nodes.Scene(uniqueId, n));
                 Nodes.TestClass testClass = new Nodes.TestClass(scene, scanned.get());
                 for (ClassScan.Method m : scanned.get().methods()) {
@@ -119,7 +133,9 @@ public final class StageWrightTestEngine implements TestEngine {
                                 testClass.getUniqueId(), scanned.get().className(), m));
                     }
                 }
-                if (!testClass.getChildren().isEmpty()) scene.addChild(testClass);
+                if (!testClass.getChildren().isEmpty()) {
+                    scene.addChild(testClass);
+                }
             }
         }
         for (Map.Entry<String, Predicate<String>> entry : wantedScripts.entrySet()) {
@@ -129,10 +145,14 @@ public final class StageWrightTestEngine implements TestEngine {
                 continue;
             }
             for (ScriptScan.Test test : scanned.tests()) {
-                if (!entry.getValue().test(test.name())) continue;
+                if (!entry.getValue().test(test.name())) {
+                    continue;
+                }
                 for (String sceneName : test.scenes()) {
                     Set<String> only = scenesOf.get(entry.getKey());
-                    if (only != null && !only.contains(sceneName)) continue;
+                    if (only != null && !only.contains(sceneName)) {
+                        continue;
+                    }
                     Nodes.Scene scene = scenes.computeIfAbsent(sceneName, n -> new Nodes.Scene(uniqueId, n));
                     Nodes.ScriptFile file = scene.getChildren().stream()
                             .filter(c -> c instanceof Nodes.ScriptFile f && f.resource.equals(entry.getKey()))
@@ -186,7 +206,9 @@ public final class StageWrightTestEngine implements TestEngine {
             Map<String, Predicate<ClassScan.Method>> wanted,
             Map<String, Set<String>> scenesOf,
             Map<String, Predicate<String>> wantedScripts) {
-        if (!id.hasPrefix(engineId)) return;
+        if (!id.hasPrefix(engineId)) {
+            return;
+        }
         String scene = null;
         String className = null;
         String methodKey = null;
@@ -203,21 +225,27 @@ public final class StageWrightTestEngine implements TestEngine {
             }
         }
         if (script != null) {
-            if (scene != null)
+            if (scene != null) {
                 scenesOf.computeIfAbsent(script, c -> new LinkedHashSet<>()).add(scene);
+            }
             String name = testName;
             wantedScripts.merge(script, name == null ? t -> true : t -> t.equals(name), Predicate::or);
             return;
         }
-        if (className == null) return;
-        if (scene != null)
+        if (className == null) {
+            return;
+        }
+        if (scene != null) {
             scenesOf.computeIfAbsent(className, c -> new LinkedHashSet<>()).add(scene);
+        }
         String key = methodKey;
         wanted.merge(className, key == null ? m -> true : m -> m.key().equals(key), Predicate::or);
     }
 
     private static List<String> classesUnder(Path root) {
-        if (!Files.isDirectory(root)) return List.of();
+        if (!Files.isDirectory(root)) {
+            return List.of();
+        }
         try (Stream<Path> walk = Files.walk(root)) {
             return walk.filter(p -> p.toString().endsWith(".class")
                             && !p.getFileName().toString().contains("$"))

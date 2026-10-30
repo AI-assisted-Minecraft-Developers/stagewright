@@ -53,7 +53,9 @@ record LaunchSpec(
         REPORT;
 
         static Leaks parse(Object value) {
-            if (value == null) return FAIL;
+            if (value == null) {
+                return FAIL;
+            }
             return switch (String.valueOf(value)) {
                 case "fail" -> FAIL;
                 case "report" -> REPORT;
@@ -92,7 +94,9 @@ record LaunchSpec(
             command.addAll(jvmArgs.subList(0, at));
             command.addAll(extra);
             command.addAll(jvmArgs.subList(at, jvmArgs.size()));
-            if (mainClass != null) command.add(mainClass);
+            if (mainClass != null) {
+                command.add(mainClass);
+            }
             command.addAll(args);
             return command;
         }
@@ -108,7 +112,9 @@ record LaunchSpec(
         Path file = Path.of(dir).resolve(topology + ".json");
         if (!Files.isRegularFile(file)) {
             String message = "topology '" + topology + "' has no launch spec: " + file + " is missing";
-            if ("skip".equals(System.getProperty(MISSING))) throw new Unlaunchable(message);
+            if ("skip".equals(System.getProperty(MISSING))) {
+                throw new Unlaunchable(message);
+            }
             throw new IllegalStateException(message);
         }
         Map<?, ?> json;
@@ -144,10 +150,13 @@ record LaunchSpec(
     }
 
     private static Process process(Map<?, ?> p) {
-        if (p == null) throw new IllegalArgumentException("no primary process");
+        if (p == null) {
+            throw new IllegalArgumentException("no primary process");
+        }
         Map<String, String> env = new LinkedHashMap<>();
-        if (p.get("environment") instanceof Map<?, ?> e)
+        if (p.get("environment") instanceof Map<?, ?> e) {
             e.forEach((k, v) -> env.put(String.valueOf(k), String.valueOf(v)));
+        }
         return new Process(
                 string(p, "java"),
                 strings(p.get("jvmArgs")),
@@ -158,7 +167,9 @@ record LaunchSpec(
     }
 
     private static String string(Map<?, ?> o, String key) {
-        if (!(o.get(key) instanceof String s)) throw new IllegalArgumentException("'" + key + "' is missing");
+        if (!(o.get(key) instanceof String s)) {
+            throw new IllegalArgumentException("'" + key + "' is missing");
+        }
         return s;
     }
 
@@ -168,7 +179,9 @@ record LaunchSpec(
 
     private static List<String> strings(Object value) {
         List<String> out = new ArrayList<>();
-        if (value instanceof List<?> list) list.forEach(v -> out.add(String.valueOf(v)));
+        if (value instanceof List<?> list) {
+            list.forEach(v -> out.add(String.valueOf(v)));
+        }
         return out;
     }
 }

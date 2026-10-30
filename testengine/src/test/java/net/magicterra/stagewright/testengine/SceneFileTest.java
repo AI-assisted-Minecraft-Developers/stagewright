@@ -38,7 +38,9 @@ class SceneFileTest {
 
     private void refuses(String worldYaml, String... mentions) {
         String message = refusal("topology: t\nworld:\n" + worldYaml);
-        for (String m : mentions) assertTrue(message.contains(m), "expected '" + m + "' in: " + message);
+        for (String m : mentions) {
+            assertTrue(message.contains(m), "expected '" + m + "' in: " + message);
+        }
     }
 
     @Test

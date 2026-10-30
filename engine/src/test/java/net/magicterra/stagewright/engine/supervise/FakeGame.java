@@ -60,7 +60,10 @@ public final class FakeGame {
         Class<?> control =
                 Class.forName("net.magicterra.stagewright.agent.Control", true, ClassLoader.getSystemClassLoader());
         Method m = parameter == null ? control.getMethod(method) : control.getMethod(method, parameter);
-        if (parameter == null) m.invoke(null);
-        else m.invoke(null, argument);
+        if (parameter == null) {
+            m.invoke(null);
+        } else {
+            m.invoke(null, argument);
+        }
     }
 }

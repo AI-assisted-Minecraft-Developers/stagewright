@@ -62,8 +62,11 @@ final class SceneRun {
             // Skipped, not failed: the run was not given what this topology needs (the CLI without --client). Its
             // tests do not count against coverage either, since they would have run had it been given.
             for (TestDescriptor d : scene.getDescendants()) {
-                if (d instanceof Nodes.TestMethod m) coverage.unlaunched(m.key());
-                else if (d instanceof Nodes.ScriptTest t) coverage.unlaunched(t.key());
+                if (d instanceof Nodes.TestMethod m) {
+                    coverage.unlaunched(m.key());
+                } else if (d instanceof Nodes.ScriptTest t) {
+                    coverage.unlaunched(t.key());
+                }
             }
             listener.executionSkipped(scene, "scene '" + scene.name + "' was not run: " + e.getMessage());
             return;
@@ -74,7 +77,9 @@ final class SceneRun {
         Relay relay = new Relay(scene, listener, coverage);
         TestExecutionResult result;
         try {
-            if (early != null) throw early;
+            if (early != null) {
+                throw early;
+            }
             if (declaration.world().createsWorld() && !spec.cleanWorld()) {
                 throw new IllegalStateException("scene '" + scene.name + "' declares how its world is created, but"
                         + " topology '" + spec.topology() + "' keeps the world of the run before (cleanWorld is false),"
@@ -109,16 +114,21 @@ final class SceneRun {
             deleteTree(spec.worldDirectory());
             deleteTree(spec.gameDirectory().resolve("saves"));
         }
-        if (declaration.from() != null) SceneSetup.installSave(declaration.from(), loader, spec.worldDirectory());
-        if (spec.companion() != null) Files.createDirectories(spec.companion().workingDirectory());
+        if (declaration.from() != null) {
+            SceneSetup.installSave(declaration.from(), loader, spec.worldDirectory());
+        }
+        if (spec.companion() != null) {
+            Files.createDirectories(spec.companion().workingDirectory());
+        }
         // Put back afterwards, so a setting one scene declares is not the next scene's undeclared default.
         Path serverProperties = spec.primary().workingDirectory().resolve("server.properties");
         byte[] original = Files.isRegularFile(serverProperties) ? Files.readAllBytes(serverProperties) : null;
         SceneSetup.Restore files = SceneSetup.writeFiles(spec.primary().workingDirectory(), declaration.files());
         Path modsScratch = artifacts.resolve("scene-mods");
         try {
-            if (!declaration.excludedMods().isEmpty())
+            if (!declaration.excludedMods().isEmpty()) {
                 spec = withoutMods(spec, declaration.excludedMods(), modsScratch);
+            }
             // A run directory nothing else prepares, such as one the plugin generated: a dedicated server there needs
             // the EULA accepted and offline mode before it starts at all. Inside the put-back, like the scene's own.
             RunDirectory.provision(spec.primary().workingDirectory(), spec.server());
@@ -129,8 +139,11 @@ final class SceneRun {
                 files.run();
                 SceneMods.deleteTree(modsScratch);
             } finally {
-                if (original != null) Files.write(serverProperties, original);
-                else Files.deleteIfExists(serverProperties);
+                if (original != null) {
+                    Files.write(serverProperties, original);
+                } else {
+                    Files.deleteIfExists(serverProperties);
+                }
             }
         }
     }
@@ -142,7 +155,9 @@ final class SceneRun {
                 ? null
                 : SceneMods.apply(spec.companion(), exclude, scratch.resolve("companion"));
         String report = "excluded " + primary.excluded();
-        if (companion != null) report = "server: " + report + "; client: excluded " + companion.excluded();
+        if (companion != null) {
+            report = "server: " + report + "; client: excluded " + companion.excluded();
+        }
         String unmatched = companion == null
                 ? unmatched("the game", primary)
                 : unmatched("the server", primary) + unmatched("the client", companion);
@@ -177,8 +192,11 @@ final class SceneRun {
         List<String> classes = new ArrayList<>();
         List<String> scripts = new ArrayList<>();
         for (TestDescriptor c : scene.getChildren()) {
-            if (c instanceof Nodes.ScriptFile f) scripts.add(f.resource);
-            else classes.add(((Nodes.TestClass) c).className);
+            if (c instanceof Nodes.ScriptFile f) {
+                scripts.add(f.resource);
+            } else {
+                classes.add(((Nodes.TestClass) c).className);
+            }
         }
 
         // What the rounds before handed to the ones after; a scene's first round starts with neither.
@@ -247,15 +265,21 @@ final class SceneRun {
                     }
                     ended = ending.ended();
                 }
-                if (ended != Supervisor.Ended.DONE) Supervisor.kill(game.toHandle());
+                if (ended != Supervisor.Ended.DONE) {
+                    Supervisor.kill(game.toHandle());
+                }
                 // The supervisor's reader may still be handing over the last lines; they precede the end it saw.
                 boolean exited = supervisor.awaitExit(game.toHandle(), Duration.ofSeconds(agentGraceSeconds + 10));
                 // Not ended by the agent either: the next round, or the next scene, must not find it still there.
-                if (!exited) Supervisor.kill(game.toHandle());
+                if (!exited) {
+                    Supervisor.kill(game.toHandle());
+                }
                 if (ended == Supervisor.Ended.DONE && (supervisor.forcedDown() || !exited)) {
                     String report = forcedDown(round, supervisor.leaks(), exited, agentGraceSeconds);
                     // Reported the same either way; only the verdict is the topology's to choose.
-                    if (spec.leaks() == LaunchSpec.Leaks.FAIL) forced.add(report);
+                    if (spec.leaks() == LaunchSpec.Leaks.FAIL) {
+                        forced.add(report);
+                    }
                     listener.reportingEntryPublished(scene, ReportEntry.from("forcedDown", report));
                     appendToLog(gameLog, report);
                 }
@@ -284,7 +308,9 @@ final class SceneRun {
                 return TestExecutionResult.failed(new AssertionError(
                         "the game ended " + why + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
             } finally {
-                if (companion != null) Supervisor.kill(companion.toHandle());
+                if (companion != null) {
+                    Supervisor.kill(companion.toHandle());
+                }
             }
         }
     }
@@ -329,7 +355,9 @@ final class SceneRun {
             out.append("\nwhere its threads were when it last stood still:");
             for (Supervisor.ThreadStack t : stacks) {
                 out.append("\n  ").append(t.thread());
-                for (String frame : t.frames()) out.append("\n    at ").append(frame);
+                for (String frame : t.frames()) {
+                    out.append("\n    at ").append(frame);
+                }
             }
         }
         return out.toString();
@@ -346,7 +374,9 @@ final class SceneRun {
             String crashReport,
             List<Supervisor.ThreadStack> stacks,
             File log) {
-        if (ended != Supervisor.Ended.DONE) return describe(ended, phase, ticks, crashReport, stacks, log);
+        if (ended != Supervisor.Ended.DONE) {
+            return describe(ended, phase, ticks, crashReport, stacks, log);
+        }
         return "(" + ended + ") by leaving the server before the run was over, in phase " + phase + "; its log is "
                 + log;
     }
@@ -372,12 +402,17 @@ final class SceneRun {
         for (Supervisor.Leak leak : leaks) {
             out.append("\n  ").append(leak.thread());
             List<String> stack = leak.stack();
-            for (int i = 0; i < Math.min(stack.size(), LEAK_FRAMES); i++)
+            for (int i = 0; i < Math.min(stack.size(), LEAK_FRAMES); i++) {
                 out.append("\n    at ").append(stack.get(i));
-            if (!leak.jars().isEmpty()) out.append("\n    code from ").append(String.join(", ", leak.jars()));
+            }
+            if (!leak.jars().isEmpty()) {
+                out.append("\n    code from ").append(String.join(", ", leak.jars()));
+            }
             if (!leak.origin().isEmpty()) {
                 out.append("\n    started by ").append(leak.origin().get(0));
-                if (!leak.originJars().isEmpty()) out.append(" in ").append(String.join(", ", leak.originJars()));
+                if (!leak.originJars().isEmpty()) {
+                    out.append(" in ").append(String.join(", ", leak.originJars()));
+                }
             }
         }
         return out.toString();
@@ -420,7 +455,9 @@ final class SceneRun {
                     "initial-disabled-packs",
                     merged(properties.getProperty("initial-disabled-packs", ""), world.disablePacks()));
         }
-        if (wanted.isEmpty()) return;
+        if (wanted.isEmpty()) {
+            return;
+        }
         properties.putAll(wanted);
         Files.createDirectories(file.getParent());
         try (Writer out = Files.newBufferedWriter(file)) {
@@ -430,15 +467,23 @@ final class SceneRun {
 
     private static String merged(String existing, List<String> added) {
         Set<String> all = new LinkedHashSet<>();
-        for (String id : existing.split(",")) if (!id.isBlank()) all.add(id.trim());
+        for (String id : existing.split(",")) {
+            if (!id.isBlank()) {
+                all.add(id.trim());
+            }
+        }
         all.addAll(added);
         return String.join(",", all);
     }
 
     private static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) return;
+        if (!Files.exists(root)) {
+            return;
+        }
         try (Stream<Path> walk = Files.walk(root)) {
-            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) Files.delete(p);
+            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(p);
+            }
         }
     }
 }

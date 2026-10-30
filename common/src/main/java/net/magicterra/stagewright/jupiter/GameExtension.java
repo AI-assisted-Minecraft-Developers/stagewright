@@ -52,9 +52,15 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
     public Object resolveParameter(ParameterContext parameter, ExtensionContext context) {
         Game g = game();
         Class<?> type = parameter.getParameter().getType();
-        if (type == Game.class) return g;
-        if (type == Player.class) return BodyImpl.player(g);
-        if (type == Client.class) return ClientConnection.client(g);
+        if (type == Game.class) {
+            return g;
+        }
+        if (type == Player.class) {
+            return BodyImpl.player(g);
+        }
+        if (type == Client.class) {
+            return ClientConnection.client(g);
+        }
         if (context.getTestMethod().isEmpty()) {
             throw new ParameterResolutionException(
                     "a " + type.getSimpleName() + " is leased to one test: take it as a" + " test method parameter");
@@ -113,7 +119,9 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
         } else {
             bot = BodyImpl.BotImpl.join(g, name, parked);
         }
-        if (keep) bot.keep(test);
+        if (keep) {
+            bot.keep(test);
+        }
         return bot;
     }
 
@@ -145,10 +153,14 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
         // replace that abort with a failure.
         TestScope scope = TestScope.bound();
         try {
-            if (scope != null && scope.changedAnything()) game().runOnServer(scope::restore);
+            if (scope != null && scope.changedAnything()) {
+                game().runOnServer(scope::restore);
+            }
         } finally {
             TestScope.unbind();
-            if (scope != null) scope.release();
+            if (scope != null) {
+                scope.release();
+            }
         }
         AssertionError checks = scope == null ? null : scope.takeChecks();
         // Decided here, before the store closes the bots: the outcome is only recorded after that.
@@ -157,10 +169,14 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
                 plots(context),
                 checks != null || context.getExecutionException().isPresent());
         if (checks != null) {
-            if (misplaced != null) checks.addSuppressed(misplaced);
+            if (misplaced != null) {
+                checks.addSuppressed(misplaced);
+            }
             throw checks;
         }
-        if (misplaced != null) throw misplaced;
+        if (misplaced != null) {
+            throw misplaced;
+        }
     }
 
     static Game game() {

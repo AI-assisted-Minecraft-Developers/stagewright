@@ -39,8 +39,12 @@ class DisplayTest {
 
     /** Display :0 only, and it wants {@link #GOOD}. */
     private static final Display.XServer ONLY_ZERO = (n, tcpToo, cookie) -> {
-        if (n != 0) return Display.Answer.NOT_LISTENING;
-        if (Arrays.equals(cookie, GOOD)) return Display.Answer.ACCEPTED;
+        if (n != 0) {
+            return Display.Answer.NOT_LISTENING;
+        }
+        if (Arrays.equals(cookie, GOOD)) {
+            return Display.Answer.ACCEPTED;
+        }
         return new Display.Answer(
                 Display.Answer.Kind.REFUSED, "Authorization required, but no authorization protocol specified");
     };
@@ -274,7 +278,9 @@ class DisplayTest {
 
             assertEquals(Display.Answer.NOT_ASKED, answer);
         } finally {
-            for (SocketChannel filler : waiting) filler.close();
+            for (SocketChannel filler : waiting) {
+                filler.close();
+            }
         }
     }
 
@@ -283,11 +289,15 @@ class DisplayTest {
         return CompletableFuture.supplyAsync(() -> {
             try (SocketChannel client = server.accept()) {
                 ByteBuffer head = ByteBuffer.allocate(12).order(ByteOrder.LITTLE_ENDIAN);
-                while (head.hasRemaining()) client.read(head);
+                while (head.hasRemaining()) {
+                    client.read(head);
+                }
                 int rest = pad(head.getShort(6)) + pad(head.getShort(8));
                 ByteBuffer all = ByteBuffer.allocate(12 + rest);
                 all.put(head.array());
-                while (all.hasRemaining()) client.read(all);
+                while (all.hasRemaining()) {
+                    client.read(all);
+                }
                 client.write(ByteBuffer.wrap(reply));
                 return all.array();
             } catch (IOException e) {

@@ -105,13 +105,21 @@ final class Rounds {
 
     private static int of(String key, Set<String> visiting) {
         Integer known = ROUNDS.get(key);
-        if (known != null) return known;
+        if (known != null) {
+            return known;
+        }
         // A cycle is refused before anything runs; here it only must not recurse forever.
-        if (!visiting.add(key)) return 0;
+        if (!visiting.add(key)) {
+            return 0;
+        }
         Upstream up = upstream(key);
         int round = 0;
-        for (String k : up.keys()) round = Math.max(round, of(k, visiting));
-        if (up.afterRestart()) round++;
+        for (String k : up.keys()) {
+            round = Math.max(round, of(k, visiting));
+        }
+        if (up.afterRestart()) {
+            round++;
+        }
         visiting.remove(key);
         ROUNDS.put(key, round);
         return round;
@@ -119,7 +127,9 @@ final class Rounds {
 
     /** A script test's from what its file registered; a Java test's from its {@code @DependsOn}, read now. */
     private static Upstream upstream(String key) {
-        if (Dependencies.isScript(key)) return SCRIPTS.getOrDefault(key, new Upstream(List.of(), false));
+        if (Dependencies.isScript(key)) {
+            return SCRIPTS.getOrDefault(key, new Upstream(List.of(), false));
+        }
         Dependencies.Ref ref = Dependencies.Ref.of(key);
         List<String> keys = new ArrayList<>();
         boolean afterRestart = false;
@@ -127,11 +137,17 @@ final class Rounds {
             Class<?> type =
                     Class.forName(ref.className(), false, Thread.currentThread().getContextClassLoader());
             for (Method m : type.getDeclaredMethods()) {
-                if (!m.getName().equals(ref.method())) continue;
+                if (!m.getName().equals(ref.method())) {
+                    continue;
+                }
                 DependsOn d = m.getAnnotation(DependsOn.class);
-                if (d == null) continue;
+                if (d == null) {
+                    continue;
+                }
                 afterRestart |= d.afterRestart();
-                for (Dependencies.Ref r : Dependencies.upstream(type, m)) keys.add(r.key());
+                for (Dependencies.Ref r : Dependencies.upstream(type, m)) {
+                    keys.add(r.key());
+                }
                 keys.addAll(Dependencies.scriptUpstream(m));
             }
         } catch (ClassNotFoundException | LinkageError e) {

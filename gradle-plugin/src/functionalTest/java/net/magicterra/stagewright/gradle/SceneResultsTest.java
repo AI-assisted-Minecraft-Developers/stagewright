@@ -42,7 +42,9 @@ class SceneResultsTest {
         String engine = System.getProperty("stagewright.functionalTest.engine");
         StringBuilder files = new StringBuilder();
         for (String f : engine.split(File.pathSeparator)) {
-            if (!files.isEmpty()) files.append(", ");
+            if (!files.isEmpty()) {
+                files.append(", ");
+            }
             files.append("'").append(f.replace("\\", "/")).append("'");
         }
         write("settings.gradle", "rootProject.name = 'consumer'\n");
@@ -151,7 +153,9 @@ class SceneResultsTest {
                 .withProjectDir(dir.toFile())
                 .withPluginClasspath()
                 .withArguments("stagewrightTestFake", "--configuration-cache", "--stacktrace");
-        if (!gradle.equals("current")) runner = runner.withGradleInstallation(new File(gradle));
+        if (!gradle.equals("current")) {
+            runner = runner.withGradleInstallation(new File(gradle));
+        }
         BuildResult result = runner.build();
         String out = result.getOutput();
 

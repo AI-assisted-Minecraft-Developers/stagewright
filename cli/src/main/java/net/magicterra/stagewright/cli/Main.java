@@ -48,7 +48,9 @@ public final class Main {
             BuildInfo.describe().forEach(System.out::println);
             return 0;
         }
-        if ("test".equals(args[0])) return TestCommand.run(List.of(args).subList(1, args.length));
+        if ("test".equals(args[0])) {
+            return TestCommand.run(List.of(args).subList(1, args.length));
+        }
         throw new IllegalArgumentException("unknown command '" + args[0] + "'");
     }
 
@@ -86,7 +88,9 @@ public final class Main {
                 String trimmed = line.trim();
                 if (trimmed.startsWith("server-port=")) {
                     String value = trimmed.substring("server-port=".length()).trim();
-                    if (!value.isEmpty()) return Integer.parseInt(value);
+                    if (!value.isEmpty()) {
+                        return Integer.parseInt(value);
+                    }
                 }
             }
         }

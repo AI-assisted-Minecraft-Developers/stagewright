@@ -61,7 +61,9 @@ final class CompanionLaunch {
         FileCollection cp = spec.getClasspath();
         for (Toolchain toolchain : toolchains) {
             FileCollection late = toolchain.lateClasspath(spec);
-            if (late != null) cp = cp.plus(late);
+            if (late != null) {
+                cp = cp.plus(late);
+            }
         }
         this.classpath = cp;
         this.environment = new LinkedHashMap<>();
@@ -71,7 +73,9 @@ final class CompanionLaunch {
         for (Toolchain toolchain : toolchains) {
             lateEnvironment.addAll(toolchain.lateEnvironment(spec));
             Toolchain.WorkingDirectory dir = toolchain.workingDirectory(spec);
-            if (dir != null) workingDirectories.add(dir);
+            if (dir != null) {
+                workingDirectories.add(dir);
+            }
         }
         this.fallbackDirectory = spec.getWorkingDir();
     }
@@ -118,7 +122,9 @@ final class CompanionLaunch {
     File workingDirectory() {
         for (Toolchain.WorkingDirectory dir : workingDirectories) {
             File resolved = dir.resolve();
-            if (resolved != null) return resolved;
+            if (resolved != null) {
+                return resolved;
+            }
         }
         return fallbackDirectory;
     }
@@ -177,7 +183,9 @@ final class CompanionLaunch {
         jvmArgs().forEach(a -> jvm.add(unescapeArgFileReference(a)));
         if (!alreadyHasClasspath(jvm)) {
             String reference = writeClasspathArgFile(classpathArgFile);
-            if (reference != null) jvm.add(reference);
+            if (reference != null) {
+                jvm.add(reference);
+            }
         }
         return jvm;
     }
@@ -204,7 +212,9 @@ final class CompanionLaunch {
 
     /** Append a source's arguments unless the target already carries all of them. */
     private static void appendUnlessPresent(List<String> target, List<String> extra) {
-        if (extra.isEmpty() || target.containsAll(extra)) return;
+        if (extra.isEmpty() || target.containsAll(extra)) {
+            return;
+        }
         target.addAll(extra);
     }
 
@@ -221,7 +231,9 @@ final class CompanionLaunch {
      * <p>Only after the first character, so a UNC reference ({@code @\\server\share\...}) keeps its leading pair.
      */
     static String unescapeArgFileReference(String arg) {
-        if (arg == null || arg.length() < 2 || arg.charAt(0) != '@') return arg;
+        if (arg == null || arg.length() < 2 || arg.charAt(0) != '@') {
+            return arg;
+        }
         return "@" + arg.substring(1).replace("\\\\", "\\");
     }
 
@@ -234,7 +246,9 @@ final class CompanionLaunch {
      */
     private static boolean alreadyHasClasspath(List<String> args) {
         for (String arg : args) {
-            if (arg == null) continue;
+            if (arg == null) {
+                continue;
+            }
             if (arg.equals("-cp") || arg.equals("-classpath") || arg.equals("--class-path")) {
                 return true;
             }
@@ -269,7 +283,9 @@ final class CompanionLaunch {
      */
     private String writeClasspathArgFile(File argFile) {
         String path = classpath.getAsPath();
-        if (path == null || path.isBlank()) return null;
+        if (path == null || path.isBlank()) {
+            return null;
+        }
 
         String body = "-cp \"" + path.replace('\\', '/') + "\"\n";
         try {

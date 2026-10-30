@@ -38,7 +38,9 @@ final class GameLaunch {
      */
     static List<String> detect(Path gameDir, String javaBinary, Consumer<String> log) {
         List<String> forge = modLauncher(gameDir, javaBinary, log);
-        if (forge != null) return forge;
+        if (forge != null) {
+            return forge;
+        }
         return fabricOrVanilla(gameDir, javaBinary, log);
     }
 
@@ -51,14 +53,20 @@ final class GameLaunch {
      * has both loaders' mods sitting there, and the answer has to be what will actually boot.
      */
     static String loader(Path gameDir) {
-        if (Files.isDirectory(gameDir.resolve("libraries/net/neoforged/neoforge"))) return "neoforge";
-        if (Files.isDirectory(gameDir.resolve("libraries/net/minecraftforge/forge"))) return "forge";
+        if (Files.isDirectory(gameDir.resolve("libraries/net/neoforged/neoforge"))) {
+            return "neoforge";
+        }
+        if (Files.isDirectory(gameDir.resolve("libraries/net/minecraftforge/forge"))) {
+            return "forge";
+        }
         try (Stream<Path> top = Files.list(gameDir)) {
             boolean fabric = top.map(p -> p.getFileName().toString().toLowerCase())
                     .anyMatch(n -> n.endsWith(".jar")
                             && !n.contains("installer")
                             && (n.contains("fabric") || n.contains("quilt")));
-            if (fabric) return "fabric";
+            if (fabric) {
+                return "fabric";
+            }
         } catch (IOException e) {
             throw new UncheckedIOException("cannot list " + gameDir, e);
         }
@@ -78,15 +86,23 @@ final class GameLaunch {
                 System.getProperty("os.name", "").toLowerCase().startsWith("win") ? "win_args.txt" : "unix_args.txt";
         for (String vendor : new String[] {"net/neoforged/neoforge", "net/minecraftforge/forge"}) {
             Path base = gameDir.resolve("libraries").resolve(vendor);
-            if (!Files.isDirectory(base)) continue;
+            if (!Files.isDirectory(base)) {
+                continue;
+            }
             Path args = declaredVersionFile(gameDir, base, vendor, argsName, log);
-            if (args == null) args = newestVersionFile(base, vendor, argsName, log);
-            if (args == null) continue;
+            if (args == null) {
+                args = newestVersionFile(base, vendor, argsName, log);
+            }
+            if (args == null) {
+                continue;
+            }
 
             List<String> command = new ArrayList<>();
             command.add(javaBinary);
             Path jvmArgs = gameDir.resolve("user_jvm_args.txt");
-            if (Files.isRegularFile(jvmArgs)) command.add("@" + jvmArgs);
+            if (Files.isRegularFile(jvmArgs)) {
+                command.add("@" + jvmArgs);
+            }
             command.add("@" + args);
             command.add("nogui");
             return command;
@@ -105,8 +121,12 @@ final class GameLaunch {
         // A loader's launcher first: in Fabric's own layout the vanilla server.jar sits beside it, as the jar its
         // fabric-server-launcher.properties names, and starting that one starts a server with no mods at all.
         Path jar = newestJar(gameDir, n -> n.contains("fabric") || n.contains("quilt"));
-        if (jar == null) jar = newestJar(gameDir, n -> n.contains("server"));
-        if (jar == null) return null;
+        if (jar == null) {
+            jar = newestJar(gameDir, n -> n.contains("server"));
+        }
+        if (jar == null) {
+            return null;
+        }
         log.accept("launching " + jar.getFileName() + " (newest jar in " + gameDir + ")");
         return new ArrayList<>(List.of(javaBinary, "-jar", jar.toString(), "nogui"));
     }
@@ -144,7 +164,9 @@ final class GameLaunch {
         Pattern declaration = Pattern.compile(Pattern.quote(vendor) + "/([^/\\s\"']+)/");
         for (String script : scripts) {
             Path file = gameDir.resolve(script);
-            if (!Files.isRegularFile(file)) continue;
+            if (!Files.isRegularFile(file)) {
+                continue;
+            }
             String body;
             try {
                 body = Files.readString(file, java.nio.charset.StandardCharsets.ISO_8859_1);
@@ -152,10 +174,14 @@ final class GameLaunch {
                 continue; // unreadable script: fall through to the guess
             }
             Matcher matcher = declaration.matcher(body.replace('\\', '/'));
-            if (!matcher.find()) continue;
+            if (!matcher.find()) {
+                continue;
+            }
             String version = matcher.group(1);
             Path args = base.resolve(version).resolve(name);
-            if (!Files.isRegularFile(args)) continue;
+            if (!Files.isRegularFile(args)) {
+                continue;
+            }
             log.accept(vendorName(vendor) + " " + version + " — named by " + script
                     + ", which the installer wrote alongside the loader it installed");
             return args;
@@ -177,7 +203,9 @@ final class GameLaunch {
                     .map(v -> v.resolve(name))
                     .filter(Files::isRegularFile)
                     .toList();
-            if (candidates.isEmpty()) return null;
+            if (candidates.isEmpty()) {
+                return null;
+            }
             Path best = candidates.stream()
                     .max(Comparator.comparing(p -> p.getParent().getFileName().toString(), GameLaunch::compareVersions))
                     .orElseThrow();
@@ -237,7 +265,9 @@ final class GameLaunch {
             } else {
                 cmp = x.compareToIgnoreCase(y);
             }
-            if (cmp != 0) return cmp;
+            if (cmp != 0) {
+                return cmp;
+            }
         }
         return 0;
     }
@@ -246,15 +276,21 @@ final class GameLaunch {
     private static List<String> segments(String version) {
         List<String> out = new ArrayList<>();
         for (String part : version.split("[.\\-+_]")) {
-            if (!part.isEmpty()) out.add(part);
+            if (!part.isEmpty()) {
+                out.add(part);
+            }
         }
         return out;
     }
 
     private static boolean numeric(String segment) {
-        if (segment.isEmpty()) return false;
+        if (segment.isEmpty()) {
+            return false;
+        }
         for (int i = 0; i < segment.length(); i++) {
-            if (!Character.isDigit(segment.charAt(i))) return false;
+            if (!Character.isDigit(segment.charAt(i))) {
+                return false;
+            }
         }
         return true;
     }

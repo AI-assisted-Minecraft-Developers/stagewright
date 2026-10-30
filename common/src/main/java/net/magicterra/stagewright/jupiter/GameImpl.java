@@ -77,14 +77,18 @@ final class GameImpl implements Game {
     @Override
     public ApiRegistry registry() {
         ApiRegistry r = registry;
-        if (r == null) registry = r = WorldDriver.registry().withThreadWait(THREAD_WAIT_MS);
+        if (r == null) {
+            registry = r = WorldDriver.registry().withThreadWait(THREAD_WAIT_MS);
+        }
         return r;
     }
 
     /** The script engine script tests run in: WorldDriver's, over {@link #registry()}, so their calls wait as long. */
     Scripting scripting() {
         Scripting s = scripting;
-        if (s == null) scripting = s = new HostedScripts(registry());
+        if (s == null) {
+            scripting = s = new HostedScripts(registry());
+        }
         return s;
     }
 
@@ -96,7 +100,9 @@ final class GameImpl implements Game {
     @Override
     public <T> T onServer(Function<MinecraftServer, T> work) {
         // Already there, as an await condition is: nothing to wait for, so run it now.
-        if (server.isSameThread()) return work.apply(server);
+        if (server.isSameThread()) {
+            return work.apply(server);
+        }
         // The calling test goes along, so a soft check made in the task is that test's.
         TestScope scope = TestScope.bound();
         try {
@@ -138,8 +144,9 @@ final class GameImpl implements Game {
         ServerLevel level = server.getLevel(dimension);
         if (level == null) {
             List<String> have = new ArrayList<>();
-            for (ServerLevel l : server.getAllLevels())
+            for (ServerLevel l : server.getAllLevels()) {
                 have.add(l.dimension().location().toString());
+            }
             throw new IllegalArgumentException(
                     "this game has no dimension " + dimension.location() + "; it has " + have);
         }
@@ -149,7 +156,9 @@ final class GameImpl implements Game {
     @Override
     public void check(boolean holds, String what) {
         TestScope scope = checking();
-        if (!holds) scope.failed(new AssertionError(what));
+        if (!holds) {
+            scope.failed(new AssertionError(what));
+        }
     }
 
     @Override
@@ -253,7 +262,9 @@ final class GameImpl implements Game {
     public void freezeTicks() {
         TestScope scope = TestScope.current("game.freezeTicks");
         scope.require(Locks.TICK_RATE, "Locks.TICK_RATE", "game.freezeTicks");
-        if (scope.frozeTicks()) return;
+        if (scope.frozeTicks()) {
+            return;
+        }
         runOnServer(s -> {
             // A world already frozen, by a command, is left frozen at the end.
             boolean wasFrozen = s.tickRateManager().isFrozen();
@@ -275,7 +286,9 @@ final class GameImpl implements Game {
     public Object capability(String name) {
         CapabilityProvider provider = capabilities().require(name);
         TestScope scope = TestScope.bound();
-        if (scope == null) return provider.facet(this);
+        if (scope == null) {
+            return provider.facet(this);
+        }
         Map<String, Object> cache;
         synchronized (facets) {
             cache = facets.computeIfAbsent(scope, s -> new HashMap<>());
@@ -325,18 +338,26 @@ final class GameImpl implements Game {
             CompletableFuture<Boolean> done = ServerTicks.await(
                     () -> {
                         boolean holds = condition.getAsBoolean();
-                        if (holds) s.tickRateManager().stopStepping();
+                        if (holds) {
+                            s.tickRateManager().stopStepping();
+                        }
                         return holds;
                     },
                     budget);
-            if (budget > 0) s.tickRateManager().stepGameIfPaused(budget);
+            if (budget > 0) {
+                s.tickRateManager().stepGameIfPaused(budget);
+            }
             return done;
         });
     }
 
     private static RuntimeException rethrow(Throwable t) {
-        if (t instanceof RuntimeException r) return r;
-        if (t instanceof Error err) throw err;
+        if (t instanceof RuntimeException r) {
+            return r;
+        }
+        if (t instanceof Error err) {
+            throw err;
+        }
         return new IllegalStateException(t);
     }
 

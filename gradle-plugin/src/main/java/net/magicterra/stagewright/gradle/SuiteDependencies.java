@@ -69,9 +69,13 @@ final class SuiteDependencies {
                     .getByName(source.getRuntimeOnlyConfigurationName())
                     .extendsFrom(runtime);
         }
-        if (!suite.getTestDependencies().getOrElse(true)) return;
+        if (!suite.getTestDependencies().getOrElse(true)) {
+            return;
+        }
         Configuration compile = loader.getConfigurations().findByName(COMPILE);
-        if (compile == null) return;
+        if (compile == null) {
+            return;
+        }
         loader.getConfigurations()
                 .getByName(source.getCompileOnlyConfigurationName())
                 .extendsFrom(compile);
@@ -81,7 +85,9 @@ final class SuiteDependencies {
         Object loom = project.getExtensions().getByName("loom");
         NamedDomainObjectCollection<?> remaps =
                 (NamedDomainObjectCollection<?>) InvokerHelper.invokeMethod(loom, "getRemapConfigurations", null);
-        if (remaps.findByName(RUNTIME) != null) return;
+        if (remaps.findByName(RUNTIME) != null) {
+            return;
+        }
         Provider<SourceSet> source = project.provider(() -> {
             StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
             return suite != null
@@ -108,7 +114,9 @@ final class SuiteDependencies {
             c.setTransitive(true);
             // On the configuration too, for what a build declares there: loom resolves it alone, so nothing inherits
             // it.
-            for (String group : PROJECT_GROUPS) c.exclude(Map.of("group", group));
+            for (String group : PROJECT_GROUPS) {
+                c.exclude(Map.of("group", group));
+            }
             runtimeDefaults(project, c, tests, suite -> loaderName(loom, project, suite));
         });
         constrainWorldDriver(project, RUNTIME, "worlddriver-fabric", "worlddriver-neoforge");
@@ -119,7 +127,9 @@ final class SuiteDependencies {
      * same classpath as the project's own, so Gradle settles a library both declare without help.
      */
     private static void modDevRuntime(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
-        if (project.getConfigurations().findByName(MOD_DEV_RUNTIME) != null) return;
+        if (project.getConfigurations().findByName(MOD_DEV_RUNTIME) != null) {
+            return;
+        }
         project.getConfigurations().create(MOD_DEV_RUNTIME, c -> {
             c.setDescription("The mods StageWright's generated runs get: StageWright's and WorldDriver's by default.");
             c.setCanBeConsumed(false);
@@ -141,7 +151,9 @@ final class SuiteDependencies {
             Function<StageWrightTestSuite, String> loaderOf) {
         c.defaultDependencies(deps -> {
             StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
-            if (suite == null) return;
+            if (suite == null) {
+                return;
+            }
             String loader = loaderOf.apply(suite);
             add(project, deps, "net.magicterra:mc_stagewright-" + loader + ":" + PluginVersion.get(), null);
             if (suite.getIncludeWorldDriver().getOrElse(true)) {
@@ -151,13 +163,17 @@ final class SuiteDependencies {
                         "net.magicterra:worlddriver-" + loader + ":"
                                 + suite.getWorldDriverVersion().get(),
                         null);
-                for (String group : PROJECT_GROUPS) worldDriver.exclude(Map.of("group", group));
+                for (String group : PROJECT_GROUPS) {
+                    worldDriver.exclude(Map.of("group", group));
+                }
             }
         });
     }
 
     private static void compileConfiguration(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
-        if (project.getConfigurations().findByName(COMPILE) != null) return;
+        if (project.getConfigurations().findByName(COMPILE) != null) {
+            return;
+        }
         project.getConfigurations().create(COMPILE, c -> {
             c.setDescription("What StageWright tests compile against: StageWright's api, WorldDriver's and JUnit"
                     + " Jupiter's by default, the first two in Mojang names.");
@@ -165,7 +181,9 @@ final class SuiteDependencies {
             c.setCanBeResolved(false);
             c.defaultDependencies(deps -> {
                 StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
-                if (suite == null) return;
+                if (suite == null) {
+                    return;
+                }
                 // Its POM names WorldDriver's api, at the build StageWright was built against; which one the tests get,
                 // if any, is includeWorldDriver's and worldDriverVersion's to say, so the default brings it only below.
                 add(project, deps, "net.magicterra:mc_stagewright-api:" + PluginVersion.get(), "dev")
@@ -213,7 +231,9 @@ final class SuiteDependencies {
 
     /** {@code fabric} or {@code neoforge}: the loader jar to take. */
     private static String loaderName(Object loom, Project project, StageWrightTestSuite suite) {
-        if (is(loom, "isNeoForge")) return "neoforge";
+        if (is(loom, "isNeoForge")) {
+            return "neoforge";
+        }
         if (is(loom, "isForge")) {
             throw new GradleException("stagewright test suite '" + suite.getName() + "': " + project.getPath()
                     + " is a Forge project, and StageWright has no Forge mod");

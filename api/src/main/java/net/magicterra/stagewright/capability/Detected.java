@@ -35,7 +35,9 @@ public final class Detected {
     public List<String> mods() {
         List<String> out = new ArrayList<>();
         for (String mod : descriptor.declaredMods()) {
-            if (Mods.loaded(mod)) out.add(mod);
+            if (Mods.loaded(mod)) {
+                out.add(mod);
+            }
         }
         out.sort(String::compareTo);
         return out;

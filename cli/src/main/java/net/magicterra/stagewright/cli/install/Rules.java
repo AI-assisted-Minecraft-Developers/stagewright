@@ -19,8 +19,12 @@ public final class Rules {
 
     static String os(String osName) {
         String name = osName.toLowerCase(Locale.ROOT);
-        if (name.contains("win")) return "windows";
-        if (name.contains("mac") || name.contains("darwin")) return "osx";
+        if (name.contains("win")) {
+            return "windows";
+        }
+        if (name.contains("mac") || name.contains("darwin")) {
+            return "osx";
+        }
         return "linux";
     }
 
@@ -37,7 +41,9 @@ public final class Rules {
 
     static boolean allowed(JsonObject entry, String os) {
         JsonArray rules = entry.getAsJsonArray("rules");
-        if (rules == null || rules.isEmpty()) return true;
+        if (rules == null || rules.isEmpty()) {
+            return true;
+        }
         boolean verdict = false;
         for (JsonElement element : rules) {
             JsonObject rule = element.getAsJsonObject();
@@ -47,7 +53,9 @@ public final class Rules {
                     && !os.equals(ruleOs.get("name").getAsString())) {
                 continue;
             }
-            if (rule.has("features")) continue;
+            if (rule.has("features")) {
+                continue;
+            }
             verdict = "allow".equals(rule.get("action").getAsString());
         }
         return verdict;

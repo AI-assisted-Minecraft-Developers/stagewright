@@ -31,20 +31,29 @@ final class DevJUnitRuntime {
         plugin.getRootProject()
                 .allprojects(p -> p.getConfigurations().configureEach(c -> {
                     if (!c.getName().equals("forgeRuntimeLibrary")
-                            && !c.getName().equals("localRuntime")) return;
+                            && !c.getName().equals("localRuntime")) {
+                        return;
+                    }
                     c.withDependencies(dependencies -> {
-                        if (target(p) != c) return;
-                        if (!runProjects(plugin, tests, topologies).contains(p.getPath())) return;
+                        if (target(p) != c) {
+                            return;
+                        }
+                        if (!runProjects(plugin, tests, topologies).contains(p.getPath())) {
+                            return;
+                        }
                         dependencies.add(p.getDependencies().platform("org.junit:junit-bom:" + PluginVersion.junit()));
-                        for (String module : MODULES)
+                        for (String module : MODULES) {
                             dependencies.add(p.getDependencies().create(module));
+                        }
                     });
                 }));
     }
 
     /** Where a loom project keeps runtime-only libraries; null for a project not under loom. */
     private static Configuration target(Project p) {
-        if (p.getExtensions().findByName("loom") == null) return null;
+        if (p.getExtensions().findByName("loom") == null) {
+            return null;
+        }
         Configuration forge = p.getConfigurations().findByName("forgeRuntimeLibrary");
         return forge != null ? forge : p.getConfigurations().findByName("localRuntime");
     }
@@ -56,12 +65,15 @@ final class DevJUnitRuntime {
             NamedDomainObjectContainer<StageWrightTopology> topologies) {
         Set<String> projects = new HashSet<>();
         for (StageWrightTestSuite suite : tests) {
-            if (GeneratedRuns.generates(suite))
+            if (GeneratedRuns.generates(suite)) {
                 projects.add(GeneratedRuns.loader(plugin, suite).getPath());
+            }
             for (String declared : suite.getTopologies().get().values()) {
                 StageWrightTopology topology = topologies.findByName(declared);
                 String runTask = topology == null ? null : topology.getRunTask().getOrNull();
-                if (runTask == null) continue;
+                if (runTask == null) {
+                    continue;
+                }
                 int lastColon = runTask.lastIndexOf(':');
                 projects.add(lastColon < 0 ? plugin.getPath() : lastColon == 0 ? ":" : runTask.substring(0, lastColon));
             }

@@ -129,16 +129,30 @@ public final class FakeGame {
     /** What the engine should have handed a game of the "world" scenario; null when it did. */
     private static String worldProblem() throws Exception {
         String json = System.getProperty("stagewright.scene.world");
-        if (json == null) return "-Dstagewright.scene.world was not passed";
-        if (!json.contains("\"time\":6000")) return "-Dstagewright.scene.world lacks the declared time: " + json;
+        if (json == null) {
+            return "-Dstagewright.scene.world was not passed";
+        }
+        if (!json.contains("\"time\":6000")) {
+            return "-Dstagewright.scene.world lacks the declared time: " + json;
+        }
         java.nio.file.Path file = java.nio.file.Path.of("server.properties").toAbsolutePath();
-        if (!java.nio.file.Files.isRegularFile(file)) return "no server.properties at " + file;
+        if (!java.nio.file.Files.isRegularFile(file)) {
+            return "no server.properties at " + file;
+        }
         String text = java.nio.file.Files.readString(file);
-        if (!text.contains("level-seed=5471")) return "server.properties lacks level-seed=5471: " + text;
-        if (!text.contains("server-port=1")) return "server.properties lost server-port=1: " + text;
+        if (!text.contains("level-seed=5471")) {
+            return "server.properties lacks level-seed=5471: " + text;
+        }
+        if (!text.contains("server-port=1")) {
+            return "server.properties lost server-port=1: " + text;
+        }
         // The spec says a dedicated server runs here, so the engine accepted the EULA for it.
-        if (!java.nio.file.Files.isRegularFile(java.nio.file.Path.of("eula.txt"))) return "no eula.txt was written";
-        if (!text.contains("online-mode=false")) return "server.properties lacks online-mode=false: " + text;
+        if (!java.nio.file.Files.isRegularFile(java.nio.file.Path.of("eula.txt"))) {
+            return "no eula.txt was written";
+        }
+        if (!text.contains("online-mode=false")) {
+            return "server.properties lacks online-mode=false: " + text;
+        }
         return null;
     }
 
@@ -188,7 +202,9 @@ public final class FakeGame {
                             + q("round " + round + ", mark " + java.nio.file.Files.exists(mark)) + ",\"trace\":[]}");
         }
         finish(classId(c), "SUCCESSFUL", null);
-        if (round == 0) test("{\"type\":\"restart\",\"round\":1}");
+        if (round == 0) {
+            test("{\"type\":\"restart\",\"round\":1}");
+        }
         test("{\"type\":\"ended\"}");
         done();
         System.exit(0);
@@ -202,8 +218,9 @@ public final class FakeGame {
         List<String> nodes = new ArrayList<>();
         nodes.add(node(engine, null, "StageWright scripts", false, null, null, null));
         nodes.add(scriptNode(file, engine, resource, false, resource));
-        for (String t : List.of("adds", "fails"))
+        for (String t : List.of("adds", "fails")) {
             nodes.add(scriptNode(file + "/[test:" + t + "]", file, t, true, resource));
+        }
         test("{\"type\":\"planned\",\"nodes\":[" + String.join(",", nodes) + "]}");
         start(file);
         start(file + "/[test:adds]");
@@ -211,13 +228,15 @@ public final class FakeGame {
         test("{\"type\":\"record\",\"id\":" + q(file + "/[test:adds]")
                 + ",\"name\":\"note\",\"value\":\"two\\nlines\"}");
         test("{\"type\":\"record\",\"id\":" + q(file + "/[test:adds]") + ",\"name\":\"none found\",\"value\":\"\"}");
-        if ("script".equals(scene)) finish(file + "/[test:adds]", "SUCCESSFUL", null);
-        else
+        if ("script".equals(scene)) {
+            finish(file + "/[test:adds]", "SUCCESSFUL", null);
+        } else {
             finish(
                     file + "/[test:adds]",
                     "FAILED",
                     "{\"class\":\"java.lang.AssertionError\",\"message\":" + q("-Dstagewright.junit.scene was " + scene)
                             + ",\"trace\":[]}");
+        }
         start(file + "/[test:fails]");
         finish(
                 file + "/[test:fails]",
@@ -239,7 +258,9 @@ public final class FakeGame {
         nodes.add(node(ENGINE, null, "engine", false, null, null, null));
         for (String c : classes) {
             nodes.add(classNode(c));
-            for (String m : methods) nodes.add(node(methodId(c, m), classId(c), m + "()", true, c, m, ""));
+            for (String m : methods) {
+                nodes.add(node(methodId(c, m), classId(c), m + "()", true, c, m, ""));
+            }
         }
         test("{\"type\":\"planned\",\"nodes\":[" + String.join(",", nodes) + "]}");
     }
@@ -251,11 +272,19 @@ public final class FakeGame {
     private static String node(
             String id, String parent, String name, boolean test, String className, String method, String parameters) {
         StringBuilder s = new StringBuilder("{\"id\":").append(q(id));
-        if (parent != null) s.append(",\"parent\":").append(q(parent));
+        if (parent != null) {
+            s.append(",\"parent\":").append(q(parent));
+        }
         s.append(",\"name\":").append(q(name)).append(",\"test\":").append(test);
-        if (className != null) s.append(",\"class\":").append(q(className));
-        if (method != null) s.append(",\"method\":").append(q(method));
-        if (parameters != null) s.append(",\"parameters\":").append(q(parameters));
+        if (className != null) {
+            s.append(",\"class\":").append(q(className));
+        }
+        if (method != null) {
+            s.append(",\"method\":").append(q(method));
+        }
+        if (parameters != null) {
+            s.append(",\"parameters\":").append(q(parameters));
+        }
         return s.append('}').toString();
     }
 

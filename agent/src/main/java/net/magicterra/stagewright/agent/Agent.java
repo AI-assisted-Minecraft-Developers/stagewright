@@ -74,7 +74,9 @@ public final class Agent {
         }
         Agent agent = new Agent(config, instrumentation);
         synchronized (Agent.class) {
-            if (running != null) return;
+            if (running != null) {
+                return;
+            }
             running = agent;
         }
         // Here and not on the agent's thread: a pool a launcher starts in the JVM's first second is
@@ -93,7 +95,9 @@ public final class Agent {
     }
 
     void phase(String name) {
-        if (name == null || name.equals(phase)) return;
+        if (name == null || name.equals(phase)) {
+            return;
+        }
         phase = name;
         send(Lines.event("phase").text("phase", name));
     }
@@ -104,7 +108,9 @@ public final class Agent {
 
     void done() {
         synchronized (wake) {
-            if (doneAtNanos != 0) return;
+            if (doneAtNanos != 0) {
+                return;
+            }
             doneAtNanos = System.nanoTime();
             wake.notifyAll();
         }
@@ -113,12 +119,16 @@ public final class Agent {
 
     /** One event of the in-game test run, already a JSON object; passed on as the line's {@code data}. */
     void test(String json) {
-        if (json == null || json.isBlank()) return;
+        if (json == null || json.isBlank()) {
+            return;
+        }
         send(Lines.event("test").raw("data", json));
     }
 
     private void run() {
-        if (!connect()) return;
+        if (!connect()) {
+            return;
+        }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> send(Lines.event("exiting")), "stagewright-agent-exit"));
         send(Lines.event("hello")
                 .text("token", config.token())
@@ -128,9 +138,13 @@ public final class Agent {
         while (true) {
             send(heartbeat());
             // A crashed game frequently does not exit, so this is how its supervisor stops waiting on it.
-            for (String report : crashes.fresh()) send(Lines.event("crash").text("report", report));
+            for (String report : crashes.fresh()) {
+                send(Lines.event("crash").text("report", report));
+            }
             ThreadOrigins recording = origins;
-            if (recording != null && recording.releaseIfAlone()) origins = null;
+            if (recording != null && recording.releaseIfAlone()) {
+                origins = null;
+            }
             long doneAt = doneAtNanos;
             if (doneAt != 0 && System.nanoTime() - doneAt >= config.graceMillis() * 1_000_000L) {
                 endJvm();
@@ -184,7 +198,9 @@ public final class Agent {
                 .number("atMs", System.currentTimeMillis())
                 .text("phase", phase)
                 .number("ticks", ticks);
-        if (classes >= 0) line.number("classes", classes);
+        if (classes >= 0) {
+            line.number("classes", classes);
+        }
 
         // Where the threads that matter are, once nothing the supervisor can see has moved for a while:
         // the evidence it needs to say what a stuck game is stuck on, which it cannot read from outside.
@@ -205,10 +221,14 @@ public final class Agent {
         for (Map.Entry<Thread, StackTraceElement[]> entry :
                 Thread.getAllStackTraces().entrySet()) {
             String name = entry.getKey().getName();
-            if (!name.equals("main") && !name.equals("Render thread") && !name.equals("Server thread")) continue;
+            if (!name.equals("main") && !name.equals("Render thread") && !name.equals("Server thread")) {
+                continue;
+            }
             List<String> frames = new ArrayList<>();
             StackTraceElement[] stack = entry.getValue();
-            for (int i = 0; i < Math.min(stack.length, IDLE_FRAMES); i++) frames.add(stack[i].toString());
+            for (int i = 0; i < Math.min(stack.length, IDLE_FRAMES); i++) {
+                frames.add(stack[i].toString());
+            }
             sampled.add(new Lines().text("name", name).texts("stack", frames));
         }
         return sampled;
@@ -217,7 +237,9 @@ public final class Agent {
     /** One line out. A broken connection ends the sending and nothing else: the game carries on. */
     private synchronized void send(Lines line) {
         BufferedWriter writer = out;
-        if (writer == null) return;
+        if (writer == null) {
+            return;
+        }
         try {
             writer.write(line.build());
             writer.write('\n');
@@ -245,16 +267,26 @@ public final class Agent {
         ThreadOrigins recorded = origins;
         for (Map.Entry<Thread, StackTraceElement[]> entry : all.entrySet()) {
             Thread thread = entry.getKey();
-            if (thread.isDaemon() || !thread.isAlive() || thread == Thread.currentThread()) continue;
+            if (thread.isDaemon() || !thread.isAlive() || thread == Thread.currentThread()) {
+                continue;
+            }
             // The thread the JVM parks to wait for the others: it is the symptom, not a holder.
-            if (thread.getName().equals("DestroyJavaVM")) continue;
+            if (thread.getName().equals("DestroyJavaVM")) {
+                continue;
+            }
             // The recorder's own reader: it holds nothing the game left behind.
-            if (isRecorderThread(thread.getName())) continue;
+            if (isRecorderThread(thread.getName())) {
+                continue;
+            }
             holders.add(thread);
             StackTraceElement[] stack = entry.getValue();
-            for (int i = 0; i < Math.min(stack.length, STACK_FRAMES); i++) classNames.add(stack[i].getClassName());
+            for (int i = 0; i < Math.min(stack.length, STACK_FRAMES); i++) {
+                classNames.add(stack[i].getClassName());
+            }
             if (recorded != null) {
-                for (String frame : recorded.of(thread.threadId())) classNames.add(typeOf(frame));
+                for (String frame : recorded.of(thread.threadId())) {
+                    classNames.add(typeOf(frame));
+                }
             }
         }
         Map<String, String> jars = locate(classNames);
@@ -266,13 +298,17 @@ public final class Agent {
             for (int i = 0; i < Math.min(stack.length, STACK_FRAMES); i++) {
                 frames.add(stack[i].toString());
                 String location = jars.get(stack[i].getClassName());
-                if (location != null) where.add(location);
+                if (location != null) {
+                    where.add(location);
+                }
             }
             List<String> started = recorded == null ? List.of() : recorded.of(thread.threadId());
             Set<String> startedIn = new LinkedHashSet<>();
             for (String frame : started) {
                 String location = jars.get(typeOf(frame));
-                if (location != null) startedIn.add(location);
+                if (location != null) {
+                    startedIn.add(location);
+                }
             }
             described.add(new Lines()
                     .text("name", thread.getName())
@@ -301,13 +337,19 @@ public final class Agent {
     /** Where each named class was loaded from. The JDK's own classes have no code source and are left out. */
     private Map<String, String> locate(Set<String> names) {
         Map<String, String> found = new HashMap<>();
-        if (names.isEmpty()) return found;
+        if (names.isEmpty()) {
+            return found;
+        }
         for (Class<?> type : instrumentation.getAllLoadedClasses()) {
-            if (!names.contains(type.getName())) continue;
+            if (!names.contains(type.getName())) {
+                continue;
+            }
             try {
                 CodeSource source = type.getProtectionDomain().getCodeSource();
                 URL location = source == null ? null : source.getLocation();
-                if (location != null) found.putIfAbsent(type.getName(), location.toString());
+                if (location != null) {
+                    found.putIfAbsent(type.getName(), location.toString());
+                }
             } catch (SecurityException ignored) {
                 // Leave it unlocated rather than fail the report.
             }

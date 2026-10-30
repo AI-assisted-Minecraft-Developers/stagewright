@@ -11,6 +11,8 @@ final class ClientPreflight {
     /** A client needs a display this tool does not provide, and an X server that lets it in; see {@link Display}. */
     static void requireDisplay(String osName, Map<String, String> env) {
         String missing = Display.missing(osName, env);
-        if (missing != null) throw new EnvFailure(missing);
+        if (missing != null) {
+            throw new EnvFailure(missing);
+        }
     }
 }

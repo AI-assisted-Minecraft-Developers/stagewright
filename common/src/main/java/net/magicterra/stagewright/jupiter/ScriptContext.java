@@ -54,7 +54,9 @@ final class ScriptContext {
     }
 
     Map<String, Object> asScript() {
-        if (script != null) return script;
+        if (script != null) {
+            return script;
+        }
         script = new LinkedHashMap<>();
         script.put("call", (Scripting.Function) this::call);
         script.put("step", (Scripting.Function) this::step);
@@ -112,8 +114,12 @@ final class ScriptContext {
      * is the body's; what ending throws is added to it, or becomes the failure when the body passed.
      */
     Throwable end(Throwable failure) {
-        if (failure != null) failure = CatchableErrors.unwrapAbort(failure);
-        if (errors != null && failure != null) failure = errors.explain(failure);
+        if (failure != null) {
+            failure = CatchableErrors.unwrapAbort(failure);
+        }
+        if (errors != null && failure != null) {
+            failure = errors.explain(failure);
+        }
         // First, on this thread: a cleanup may call the game, and may still use what the test leased.
         List<Scripting.Function> cleanups;
         synchronized (afterTest) {
@@ -122,7 +128,9 @@ final class ScriptContext {
         failure = runAfterTest(cleanups, failure, errors);
         TestScope scope = TestScope.bound();
         List<Runnable> undo = new ArrayList<>();
-        if (scope != null && scope.changedAnything()) undo.add(() -> game.runOnServer(scope::restore));
+        if (scope != null && scope.changedAnything()) {
+            undo.add(() -> game.runOnServer(scope::restore));
+        }
         AssertionError checks = scope == null ? null : scope.takeChecks();
         // A kept bot goes to a later test only when this one passed and it stands outside the test's plots.
         IllegalStateException misplaced = Handovers.endOfTest(
@@ -136,8 +144,11 @@ final class ScriptContext {
                         .toList(),
                 failure != null || checks != null);
         if (misplaced != null) {
-            if (failure == null) failure = misplaced;
-            else failure.addSuppressed(misplaced);
+            if (failure == null) {
+                failure = misplaced;
+            } else {
+                failure.addSuppressed(misplaced);
+            }
         }
         for (int i = leases.size() - 1; i >= 0; i--) {
             CloseableResource lease = leases.get(i);
@@ -153,13 +164,19 @@ final class ScriptContext {
             try {
                 step.run();
             } catch (Throwable t) {
-                if (failure == null) failure = t;
-                else failure.addSuppressed(t);
+                if (failure == null) {
+                    failure = t;
+                } else {
+                    failure.addSuppressed(t);
+                }
             }
         }
         if (checks != null) {
-            if (failure == null) failure = checks;
-            else failure.addSuppressed(checks);
+            if (failure == null) {
+                failure = checks;
+            } else {
+                failure.addSuppressed(checks);
+            }
         }
         TestScope.unbind();
         return failure;
@@ -175,9 +192,14 @@ final class ScriptContext {
                 cleanups.get(i).call();
             } catch (Throwable t) {
                 Throwable thrown = CatchableErrors.unwrapAbort(t);
-                if (errors != null) thrown = errors.explain(thrown);
-                if (failure == null) failure = thrown;
-                else if (failure != thrown) failure.addSuppressed(thrown);
+                if (errors != null) {
+                    thrown = errors.explain(thrown);
+                }
+                if (failure == null) {
+                    failure = thrown;
+                } else if (failure != thrown) {
+                    failure.addSuppressed(thrown);
+                }
             }
         }
         return failure;
@@ -215,8 +237,9 @@ final class ScriptContext {
     static Object route(ApiRegistry registry, String usage, Object[] args) {
         String method = string(args, 0, usage + "(method, params)");
         JsonElement params = args.length > 1 && args[1] != null ? tree(args[1]) : new JsonObject();
-        if (!params.isJsonObject())
+        if (!params.isJsonObject()) {
             throw new IllegalArgumentException(usage + "(" + method + "): params must be an object");
+        }
         // A Game's registry already waits as long as a test may for a busy server: see GameImpl.registry.
         return GSON.fromJson(registry.route(method, params.getAsJsonObject()), Object.class);
     }
@@ -232,9 +255,15 @@ final class ScriptContext {
         synchronized (steps) {
             body = steps.get(name);
         }
-        if (body != null) return body.call(asScript(), args);
-        if (BuiltinSteps.NAMES.contains(name)) return BuiltinSteps.run(this, name, args);
-        if (javaSteps.has(name)) return javaSteps.run(name, game, args);
+        if (body != null) {
+            return body.call(asScript(), args);
+        }
+        if (BuiltinSteps.NAMES.contains(name)) {
+            return BuiltinSteps.run(this, name, args);
+        }
+        if (javaSteps.has(name)) {
+            return javaSteps.run(name, game, args);
+        }
         throw new IllegalArgumentException("no step named '" + name + "'; built in: " + BuiltinSteps.NAMES
                 + ", registered by scripts: " + steps.keySet() + ", @Step: " + javaSteps.names());
     }
@@ -273,7 +302,11 @@ final class ScriptContext {
 
     /** The first plot the test leased; a position inside a plot needs one. */
     PlotImpl plotOrFail() {
-        for (CloseableResource lease : leases) if (lease instanceof PlotImpl plot) return plot;
+        for (CloseableResource lease : leases) {
+            if (lease instanceof PlotImpl plot) {
+                return plot;
+            }
+        }
         throw new IllegalArgumentException("[x, y, z] is a position in the test's plot, and it leased none: give the"
                 + " test plot: {size}, or call t.plot() first");
     }
@@ -318,7 +351,9 @@ final class ScriptContext {
         int streak = 0;
         for (int tick = 0; ; tick++) {
             streak = condition.getAsBoolean() ? streak + 1 : 0;
-            if (streak >= run) return;
+            if (streak >= run) {
+                return;
+            }
             if (tick >= within) {
                 throw new AssertionError(as + " did not hold" + (run > 1 ? " for " + run + " ticks in a row" : "")
                         + " within " + within + " ticks");
@@ -400,7 +435,9 @@ final class ScriptContext {
             } catch (AssertionError e) {
                 throw new AssertionError(what + ": " + e.getMessage(), e);
             }
-            if (Boolean.FALSE.equals(result)) throw new AssertionError(what);
+            if (Boolean.FALSE.equals(result)) {
+                throw new AssertionError(what);
+            }
         });
         return null;
     }
@@ -411,7 +448,9 @@ final class ScriptContext {
      */
     private Object record(Object... args) {
         String name = string(args, 0, "t.record(name, value)");
-        if (name.isBlank()) throw new IllegalArgumentException("t.record(name, value): the name must not be blank");
+        if (name.isBlank()) {
+            throw new IllegalArgumentException("t.record(name, value): the name must not be blank");
+        }
         Object value = args.length > 1 ? args[1] : null;
         Records.publish(
                 test.getUniqueId().toString(),
@@ -433,7 +472,9 @@ final class ScriptContext {
             case String s -> new JsonPrimitive(s);
             case List<?> list -> {
                 JsonArray out = new JsonArray();
-                for (Object item : list) out.add(tree(item));
+                for (Object item : list) {
+                    out.add(tree(item));
+                }
                 yield out;
             }
             case Map<?, ?> map -> {
@@ -452,12 +493,16 @@ final class ScriptContext {
     }
 
     static String string(Object[] args, int i, String usage) {
-        if (args.length > i && args[i] instanceof String s) return s;
+        if (args.length > i && args[i] instanceof String s) {
+            return s;
+        }
         throw new IllegalArgumentException(usage + ": argument " + (i + 1) + " must be a string");
     }
 
     private static Scripting.Function function(Object[] args, String usage) {
-        if (args.length > 0 && args[0] instanceof Scripting.Function f) return f;
+        if (args.length > 0 && args[0] instanceof Scripting.Function f) {
+            return f;
+        }
         throw new IllegalArgumentException(usage + ": the condition must be a function");
     }
 

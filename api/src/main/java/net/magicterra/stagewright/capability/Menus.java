@@ -165,7 +165,9 @@ public final class Menus {
             List<String> out = new ArrayList<>();
             for (int i = 0; i < menu.slots.size(); i++) {
                 ItemStack stack = menu.slots.get(i).getItem();
-                if (!stack.isEmpty()) out.add(i + "=" + Ids.idOf(stack) + " x" + stack.getCount());
+                if (!stack.isEmpty()) {
+                    out.add(i + "=" + Ids.idOf(stack) + " x" + stack.getCount());
+                }
             }
             return out;
         });
@@ -231,7 +233,9 @@ public final class Menus {
     public Menus close(Body body) {
         body.runOnServer(player -> {
             Open o = open.remove(body.name());
-            if (o != null && player.containerMenu == o.menu()) player.closeContainer();
+            if (o != null && player.containerMenu == o.menu()) {
+                player.closeContainer();
+            }
         });
         return this;
     }
@@ -241,7 +245,9 @@ public final class Menus {
     /** The block's own provider, else its block entity if that is one, else null. */
     private static MenuProvider providerAt(ServerLevel level, BlockPos pos) {
         MenuProvider provider = level.getBlockState(pos).getMenuProvider(level, pos);
-        if (provider != null) return provider;
+        if (provider != null) {
+            return provider;
+        }
         return level.getBlockEntity(pos) instanceof MenuProvider fromEntity ? fromEntity : null;
     }
 
@@ -267,7 +273,9 @@ public final class Menus {
 
     private AbstractContainerMenu require(Body body, ServerPlayer player) {
         Open o = open.get(body.name());
-        if (o == null) throw new IllegalStateException("no menu is open for " + body.name() + " — call openAt first");
+        if (o == null) {
+            throw new IllegalStateException("no menu is open for " + body.name() + " — call openAt first");
+        }
         if (player.containerMenu != o.menu()) {
             throw new IllegalStateException("the menu this test opened ('" + o.title() + "') is no longer "
                     + body.name() + "'s current one — something closed or replaced it");
@@ -288,7 +296,9 @@ public final class Menus {
 
     /** Close whatever is open before opening something else. */
     private void closeQuietly(Body body, ServerPlayer player) {
-        if (player.containerMenu != player.inventoryMenu) player.closeContainer();
+        if (player.containerMenu != player.inventoryMenu) {
+            player.closeContainer();
+        }
         open.remove(body.name());
     }
 
@@ -298,24 +308,31 @@ public final class Menus {
      * Registered after the inventory pin, so it runs before that restore: the last registered runs first.
      */
     private void registerClose(Body body) {
-        if (!closing.add(body.name())) return;
+        if (!closing.add(body.name())) {
+            return;
+        }
         game.capability("items", Items.class).pinInventory(body);
         ServerPlayer player = body.onServer(p -> p);
         game.afterTest(server -> {
             open.remove(body.name());
-            if (player.containerMenu != player.inventoryMenu) player.closeContainer();
+            if (player.containerMenu != player.inventoryMenu) {
+                player.closeContainer();
+            }
         });
     }
 
     private static ClickType clickTypeOf(String name) {
         if (name != null) {
             for (ClickType candidate : ClickType.values()) {
-                if (candidate.name().equalsIgnoreCase(name)) return candidate;
+                if (candidate.name().equalsIgnoreCase(name)) {
+                    return candidate;
+                }
             }
         }
         List<String> names = new ArrayList<>();
-        for (ClickType candidate : ClickType.values())
+        for (ClickType candidate : ClickType.values()) {
             names.add(candidate.name().toLowerCase(Locale.ROOT));
+        }
         throw new IllegalStateException(
                 "'" + name + "' is not a click type — the types are " + String.join(", ", names));
     }

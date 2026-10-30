@@ -39,8 +39,9 @@ class ReleaseVersionTest {
     void startNexus() throws IOException {
         nexus = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         nexus.createContext("/", exchange -> {
-            if ("PUT".equals(exchange.getRequestMethod()))
+            if ("PUT".equals(exchange.getRequestMethod())) {
                 uploads.add(exchange.getRequestURI().getPath());
+            }
             exchange.getRequestBody().readAllBytes();
             exchange.sendResponseHeaders("PUT".equals(exchange.getRequestMethod()) ? 201 : 404, -1);
             exchange.close();
@@ -83,7 +84,9 @@ class ReleaseVersionTest {
                         "http://127.0.0.1:" + nexus.getAddress().getPort() + "/"));
         Map<String, String> env = new HashMap<>(System.getenv());
         env.remove("BUILD_NUMBER");
-        if (buildNumber != null) env.put("BUILD_NUMBER", buildNumber);
+        if (buildNumber != null) {
+            env.put("BUILD_NUMBER", buildNumber);
+        }
         env.put("MAVEN_USERNAME", "u");
         env.put("MAVEN_PASSWORD", "p");
         return GradleRunner.create().withProjectDir(dir.toFile()).withEnvironment(env);

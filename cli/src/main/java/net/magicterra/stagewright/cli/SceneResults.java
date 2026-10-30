@@ -61,7 +61,9 @@ final class SceneResults implements TestExecutionListener {
     static String sceneOf(String uniqueId) {
         try {
             for (UniqueId.Segment s : UniqueId.parse(uniqueId).getSegments()) {
-                if (s.getType().equals(SCENE)) return s.getValue();
+                if (s.getType().equals(SCENE)) {
+                    return s.getValue();
+                }
             }
         } catch (RuntimeException e) {
             return null;
@@ -84,13 +86,17 @@ final class SceneResults implements TestExecutionListener {
 
     @Override
     public void executionStarted(TestIdentifier id) {
-        if (!id.isTest() && isScene(id)) counts(sceneOf(id.getUniqueId())).startedAt = System.nanoTime();
+        if (!id.isTest() && isScene(id)) {
+            counts(sceneOf(id.getUniqueId())).startedAt = System.nanoTime();
+        }
     }
 
     @Override
     public void executionSkipped(TestIdentifier id, String reason) {
         String scene = sceneOf(id.getUniqueId());
-        if (scene == null) return;
+        if (scene == null) {
+            return;
+        }
         if (id.isTest()) {
             Counts c = counts(scene);
             synchronized (c) {
@@ -109,7 +115,9 @@ final class SceneResults implements TestExecutionListener {
     @Override
     public void executionFinished(TestIdentifier id, TestExecutionResult result) {
         String scene = sceneOf(id.getUniqueId());
-        if (scene == null) return;
+        if (scene == null) {
+            return;
+        }
         Counts c = counts(scene);
         if (id.isTest()) {
             synchronized (c) {
@@ -135,8 +143,12 @@ final class SceneResults implements TestExecutionListener {
                 .append(tests == 1 ? " test, " : " tests, ")
                 .append(c.passed)
                 .append(" passed");
-        if (c.failed > 0) line.append(", ").append(c.failed).append(" failed");
-        if (c.skipped > 0) line.append(", ").append(c.skipped).append(" skipped");
+        if (c.failed > 0) {
+            line.append(", ").append(c.failed).append(" failed");
+        }
+        if (c.skipped > 0) {
+            line.append(", ").append(c.skipped).append(" skipped");
+        }
         line.append(", in ")
                 .append(BigDecimal.valueOf((System.nanoTime() - c.startedAt) / 1e9)
                         .setScale(1, RoundingMode.HALF_UP)
@@ -160,14 +172,18 @@ final class SceneResults implements TestExecutionListener {
 
     /** Rewrite each XML file directly in {@code reports} whose testcases lie in scenes into one file per scene. */
     static void split(Path reports) throws IOException {
-        if (!Files.isDirectory(reports)) return;
+        if (!Files.isDirectory(reports)) {
+            return;
+        }
         List<Path> files;
         try (Stream<Path> list = Files.list(reports)) {
             files = list.filter(p -> p.getFileName().toString().endsWith(".xml"))
                     .sorted()
                     .toList();
         }
-        for (Path file : files) splitFile(file);
+        for (Path file : files) {
+            splitFile(file);
+        }
     }
 
     private static void splitFile(Path file) throws IOException {
@@ -175,20 +191,31 @@ final class SceneResults implements TestExecutionListener {
             Document doc =
                     DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file.toFile());
             Element suite = doc.getDocumentElement();
-            if (!suite.getTagName().equals("testsuite")) return;
+            if (!suite.getTagName().equals("testsuite")) {
+                return;
+            }
             Map<String, List<Element>> scenes = new LinkedHashMap<>();
             List<Element> unplaced = new ArrayList<>();
             for (Node child = suite.getFirstChild(); child != null; child = child.getNextSibling()) {
-                if (!(child instanceof Element e) || !e.getTagName().equals("testcase")) continue;
+                if (!(child instanceof Element e) || !e.getTagName().equals("testcase")) {
+                    continue;
+                }
                 String scene = sceneOf(RecordProperties.uniqueId(e));
-                if (scene == null) unplaced.add(e);
-                else scenes.computeIfAbsent(scene, k -> new ArrayList<>()).add(e);
+                if (scene == null) {
+                    unplaced.add(e);
+                } else {
+                    scenes.computeIfAbsent(scene, k -> new ArrayList<>()).add(e);
+                }
             }
-            if (scenes.isEmpty()) return;
+            if (scenes.isEmpty()) {
+                return;
+            }
 
             Element suiteProperties = null;
             for (Node child = suite.getFirstChild(); child != null; child = child.getNextSibling()) {
-                if (child instanceof Element e && e.getTagName().equals("properties")) suiteProperties = e;
+                if (child instanceof Element e && e.getTagName().equals("properties")) {
+                    suiteProperties = e;
+                }
             }
             for (Map.Entry<String, List<Element>> scene : scenes.entrySet()) {
                 Document out = DocumentBuilderFactory.newInstance()
@@ -197,8 +224,12 @@ final class SceneResults implements TestExecutionListener {
                 Element root = (Element) out.importNode(suite, false);
                 out.appendChild(root);
                 root.setAttribute("name", scene.getKey());
-                if (suiteProperties != null) root.appendChild(out.importNode(suiteProperties, true));
-                for (Element testcase : scene.getValue()) root.appendChild(out.importNode(testcase, true));
+                if (suiteProperties != null) {
+                    root.appendChild(out.importNode(suiteProperties, true));
+                }
+                for (Element testcase : scene.getValue()) {
+                    root.appendChild(out.importNode(testcase, true));
+                }
                 count(root, scene.getValue());
                 Path target = file.resolveSibling(fileName(scene.getKey(), file));
                 write(out, target);
@@ -207,7 +238,9 @@ final class SceneResults implements TestExecutionListener {
                 Files.delete(file);
                 return;
             }
-            for (List<Element> moved : scenes.values()) moved.forEach(suite::removeChild);
+            for (List<Element> moved : scenes.values()) {
+                moved.forEach(suite::removeChild);
+            }
             count(suite, unplaced);
             write(doc, file);
         } catch (IOException e) {
@@ -230,9 +263,13 @@ final class SceneResults implements TestExecutionListener {
         int errors = 0;
         double time = 0;
         for (Element testcase : testcases) {
-            if (testcase.getElementsByTagName("skipped").getLength() > 0) skipped++;
-            else if (testcase.getElementsByTagName("failure").getLength() > 0) failures++;
-            else if (testcase.getElementsByTagName("error").getLength() > 0) errors++;
+            if (testcase.getElementsByTagName("skipped").getLength() > 0) {
+                skipped++;
+            } else if (testcase.getElementsByTagName("failure").getLength() > 0) {
+                failures++;
+            } else if (testcase.getElementsByTagName("error").getLength() > 0) {
+                errors++;
+            }
             try {
                 time += Double.parseDouble(testcase.getAttribute("time"));
             } catch (NumberFormatException e) {

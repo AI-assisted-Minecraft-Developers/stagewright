@@ -32,7 +32,9 @@ final class PlotLayout {
 
     synchronized void release(ResourceKey<Level> dimension, int start) {
         TreeMap<Integer, Integer> row = leased.get(dimension);
-        if (row != null) row.remove(start);
+        if (row != null) {
+            row.remove(start);
+        }
     }
 
     /** A plot's stretch: its width and the gap after it, rounded up to whole chunks. */
@@ -44,7 +46,9 @@ final class PlotLayout {
     static int firstFree(TreeMap<Integer, Integer> row, int width) {
         int candidate = 0;
         for (Map.Entry<Integer, Integer> taken : row.entrySet()) {
-            if (candidate + width <= taken.getKey()) return candidate;
+            if (candidate + width <= taken.getKey()) {
+                return candidate;
+            }
             candidate = Math.max(candidate, taken.getValue());
         }
         return candidate;

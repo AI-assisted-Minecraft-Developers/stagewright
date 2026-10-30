@@ -130,7 +130,9 @@ class DownloaderTest {
     private Downloader downloader(Path install, java.util.function.Function<URI, List<URI>> mirror) {
         java.util.function.Function<URI, List<URI>> candidates = uri -> {
             List<URI> out = new java.util.ArrayList<>(mirror.apply(uri));
-            if (!out.contains(uri)) out.add(uri);
+            if (!out.contains(uri)) {
+                out.add(uri);
+            }
             return out;
         };
         return new Downloader(candidates, new HmclCache(install), ProxySelector.getDefault());

@@ -49,7 +49,9 @@ class SupervisorTest {
         command.add(FakeGame.class.getName());
         command.add(mode);
         ProcessBuilder builder = new ProcessBuilder(command).inheritIO();
-        if (gameDir != null) builder.directory(gameDir.toFile());
+        if (gameDir != null) {
+            builder.directory(gameDir.toFile());
+        }
         return builder.start();
     }
 
@@ -133,7 +135,9 @@ class SupervisorTest {
             try {
                 // Wait until it has connected, then take it away.
                 long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
-                while (supervisor.agentPid() < 0 && System.nanoTime() < deadline) Thread.sleep(50);
+                while (supervisor.agentPid() < 0 && System.nanoTime() < deadline) {
+                    Thread.sleep(50);
+                }
                 assertTrue(supervisor.agentPid() > 0, "the agent should have said hello");
                 game.destroyForcibly();
                 assertEquals(Ended.PROCESS_DIED, supervisor.await(game.toHandle(), FAST));
@@ -225,7 +229,9 @@ class SupervisorTest {
             Process game = new ProcessBuilder(command).inheritIO().start();
             try {
                 long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
-                while (supervisor.stacks().isEmpty() && System.nanoTime() < deadline) Thread.sleep(100);
+                while (supervisor.stacks().isEmpty() && System.nanoTime() < deadline) {
+                    Thread.sleep(100);
+                }
                 List<Supervisor.ThreadStack> stacks = supervisor.stacks();
                 assertEquals(1, stacks.size(), stacks.toString());
                 assertEquals("main", stacks.get(0).thread());
@@ -394,7 +400,9 @@ class SupervisorTest {
             Process client = start(joined, 20, "silent");
             try {
                 long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
-                while (joined.agentPid() < 0 && System.nanoTime() < deadline) Thread.sleep(50);
+                while (joined.agentPid() < 0 && System.nanoTime() < deadline) {
+                    Thread.sleep(50);
+                }
                 assertTrue(joined.agentPid() > 0, "the companion's agent should have said hello");
                 client.destroyForcibly();
                 assertEquals(

@@ -60,7 +60,9 @@ public final class Quests {
         return game.onServer(server -> {
             List<String> out = new ArrayList<>();
             for (Object chapter : allChapters()) {
-                for (Object quest : questsIn(chapter)) out.add(codeOf(quest));
+                for (Object quest : questsIn(chapter)) {
+                    out.add(codeOf(quest));
+                }
             }
             return out;
         });
@@ -70,9 +72,13 @@ public final class Quests {
     public List<String> questsInChapter(String filename) {
         return game.onServer(server -> {
             for (Object chapter : allChapters()) {
-                if (!filename.equals(String.valueOf(call(chapter, "getFilename")))) continue;
+                if (!filename.equals(String.valueOf(call(chapter, "getFilename")))) {
+                    continue;
+                }
                 List<String> out = new ArrayList<>();
-                for (Object quest : questsIn(chapter)) out.add(codeOf(quest));
+                for (Object quest : questsIn(chapter)) {
+                    out.add(codeOf(quest));
+                }
                 return out;
             }
             throw new IllegalStateException(
@@ -88,7 +94,9 @@ public final class Quests {
         return game.onServer(server -> {
             Object stream = call(requireQuest(questCode), "streamDependencies");
             List<String> out = new ArrayList<>();
-            if (stream instanceof Stream<?> s) s.forEach(dep -> out.add(codeOf(dep)));
+            if (stream instanceof Stream<?> s) {
+                s.forEach(dep -> out.add(codeOf(dep)));
+            }
             return out;
         });
     }
@@ -138,10 +146,14 @@ public final class Quests {
     /** The loaded quest file, or null when FTB Quests is absent or has not loaded one. */
     private static Object questFile() {
         Class<?> type = serverQuestFileClass();
-        if (type == null) return null;
+        if (type == null) {
+            return null;
+        }
         try {
             Object result = type.getMethod("getInstance").invoke(null);
-            if (result instanceof Optional<?> optional) return optional.orElse(null);
+            if (result instanceof Optional<?> optional) {
+                return optional.orElse(null);
+            }
             return result;
         } catch (ReflectiveOperationException e) {
             return null;
@@ -159,13 +171,17 @@ public final class Quests {
 
     private static List<String> chapterNames() {
         List<String> out = new ArrayList<>();
-        for (Object chapter : allChapters()) out.add(String.valueOf(call(chapter, "getFilename")));
+        for (Object chapter : allChapters()) {
+            out.add(String.valueOf(call(chapter, "getFilename")));
+        }
         return out;
     }
 
     private static int countQuests() {
         int total = 0;
-        for (Object chapter : allChapters()) total += questsIn(chapter).size();
+        for (Object chapter : allChapters()) {
+            total += questsIn(chapter).size();
+        }
         return total;
     }
 
@@ -182,7 +198,9 @@ public final class Quests {
     private static Object requireQuest(String questCode) {
         for (Object chapter : allChapters()) {
             for (Object quest : questsIn(chapter)) {
-                if (codeOf(quest).equalsIgnoreCase(questCode)) return quest;
+                if (codeOf(quest).equalsIgnoreCase(questCode)) {
+                    return quest;
+                }
             }
         }
         throw new IllegalStateException("no quest has the code '" + questCode + "' — this book holds "

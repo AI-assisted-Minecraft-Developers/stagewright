@@ -40,18 +40,25 @@ public final class ServerTicks {
         for (Waiter w : WAITERS) {
             w.elapsed++;
             try {
-                if (w.condition.getAsBoolean()) w.done.complete(true);
-                else if (w.elapsed >= w.budget) w.done.complete(false);
+                if (w.condition.getAsBoolean()) {
+                    w.done.complete(true);
+                } else if (w.elapsed >= w.budget) {
+                    w.done.complete(false);
+                }
             } catch (Throwable t) {
                 w.done.completeExceptionally(t);
             }
-            if (w.done.isDone()) WAITERS.remove(w);
+            if (w.done.isDone()) {
+                WAITERS.remove(w);
+            }
         }
     }
 
     /** Fail every pending wait: the server is going away and no tick will answer them. */
     static void stop() {
-        for (Waiter w : WAITERS) w.done.completeExceptionally(new IllegalStateException("the server stopped"));
+        for (Waiter w : WAITERS) {
+            w.done.completeExceptionally(new IllegalStateException("the server stopped"));
+        }
         WAITERS.clear();
     }
 }

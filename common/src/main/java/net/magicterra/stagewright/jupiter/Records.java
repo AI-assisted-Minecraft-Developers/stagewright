@@ -42,8 +42,12 @@ final class Records {
 
     /** How a test is named in the log: {@code Class#method}, or a script's {@code file#test}. */
     static String label(TestSource source, String displayName) {
-        if (source instanceof MethodSource m) return m.getClassName() + "#" + m.getMethodName();
-        if (source instanceof ClasspathResourceSource r) return r.getClasspathResourceName() + "#" + displayName;
+        if (source instanceof MethodSource m) {
+            return m.getClassName() + "#" + m.getMethodName();
+        }
+        if (source instanceof ClasspathResourceSource r) {
+            return r.getClasspathResourceName() + "#" + displayName;
+        }
         return displayName;
     }
 

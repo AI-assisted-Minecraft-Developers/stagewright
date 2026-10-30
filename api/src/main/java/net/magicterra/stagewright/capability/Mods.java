@@ -55,13 +55,21 @@ public final class Mods {
 
     /** Whether every one of these mod ids is loaded. */
     public static boolean all(String... modIds) {
-        for (String id : modIds) if (!loaded(id)) return false;
+        for (String id : modIds) {
+            if (!loaded(id)) {
+                return false;
+            }
+        }
         return true;
     }
 
     /** Whether any one of these mod ids is loaded — a fork, a rename, a shim, all satisfy the same test. */
     public static boolean any(String... modIds) {
-        for (String id : modIds) if (loaded(id)) return true;
+        for (String id : modIds) {
+            if (loaded(id)) {
+                return true;
+            }
+        }
         return false;
     }
 

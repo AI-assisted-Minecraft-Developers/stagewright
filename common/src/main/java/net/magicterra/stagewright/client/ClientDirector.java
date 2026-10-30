@@ -93,7 +93,9 @@ public final class ClientDirector {
      */
     public static boolean arm() {
         String directive = directive();
-        if (directive == null) return false;
+        if (directive == null) {
+            return false;
+        }
         StageWrightCommon.LOG.info("[{}] client director armed: {}", StageWrightCommon.MOD_ID, directive);
         return true;
     }
@@ -105,9 +107,13 @@ public final class ClientDirector {
 
     private static String directive() {
         String connect = System.getProperty(P_CONNECT);
-        if (connect != null && !connect.isBlank()) return "connect=" + connect.trim();
+        if (connect != null && !connect.isBlank()) {
+            return "connect=" + connect.trim();
+        }
         String world = System.getProperty(P_WORLD);
-        if (world != null && !world.isBlank()) return "world=" + world.trim();
+        if (world != null && !world.isBlank()) {
+            return "world=" + world.trim();
+        }
         return null;
     }
 
@@ -116,13 +122,16 @@ public final class ClientDirector {
         Minecraft mc = Minecraft.getInstance();
         // Before anything can return: a client that is stuck loading still ticks, and one that has
         // stopped ticking is what the supervisor needs to see. Once a second is plenty for that.
-        if (joinsServer() && ++clientTicks % AGENT_TICK_INTERVAL == 0)
+        if (joinsServer() && ++clientTicks % AGENT_TICK_INTERVAL == 0) {
             AgentBridge.system().ticks(clientTicks);
+        }
         // Nothing before the game has finished loading itself — not driving, not counting, not even
         // reporting. See stillLoading: these ticks arrive from inside the loading window and are
         // about a game that does not exist yet.
         if (phase == Phase.WAITING_FOR_TITLE) {
-            if (stillLoading(mc)) return;
+            if (stillLoading(mc)) {
+                return;
+            }
             if (!loadReported) {
                 loadReported = true;
                 StageWrightCommon.LOG.info(
@@ -204,14 +213,17 @@ public final class ClientDirector {
         exitCountdown = EXIT_DELAY_TICKS;
         // The client is about to stop itself; if a mod's thread keeps the JVM up after that, the agent
         // names the thread and ends the JVM instead of leaving the build to wait out its timeout.
-        if (joinsServer() && exitWhenDone()) AgentBridge.system().done();
+        if (joinsServer() && exitWhenDone()) {
+            AgentBridge.system().done();
+        }
     }
 
     private static void enter(Phase next) {
         phase = next;
-        if (joinsServer())
+        if (joinsServer()) {
             AgentBridge.system()
                     .phase("client-" + next.name().toLowerCase(Locale.ROOT).replace('_', '-'));
+        }
     }
 
     /**
@@ -274,7 +286,9 @@ public final class ClientDirector {
         if (mc.level == null
                 || mc.player == null
                 || connection == null
-                || !connection.getConnection().isConnected()) return;
+                || !connection.getConnection().isConnected()) {
+            return;
+        }
         StageWrightCommon.onClientWorldReady();
     }
 
@@ -331,7 +345,9 @@ public final class ClientDirector {
             mc.doWorldLoad(access, packs, stem, false);
         } catch (Exception e) {
             StageWrightCommon.LOG.error("[{}] opening world '{}' failed", StageWrightCommon.MOD_ID, world, e);
-            if (access != null) access.safeClose();
+            if (access != null) {
+                access.safeClose();
+            }
         }
     }
 }

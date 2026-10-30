@@ -70,7 +70,9 @@ public final class BlockEnergy implements Energy {
             require(pos, handlers);
             for (IEnergyStorage storage : handlers) {
                 int gave = storage.extractEnergy(amount, false);
-                if (gave > 0) return gave;
+                if (gave > 0) {
+                    return gave;
+                }
             }
             return 0;
         });
@@ -85,7 +87,9 @@ public final class BlockEnergy implements Energy {
         require(pos, handlers);
         for (IEnergyStorage storage : handlers) {
             int took = storage.receiveEnergy(amount, false);
-            if (took > 0) return took;
+            if (took > 0) {
+                return took;
+            }
         }
         return 0;
     }
@@ -111,10 +115,14 @@ public final class BlockEnergy implements Energy {
     static List<IEnergyStorage> handlers(ServerLevel level, BlockPos pos) {
         List<IEnergyStorage> out = new ArrayList<>();
         IEnergyStorage noSide = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, null);
-        if (noSide != null) out.add(noSide);
+        if (noSide != null) {
+            out.add(noSide);
+        }
         for (Direction side : Direction.values()) {
             IEnergyStorage sided = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, side);
-            if (sided != null && out.stream().noneMatch(known -> known == sided)) out.add(sided);
+            if (sided != null && out.stream().noneMatch(known -> known == sided)) {
+                out.add(sided);
+            }
         }
         return out;
     }

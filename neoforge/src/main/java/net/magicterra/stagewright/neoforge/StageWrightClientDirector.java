@@ -23,7 +23,9 @@ public final class StageWrightClientDirector {
         // client sat at the title screen, ticking normally, while nothing drove it.
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> {
             ClientDirector.onWorldReady();
-            if (directed) ClientDirector.tick();
+            if (directed) {
+                ClientDirector.tick();
+            }
         });
     }
 }

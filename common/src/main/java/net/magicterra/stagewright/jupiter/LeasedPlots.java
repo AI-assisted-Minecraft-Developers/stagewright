@@ -28,14 +28,22 @@ public final class LeasedPlots {
 
     static void remove(ResourceKey<Level> dimension, BoundingBox box) {
         List<BoundingBox> boxes = BOXES.get(dimension);
-        if (boxes != null) boxes.remove(box);
+        if (boxes != null) {
+            boxes.remove(box);
+        }
     }
 
     /** Whether {@code pos} in {@code dimension} lies in a leased plot. */
     static boolean contains(ResourceKey<Level> dimension, BlockPos pos) {
         List<BoundingBox> boxes = BOXES.get(dimension);
-        if (boxes == null) return false;
-        for (BoundingBox box : boxes) if (box.isInside(pos)) return true;
+        if (boxes == null) {
+            return false;
+        }
+        for (BoundingBox box : boxes) {
+            if (box.isInside(pos)) {
+                return true;
+            }
+        }
         return false;
     }
 

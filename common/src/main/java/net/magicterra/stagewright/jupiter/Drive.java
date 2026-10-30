@@ -67,7 +67,9 @@ final class Drive {
     }
 
     private static int positive(int ticks) {
-        if (ticks < 1) throw new IllegalArgumentException("a tick count is at least 1, but was " + ticks);
+        if (ticks < 1) {
+            throw new IllegalArgumentException("a tick count is at least 1, but was " + ticks);
+        }
         return ticks;
     }
 }

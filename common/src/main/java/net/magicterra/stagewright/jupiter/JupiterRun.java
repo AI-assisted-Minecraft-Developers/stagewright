@@ -76,10 +76,16 @@ public final class JupiterRun {
     /** Server thread, every settled tick: answer pending waits, and start the run the first time it may. */
     public static void tick(MinecraftServer server) {
         ServerTicks.tick();
-        if (started) return;
-        if (!selected() && !Boolean.getBoolean(ENABLED)) return;
+        if (started) {
+            return;
+        }
+        if (!selected() && !Boolean.getBoolean(ENABLED)) {
+            return;
+        }
         // A topology with a real client holds the tests until it has joined, as it holds the scene suite.
-        if (Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() == 0) return;
+        if (Boolean.getBoolean(AWAIT_PLAYER) && server.getPlayerCount() == 0) {
+            return;
+        }
         started = true;
         // The server thread's context loader, the one scene discovery's ServiceLoader uses.
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
@@ -205,7 +211,9 @@ public final class JupiterRun {
                 // the log line above is the record
             }
         } finally {
-            if (Boolean.getBoolean(EXIT)) server.execute(() -> halt(server));
+            if (Boolean.getBoolean(EXIT)) {
+                server.execute(() -> halt(server));
+            }
         }
     }
 
@@ -222,7 +230,9 @@ public final class JupiterRun {
         // Before the halt: the agent's grace period for a JVM that will not end starts here.
         AgentBridge.system().done();
         server.halt(false);
-        if (!server.isDedicatedServer() || AgentBridge.system().attached()) return;
+        if (!server.isDedicatedServer() || AgentBridge.system().attached()) {
+            return;
+        }
         Thread watchdog = new Thread(
                 () -> {
                     try {
@@ -246,8 +256,9 @@ public final class JupiterRun {
 
     /** Keeps the Java tests of the round this game runs ({@link Rounds}); script tests are kept by their engine. */
     private static final PostDiscoveryFilter THIS_ROUND = descriptor -> {
-        if (!(descriptor.getSource().orElse(null) instanceof MethodSource m))
+        if (!(descriptor.getSource().orElse(null) instanceof MethodSource m)) {
             return FilterResult.included("not a test");
+        }
         int round = Rounds.of(m.getClassName() + "#" + m.getMethodName());
         return round == Rounds.current()
                 ? FilterResult.included("this round")

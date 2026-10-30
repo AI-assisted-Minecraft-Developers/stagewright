@@ -71,7 +71,9 @@ final class ScriptHandles {
             }
             BodyImpl.BotImpl bot =
                     kept ? BodyImpl.BotImpl.take(game, name, parked, test) : BodyImpl.BotImpl.join(game, name, parked);
-            if (keep) bot.keep(test);
+            if (keep) {
+                bot.keep(test);
+            }
             leases.add(bot);
             Map<String, Object> out = body(bot);
             driven(out, bot);
@@ -124,12 +126,14 @@ final class ScriptHandles {
             String rule = ScriptContext.string(args, 0, "t.override(rule, value)");
             Object value = args.length > 1 ? args[1] : null;
             Rule found = rule(rule);
-            if (value instanceof Boolean b && found.bool() != null) game.override(found.bool(), b);
-            else if (value instanceof Number n && found.integer() != null)
+            if (value instanceof Boolean b && found.bool() != null) {
+                game.override(found.bool(), b);
+            } else if (value instanceof Number n && found.integer() != null) {
                 game.override(found.integer(), whole(n, rule));
-            else
+            } else {
                 throw new IllegalArgumentException("t.override('" + rule + "', " + Expectations.show(value)
                         + "): the rule takes a " + (found.bool() != null ? "boolean" : "whole number"));
+            }
             return null;
         });
         t.put("overrideTime", (Scripting.Function) args -> {
@@ -155,7 +159,9 @@ final class ScriptHandles {
                 }
                 Scripting.Function run = phase.get("run") instanceof Scripting.Function f ? f : null;
                 measurement.phase(name, () -> {
-                    if (run != null) run.call();
+                    if (run != null) {
+                        run.call();
+                    }
                 });
             }
             measurement
@@ -186,7 +192,9 @@ final class ScriptHandles {
         for (ClassLoader loader : new ClassLoader[] {
             ScriptHandles.class.getClassLoader(), Thread.currentThread().getContextClassLoader()
         }) {
-            if (loader == null) continue;
+            if (loader == null) {
+                continue;
+            }
             try {
                 Class.forName(name, false, loader);
                 return true;
@@ -206,8 +214,9 @@ final class ScriptHandles {
         out.put("origin", position(plot.origin()));
         out.put("structure", (Scripting.Function) a -> {
             ResourceLocation id = arg(a, 0) instanceof String s ? ResourceLocation.tryParse(s) : null;
-            if (id == null)
+            if (id == null) {
                 throw new IllegalArgumentException("structure(id, x, y, z): id is a structure template's id");
+            }
             plot.structure(id, whole(arg(a, 1), "x"), whole(arg(a, 2), "y"), whole(arg(a, 3), "z"));
             return null;
         });
@@ -315,7 +324,9 @@ final class ScriptHandles {
                 throw new IllegalArgumentException("press has no key '" + k + "'; it takes " + PRESS_KEYS);
             }
         }
-        if (Expectations.truthy(keys.get("release"))) p = p.release();
+        if (Expectations.truthy(keys.get("release"))) {
+            p = p.release();
+        }
         // Each axis alone, so a press naming only forward leaves left as it was held.
         if (keys.containsKey("forward") || keys.containsKey("left")) {
             p = new Press(
@@ -331,14 +342,30 @@ final class ScriptHandles {
                     p.toolFor(),
                     p.hit());
         }
-        if (keys.containsKey("jump")) p = p.jump(Expectations.truthy(keys.get("jump")));
-        if (keys.containsKey("sneak")) p = p.sneak(Expectations.truthy(keys.get("sneak")));
-        if (keys.containsKey("sprint")) p = p.sprint(Expectations.truthy(keys.get("sprint")));
-        if (keys.containsKey("attack")) p = p.attack(Expectations.truthy(keys.get("attack")));
-        if (keys.containsKey("use")) p = p.use(Expectations.truthy(keys.get("use")));
-        if (keys.containsKey("aimAt")) p = p.aimAt(cell(keys.get("aimAt")));
-        if (keys.containsKey("toolFor")) p = p.toolFor(cell(keys.get("toolFor")));
-        if (keys.containsKey("hit")) p = p.hit(whole(keys.get("hit"), "hit"));
+        if (keys.containsKey("jump")) {
+            p = p.jump(Expectations.truthy(keys.get("jump")));
+        }
+        if (keys.containsKey("sneak")) {
+            p = p.sneak(Expectations.truthy(keys.get("sneak")));
+        }
+        if (keys.containsKey("sprint")) {
+            p = p.sprint(Expectations.truthy(keys.get("sprint")));
+        }
+        if (keys.containsKey("attack")) {
+            p = p.attack(Expectations.truthy(keys.get("attack")));
+        }
+        if (keys.containsKey("use")) {
+            p = p.use(Expectations.truthy(keys.get("use")));
+        }
+        if (keys.containsKey("aimAt")) {
+            p = p.aimAt(cell(keys.get("aimAt")));
+        }
+        if (keys.containsKey("toolFor")) {
+            p = p.toolFor(cell(keys.get("toolFor")));
+        }
+        if (keys.containsKey("hit")) {
+            p = p.hit(whole(keys.get("hit"), "hit"));
+        }
         return p;
     }
 
@@ -346,7 +373,9 @@ final class ScriptHandles {
             "forward", "left", "jump", "sneak", "sprint", "attack", "use", "aimAt", "toolFor", "hit", "release");
 
     private static double number(Object v, String what) {
-        if (v instanceof Number n) return n.doubleValue();
+        if (v instanceof Number n) {
+            return n.doubleValue();
+        }
         throw new IllegalArgumentException(what + " is a number from -1 to 1, but was " + Expectations.show(v));
     }
 
@@ -365,22 +394,25 @@ final class ScriptHandles {
 
     static ResourceKey<Level> dimension(Object id) {
         ResourceLocation location = id instanceof String s ? ResourceLocation.tryParse(s) : null;
-        if (location == null)
+        if (location == null) {
             throw new IllegalArgumentException("a dimension is its id, but was " + Expectations.show(id));
+        }
         return ResourceKey.create(Registries.DIMENSION, location);
     }
 
     private static BlockPos blockPos(Object v) {
-        if (v instanceof Map<?, ?> m)
+        if (v instanceof Map<?, ?> m) {
             return new BlockPos(whole(m.get("x"), "x"), whole(m.get("y"), "y"), whole(m.get("z"), "z"));
+        }
         throw new IllegalArgumentException("a position is {x, y, z}, but was " + Expectations.show(v));
     }
 
     /** Loud on a miss: the registry's own answer for an unknown id is its default, air or nothing. */
     private static <T> T lookup(Registry<T> registry, Object id, String what) {
         ResourceLocation location = id instanceof String s ? ResourceLocation.tryParse(s) : null;
-        if (location == null)
+        if (location == null) {
             throw new IllegalArgumentException("a " + what + " is its id, but was " + Expectations.show(id));
+        }
         return registry.getOptional(location)
                 .orElseThrow(() -> new IllegalArgumentException("no " + what + " '" + id + "' in this game"));
     }
@@ -394,16 +426,22 @@ final class ScriptHandles {
             @Override
             public void visitBoolean(
                     GameRules.Key<GameRules.BooleanValue> key, GameRules.Type<GameRules.BooleanValue> type) {
-                if (key.getId().equals(id)) found[0] = new Rule(key, null);
+                if (key.getId().equals(id)) {
+                    found[0] = new Rule(key, null);
+                }
             }
 
             @Override
             public void visitInteger(
                     GameRules.Key<GameRules.IntegerValue> key, GameRules.Type<GameRules.IntegerValue> type) {
-                if (key.getId().equals(id)) found[0] = new Rule(null, key);
+                if (key.getId().equals(id)) {
+                    found[0] = new Rule(null, key);
+                }
             }
         });
-        if (found[0] == null) throw new IllegalArgumentException("no game rule '" + id + "'");
+        if (found[0] == null) {
+            throw new IllegalArgumentException("no game rule '" + id + "'");
+        }
         return found[0];
     }
 
@@ -416,7 +454,9 @@ final class ScriptHandles {
     }
 
     private static int whole(Object v, String what) {
-        if (v instanceof Number n && n.doubleValue() == Math.rint(n.doubleValue())) return n.intValue();
+        if (v instanceof Number n && n.doubleValue() == Math.rint(n.doubleValue())) {
+            return n.intValue();
+        }
         throw new IllegalArgumentException(what + " is a whole number, but was " + Expectations.show(v));
     }
 }

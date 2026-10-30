@@ -47,7 +47,9 @@ final class Relay implements Consumer<Map<String, Object>> {
         for (TestDescriptor c : scene.getChildren()) {
             if (c instanceof Nodes.ScriptFile file) {
                 scriptFiles.put(file.resource, file);
-                for (TestDescriptor t : file.getChildren()) scriptTests.put(((Nodes.ScriptTest) t).key(), t);
+                for (TestDescriptor t : file.getChildren()) {
+                    scriptTests.put(((Nodes.ScriptTest) t).key(), t);
+                }
                 continue;
             }
             Nodes.TestClass tc = (Nodes.TestClass) c;
@@ -65,16 +67,24 @@ final class Relay implements Consumer<Map<String, Object>> {
             case "planned" -> {
                 plan = true;
                 if (event.get("nodes") instanceof List<?> nodes) {
-                    for (Object n : nodes) if (n instanceof Map<?, ?> node) match(node);
+                    for (Object n : nodes) {
+                        if (n instanceof Map<?, ?> node) {
+                            match(node);
+                        }
+                    }
                 }
             }
             case "dynamic" -> {
-                if (event.get("node") instanceof Map<?, ?> node) register(node);
+                if (event.get("node") instanceof Map<?, ?> node) {
+                    register(node);
+                }
             }
             case "started" -> {
                 TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
                 String key = key(d);
-                if (key != null) coverage.ran(key);
+                if (key != null) {
+                    coverage.ran(key);
+                }
                 start(d);
             }
             case "skipped" -> {
@@ -82,18 +92,24 @@ final class Relay implements Consumer<Map<String, Object>> {
                 String reason = String.valueOf(event.get("reason"));
                 if (d != null && !started.contains(d) && finished.add(d)) {
                     listener.executionSkipped(d, reason);
-                    if (key(d) != null) coverage.skipped(key(d), sceneName, reason);
+                    if (key(d) != null) {
+                        coverage.skipped(key(d), sceneName, reason);
+                    }
                     // Skipping a node skips what is under it without an event of its own; closing those out
                     // later would report them as never run.
                     for (TestDescriptor child : d.getDescendants()) {
                         finished.add(child);
-                        if (key(child) != null) coverage.skipped(key(child), sceneName, reason);
+                        if (key(child) != null) {
+                            coverage.skipped(key(child), sceneName, reason);
+                        }
                     }
                 }
             }
             case "finished" -> {
                 TestDescriptor d = byGameId.get(String.valueOf(event.get("id")));
-                if (d == null || finished.contains(d)) return;
+                if (d == null || finished.contains(d)) {
+                    return;
+                }
                 String status = String.valueOf(event.get("status"));
                 Map<?, ?> failure = event.get("failure") instanceof Map<?, ?> f ? f : null;
                 TestExecutionResult result = switch (status) {
@@ -109,13 +125,16 @@ final class Relay implements Consumer<Map<String, Object>> {
                 // A class or script file may have tests in a later round, after a restart: it finishes at close-out,
                 // with the first failure any round reported for it.
                 if (d instanceof Nodes.TestClass || d instanceof Nodes.ScriptFile) {
-                    if (result.getStatus() != TestExecutionResult.Status.SUCCESSFUL) containers.putIfAbsent(d, result);
+                    if (result.getStatus() != TestExecutionResult.Status.SUCCESSFUL) {
+                        containers.putIfAbsent(d, result);
+                    }
                     return;
                 }
                 // Children end before their parent: what the game never ran under this node is closed out first.
                 for (TestDescriptor child : d.getChildren()) {
-                    if (!finished.contains(child))
+                    if (!finished.contains(child)) {
                         closeOut(child, null, "the game finished its parent without running it");
+                    }
                 }
                 finish(d, result);
             }
@@ -170,30 +189,42 @@ final class Relay implements Consumer<Map<String, Object>> {
             TestExecutionResult own = containers.get(c);
             Throwable around = own == null ? null : own.getThrowable().orElse(null);
             boolean anyClosed = false;
-            for (TestDescriptor m : c.getChildren()) anyClosed |= closeOut(m, around, gameEnded);
-            if (finished.contains(c)) continue;
+            for (TestDescriptor m : c.getChildren()) {
+                anyClosed |= closeOut(m, around, gameEnded);
+            }
+            if (finished.contains(c)) {
+                continue;
+            }
             start(c);
-            if (own != null) finish(c, own);
-            else
+            if (own != null) {
+                finish(c, own);
+            } else {
                 finish(
                         c,
                         anyClosed
                                 ? TestExecutionResult.failed(new AssertionError("not every test in it ran"))
                                 : TestExecutionResult.successful());
+            }
         }
     }
 
     private boolean closeOut(TestDescriptor d, Throwable around, String gameEnded) {
         boolean closed = false;
-        for (TestDescriptor child : d.getChildren()) closed |= closeOut(child, around, gameEnded);
-        if (finished.contains(d)) return closed;
+        for (TestDescriptor child : d.getChildren()) {
+            closed |= closeOut(child, around, gameEnded);
+        }
+        if (finished.contains(d)) {
+            return closed;
+        }
         start(d);
         finish(d, TestExecutionResult.failed(around != null ? around : why(d, gameEnded)));
         return true;
     }
 
     private Throwable why(TestDescriptor d, String gameEnded) {
-        if (error != null) return error;
+        if (error != null) {
+            return error;
+        }
         if (plan && !planned.contains(d) && (d instanceof Nodes.ScriptFile || d instanceof Nodes.ScriptTest)) {
             return new AssertionError("the game did not register this script test: the file failed to evaluate there,"
                     + " registered it only outside the game, or is not the file read here. The game's log says which");
@@ -212,7 +243,9 @@ final class Relay implements Consumer<Map<String, Object>> {
      * test report the line is the output of whichever test was running then, and says which test it belongs to.
      */
     private void record(TestDescriptor d, String name, String value) {
-        if (name.isBlank()) return;
+        if (name.isBlank()) {
+            return;
+        }
         String label = key(d) != null ? key(d) : d.getDisplayName();
         System.out.println("[stagewright] record " + sceneName + " " + label + ": " + name + " = "
                 + value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n"));
@@ -225,8 +258,12 @@ final class Relay implements Consumer<Map<String, Object>> {
 
     /** A test's key for coverage, the same in every scene; null for a container. */
     private static String key(TestDescriptor d) {
-        if (d instanceof Nodes.TestMethod m) return m.key();
-        if (d instanceof Nodes.ScriptTest t) return t.key();
+        if (d instanceof Nodes.TestMethod m) {
+            return m.key();
+        }
+        if (d instanceof Nodes.ScriptTest t) {
+            return t.key();
+        }
         return null;
     }
 
@@ -235,24 +272,32 @@ final class Relay implements Consumer<Map<String, Object>> {
             TestDescriptor d = Boolean.TRUE.equals(node.get("test"))
                     ? scriptTests.get(script + "#" + node.get("name"))
                     : scriptFiles.get(script);
-            if (d == null) return;
+            if (d == null) {
+                return;
+            }
             byGameId.put(String.valueOf(node.get("id")), d);
             planned.add(d);
             return;
         }
         String className = node.get("class") instanceof String s ? s : null;
-        if (className == null) return;
+        if (className == null) {
+            return;
+        }
         TestDescriptor d = node.get("method") instanceof String method
                 ? methods.get(className + "#" + method + "(" + node.get("parameters") + ")")
                 : classes.get(className);
-        if (d == null) return;
+        if (d == null) {
+            return;
+        }
         byGameId.put(String.valueOf(node.get("id")), d);
         planned.add(d);
     }
 
     private void register(Map<?, ?> node) {
         TestDescriptor parent = byGameId.get(String.valueOf(node.get("parent")));
-        if (parent == null) return;
+        if (parent == null) {
+            return;
+        }
         String gameId = String.valueOf(node.get("id"));
         UniqueId.Segment last = UniqueId.parse(gameId).getLastSegment();
         Nodes.Dynamic d = new Nodes.Dynamic(
@@ -266,14 +311,18 @@ final class Relay implements Consumer<Map<String, Object>> {
     }
 
     private void start(TestDescriptor d) {
-        if (d == null || started.contains(d) || finished.contains(d)) return;
+        if (d == null || started.contains(d) || finished.contains(d)) {
+            return;
+        }
         d.getParent().filter(p -> !(p instanceof Nodes.Scene)).ifPresent(this::start);
         started.add(d);
         listener.executionStarted(d);
     }
 
     private void finish(TestDescriptor d, TestExecutionResult result) {
-        if (!started.contains(d) || !finished.add(d)) return;
+        if (!started.contains(d) || !finished.add(d)) {
+            return;
+        }
         listener.executionFinished(d, result);
     }
 }

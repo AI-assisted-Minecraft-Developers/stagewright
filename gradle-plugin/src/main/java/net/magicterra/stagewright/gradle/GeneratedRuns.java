@@ -58,8 +58,11 @@ final class GeneratedRuns {
         // The plugin's own project is in its afterEvaluate already, and another one nested there would be one level
         // too deep: ModDevGradle wires DevLaunch onto a run's classpath from an afterEvaluate of its own, which
         // Gradle then drops without a word, and the game dies on ClassNotFoundException: net.neoforged.devlaunch.Main.
-        if (loader == plugin || loader.getState().getExecuted()) declareNow(loader, suite);
-        else loader.afterEvaluate(p -> declareNow(p, suite));
+        if (loader == plugin || loader.getState().getExecuted()) {
+            declareNow(loader, suite);
+        } else {
+            loader.afterEvaluate(p -> declareNow(p, suite));
+        }
     }
 
     /** The topologies the generated runs give the suite. */
@@ -127,7 +130,9 @@ final class GeneratedRuns {
                 InvokerHelper.invokeMethod(loom != null ? loom : modDev, "getRuns", null);
         SourceSet source = sourceSet(loader, suite);
         SuiteDependencies.attach(loader, suite, source);
-        if (modDev != null) testsMod(loader, modDev, suite, source, runs);
+        if (modDev != null) {
+            testsMod(loader, modDev, suite, source, runs);
+        }
         int port = suite.getServerPort().getOrElse(DEFAULT_SERVER_PORT);
         List<String> serverArgs = List.of("--port", String.valueOf(port));
 
@@ -206,8 +211,12 @@ final class GeneratedRuns {
             String programArg = loom ? "programArg" : "programArgument";
             String jvmArg = loom ? "vmArg" : "jvmArgument";
             String systemProperty = loom ? "property" : "systemProperty";
-            for (String arg : programArgs) InvokerHelper.invokeMethod(run, programArg, arg);
-            for (String arg : suite.getJvmArgs().get()) InvokerHelper.invokeMethod(run, jvmArg, arg);
+            for (String arg : programArgs) {
+                InvokerHelper.invokeMethod(run, programArg, arg);
+            }
+            for (String arg : suite.getJvmArgs().get()) {
+                InvokerHelper.invokeMethod(run, jvmArg, arg);
+            }
             suite.getSystemProperties()
                     .get()
                     .forEach((k, v) -> InvokerHelper.invokeMethod(run, systemProperty, new Object[] {k, v}));
@@ -229,11 +238,15 @@ final class GeneratedRuns {
             StageWrightTestSuite suite,
             SourceSet source,
             NamedDomainObjectContainer<Object> runs) {
-        if (source.getName().equals(SourceSet.MAIN_SOURCE_SET_NAME)) return;
+        if (source.getName().equals(SourceSet.MAIN_SOURCE_SET_NAME)) {
+            return;
+        }
         @SuppressWarnings("unchecked")
         NamedDomainObjectContainer<Object> mods =
                 (NamedDomainObjectContainer<Object>) InvokerHelper.invokeMethod(modDev, "getMods", null);
-        if (mods.findByName(TESTS_MOD) != null) return;
+        if (mods.findByName(TESTS_MOD) != null) {
+            return;
+        }
         Object[] copy = new Object[1];
         copy[0] = mods.create(
                 TESTS_MOD,
@@ -269,9 +282,13 @@ final class GeneratedRuns {
                 .getSourceSets()
                 .getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         for (Object mod : mods) {
-            if (mod == copy) continue;
+            if (mod == copy) {
+                continue;
+            }
             for (Object set : listProperty(mod, "getModSourceSets").get()) {
-                if (set == main) return mod;
+                if (set == main) {
+                    return mod;
+                }
             }
         }
         throw new GradleException("stagewright test suite '" + suite.getName() + "': " + loader.getPath()
@@ -320,7 +337,9 @@ final class GeneratedRuns {
     /** The suite generating runs in {@code project}, or null. */
     static StageWrightTestSuite suiteOf(Project project, Iterable<StageWrightTestSuite> suites) {
         for (StageWrightTestSuite suite : suites) {
-            if (generates(suite) && loader(project, suite) == project) return suite;
+            if (generates(suite) && loader(project, suite) == project) {
+                return suite;
+            }
         }
         return null;
     }

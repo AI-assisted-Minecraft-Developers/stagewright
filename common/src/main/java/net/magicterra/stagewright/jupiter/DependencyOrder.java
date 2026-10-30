@@ -32,7 +32,9 @@ public final class DependencyOrder implements MethodOrderer, ClassOrderer {
         sort(context.getMethodDescriptors(), m -> m.getMethod().getName(), m -> {
             List<String> before = new ArrayList<>();
             for (Dependencies.Ref ref : Dependencies.javaUpstream(context.getTestClass(), m.getMethod())) {
-                if (ref.className().equals(context.getTestClass().getName())) before.add(ref.method());
+                if (ref.className().equals(context.getTestClass().getName())) {
+                    before.add(ref.method());
+                }
             }
             within[0] |= !before.isEmpty();
             return before;
@@ -56,7 +58,9 @@ public final class DependencyOrder implements MethodOrderer, ClassOrderer {
             Set<String> before = new HashSet<>();
             for (var method : c.getTestClass().getDeclaredMethods()) {
                 for (Dependencies.Ref ref : Dependencies.javaUpstream(c.getTestClass(), method)) {
-                    if (!ref.className().equals(c.getTestClass().getName())) before.add(ref.className());
+                    if (!ref.className().equals(c.getTestClass().getName())) {
+                        before.add(ref.className());
+                    }
                 }
             }
             return List.copyOf(before);
@@ -66,7 +70,9 @@ public final class DependencyOrder implements MethodOrderer, ClassOrderer {
     /** Reorder {@code items} in place: each after every item {@code before} names, otherwise as they were. */
     private static <T> void sort(List<T> items, Function<T, String> key, Function<T, List<String>> before) {
         Set<String> present = new HashSet<>();
-        for (T item : items) present.add(key.apply(item));
+        for (T item : items) {
+            present.add(key.apply(item));
+        }
         List<T> remaining = new ArrayList<>(items);
         List<T> ordered = new ArrayList<>(items.size());
         Set<String> placed = new HashSet<>();

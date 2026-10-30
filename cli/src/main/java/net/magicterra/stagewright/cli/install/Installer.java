@@ -73,7 +73,9 @@ public final class Installer {
             }
             libraries(chain);
             assets(root);
-            if (!id.equals(spec.minecraft())) gameJar(id, vanilla);
+            if (!id.equals(spec.minecraft())) {
+                gameJar(id, vanilla);
+            }
             log.accept("client " + spec + " ready as " + id + " in " + installDir);
             return id;
         }
@@ -81,7 +83,9 @@ public final class Installer {
 
     private FileLock lock(FileChannel channel) throws IOException {
         FileLock lock = channel.tryLock();
-        if (lock != null) return lock;
+        if (lock != null) {
+            return lock;
+        }
         log.accept("another stagewright is installing into " + installDir + " — waiting for it");
         return channel.lock();
     }
@@ -94,14 +98,18 @@ public final class Installer {
                     JsonParser.parseString(downloader.text(MANIFEST)).getAsJsonObject();
             for (JsonElement element : manifest.getAsJsonArray("versions")) {
                 JsonObject version = element.getAsJsonObject();
-                if (minecraft.equals(version.get("id").getAsString())) entry = version;
+                if (minecraft.equals(version.get("id").getAsString())) {
+                    entry = version;
+                }
             }
             if (entry == null) {
                 throw new IllegalArgumentException("Minecraft " + minecraft + " is not in Mojang's version manifest");
             }
         } catch (IOException e) {
             // Offline with the version already here is a rerun, not a failure.
-            if (!Files.isRegularFile(json)) throw e;
+            if (!Files.isRegularFile(json)) {
+                throw e;
+            }
             log.accept("cannot reach Mojang's version manifest (" + e.getMessage() + ") — using the " + minecraft
                     + " already installed");
         }
@@ -194,13 +202,17 @@ public final class Installer {
             done = true;
             return id;
         } finally {
-            if (done) deleteTree(staging);
+            if (done) {
+                deleteTree(staging);
+            }
         }
     }
 
     /** Move every file the installer produced into the install directory, keeping identical ones. */
     private void merge(Path from, Path to) throws IOException {
-        if (!Files.isDirectory(from)) return;
+        if (!Files.isDirectory(from)) {
+            return;
+        }
         List<Path> files;
         try (Stream<Path> walk = Files.walk(from)) {
             files = walk.filter(Files::isRegularFile).toList();
@@ -247,7 +259,9 @@ public final class Installer {
             if (downloads != null) {
                 JsonObject artifact = downloads.getAsJsonObject("artifact");
                 // A natives-only entry from before 1.19; nothing on the classpath comes from it.
-                if (artifact == null) continue;
+                if (artifact == null) {
+                    continue;
+                }
                 if (!artifact.has("url") || artifact.get("url").getAsString().isBlank()) {
                     // Produced locally by a loader's installer; there is nowhere to fetch it from.
                     if (!Sha1.matches(target, string(artifact, "sha1"), size(artifact))) {
@@ -261,10 +275,14 @@ public final class Installer {
                 // Fabric's shape: a repository root and a coordinate. asm and mixin carry a sha1;
                 // fabric-loader and intermediary do not, so theirs comes from the maven sidecar.
                 String base = library.has("url") ? library.get("url").getAsString() : LIBRARIES;
-                if (!base.endsWith("/")) base += "/";
+                if (!base.endsWith("/")) {
+                    base += "/";
+                }
                 URI url = URI.create(base + Versions.mavenPath(name));
                 String sha1 = string(library, "sha1");
-                if (sha1 == null && !Files.isRegularFile(target)) sha1 = sidecarOrNull(url);
+                if (sha1 == null && !Files.isRegularFile(target)) {
+                    sha1 = sidecarOrNull(url);
+                }
                 artifacts.add(new Artifact(url, target, sha1, size(library), false, true));
             }
         }
@@ -343,9 +361,13 @@ public final class Installer {
     }
 
     private static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) return;
+        if (!Files.exists(root)) {
+            return;
+        }
         try (Stream<Path> walk = Files.walk(root)) {
-            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) Files.deleteIfExists(p);
+            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(p);
+            }
         }
     }
 }

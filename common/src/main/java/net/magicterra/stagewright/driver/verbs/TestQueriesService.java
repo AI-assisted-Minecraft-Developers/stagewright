@@ -144,14 +144,18 @@ final class TestQueriesService implements TestQueriesApi {
         for (int i = 0; i < r.times(); i++) {
             boolean any = false;
             for (ItemStack stack : table.getRandomItems(params)) {
-                if (stack.isEmpty()) continue;
+                if (stack.isEmpty()) {
+                    continue;
+                }
                 any = true;
                 long[] c = counts.computeIfAbsent(
                         BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), k -> new long[2]);
                 c[0]++;
                 c[1] += stack.getCount();
             }
-            if (!any) empty++;
+            if (!any) {
+                empty++;
+            }
         }
         List<LootContracts.ItemCount> items = new ArrayList<>();
         counts.forEach((id, c) -> items.add(new LootContracts.ItemCount(id, (int) c[0], c[1])));
@@ -170,7 +174,9 @@ final class TestQueriesService implements TestQueriesApi {
                     // Snapshot before awarding: these are exactly the criteria this call is responsible for.
                     List<String> awarded = new ArrayList<>();
                     progress.getOrStartProgress(holder).getRemainingCriteria().forEach(awarded::add);
-                    for (String criterion : awarded) progress.award(holder, criterion);
+                    for (String criterion : awarded) {
+                        progress.award(holder, criterion);
+                    }
                     yield new AdvancementsContracts.Granted(
                             progress.getOrStartProgress(holder).isDone(), awarded);
                 }
@@ -180,7 +186,9 @@ final class TestQueriesService implements TestQueriesApi {
                     PlayerAdvancements progress = player.getAdvancements();
                     List<String> completed = new ArrayList<>();
                     progress.getOrStartProgress(holder).getCompletedCriteria().forEach(completed::add);
-                    for (String criterion : completed) progress.revoke(holder, criterion);
+                    for (String criterion : completed) {
+                        progress.revoke(holder, criterion);
+                    }
                     yield new AdvancementsContracts.Revoked(
                             progress.getOrStartProgress(holder).isDone(), completed);
                 }
@@ -242,9 +250,13 @@ final class TestQueriesService implements TestQueriesApi {
                     List<String> out = new ArrayList<>();
                     for (ResourceLocation id : registry.keySet()) {
                         Structure structure = registry.get(id);
-                        if (structure == null) continue;
+                        if (structure == null) {
+                            continue;
+                        }
                         StructureStart start = level.structureManager().getStructureAt(pos, structure);
-                        if (start != null && start.isValid()) out.add(id.toString());
+                        if (start != null && start.isValid()) {
+                            out.add(id.toString());
+                        }
                     }
                     out.sort(String::compareTo);
                     yield new StructuresContracts.Covering(out);
@@ -271,7 +283,9 @@ final class TestQueriesService implements TestQueriesApi {
                 switch (op) {
                     case ModsContracts.ListMods l -> {
                         List<ModsContracts.Mod> mods = new ArrayList<>();
-                        for (String id : Mods.ids()) mods.add(new ModsContracts.Mod(id, clip(Mods.version(id), 256)));
+                        for (String id : Mods.ids()) {
+                            mods.add(new ModsContracts.Mod(id, clip(Mods.version(id), 256)));
+                        }
                         yield new ModsContracts.ModList(mods.size(), mods.subList(0, Math.min(mods.size(), 10000)));
                     }
                     case ModsContracts.Has h ->
@@ -316,7 +330,9 @@ final class TestQueriesService implements TestQueriesApi {
                 .getGenerator()
                 .findNearestMapStructure(level, HolderSet.direct(holder), from, l.chunkRadius(), false);
         long ms = System.currentTimeMillis() - startedAt;
-        if (found == null) return new StructuresContracts.Located(false, Optional.empty(), ms);
+        if (found == null) {
+            return new StructuresContracts.Located(false, Optional.empty(), ms);
+        }
         BlockPos at = found.getFirst();
         return new StructuresContracts.Located(
                 true, Optional.of(new BlockPosition(at.getX(), at.getY(), at.getZ())), ms);
@@ -396,7 +412,9 @@ final class TestQueriesService implements TestQueriesApi {
     }
 
     private static ServerLevel level(MinecraftServer server, Optional<String> dimension) {
-        if (dimension.isEmpty()) return server.overworld();
+        if (dimension.isEmpty()) {
+            return server.overworld();
+        }
         ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(dimension.get()));
         ServerLevel level = server.getLevel(key);
         if (level == null) {

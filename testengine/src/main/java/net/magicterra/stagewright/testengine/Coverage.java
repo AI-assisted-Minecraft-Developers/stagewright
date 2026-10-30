@@ -27,7 +27,9 @@ final class Coverage {
 
     /** A skip the game reported; only an unmet requirement counts against coverage. */
     synchronized void skipped(String key, String scene, String reason) {
-        if (reason == null || !reason.startsWith(REQUIRES_PREFIX)) return;
+        if (reason == null || !reason.startsWith(REQUIRES_PREFIX)) {
+            return;
+        }
         unmet.computeIfAbsent(key, k -> new ArrayList<>())
                 .add(scene + " (" + reason.substring(REQUIRES_PREFIX.length()) + ")");
     }
@@ -41,7 +43,9 @@ final class Coverage {
     synchronized List<String> neverRan() {
         List<String> lines = new ArrayList<>();
         unmet.forEach((key, where) -> {
-            if (!ran.contains(key) && !unlaunched.contains(key)) lines.add(key + ": " + String.join("; ", where));
+            if (!ran.contains(key) && !unlaunched.contains(key)) {
+                lines.add(key + ": " + String.join("; ", where));
+            }
         });
         return lines;
     }

@@ -82,7 +82,9 @@ public final class AgentBridge {
     }
 
     private static void call(Method method, Object... arguments) {
-        if (method == null) return;
+        if (method == null) {
+            return;
+        }
         try {
             method.invoke(null, arguments);
         } catch (ReflectiveOperationException | RuntimeException e) {

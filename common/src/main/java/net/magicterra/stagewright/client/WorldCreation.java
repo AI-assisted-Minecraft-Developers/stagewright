@@ -51,7 +51,9 @@ record WorldCreation(
         Properties p = read(gameDirectory.resolve("server.properties"));
         GameType mode = GameType.byName(p.getProperty("gamemode", "survival"), GameType.SURVIVAL);
         Difficulty difficulty = Difficulty.byName(p.getProperty("difficulty", "easy"));
-        if (difficulty == null) difficulty = Difficulty.EASY;
+        if (difficulty == null) {
+            difficulty = Difficulty.EASY;
+        }
         DataPackConfig packs = new DataPackConfig(
                 list(p.getProperty("initial-enabled-packs", "vanilla")),
                 list(p.getProperty("initial-disabled-packs", "")));
@@ -100,7 +102,9 @@ record WorldCreation(
 
     private static Properties read(Path file) {
         Properties properties = new Properties();
-        if (!Files.isRegularFile(file)) return properties;
+        if (!Files.isRegularFile(file)) {
+            return properties;
+        }
         try (Reader in = Files.newBufferedReader(file)) {
             properties.load(in);
         } catch (IOException e) {

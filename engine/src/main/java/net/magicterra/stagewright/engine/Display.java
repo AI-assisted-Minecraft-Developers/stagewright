@@ -95,16 +95,22 @@ public final class Display {
      * Wayland one still fails in {@code glfwInit}.
      */
     static String missing(String osName, Map<String, ?> env, String hostname, XServer server) {
-        if (!osName.toLowerCase(Locale.ROOT).contains("linux")) return null;
+        if (!osName.toLowerCase(Locale.ROOT).contains("linux")) {
+            return null;
+        }
         if (!isSet(env.get("DISPLAY"))) {
-            if (isSet(env.get("WAYLAND_DISPLAY"))) return null;
+            if (isSet(env.get("WAYLAND_DISPLAY"))) {
+                return null;
+            }
             return "a client needs a display, and neither DISPLAY nor WAYLAND_DISPLAY is set. Run it in"
                     + " a desktop session, or give it one — on a headless machine that is an X server the"
                     + " environment starts, such as Xvfb in the CI image or xvfb-run around the command.";
         }
         String display = env.get("DISPLAY").toString().trim();
         Matcher local = LOCAL.matcher(display);
-        if (!local.matches()) return null;
+        if (!local.matches()) {
+            return null;
+        }
         // Read as libxcb reads it, so a mistyped number is asked where GLFW would really connect.
         int n = displayNumber(local.group(2));
 
@@ -162,7 +168,9 @@ public final class Display {
     static byte[] cookie(Path authority, int n, String hostname) {
         byte[] file;
         try {
-            if (!Files.isRegularFile(authority)) return null;
+            if (!Files.isRegularFile(authority)) {
+                return null;
+            }
             file = Files.readAllBytes(authority);
         } catch (IOException e) {
             return null;
@@ -178,7 +186,9 @@ public final class Display {
                 boolean here = family == FAMILY_WILD
                         || family == FAMILY_LOCAL && (hostname == null || hostname.equals(address));
                 boolean thisDisplay = number.isEmpty() || number.equals(String.valueOf(n));
-                if (here && thisDisplay && COOKIE.equals(name)) return data;
+                if (here && thisDisplay && COOKIE.equals(name)) {
+                    return data;
+                }
             }
         } catch (RuntimeException e) {
             // A truncated file: whatever came before the damage has already been searched.
@@ -213,16 +223,22 @@ public final class Display {
         // Tried even where the file seems absent: a directory this user cannot search hides it just
         // the same, and only the connect says which of the two it is.
         Answer onSocket = handshake(UnixDomainSocketAddress.of(socket), cookie, HANDSHAKE_MILLIS);
-        if (onSocket.kind() != Answer.Kind.NOT_LISTENING) return onSocket;
+        if (onSocket.kind() != Answer.Kind.NOT_LISTENING) {
+            return onSocket;
+        }
         tried.add(socket + ": " + onSocket.reason());
         // An X server may hold the abstract socket of the same name, which Java cannot connect to,
         // so it is let through unasked.
-        if (abstractSocketListed(socket)) return Answer.NOT_ASKED;
+        if (abstractSocketListed(socket)) {
+            return Answer.NOT_ASKED;
+        }
         int port = tcpPort(n);
         if (tcpToo) {
             for (InetAddress address : localhost()) {
                 Answer answer = handshake(new InetSocketAddress(address, port), cookie, HANDSHAKE_MILLIS);
-                if (answer.kind() != Answer.Kind.NOT_LISTENING) return answer;
+                if (answer.kind() != Answer.Kind.NOT_LISTENING) {
+                    return answer;
+                }
                 tried.add("localhost:" + port + " (" + address.getHostAddress() + "): " + answer.reason());
             }
         }
@@ -277,19 +293,29 @@ public final class Display {
                         ? SocketChannel.open(StandardProtocolFamily.UNIX)
                         : SocketChannel.open();
                 Selector selector = Selector.open()) {
-            if (!connect(channel, address, deadline)) return Answer.NOT_ASKED;
+            if (!connect(channel, address, deadline)) {
+                return Answer.NOT_ASKED;
+            }
             channel.configureBlocking(false);
             SelectionKey key = channel.register(selector, SelectionKey.OP_WRITE);
             while (setup.hasRemaining()) {
-                if (channel.write(setup) == 0 && !await(selector, deadline)) return Answer.NOT_ASKED;
+                if (channel.write(setup) == 0 && !await(selector, deadline)) {
+                    return Answer.NOT_ASKED;
+                }
             }
             key.interestOps(SelectionKey.OP_READ);
             ByteBuffer head = read(channel, selector, 8, deadline);
-            if (head == null) return Answer.NOT_ASKED;
+            if (head == null) {
+                return Answer.NOT_ASKED;
+            }
             int status = head.get(0);
-            if (status == 1) return Answer.ACCEPTED;
+            if (status == 1) {
+                return Answer.ACCEPTED;
+            }
             // 0 is Failed and 2 Authenticate; anything else is not an X server answering.
-            if (status != 0 && status != 2) return Answer.NOT_ASKED;
+            if (status != 0 && status != 2) {
+                return Answer.NOT_ASKED;
+            }
             int reasonLength = status == 0
                     ? Byte.toUnsignedInt(head.get(1))
                     : Short.toUnsignedInt(head.order(ByteOrder.LITTLE_ENDIAN).getShort(6)) * 4;
@@ -328,7 +354,9 @@ public final class Display {
         } catch (TimeoutException e) {
             return false; // the caller closes the channel, which ends the connect still waiting
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof IOException io) throw io;
+            if (e.getCause() instanceof IOException io) {
+                throw io;
+            }
             throw new IOException(e.getCause());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -341,8 +369,12 @@ public final class Display {
         ByteBuffer buffer = ByteBuffer.allocate(length);
         while (buffer.hasRemaining()) {
             int got = channel.read(buffer);
-            if (got < 0) return null;
-            if (got == 0 && !await(selector, deadline)) return null;
+            if (got < 0) {
+                return null;
+            }
+            if (got == 0 && !await(selector, deadline)) {
+                return null;
+            }
         }
         return buffer;
     }
@@ -350,7 +382,9 @@ public final class Display {
     /** Waits on {@code selector} until {@code deadline}; false once it has passed. */
     private static boolean await(Selector selector, long deadline) throws IOException {
         long left = deadline - System.currentTimeMillis();
-        if (left <= 0) return false;
+        if (left <= 0) {
+            return false;
+        }
         selector.select(left);
         selector.selectedKeys().clear();
         return true;
@@ -365,7 +399,9 @@ public final class Display {
         try {
             List<String> sockets = Files.readAllLines(Path.of("/proc/net/unix"));
             for (String line : sockets) {
-                if (line.endsWith(" @" + socket)) return true;
+                if (line.endsWith(" @" + socket)) {
+                    return true;
+                }
             }
         } catch (IOException | RuntimeException e) {
             // Not Linux-shaped; the file was the only evidence there was.

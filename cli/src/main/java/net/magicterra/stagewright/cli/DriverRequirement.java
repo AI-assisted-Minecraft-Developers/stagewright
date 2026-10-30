@@ -37,7 +37,9 @@ final class DriverRequirement {
      * either way.
      */
     static void check(Path gameDir, String loader, List<Path> extras, boolean bundledFramework) {
-        if (loader != null || bundledFramework) ModInjection.requireLoader(loader);
+        if (loader != null || bundledFramework) {
+            ModInjection.requireLoader(loader);
+        }
         String loaderName = loader == null ? "this pack's loader" : loader;
         List<Mod> mods = new ArrayList<>();
         Path dir = gameDir.resolve("mods");
@@ -51,15 +53,21 @@ final class DriverRequirement {
             }
         }
         for (Path extra : extras) {
-            if (!Files.isRegularFile(extra)) throw new IllegalArgumentException("--mod " + extra + " is not a file");
-            if (!Files.exists(dir.resolve(extra.getFileName()))) mods.addAll(read(extra, loader));
+            if (!Files.isRegularFile(extra)) {
+                throw new IllegalArgumentException("--mod " + extra + " is not a file");
+            }
+            if (!Files.exists(dir.resolve(extra.getFileName()))) {
+                mods.addAll(read(extra, loader));
+            }
         }
         List<Mod> frameworks =
                 mods.stream().filter(m -> m.id().equals("mc_testkit")).toList();
         if (frameworks.isEmpty() && bundledFramework) {
             String resource = "/mods/mc_stagewright-" + loader + ".jar";
             try (InputStream in = DriverRequirement.class.getResourceAsStream(resource)) {
-                if (in == null) throw new IllegalStateException("this CLI carries no " + resource);
+                if (in == null) {
+                    throw new IllegalStateException("this CLI carries no " + resource);
+                }
                 frameworks = metadata(in, loader, resource).stream()
                         .filter(m -> m.id().equals("mc_testkit"))
                         .toList();
@@ -67,16 +75,18 @@ final class DriverRequirement {
                 throw new UncheckedIOException(e);
             }
         }
-        if (frameworks.size() != 1)
+        if (frameworks.size() != 1) {
             throw new IllegalArgumentException(
                     "expected one StageWright mod for " + loaderName + ", found " + frameworks.size());
+        }
         Mod framework = frameworks.get(0);
-        if (framework.driverRange() == null)
+        if (framework.driverRange() == null) {
             throw new IllegalArgumentException(framework.source()
                     + " does not declare a required WorldDriver dependency; install the current StageWright");
+        }
         List<Mod> drivers =
                 mods.stream().filter(m -> m.id().equals("worlddriver")).toList();
-        if (drivers.size() != 1)
+        if (drivers.size() != 1) {
             throw new IllegalArgumentException("StageWright requires one compatible WorldDriver mod for "
                     + loaderName + ", found " + drivers.size()
                     + (drivers.isEmpty()
@@ -86,10 +96,12 @@ final class DriverRequirement {
                                             ", ",
                                             drivers.stream().map(Mod::source).toList()) + ")")
                     + ". Install it in " + dir + " or pass --mod <worlddriver.jar>");
+        }
         Mod driver = drivers.get(0);
-        if (!accepts(framework.driverRange(), driver.version()))
+        if (!accepts(framework.driverRange(), driver.version())) {
             throw new IllegalArgumentException("WorldDriver " + driver.version() + " in " + driver.source()
                     + " is incompatible with " + framework.source() + ": requires " + framework.driverRange());
+        }
     }
 
     /**
@@ -106,7 +118,9 @@ final class DriverRequirement {
 
     /** The jars directly in {@code dir}, by name; none when it is no directory. */
     static List<Path> jars(Path dir) {
-        if (!Files.isDirectory(dir)) return List.of();
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
         try (var files = Files.list(dir)) {
             return files.filter(DriverRequirement::isJar).sorted().toList();
         } catch (IOException e) {
@@ -120,7 +134,9 @@ final class DriverRequirement {
 
     static List<Path> frameworkJars(Path gameDir, String loader) {
         Path dir = gameDir.resolve("mods");
-        if (!Files.isDirectory(dir)) return List.of();
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
         try (var files = Files.list(dir)) {
             return files.filter(DriverRequirement::isJar)
                     .filter(p -> isFramework(p, loader))
@@ -172,7 +188,9 @@ final class DriverRequirement {
         try (ZipFile zip = opened) {
             for (String path : metadataPaths(loader)) {
                 ZipEntry entry = zip.getEntry(path);
-                if (entry == null) continue;
+                if (entry == null) {
+                    continue;
+                }
                 try (InputStream in = zip.getInputStream(entry)) {
                     return parse(path, new String(in.readAllBytes(), StandardCharsets.UTF_8), jar.toString());
                 }
@@ -188,7 +206,9 @@ final class DriverRequirement {
         List<String> paths = metadataPaths(loader);
         try (ZipInputStream zip = new ZipInputStream(input)) {
             for (ZipEntry entry; (entry = zip.getNextEntry()) != null; ) {
-                if (!paths.contains(entry.getName())) continue;
+                if (!paths.contains(entry.getName())) {
+                    continue;
+                }
                 return parse(entry.getName(), new String(zip.readAllBytes(), StandardCharsets.UTF_8), source);
             }
         }
@@ -196,7 +216,9 @@ final class DriverRequirement {
     }
 
     private static List<String> metadataPaths(String loader) {
-        if (loader == null) return List.of(FABRIC_METADATA, NEOFORGE_METADATA);
+        if (loader == null) {
+            return List.of(FABRIC_METADATA, NEOFORGE_METADATA);
+        }
         return List.of(loader.equals("fabric") ? FABRIC_METADATA : NEOFORGE_METADATA);
     }
 
@@ -212,23 +234,33 @@ final class DriverRequirement {
             } catch (JsonParseException unreadable) {
                 return List.of();
             }
-            if (!root.isJsonObject()) return List.of();
+            if (!root.isJsonObject()) {
+                return List.of();
+            }
             JsonObject json = root.getAsJsonObject();
             String id = string(json, "id");
-            if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) return List.of();
+            if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) {
+                return List.of();
+            }
             String range = json.get("depends") instanceof JsonObject deps ? string(deps, "worlddriver") : null;
             return List.of(new Mod(id, string(json, "version"), range, source));
         }
         List<Mod> result = new ArrayList<>();
         for (String block : text.split("(?m)^\\s*\\[\\[")) {
-            if (!block.startsWith("mods]]")) continue;
+            if (!block.startsWith("mods]]")) {
+                continue;
+            }
             String id = value(block, "modId");
-            if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) continue;
+            if (!"worlddriver".equals(id) && !"mc_testkit".equals(id)) {
+                continue;
+            }
             String range = null;
             for (String dep : text.split("(?m)^\\s*\\[\\[")) {
                 if (dep.startsWith("dependencies." + id + "]]")
                         && "worlddriver".equals(value(dep, "modId"))
-                        && "required".equals(value(dep, "type"))) range = value(dep, "versionRange");
+                        && "required".equals(value(dep, "type"))) {
+                    range = value(dep, "versionRange");
+                }
             }
             result.add(new Mod(id, value(block, "version"), range, source));
         }
@@ -250,20 +282,30 @@ final class DriverRequirement {
         // the ceiling is the first build of the next breaking release.
         Matcher bounds = Pattern.compile("(?:>=|\\[)([0-9.]+)-alpha\\.([0-9]+)(?: <|,)([0-9.]+)-alpha\\.0\\)?")
                 .matcher(range);
-        if (!bounds.matches()) throw new IllegalArgumentException("unsupported WorldDriver release range: " + range);
+        if (!bounds.matches()) {
+            throw new IllegalArgumentException("unsupported WorldDriver release range: " + range);
+        }
         Matcher actual = Pattern.compile("([0-9]+\\.[0-9]+\\.[0-9]+)(?:-([0-9A-Za-z.-]+))?(?:\\+[0-9A-Za-z.-]+)?")
                 .matcher(version == null ? "" : version);
-        if (!actual.matches()) return false;
+        if (!actual.matches()) {
+            return false;
+        }
         // StageWright candidates are numbered builds, local snapshots and releases. Leave other prerelease
         // ordering to the loader by refusing unsupported candidates before starting the game.
         String prerelease = actual.group(2);
         Matcher n = Pattern.compile("alpha\\.([0-9]+)").matcher(prerelease == null ? "" : prerelease);
         boolean numbered = n.matches();
-        if (prerelease != null && !numbered && !prerelease.equals("snapshot")) return false;
+        if (prerelease != null && !numbered && !prerelease.equals("snapshot")) {
+            return false;
+        }
         int base = compare(actual.group(1), bounds.group(1));
-        if (base < 0 || compare(actual.group(1), bounds.group(3)) >= 0) return false;
+        if (base < 0 || compare(actual.group(1), bounds.group(3)) >= 0) {
+            return false;
+        }
         // Same base: the snapshot and the release follow every numbered build, which go by their numbers.
-        if (base > 0 || !numbered) return true;
+        if (base > 0 || !numbered) {
+            return true;
+        }
         return Long.parseLong(n.group(1)) >= Long.parseLong(bounds.group(2));
     }
 
@@ -272,7 +314,9 @@ final class DriverRequirement {
         String[] b = right.split("\\.");
         for (int i = 0; i < 3; i++) {
             int c = Integer.compare(Integer.parseInt(a[i]), Integer.parseInt(b[i]));
-            if (c != 0) return c;
+            if (c != 0) {
+                return c;
+            }
         }
         return 0;
     }

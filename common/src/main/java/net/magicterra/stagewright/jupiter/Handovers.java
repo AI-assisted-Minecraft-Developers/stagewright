@@ -60,18 +60,25 @@ final class Handovers {
             Collection<BodyImpl.BotImpl> bots, Collection<PlotImpl> plots, boolean failed) {
         IllegalStateException misplaced = null;
         for (BodyImpl.BotImpl bot : bots) {
-            if (!bot.kept()) continue;
+            if (!bot.kept()) {
+                continue;
+            }
             if (failed) {
                 bot.release();
                 continue;
             }
             for (PlotImpl plot : plots) {
-                if (!plot.contains(bot.dimension(), bot.blockPos())) continue;
+                if (!plot.contains(bot.dimension(), bot.blockPos())) {
+                    continue;
+                }
                 bot.release();
                 IllegalStateException e = new IllegalStateException(bot.name() + " is kept for a later test but"
                         + " stands in this test's plot, which is put back when the test ends: move it out first");
-                if (misplaced == null) misplaced = e;
-                else misplaced.addSuppressed(e);
+                if (misplaced == null) {
+                    misplaced = e;
+                } else {
+                    misplaced.addSuppressed(e);
+                }
                 break;
             }
         }
@@ -82,7 +89,9 @@ final class Handovers {
     static void load(Path dir, int round) {
         BEFORE_RESTART.clear();
         // A scene's first game finds a file only a run of some earlier scene left.
-        if (round > 0) BEFORE_RESTART.putAll(read(dir));
+        if (round > 0) {
+            BEFORE_RESTART.putAll(read(dir));
+        }
     }
 
     /**
@@ -128,7 +137,9 @@ final class Handovers {
     /** The file in {@code dir}: name to keeper; empty when there is none. */
     static Map<String, String> read(Path dir) {
         Path file = dir.resolve(FILE);
-        if (!Files.isRegularFile(file)) return Map.of();
+        if (!Files.isRegularFile(file)) {
+            return Map.of();
+        }
         try {
             JsonObject o = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))
                     .getAsJsonObject();

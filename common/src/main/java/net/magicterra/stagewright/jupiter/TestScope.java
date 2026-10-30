@@ -57,7 +57,9 @@ final class TestScope {
         Set<String> reads = new HashSet<>();
         boolean isolated = false;
         for (ExtensionContext c = context; c != null; c = c.getParent().orElse(null)) {
-            if (c.getElement().isEmpty()) continue;
+            if (c.getElement().isEmpty()) {
+                continue;
+            }
             AnnotatedElement element = c.getElement().get();
             for (ResourceLock lock : AnnotationSupport.findRepeatableAnnotations(element, ResourceLock.class)) {
                 (lock.mode() == ResourceAccessMode.READ_WRITE ? locks : reads).add(lock.value());
@@ -79,7 +81,9 @@ final class TestScope {
      */
     void hold(boolean oneAtATime) {
         Map<String, Boolean> named = RunLocks.exclusive(locks);
-        for (String read : readLocks) named.put(read, false);
+        for (String read : readLocks) {
+            named.put(read, false);
+        }
         held = RunLocks.hold(named, isolated || oneAtATime);
     }
 
@@ -87,7 +91,9 @@ final class TestScope {
     void release() throws Exception {
         AutoCloseable h = held;
         held = null;
-        if (h != null) h.close();
+        if (h != null) {
+            h.close();
+        }
     }
 
     static void bind(TestScope scope) {
@@ -111,14 +117,19 @@ final class TestScope {
      * before is lent again after. With no scope, {@code work} runs as it is.
      */
     static <T> T lending(TestScope scope, Supplier<T> work) {
-        if (scope == null) return work.get();
+        if (scope == null) {
+            return work.get();
+        }
         TestScope before = LENT.get();
         LENT.set(scope);
         try {
             return work.get();
         } finally {
-            if (before == null) LENT.remove();
-            else LENT.set(before);
+            if (before == null) {
+                LENT.remove();
+            } else {
+                LENT.set(before);
+            }
         }
     }
 
@@ -134,7 +145,9 @@ final class TestScope {
 
     /** Refuse {@code what} unless the test holds {@code lock} read-write or is isolated. */
     void require(String lock, String constant, String what) {
-        if (isolated || locks.contains(lock)) return;
+        if (isolated || locks.contains(lock)) {
+            return;
+        }
         String fix = script
                 ? "locks: ['" + lock.substring(LOCK_PREFIX.length()) + "'] to the test's options, or isolated: true"
                 : "@ResourceLock(" + constant + ") to the test, or @Isolated to its class";
@@ -160,10 +173,14 @@ final class TestScope {
      * method returns or {@link GameExtension} after it, leaves nothing for the other.
      */
     synchronized AssertionError takeChecks() {
-        if (failedChecks.isEmpty()) return null;
+        if (failedChecks.isEmpty()) {
+            return null;
+        }
         List<AssertionError> failed = List.copyOf(failedChecks);
         failedChecks.clear();
-        if (failed.size() == 1) return failed.getFirst();
+        if (failed.size() == 1) {
+            return failed.getFirst();
+        }
         return new MultipleFailuresError(failed.size() + " checks failed", failed);
     }
 
@@ -184,10 +201,15 @@ final class TestScope {
             try {
                 undo.pop().accept(server);
             } catch (RuntimeException e) {
-                if (first == null) first = e;
-                else first.addSuppressed(e);
+                if (first == null) {
+                    first = e;
+                } else {
+                    first.addSuppressed(e);
+                }
             }
         }
-        if (first != null) throw first;
+        if (first != null) {
+            throw first;
+        }
     }
 }

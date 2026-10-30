@@ -47,7 +47,9 @@ final class AgentEvents implements TestExecutionListener {
         JsonArray nodes = new JsonArray();
         for (TestIdentifier root : testPlan.getRoots()) {
             nodes.add(node(root));
-            for (TestIdentifier id : testPlan.getDescendants(root)) nodes.add(node(id));
+            for (TestIdentifier id : testPlan.getDescendants(root)) {
+                nodes.add(node(id));
+            }
         }
         o.add("nodes", nodes);
         send(o);
@@ -134,10 +136,14 @@ final class AgentEvents implements TestExecutionListener {
     private static JsonObject failure(Throwable t, int depth) {
         JsonObject f = new JsonObject();
         f.addProperty("class", t.getClass().getName());
-        if (t.getMessage() != null) f.addProperty("message", t.getMessage());
+        if (t.getMessage() != null) {
+            f.addProperty("message", t.getMessage());
+        }
         JsonArray frames = new JsonArray();
         StackTraceElement[] stack = t.getStackTrace();
-        for (int i = 0; i < Math.min(stack.length, MAX_FRAMES); i++) frames.add(stack[i].toString());
+        for (int i = 0; i < Math.min(stack.length, MAX_FRAMES); i++) {
+            frames.add(stack[i].toString());
+        }
         f.add("trace", frames);
         if (t.getCause() != null && t.getCause() != t && depth < MAX_CAUSES) {
             f.add("cause", failure(t.getCause(), depth + 1));

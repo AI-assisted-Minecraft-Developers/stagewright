@@ -76,10 +76,14 @@ public final class Dependencies implements TestWatcher {
     /** The Java tests {@code method}, a test of {@code testClass}, depends on. */
     static List<Ref> upstream(Class<?> testClass, Method method) {
         DependsOn d = method.getAnnotation(DependsOn.class);
-        if (d == null) return List.of();
+        if (d == null) {
+            return List.of();
+        }
         String owner = d.in() == Void.class ? testClass.getName() : d.in().getName();
         List<Ref> refs = new ArrayList<>();
-        for (String name : d.value()) refs.add(new Ref(owner, name));
+        for (String name : d.value()) {
+            refs.add(new Ref(owner, name));
+        }
         return refs;
     }
 
@@ -100,9 +104,14 @@ public final class Dependencies implements TestWatcher {
         List<String> pending = new ArrayList<>(scriptUpstream(method));
         while (!pending.isEmpty()) {
             String key = pending.remove(pending.size() - 1);
-            if (!seen.add(key)) continue;
-            if (isScript(key)) pending.addAll(EDGES.getOrDefault(key, List.of()));
-            else refs.add(Ref.of(key));
+            if (!seen.add(key)) {
+                continue;
+            }
+            if (isScript(key)) {
+                pending.addAll(EDGES.getOrDefault(key, List.of()));
+            } else {
+                refs.add(Ref.of(key));
+            }
         }
         return refs;
     }
@@ -143,10 +152,14 @@ public final class Dependencies implements TestWatcher {
             for (TestIdentifier id : plan.getDescendants(root)) {
                 // A parameterized test is a container here, its invocations not yet discovered.
                 Ref ref = methodNode(plan, id);
-                if (ref == null) continue;
+                if (ref == null) {
+                    continue;
+                }
                 MethodSource source = (MethodSource) id.getSource().orElseThrow();
                 List<String> keys = new ArrayList<>();
-                for (Ref up : upstream(source.getJavaClass(), source.getJavaMethod())) keys.add(up.key());
+                for (Ref up : upstream(source.getJavaClass(), source.getJavaMethod())) {
+                    keys.add(up.key());
+                }
                 keys.addAll(scriptUpstream(source.getJavaMethod()));
                 java.put(ref, keys);
             }
@@ -157,15 +170,21 @@ public final class Dependencies implements TestWatcher {
         ENDED.clear();
         EDGES.keySet().removeIf(key -> !isScript(key));
         java.forEach((ref, keys) -> EDGES.put(ref.key(), keys));
-        for (Ref ref : planned) ENDED.put(ref, new CompletableFuture<>());
+        for (Ref ref : planned) {
+            ENDED.put(ref, new CompletableFuture<>());
+        }
         List<String> cycles = new ArrayList<>();
         Set<String> done = new HashSet<>();
-        for (Ref start : java.keySet()) findCycle(start.key(), new LinkedHashSet<>(), done, cycles);
+        for (Ref start : java.keySet()) {
+            findCycle(start.key(), new LinkedHashSet<>(), done, cycles);
+        }
         return cycles;
     }
 
     private static void findCycle(String at, LinkedHashSet<String> path, Set<String> done, List<String> cycles) {
-        if (done.contains(at)) return;
+        if (done.contains(at)) {
+            return;
+        }
         if (path.contains(at)) {
             List<String> loop = new ArrayList<>(path);
             loop = loop.subList(loop.indexOf(at), loop.size());
@@ -177,7 +196,9 @@ public final class Dependencies implements TestWatcher {
         }
         path.add(at);
         for (String next : edges(at)) {
-            if (EDGES.containsKey(next)) findCycle(next, path, done, cycles);
+            if (EDGES.containsKey(next)) {
+                findCycle(next, path, done, cycles);
+            }
         }
         path.remove(at);
         done.add(at);
@@ -193,7 +214,9 @@ public final class Dependencies implements TestWatcher {
      */
     static String blockerFor(String className, String method) {
         Ref ref = new Ref(className, method);
-        if (!planned.contains(ref)) return earlierRound(ref.key());
+        if (!planned.contains(ref)) {
+            return earlierRound(ref.key());
+        }
         CompletableFuture<Void> ended = ENDED.get(ref);
         if (ended != null) {
             try {
@@ -206,7 +229,9 @@ public final class Dependencies implements TestWatcher {
             }
         }
         Outcome outcome = OUTCOMES.get(ref);
-        if (outcome == null) return "ended without running: its class failed or was skipped first";
+        if (outcome == null) {
+            return "ended without running: its class failed or was skipped first";
+        }
         return switch (outcome) {
             case SUCCEEDED -> null;
             case FAILED -> "failed";
@@ -221,7 +246,9 @@ public final class Dependencies implements TestWatcher {
      */
     static String earlierRound(String key) {
         String status = Rounds.endedBefore(key);
-        if (status == null) return "is not in this run";
+        if (status == null) {
+            return "is not in this run";
+        }
         return TestExecutionResult.Status.SUCCESSFUL.name().equals(status)
                 ? null
                 : "did not pass before the restart (" + status + ")";
@@ -247,7 +274,9 @@ public final class Dependencies implements TestWatcher {
     /** A script test has ended, {@code status} saying how. */
     static void scriptEnded(String key, TestExecutionResult.Status status) {
         CompletableFuture<TestExecutionResult.Status> ended = SCRIPTS.get(key);
-        if (ended != null) ended.complete(status);
+        if (ended != null) {
+            ended.complete(status);
+        }
     }
 
     /**
@@ -275,10 +304,14 @@ public final class Dependencies implements TestWatcher {
         for (Ref ref : upstream(context.getRequiredTestClass(), context.getRequiredTestMethod())) {
             if (!planned.contains(ref)) {
                 String why = earlierRound(ref.key());
-                if (why != null) Assumptions.abort("depends on " + ref + ", which " + why);
+                if (why != null) {
+                    Assumptions.abort("depends on " + ref + ", which " + why);
+                }
                 continue;
             }
-            if (parallel) await(ENDED.get(ref));
+            if (parallel) {
+                await(ENDED.get(ref));
+            }
             Outcome outcome = OUTCOMES.get(ref);
             if (outcome == null) {
                 if (!parallel) {
@@ -299,7 +332,9 @@ public final class Dependencies implements TestWatcher {
             CompletableFuture<TestExecutionResult.Status> ended = SCRIPTS.get(key);
             if (ended == null) {
                 String why = earlierRound(key);
-                if (why == null) continue;
+                if (why == null) {
+                    continue;
+                }
                 Assumptions.abort("depends on " + key + ", which " + why
                         + (why.startsWith("is not") ? ": not in this scene, or its file did not load" : ""));
             }
@@ -338,7 +373,9 @@ public final class Dependencies implements TestWatcher {
      * never starts.
      */
     private static void await(CompletableFuture<?> ended) throws InterruptedException {
-        if (ended == null || ended.isDone()) return;
+        if (ended == null || ended.isDone()) {
+            return;
+        }
         ForkJoinPool.managedBlock(new ForkJoinPool.ManagedBlocker() {
             @Override
             public boolean block() throws InterruptedException {
@@ -376,25 +413,37 @@ public final class Dependencies implements TestWatcher {
 
     private static void ended(TestIdentifier id, boolean skipped) {
         TestPlan plan = currentPlan;
-        if (plan == null) return;
+        if (plan == null) {
+            return;
+        }
         Ref own = methodNode(plan, id);
-        if (own != null) complete(own, skipped);
+        if (own != null) {
+            complete(own, skipped);
+        }
         for (TestIdentifier d : plan.getDescendants(id)) {
             Ref ref = methodNode(plan, d);
-            if (ref != null) complete(ref, skipped);
+            if (ref != null) {
+                complete(ref, skipped);
+            }
         }
     }
 
     private static void complete(Ref ref, boolean skipped) {
         // A disabled class reports only itself; its methods are disabled with it.
-        if (skipped) OUTCOMES.putIfAbsent(ref, Outcome.DISABLED);
+        if (skipped) {
+            OUTCOMES.putIfAbsent(ref, Outcome.DISABLED);
+        }
         CompletableFuture<Void> ended = ENDED.get(ref);
-        if (ended != null) ended.complete(null);
+        if (ended != null) {
+            ended.complete(null);
+        }
     }
 
     /** The test {@code id} is the method node of, or null for a class, an invocation, or anything else. */
     private static Ref methodNode(TestPlan plan, TestIdentifier id) {
-        if (!(id.getSource().orElse(null) instanceof MethodSource source)) return null;
+        if (!(id.getSource().orElse(null) instanceof MethodSource source)) {
+            return null;
+        }
         boolean invocation = plan.getParent(id)
                 .flatMap(TestIdentifier::getSource)
                 .filter(MethodSource.class::isInstance)

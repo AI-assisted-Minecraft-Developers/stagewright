@@ -58,16 +58,22 @@ final class ClientLaunch {
         // a launcher applies them and the order --launchTarget depends on.
         for (int i = chain.size() - 1; i >= 0; i--) {
             JsonObject arguments = chain.get(i).getAsJsonObject("arguments");
-            if (arguments == null) continue;
+            if (arguments == null) {
+                continue;
+            }
             collect(arguments.getAsJsonArray("jvm"), jvm);
             collect(arguments.getAsJsonArray("game"), game);
         }
 
         List<String> jvmArgs = new ArrayList<>();
-        for (String arg : jvm) jvmArgs.add(fill(arg, subst));
+        for (String arg : jvm) {
+            jvmArgs.add(fill(arg, subst));
+        }
         jvmArgs.addAll(systemProps);
         List<String> args = new ArrayList<>();
-        for (String arg : game) args.add(fill(arg, subst));
+        for (String arg : game) {
+            args.add(fill(arg, subst));
+        }
         args.addAll(gameArgs);
         return new Parts(jvmArgs, chain.get(0).get("mainClass").getAsString(), args);
     }
@@ -82,7 +88,9 @@ final class ClientLaunch {
         for (JsonObject library : Versions.libraries(chain)) {
             JsonObject downloads = library.getAsJsonObject("downloads");
             // A natives-only entry from before 1.19 puts nothing on the classpath.
-            if (downloads != null && !downloads.has("artifact")) continue;
+            if (downloads != null && !downloads.has("artifact")) {
+                continue;
+            }
             out.add(Versions.libraryPath(installDir, library.get("name").getAsString())
                     .toString());
         }
@@ -96,14 +104,18 @@ final class ClientLaunch {
      * ask for none of those features, and {@code ClientDirector} enters the world.
      */
     private static void collect(JsonArray arguments, List<String> sink) {
-        if (arguments == null) return;
+        if (arguments == null) {
+            return;
+        }
         for (JsonElement element : arguments) {
             if (element.isJsonPrimitive()) {
                 sink.add(element.getAsString());
             } else if (element.isJsonObject() && Rules.allowed(element.getAsJsonObject())) {
                 JsonElement value = element.getAsJsonObject().get("value");
                 if (value.isJsonArray()) {
-                    for (JsonElement one : value.getAsJsonArray()) sink.add(one.getAsString());
+                    for (JsonElement one : value.getAsJsonArray()) {
+                        sink.add(one.getAsString());
+                    }
                 } else {
                     sink.add(value.getAsString());
                 }

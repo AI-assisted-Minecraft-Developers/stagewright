@@ -40,7 +40,9 @@ final class BuiltinSteps {
                 yield null;
             }
             case "store.get" -> {
-                if (!(args instanceof String key)) throw new IllegalArgumentException("store.get: the key, a string");
+                if (!(args instanceof String key)) {
+                    throw new IllegalArgumentException("store.get: the key, a string");
+                }
                 yield context.game().store().get(key);
             }
             default -> throw new IllegalArgumentException("no built-in step '" + name + "'");
@@ -50,14 +52,18 @@ final class BuiltinSteps {
     /** {@code place: {at, block, as}}: set one block, and name its position when {@code as} is given. */
     private static Object place(ScriptContext context, Map<?, ?> args) {
         BlockPos at = position(context, args.get("at"));
-        if (!(args.get("block") instanceof String block)) throw new IllegalArgumentException("place: block is an id");
+        if (!(args.get("block") instanceof String block)) {
+            throw new IllegalArgumentException("place: block is an id");
+        }
         Map<String, Object> pos = ScriptHandles.position(at);
         Map<String, Object> fill = new LinkedHashMap<>();
         fill.put("from", pos);
         fill.put("to", pos);
         fill.put("type", block);
         context.call("mc.action.fill", fill);
-        if (args.get("as") instanceof String handle) context.name(handle, at);
+        if (args.get("as") instanceof String handle) {
+            context.name(handle, at);
+        }
         return pos;
     }
 
@@ -96,7 +102,9 @@ final class BuiltinSteps {
         Map<String, Integer> contents = contents(context, position(context, map.get("of")));
         Map<Object, Object> expected = new LinkedHashMap<>(map);
         expected.remove("of");
-        if (!expected.isEmpty()) Expectations.expect(contents, expected);
+        if (!expected.isEmpty()) {
+            Expectations.expect(contents, expected);
+        }
         return contents;
     }
 
@@ -106,7 +114,9 @@ final class BuiltinSteps {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("op", op);
         params.put("pos", ScriptHandles.position(position(context, map.get("at"))));
-        if (map.containsKey("within")) params.put("withinTicks", map.get("within"));
+        if (map.containsKey("within")) {
+            params.put("withinTicks", map.get("within"));
+        }
         Object reply = context.call("mc.test.chunks", params);
         if (!(reply instanceof Map<?, ?> r) || !Boolean.TRUE.equals(r.get("done"))) {
             throw new AssertionError("chunk." + op + ": not done in time"
@@ -122,23 +132,28 @@ final class BuiltinSteps {
             Map<String, Integer> out = new TreeMap<>();
             for (int i = 0; i < container.getContainerSize(); i++) {
                 ItemStack stack = container.getItem(i);
-                if (!stack.isEmpty())
+                if (!stack.isEmpty()) {
                     out.merge(
                             BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount(), Integer::sum);
+                }
             }
             return out;
         });
     }
 
     private static Container containerAt(BlockEntity entity, BlockPos at) {
-        if (entity instanceof Container container) return container;
+        if (entity instanceof Container container) {
+            return container;
+        }
         throw new AssertionError("no container at " + at.toShortString()
                 + (entity == null ? ": no block entity there" : ": " + entity.getType() + " holds no items"));
     }
 
     /** A handle's name, a position in the plot as {@code [x, y, z]}, or one in the world as {@code {x, y, z}}. */
     static BlockPos position(ScriptContext context, Object ref) {
-        if (ref instanceof String handle) return context.named(handle);
+        if (ref instanceof String handle) {
+            return context.named(handle);
+        }
         if (ref instanceof List<?> list && list.size() == 3) {
             return context.plotOrFail()
                     .at(
@@ -155,19 +170,25 @@ final class BuiltinSteps {
 
     private static Item item(Object id) {
         ResourceLocation location = id instanceof String s ? ResourceLocation.tryParse(s) : null;
-        if (location == null) throw new IllegalArgumentException("an item is its id, not " + Expectations.show(id));
+        if (location == null) {
+            throw new IllegalArgumentException("an item is its id, not " + Expectations.show(id));
+        }
         return BuiltInRegistries.ITEM
                 .getOptional(location)
                 .orElseThrow(() -> new IllegalArgumentException("no item '" + id + "' in this game"));
     }
 
     private static int whole(Object v, String what) {
-        if (v instanceof Number n && n.doubleValue() == Math.rint(n.doubleValue())) return n.intValue();
+        if (v instanceof Number n && n.doubleValue() == Math.rint(n.doubleValue())) {
+            return n.intValue();
+        }
         throw new IllegalArgumentException(what + " is a whole number, not " + Expectations.show(v));
     }
 
     private static Map<?, ?> map(Object args, String usage) {
-        if (args instanceof Map<?, ?> m) return m;
+        if (args instanceof Map<?, ?> m) {
+            return m;
+        }
         throw new IllegalArgumentException(usage);
     }
 }

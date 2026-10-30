@@ -16,15 +16,21 @@ public record ClientSpec(String loader, String minecraft, String loaderVersion) 
     public static ClientSpec parse(String spec) {
         String[] parts = spec.trim().split(":", -1);
         for (String part : parts) {
-            if (part.isBlank()) throw new IllegalArgumentException(USAGE + ", not '" + spec + "'");
+            if (part.isBlank()) {
+                throw new IllegalArgumentException(USAGE + ", not '" + spec + "'");
+            }
         }
         return switch (parts[0]) {
             case "vanilla" -> {
-                if (parts.length != 2) throw new IllegalArgumentException(USAGE + ", not '" + spec + "'");
+                if (parts.length != 2) {
+                    throw new IllegalArgumentException(USAGE + ", not '" + spec + "'");
+                }
                 yield new ClientSpec("vanilla", parts[1], null);
             }
             case "neoforge", "fabric" -> {
-                if (parts.length != 3) throw new IllegalArgumentException(USAGE + ", not '" + spec + "'");
+                if (parts.length != 3) {
+                    throw new IllegalArgumentException(USAGE + ", not '" + spec + "'");
+                }
                 yield new ClientSpec(parts[0], parts[1], parts[2]);
             }
             default -> throw new IllegalArgumentException(USAGE + ", not '" + spec + "'");

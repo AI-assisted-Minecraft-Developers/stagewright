@@ -51,7 +51,9 @@ public enum Mirror {
             base = "https://bmclapi2.bangbang93.com/maven";
             path = path.substring(NEOFORGED_PREFIX.length());
         }
-        if (base == null) return List.of(original);
+        if (base == null) {
+            return List.of(original);
+        }
         return List.of(URI.create(base + path), original);
     }
 }

@@ -20,7 +20,9 @@ class GameTest {
                 tasks.incrementAndGet();
                 return ((Function<Object, ?>) args[0]).apply(null);
             }
-            if (method.isDefault()) return InvocationHandler.invokeDefault(proxy, method, args);
+            if (method.isDefault()) {
+                return InvocationHandler.invokeDefault(proxy, method, args);
+            }
             throw new UnsupportedOperationException(method.getName());
         };
         return (Game) Proxy.newProxyInstance(Game.class.getClassLoader(), new Class<?>[] {Game.class}, handler);

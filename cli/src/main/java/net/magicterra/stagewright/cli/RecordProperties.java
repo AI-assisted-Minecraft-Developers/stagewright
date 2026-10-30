@@ -41,7 +41,9 @@ final class RecordProperties implements TestExecutionListener {
 
     @Override
     public void reportingEntryPublished(TestIdentifier id, ReportEntry entry) {
-        if (!id.isTest()) return;
+        if (!id.isTest()) {
+            return;
+        }
         List<Property> properties = byTest.computeIfAbsent(id.getUniqueId(), k -> new ArrayList<>());
         synchronized (properties) {
             entry.getKeyValuePairs()
@@ -54,14 +56,18 @@ final class RecordProperties implements TestExecutionListener {
 
     /** Add each test's records to its testcase in every XML file directly in {@code reports}. */
     void writeInto(Path reports) throws IOException {
-        if (byTest.isEmpty() || !Files.isDirectory(reports)) return;
+        if (byTest.isEmpty() || !Files.isDirectory(reports)) {
+            return;
+        }
         List<Path> files;
         try (Stream<Path> list = Files.list(reports)) {
             files = list.filter(p -> p.getFileName().toString().endsWith(".xml"))
                     .sorted()
                     .toList();
         }
-        for (Path file : files) addTo(file);
+        for (Path file : files) {
+            addTo(file);
+        }
     }
 
     private void addTo(Path file) throws IOException {
@@ -73,7 +79,9 @@ final class RecordProperties implements TestExecutionListener {
             for (int i = 0; i < cases.getLength(); i++) {
                 Element testcase = (Element) cases.item(i);
                 List<Property> properties = byTest.get(uniqueId(testcase));
-                if (properties == null || properties.isEmpty()) continue;
+                if (properties == null || properties.isEmpty()) {
+                    continue;
+                }
                 Element list = doc.createElement("properties");
                 for (Property p : properties) {
                     Element property = doc.createElement("property");
@@ -84,7 +92,9 @@ final class RecordProperties implements TestExecutionListener {
                 testcase.insertBefore(list, testcase.getFirstChild());
                 changed = true;
             }
-            if (!changed) return;
+            if (!changed) {
+                return;
+            }
             var transformer = TransformerFactory.newInstance().newTransformer();
             transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");
             transformer.transform(new DOMSource(doc), new StreamResult(file.toFile()));
@@ -100,7 +110,9 @@ final class RecordProperties implements TestExecutionListener {
         for (Node child = testcase.getFirstChild(); child != null; child = child.getNextSibling()) {
             if (child instanceof Element e && e.getTagName().equals("system-out")) {
                 Matcher m = UNIQUE_ID.matcher(e.getTextContent());
-                if (m.find()) return m.group(1).trim();
+                if (m.find()) {
+                    return m.group(1).trim();
+                }
             }
         }
         return "";

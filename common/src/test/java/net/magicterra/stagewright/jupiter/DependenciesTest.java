@@ -272,7 +272,9 @@ class DependenciesTest {
         @ValueSource(ints = {1, 2, 3})
         void upstream(int i) {
             sleep(150);
-            if (COUNT.incrementAndGet() == 3) MARKS.put("param.lastEnd", System.nanoTime());
+            if (COUNT.incrementAndGet() == 3) {
+                MARKS.put("param.lastEnd", System.nanoTime());
+            }
         }
     }
 
@@ -383,7 +385,9 @@ class DependenciesTest {
         final Map<String, Finished> finished = Collections.synchronizedMap(new LinkedHashMap<>());
 
         private static String name(TestIdentifier id) {
-            if (!id.isTest() || !(id.getSource().orElse(null) instanceof MethodSource source)) return null;
+            if (!id.isTest() || !(id.getSource().orElse(null) instanceof MethodSource source)) {
+                return null;
+            }
             String cls = source.getClassName();
             return cls.substring(cls.lastIndexOf('$') + 1) + "#" + source.getMethodName();
         }
@@ -391,7 +395,9 @@ class DependenciesTest {
         @Override
         public void executionStarted(TestIdentifier id) {
             String name = name(id);
-            if (name != null) started.add(name);
+            if (name != null) {
+                started.add(name);
+            }
         }
 
         @Override
@@ -433,7 +439,9 @@ class DependenciesTest {
 
     private static LauncherDiscoveryRequest request(Class<?>... classes) {
         List<DiscoverySelector> selectors = new ArrayList<>();
-        for (Class<?> c : classes) selectors.add(DiscoverySelectors.selectClass(c));
+        for (Class<?> c : classes) {
+            selectors.add(DiscoverySelectors.selectClass(c));
+        }
         return LauncherDiscoveryRequestBuilder.request()
                 .selectors(selectors)
                 .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")
@@ -464,7 +472,9 @@ class DependenciesTest {
         try {
             GameExtension.bind(stubGame());
             List<DiscoverySelector> selectors = new ArrayList<>();
-            for (Class<?> c : classes) selectors.add(DiscoverySelectors.selectClass(c));
+            for (Class<?> c : classes) {
+                selectors.add(DiscoverySelectors.selectClass(c));
+            }
             LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
                     .selectors(selectors)
                     .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")

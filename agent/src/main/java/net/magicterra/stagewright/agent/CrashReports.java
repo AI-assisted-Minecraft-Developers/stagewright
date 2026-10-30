@@ -40,14 +40,18 @@ final class CrashReports {
     List<String> fresh() {
         List<String> found = new ArrayList<>();
         for (String name : names(directory)) {
-            if (seen.add(name)) found.add(directory.resolve(name).toString());
+            if (seen.add(name)) {
+                found.add(directory.resolve(name).toString());
+            }
         }
         return found;
     }
 
     private static Set<String> names(Path directory) {
         Set<String> out = new HashSet<>();
-        if (!Files.isDirectory(directory)) return out;
+        if (!Files.isDirectory(directory)) {
+            return out;
+        }
         try (Stream<Path> files = Files.list(directory)) {
             files.filter(Files::isRegularFile)
                     .forEach(p -> out.add(p.getFileName().toString()));

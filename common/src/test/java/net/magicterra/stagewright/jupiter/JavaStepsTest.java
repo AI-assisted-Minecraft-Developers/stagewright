@@ -69,7 +69,9 @@ class JavaStepsTest {
         Path index = dir.resolve(JavaSteps.INDEX);
         Files.createDirectories(index.getParent());
         StringBuilder lines = new StringBuilder("# step classes\n");
-        for (String c : classNames) lines.append(c).append('\n');
+        for (String c : classNames) {
+            lines.append(c).append('\n');
+        }
         Files.writeString(index, lines);
         try (URLClassLoader loader =
                 new URLClassLoader(new URL[] {dir.toUri().toURL()}, getClass().getClassLoader())) {

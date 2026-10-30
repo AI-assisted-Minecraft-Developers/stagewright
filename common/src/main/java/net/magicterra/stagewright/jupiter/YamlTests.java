@@ -72,9 +72,13 @@ final class YamlTests {
             unknownKeys(test, TEST_KEYS, where);
             Map<String, Object> options = new LinkedHashMap<>();
             Object scene = test.containsKey("scene") ? test.get("scene") : file.get("scene");
-            if (scene != null) options.put("scene", scene);
+            if (scene != null) {
+                options.put("scene", scene);
+            }
             for (String key : OPTIONS) {
-                if (test.containsKey(key)) options.put(key, test.get(key));
+                if (test.containsKey(key)) {
+                    options.put(key, test.get(key));
+                }
             }
             Map<String, Object> plot = plotOptions(test.get("plot"), where);
             List<Map<?, ?>> steps = steps(test, where);
@@ -85,7 +89,9 @@ final class YamlTests {
 
     /** A test's {@code plot}, the options {@code t.plot} takes; null when it leases none. */
     private static Map<String, Object> plotOptions(Object plot, String where) {
-        if (plot == null) return null;
+        if (plot == null) {
+            return null;
+        }
         if (plot instanceof Map<?, ?> m && PLOT_KEYS.containsAll(m.keySet())) {
             Map<String, Object> options = new LinkedHashMap<>();
             for (Map.Entry<?, ?> e : m.entrySet()) {
@@ -109,17 +115,23 @@ final class YamlTests {
         List<Map<?, ?>> out = new ArrayList<>();
         for (String phase : phased ? List.of("given", "when", "then") : List.of("steps")) {
             Object list = test.get(phase);
-            if (list == null) continue;
-            if (!(list instanceof List<?> l))
+            if (list == null) {
+                continue;
+            }
+            if (!(list instanceof List<?> l)) {
                 throw new IllegalArgumentException(where + ": " + phase + " is a list of steps");
+            }
             for (Object step : l) {
-                if (!(step instanceof Map<?, ?> m))
+                if (!(step instanceof Map<?, ?> m)) {
                     throw new IllegalArgumentException(where + ": a step is a map, not " + step);
+                }
                 verb(m, where);
                 out.add(m);
             }
         }
-        if (out.isEmpty()) throw new IllegalArgumentException(where + ": no steps");
+        if (out.isEmpty()) {
+            throw new IllegalArgumentException(where + ": no steps");
+        }
         return out;
     }
 
@@ -138,7 +150,9 @@ final class YamlTests {
 
     private static void run(ScriptContext context, Map<String, Object> plot, List<Map<?, ?>> steps) {
         Map<String, Object> saved = new HashMap<>();
-        if (plot != null) saved.put("plot", context.plot(plot));
+        if (plot != null) {
+            saved.put("plot", context.plot(plot));
+        }
         run(context, steps, saved, "step ");
     }
 
@@ -152,8 +166,12 @@ final class YamlTests {
             try {
                 Object result = step(context, verb, step, saved);
                 KnownIssues known = step.containsKey("knownIssues") ? new KnownIssues(step.get("knownIssues")) : null;
-                if (known != null) result = known.subtract(result);
-                if (step.containsKey("expect")) Expectations.expect(result, substitute(step.get("expect"), saved));
+                if (known != null) {
+                    result = known.subtract(result);
+                }
+                if (step.containsKey("expect")) {
+                    Expectations.expect(result, substitute(step.get("expect"), saved));
+                }
                 if (step.containsKey("check")) {
                     Object spec = substitute(step.get("check"), saved);
                     Object checked = result;
@@ -170,7 +188,9 @@ final class YamlTests {
                     known.checkAllSeen();
                     context.record(label + (i + 1) + " known issues", known.count());
                 }
-                if (step.get("save") instanceof String name) saved.put(name, result);
+                if (step.get("save") instanceof String name) {
+                    saved.put(name, result);
+                }
                 // A handle a built-in step named is readable as ${name} too.
                 saved.putAll(context.handles());
             } catch (AssertionError e) {
@@ -213,10 +233,16 @@ final class YamlTests {
     private static Object step(ScriptContext context, String verb, Map<?, ?> step, Map<String, Object> saved) {
         Object value = verb.equals("perf") ? null : substitute(step.get(verb), saved);
         Map<String, Object> options = new HashMap<>();
-        for (String key : List.of("within", "ticks", "as")) if (step.containsKey(key)) options.put(key, step.get(key));
+        for (String key : List.of("within", "ticks", "as")) {
+            if (step.containsKey(key)) {
+                options.put(key, step.get(key));
+            }
+        }
         return switch (verb) {
             case "call" -> {
-                if (!(value instanceof String method)) throw new IllegalArgumentException("call names a method");
+                if (!(value instanceof String method)) {
+                    throw new IllegalArgumentException("call names a method");
+                }
                 yield context.call(method, substitute(step.get("params"), saved));
             }
             case "wait" -> {
@@ -283,17 +309,22 @@ final class YamlTests {
     static Object substitute(Object value, Map<String, Object> saved) {
         if (value instanceof String s) {
             Matcher whole = REFERENCE.matcher(s);
-            if (whole.matches()) return lookup(whole.group(1), saved);
+            if (whole.matches()) {
+                return lookup(whole.group(1), saved);
+            }
             Matcher m = REFERENCE.matcher(s);
             StringBuilder out = new StringBuilder();
-            while (m.find())
+            while (m.find()) {
                 m.appendReplacement(out, Matcher.quoteReplacement(String.valueOf(lookup(m.group(1), saved))));
+            }
             m.appendTail(out);
             return out.toString();
         }
         if (value instanceof List<?> list) {
             List<Object> out = new ArrayList<>();
-            for (Object item : list) out.add(substitute(item, saved));
+            for (Object item : list) {
+                out.add(substitute(item, saved));
+            }
             return out;
         }
         if (value instanceof Map<?, ?> map) {

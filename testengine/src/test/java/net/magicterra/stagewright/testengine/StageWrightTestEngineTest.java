@@ -98,8 +98,11 @@ class StageWrightTestEngineTest {
 
     @AfterEach
     void restore() {
-        if (previous == null) System.clearProperty(LaunchSpec.PROPERTY);
-        else System.setProperty(LaunchSpec.PROPERTY, previous);
+        if (previous == null) {
+            System.clearProperty(LaunchSpec.PROPERTY);
+        } else {
+            System.setProperty(LaunchSpec.PROPERTY, previous);
+        }
     }
 
     private static String q(String s) {
@@ -603,8 +606,11 @@ class StageWrightTestEngineTest {
                     .filters(new GradleTestsFilter(pattern))
                     .execute();
         } finally {
-            if (root == null) System.clearProperty(StageWrightTestEngine.TEST_ROOTS);
-            else System.setProperty(StageWrightTestEngine.TEST_ROOTS, root);
+            if (root == null) {
+                System.clearProperty(StageWrightTestEngine.TEST_ROOTS);
+            } else {
+                System.setProperty(StageWrightTestEngine.TEST_ROOTS, root);
+            }
         }
     }
 
@@ -705,7 +711,9 @@ class StageWrightTestEngineTest {
                     regex.append(".*");
                     continue;
                 }
-                if (!regex.isEmpty()) regex.append(".*");
+                if (!regex.isEmpty()) {
+                    regex.append(".*");
+                }
                 regex.append(Pattern.quote(part));
             }
             this.pattern = Pattern.compile(regex.toString());
@@ -731,7 +739,9 @@ class StageWrightTestEngineTest {
 
         private boolean shouldRun(TestDescriptor d, boolean checkingParent) {
             TestSource source = d.getSource().orElse(null);
-            if (source == null) return true;
+            if (source == null) {
+                return true;
+            }
             if (source instanceof MethodSource m) {
                 return matches(m.getClassName(), m.getMethodName())
                         || d.getParent()
@@ -743,7 +753,11 @@ class StageWrightTestEngineTest {
             }
             if (source instanceof ClassSource c) {
                 if (!checkingParent) {
-                    for (TestDescriptor child : d.getChildren()) if (shouldRun(child, false)) return true;
+                    for (TestDescriptor child : d.getChildren()) {
+                        if (shouldRun(child, false)) {
+                            return true;
+                        }
+                    }
                 }
                 return !d.getChildren().isEmpty()
                         || matches(c.getClassName(), null)

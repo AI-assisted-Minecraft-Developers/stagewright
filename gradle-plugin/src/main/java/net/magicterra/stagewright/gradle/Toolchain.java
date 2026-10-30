@@ -129,9 +129,13 @@ interface Toolchain {
     static String unreadMembers(JavaExec run) {
         List<String> found = new ArrayList<>();
         for (Class<?> type = run.getClass(); type != null && type != JavaExec.class; type = type.getSuperclass()) {
-            if (type.getName().contains("_Decorated")) continue;
+            if (type.getName().contains("_Decorated")) {
+                continue;
+            }
             for (Method m : type.getDeclaredMethods()) {
-                if (m.getParameterCount() != 0 || m.isSynthetic() || Modifier.isStatic(m.getModifiers())) continue;
+                if (m.getParameterCount() != 0 || m.isSynthetic() || Modifier.isStatic(m.getModifiers())) {
+                    continue;
+                }
                 Class<?> returned = m.getReturnType();
                 if (Provider.class.isAssignableFrom(returned) || FileCollection.class.isAssignableFrom(returned)) {
                     found.add(type.getSimpleName() + "." + m.getName());
@@ -157,7 +161,9 @@ interface Toolchain {
          */
         static Object read(JavaExec run, String getter) {
             Method method = find(run, getter);
-            if (method == null) return null;
+            if (method == null) {
+                return null;
+            }
             try {
                 method.setAccessible(true);
                 return method.invoke(run);
@@ -194,8 +200,9 @@ interface Toolchain {
         }
 
         File resolve() {
-            if (gameDirectory != null && gameDirectory.isPresent())
+            if (gameDirectory != null && gameDirectory.isPresent()) {
                 return gameDirectory.get().getAsFile();
+            }
             if (runDir != null && projectDir != null && runDir.isPresent() && projectDir.isPresent()) {
                 return new File(String.valueOf(projectDir.get()), String.valueOf(runDir.get()));
             }

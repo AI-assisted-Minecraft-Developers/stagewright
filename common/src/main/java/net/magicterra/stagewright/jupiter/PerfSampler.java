@@ -18,19 +18,26 @@ final class PerfSampler {
     /** Each phase's median window by name, in phase order. */
     static Map<String, Perf.Window> measure(Game game, Perf perf) {
         List<Perf.Phase> phases = perf.phaseList();
-        if (phases.isEmpty()) throw new IllegalArgumentException("perf: no phases");
+        if (phases.isEmpty()) {
+            throw new IllegalArgumentException("perf: no phases");
+        }
         if (perf.sample() < 2 || perf.repeat() < 1 || perf.warmup() < 0) {
             throw new IllegalArgumentException(
                     "perf: sample is at least 2 ticks, repeat at least 1, warmup not negative");
         }
         Map<String, Perf.Window> out = new LinkedHashMap<>();
         for (Perf.Phase phase : phases) {
-            if (out.containsKey(phase.name()))
+            if (out.containsKey(phase.name())) {
                 throw new IllegalArgumentException("perf: phase '" + phase.name() + "' twice");
+            }
             phase.setup().run();
-            if (perf.warmup() > 0) game.ticks(perf.warmup());
+            if (perf.warmup() > 0) {
+                game.ticks(perf.warmup());
+            }
             List<Perf.Window> windows = new ArrayList<>();
-            for (int i = 0; i < perf.repeat(); i++) windows.add(window(game, perf.sample()));
+            for (int i = 0; i < perf.repeat(); i++) {
+                windows.add(window(game, perf.sample()));
+            }
             out.put(phase.name(), median(windows));
         }
         return out;
@@ -53,15 +60,23 @@ final class PerfSampler {
             m.put("msptMean", w.msptMean());
             m.put("msptP99", w.msptP99());
             m.put("heapMib", w.heapMib());
-            if (!Double.isNaN(w.cpu())) m.put("cpu", w.cpu());
-            if (w.hasFps()) m.put("fps", w.fps());
+            if (!Double.isNaN(w.cpu())) {
+                m.put("cpu", w.cpu());
+            }
+            if (w.hasFps()) {
+                m.put("fps", w.fps());
+            }
             if (baseline == null) {
                 baseline = w;
             } else {
                 m.put("tpsDrop", w.tpsDropVs(baseline));
                 m.put("heapGrowthMib", w.heapGrowthVs(baseline));
-                if (m.containsKey("cpu") && !Double.isNaN(baseline.cpu())) m.put("cpuGrowth", w.cpuGrowthVs(baseline));
-                if (w.hasFps() && baseline.hasFps()) m.put("fpsDrop", w.fpsDropVs(baseline));
+                if (m.containsKey("cpu") && !Double.isNaN(baseline.cpu())) {
+                    m.put("cpuGrowth", w.cpuGrowthVs(baseline));
+                }
+                if (w.hasFps() && baseline.hasFps()) {
+                    m.put("fpsDrop", w.fpsDropVs(baseline));
+                }
             }
             out.put(e.getKey(), m);
         }
@@ -79,8 +94,12 @@ final class PerfSampler {
                 .until(() -> {
                     int i = seen[0]++;
                     at[i] = System.nanoTime();
-                    if (i == 0) cpu[0] = processCpuNanos();
-                    if (i == sample) cpu[1] = processCpuNanos();
+                    if (i == 0) {
+                        cpu[0] = processCpuNanos();
+                    }
+                    if (i == sample) {
+                        cpu[1] = processCpuNanos();
+                    }
                     int frames = clientFps();
                     if (frames >= 0) {
                         fps[0] += frames;
@@ -89,7 +108,9 @@ final class PerfSampler {
                     return seen[0] > sample;
                 });
         double[] mspt = new double[sample];
-        for (int i = 0; i < sample; i++) mspt[i] = (at[i + 1] - at[i]) / 1e6;
+        for (int i = 0; i < sample; i++) {
+            mspt[i] = (at[i + 1] - at[i]) / 1e6;
+        }
         double wallMs = (at[sample] - at[0]) / 1e6;
         Arrays.sort(mspt);
         Runtime runtime = Runtime.getRuntime();
@@ -126,7 +147,9 @@ final class PerfSampler {
                 .sorted()
                 .toArray();
         int n = values.length;
-        if (n == 0) return Double.NaN;
+        if (n == 0) {
+            return Double.NaN;
+        }
         return n % 2 == 1 ? values[n / 2] : (values[n / 2 - 1] + values[n / 2]) / 2;
     }
 
@@ -148,7 +171,9 @@ final class PerfSampler {
      * no client: Fabric refuses the class with a plain {@code RuntimeException}.
      */
     private static int clientFps() {
-        if (fpsAbsent) return -1;
+        if (fpsAbsent) {
+            return -1;
+        }
         try {
             if (fpsGetFps == null) {
                 Class<?> mc = Class.forName("net.minecraft.client.Minecraft");

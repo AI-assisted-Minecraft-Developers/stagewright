@@ -123,7 +123,9 @@ public final class Items {
             int total = 0;
             for (int i = 0; i < inventory.getContainerSize(); i++) {
                 ItemStack stack = inventory.getItem(i);
-                if (stack.is(item)) total += stack.getCount();
+                if (stack.is(item)) {
+                    total += stack.getCount();
+                }
             }
             return total;
         });
@@ -146,7 +148,9 @@ public final class Items {
             List<String> out = new ArrayList<>();
             for (int i = 0; i < inventory.getContainerSize(); i++) {
                 String id = Ids.idOf(inventory.getItem(i));
-                if (!id.isEmpty() && !out.contains(id)) out.add(id);
+                if (!id.isEmpty() && !out.contains(id)) {
+                    out.add(id);
+                }
             }
             return out;
         });
@@ -166,7 +170,9 @@ public final class Items {
     public List<String> effects(Body body) {
         return body.onServer(player -> {
             List<String> out = new ArrayList<>();
-            for (MobEffectInstance instance : player.getActiveEffects()) out.add(effectId(instance));
+            for (MobEffectInstance instance : player.getActiveEffects()) {
+                out.add(effectId(instance));
+            }
             return out;
         });
     }
@@ -176,7 +182,9 @@ public final class Items {
         return body.onServer(player -> {
             MobEffect effect = Ids.require(BuiltInRegistries.MOB_EFFECT, effectId, "mob effect");
             for (MobEffectInstance instance : player.getActiveEffects()) {
-                if (instance.getEffect().value() == effect) return true;
+                if (instance.getEffect().value() == effect) {
+                    return true;
+                }
             }
             return false;
         });
@@ -217,17 +225,22 @@ public final class Items {
 
     /** Make sure this test's changes to the body's inventory are undone when it ends. */
     private void pin(Body body) {
-        if (!pinned.add(body.name())) return;
+        if (!pinned.add(body.name())) {
+            return;
+        }
         Runnable restore = body.onServer(player -> {
             Inventory inventory = player.getInventory();
             int size = inventory.getContainerSize();
             List<ItemStack> snapshot = new ArrayList<>(size);
-            for (int i = 0; i < size; i++) snapshot.add(inventory.getItem(i).copy());
+            for (int i = 0; i < size; i++) {
+                snapshot.add(inventory.getItem(i).copy());
+            }
             int selected = inventory.selected;
             // Copied out again on restore, so the snapshot survives being installed.
             return () -> {
-                for (int i = 0; i < size; i++)
+                for (int i = 0; i < size; i++) {
                     inventory.setItem(i, snapshot.get(i).copy());
+                }
                 inventory.selected = selected;
             };
         });
@@ -235,7 +248,9 @@ public final class Items {
     }
 
     private void pinHunger(Body body) {
-        if (!hungerPinned.add(body.name())) return;
+        if (!hungerPinned.add(body.name())) {
+            return;
+        }
         Runnable restore = body.onServer(player -> {
             int food = player.getFoodData().getFoodLevel();
             float saturation = player.getFoodData().getSaturationLevel();
@@ -256,11 +271,15 @@ public final class Items {
     static EquipmentSlot equipmentSlot(String slot) {
         if (slot != null) {
             for (EquipmentSlot candidate : EquipmentSlot.values()) {
-                if (candidate.getName().equalsIgnoreCase(slot)) return candidate;
+                if (candidate.getName().equalsIgnoreCase(slot)) {
+                    return candidate;
+                }
             }
         }
         List<String> names = new ArrayList<>();
-        for (EquipmentSlot candidate : EquipmentSlot.values()) names.add(candidate.getName());
+        for (EquipmentSlot candidate : EquipmentSlot.values()) {
+            names.add(candidate.getName());
+        }
         throw new IllegalStateException(
                 "'" + slot + "' is not an equipment slot — the slots are " + String.join(", ", names));
     }

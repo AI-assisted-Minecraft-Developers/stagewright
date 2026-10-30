@@ -19,13 +19,17 @@ public final class Control {
     /** Where the game says it is: for instance {@code harness-ready} or {@code scenes-running}. */
     public static void phase(String name) {
         Agent agent = Agent.running();
-        if (agent != null) agent.phase(name);
+        if (agent != null) {
+            agent.phase(name);
+        }
     }
 
     /** Server ticks delivered so far, carried on the next heartbeat. */
     public static void ticks(long ticks) {
         Agent agent = Agent.running();
-        if (agent != null) agent.ticks(ticks);
+        if (agent != null) {
+            agent.ticks(ticks);
+        }
     }
 
     /**
@@ -34,7 +38,9 @@ public final class Control {
      */
     public static void done() {
         Agent agent = Agent.running();
-        if (agent != null) agent.done();
+        if (agent != null) {
+            agent.done();
+        }
     }
 
     /**
@@ -43,6 +49,8 @@ public final class Control {
      */
     public static void test(String json) {
         Agent agent = Agent.running();
-        if (agent != null) agent.test(json);
+        if (agent != null) {
+            agent.test(json);
+        }
     }
 }

@@ -54,8 +54,12 @@ final class CatchableErrors {
             try {
                 answer = java.call(args);
             } catch (RuntimeException e) {
-                if (isAbort(e)) throw new Abort(e);
-                if (!catchable(e)) throw e;
+                if (isAbort(e)) {
+                    throw new Abort(e);
+                }
+                if (!catchable(e)) {
+                    throw e;
+                }
                 return refusal(e);
             }
             return handles ? handlesIn(answer) : answer;
@@ -104,14 +108,17 @@ final class CatchableErrors {
     }
 
     private Object handlesIn(Object value) {
-        if (value instanceof Scripting.Function f) return wrap(f, true);
+        if (value instanceof Scripting.Function f) {
+            return wrap(f, true);
+        }
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> out = new LinkedHashMap<>();
             map.forEach((k, v) -> out.put(String.valueOf(k), handlesIn(v)));
             return out;
         }
-        if (value instanceof List<?> list)
+        if (value instanceof List<?> list) {
             return list.stream().map(this::handlesIn).toList();
+        }
         return value;
     }
 
@@ -124,7 +131,9 @@ final class CatchableErrors {
     static boolean isAbort(Throwable e) {
         for (Class<?> c = e.getClass(); c != null; c = c.getSuperclass()) {
             // By name: in a Fabric development game the class may come from another loader.
-            if (c.getName().equals("org.opentest4j.TestAbortedException")) return true;
+            if (c.getName().equals("org.opentest4j.TestAbortedException")) {
+                return true;
+            }
         }
         return false;
     }
@@ -146,7 +155,9 @@ final class CatchableErrors {
             try {
                 return f.call(args);
             } catch (RuntimeException e) {
-                if (isAbort(e)) throw new Abort(e);
+                if (isAbort(e)) {
+                    throw new Abort(e);
+                }
                 throw e;
             }
         };
@@ -155,15 +166,20 @@ final class CatchableErrors {
     /** The abort {@code failure} carries, wherever in its causes, or {@code failure} as it is. */
     static Throwable unwrapAbort(Throwable failure) {
         for (Throwable t = failure; t != null; t = t.getCause()) {
-            if (t instanceof Abort) return t.getCause();
-            if (t.getCause() == t) break;
+            if (t instanceof Abort) {
+                return t.getCause();
+            }
+            if (t.getCause() == t) {
+                break;
+            }
         }
         return failure;
     }
 
     private synchronized Scripting.Function factory() {
-        if (factory == null)
+        if (factory == null) {
             factory = (Scripting.Function) scripting.evaluate("stagewright-catchable", FACTORY, Map.of());
+        }
         return factory;
     }
 }

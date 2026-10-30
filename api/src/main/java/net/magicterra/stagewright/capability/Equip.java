@@ -83,7 +83,9 @@ public final class Equip {
         return body.onServer(player -> {
             Map<?, ?> curios = (Map<?, ?>) call(requireInventory(player), "getCurios");
             List<String> out = new ArrayList<>();
-            for (Object key : curios.keySet()) out.add(String.valueOf(key));
+            for (Object key : curios.keySet()) {
+                out.add(String.valueOf(key));
+            }
             out.sort(String::compareTo);
             return out;
         });
@@ -140,7 +142,9 @@ public final class Equip {
         return body.onServer(player -> {
             ResourceLocation id = Ids.location(attributeId, "attribute");
             Optional<Holder.Reference<Attribute>> holder = BuiltInRegistries.ATTRIBUTE.getHolder(id);
-            if (holder.isEmpty()) throw new IllegalStateException("no attribute is registered as '" + id + "'");
+            if (holder.isEmpty()) {
+                throw new IllegalStateException("no attribute is registered as '" + id + "'");
+            }
             AttributeInstance instance = player.getAttributes().getInstance(holder.get());
             if (instance == null) {
                 throw new IllegalStateException("the attribute '" + id + "' is registered but this player has no"
@@ -159,11 +163,14 @@ public final class Equip {
 
     /** Armour is shared state like the inventory: a test that dressed the body undresses it. */
     private void pin(Body body) {
-        if (!pinned.add(body.name())) return;
+        if (!pinned.add(body.name())) {
+            return;
+        }
         Runnable restore = body.onServer(player -> {
             Map<EquipmentSlot, ItemStack> before = new EnumMap<>(EquipmentSlot.class);
-            for (EquipmentSlot slot : EquipmentSlot.values())
+            for (EquipmentSlot slot : EquipmentSlot.values()) {
                 before.put(slot, player.getItemBySlot(slot).copy());
+            }
             return () -> before.forEach((slot, stack) -> player.setItemSlot(slot, stack.copy()));
         });
         game.afterTest(server -> restore.run());
@@ -190,7 +197,9 @@ public final class Equip {
     /** This player's Curios inventory; aborts the test when Curios is not here. */
     private static Object requireInventory(ServerPlayer player) {
         Class<?> api = curiosApi();
-        if (api == null) throw new TestAbortedException("this test needs the Curios mod, which is not in this runtime");
+        if (api == null) {
+            throw new TestAbortedException("this test needs the Curios mod, which is not in this runtime");
+        }
         Object result;
         try {
             Method m = api.getMethod("getCuriosInventory", LivingEntity.class);
@@ -209,9 +218,13 @@ public final class Equip {
     /** Fail naming the slot types this body DOES have. */
     private static void requireSlotType(Object handler, String slotType) {
         Map<?, ?> curios = (Map<?, ?>) call(handler, "getCurios");
-        if (curios.containsKey(slotType)) return;
+        if (curios.containsKey(slotType)) {
+            return;
+        }
         List<String> have = new ArrayList<>();
-        for (Object key : curios.keySet()) have.add(String.valueOf(key));
+        for (Object key : curios.keySet()) {
+            have.add(String.valueOf(key));
+        }
         have.sort(String::compareTo);
         throw new IllegalStateException("this player has no curio slot type '" + slotType + "' — they have "
                 + (have.isEmpty() ? "none at all" : String.join(", ", have)));

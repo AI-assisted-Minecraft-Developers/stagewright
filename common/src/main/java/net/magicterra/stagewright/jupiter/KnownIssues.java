@@ -36,7 +36,11 @@ final class KnownIssues {
     Object subtract(Object result) {
         if (result instanceof List<?> list) {
             List<Object> kept = new ArrayList<>();
-            for (Object item : list) if (!matchedAny(item)) kept.add(subtract(item));
+            for (Object item : list) {
+                if (!matchedAny(item)) {
+                    kept.add(subtract(item));
+                }
+            }
             return kept;
         }
         if (result instanceof Map<?, ?> map) {
@@ -50,7 +54,11 @@ final class KnownIssues {
     /** Fails naming every issue that took nothing out: it is fixed, or the step no longer reports it. */
     void checkAllSeen() {
         List<String> stale = new ArrayList<>();
-        for (int i = 0; i < issues.size(); i++) if (!used[i]) stale.add(Expectations.show(issues.get(i)));
+        for (int i = 0; i < issues.size(); i++) {
+            if (!used[i]) {
+                stale.add(Expectations.show(issues.get(i)));
+            }
+        }
         if (!stale.isEmpty()) {
             throw new AssertionError("known issues no longer seen, so remove them: " + String.join("; ", stale));
         }
@@ -76,7 +84,9 @@ final class KnownIssues {
         fields.remove("reason");
         if (item instanceof Map<?, ?> map) {
             for (Map.Entry<String, Object> f : fields.entrySet()) {
-                if (!map.containsKey(f.getKey()) || !Expectations.same(map.get(f.getKey()), f.getValue())) return false;
+                if (!map.containsKey(f.getKey()) || !Expectations.same(map.get(f.getKey()), f.getValue())) {
+                    return false;
+                }
             }
             return true;
         }

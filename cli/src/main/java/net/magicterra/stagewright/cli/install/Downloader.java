@@ -71,15 +71,21 @@ public final class Downloader implements AutoCloseable {
 
     /** Put one file in place; true when it had to be fetched from the network. */
     public boolean fetch(Artifact a) throws IOException {
-        if (inPlace(a)) return false;
-        if (a.sha1() != null && cache.placeInto(a.sha1(), a.size(), a.target())) return false;
+        if (inPlace(a)) {
+            return false;
+        }
+        if (a.sha1() != null && cache.placeInto(a.sha1(), a.size(), a.target())) {
+            return false;
+        }
         Files.createDirectories(a.target().getParent());
         IOException last = null;
         for (URI uri : candidates.apply(a.url())) {
             for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
                 try {
                     downloadOnce(uri, a);
-                    if (a.cacheable() && a.sha1() != null) cache.store(a.target(), a.sha1());
+                    if (a.cacheable() && a.sha1() != null) {
+                        cache.store(a.target(), a.sha1());
+                    }
                     return true;
                 } catch (FileNotFoundException e) {
                     last = e;
@@ -98,13 +104,17 @@ public final class Downloader implements AutoCloseable {
     /** Put every file in place, in parallel; returns how many came from the network. */
     public int fetchAll(List<Artifact> all) throws IOException {
         List<Future<Boolean>> futures = new ArrayList<>();
-        for (Artifact a : all) futures.add(pool.submit(() -> fetch(a)));
+        for (Artifact a : all) {
+            futures.add(pool.submit(() -> fetch(a)));
+        }
         int fetched = 0;
         IOException first = null;
         int failed = 0;
         for (Future<Boolean> f : futures) {
             try {
-                if (f.get()) fetched++;
+                if (f.get()) {
+                    fetched++;
+                }
             } catch (ExecutionException e) {
                 failed++;
                 if (first == null) {
@@ -143,14 +153,20 @@ public final class Downloader implements AutoCloseable {
                 }
             }
         }
-        if (last instanceof FileNotFoundException notFound) throw notFound;
+        if (last instanceof FileNotFoundException notFound) {
+            throw notFound;
+        }
         throw new IOException(
                 "could not fetch " + url + " — " + (last == null ? "no source" : last.getMessage()), last);
     }
 
     private boolean inPlace(Artifact a) throws IOException {
-        if (!Files.isRegularFile(a.target())) return false;
-        if (a.trustSize()) return a.size() < 0 || Files.size(a.target()) == a.size();
+        if (!Files.isRegularFile(a.target())) {
+            return false;
+        }
+        if (a.trustSize()) {
+            return a.size() < 0 || Files.size(a.target()) == a.size();
+        }
         return Sha1.matches(a.target(), a.sha1(), a.size());
     }
 
@@ -185,7 +201,9 @@ public final class Downloader implements AutoCloseable {
         if (status == 400 || status == 404 || status == 410) {
             throw new FileNotFoundException(uri + " answered " + status);
         }
-        if (status != 200) throw new IOException(uri + " answered " + status);
+        if (status != 200) {
+            throw new IOException(uri + " answered " + status);
+        }
     }
 
     /**
@@ -204,7 +222,9 @@ public final class Downloader implements AutoCloseable {
     /** The same proxy as JVM arguments, for a child process such as NeoForge's installer. */
     static List<String> proxyJvmArgs(Map<String, String> env) {
         InetSocketAddress address = proxyAddress(env);
-        if (address == null) return List.of();
+        if (address == null) {
+            return List.of();
+        }
         String host = address.getHostString();
         String port = String.valueOf(address.getPort());
         return List.of(
@@ -217,9 +237,13 @@ public final class Downloader implements AutoCloseable {
     static InetSocketAddress proxyAddress(Map<String, String> env) {
         for (String name : List.of("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy")) {
             String value = env.get(name);
-            if (value == null || value.isBlank()) continue;
+            if (value == null || value.isBlank()) {
+                continue;
+            }
             URI uri = URI.create(value.contains("://") ? value.trim() : "http://" + value.trim());
-            if (uri.getHost() == null) continue;
+            if (uri.getHost() == null) {
+                continue;
+            }
             int port = uri.getPort() != -1 ? uri.getPort() : "https".equals(uri.getScheme()) ? 443 : 80;
             return InetSocketAddress.createUnresolved(uri.getHost(), port);
         }

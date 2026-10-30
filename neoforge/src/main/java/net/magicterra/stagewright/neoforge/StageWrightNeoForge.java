@@ -61,6 +61,8 @@ public final class StageWrightNeoForge {
     /** Server levels only, as Fabric's ENTITY_LOAD is. */
     @SubscribeEvent
     public void onEntityJoin(EntityJoinLevelEvent event) {
-        if (!event.getLevel().isClientSide()) StageWrightCommon.onEntityJoin(event.getEntity(), event.getLevel());
+        if (!event.getLevel().isClientSide()) {
+            StageWrightCommon.onEntityJoin(event.getEntity(), event.getLevel());
+        }
     }
 }

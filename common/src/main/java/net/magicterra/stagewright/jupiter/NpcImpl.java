@@ -64,9 +64,13 @@ final class NpcImpl implements Npc {
     /** Server thread: let the mob go and take it out of the world. */
     private void remove(MinecraftServer server) {
         Bot bot = BotRegistry.get(ref());
-        if (bot == null) return;
+        if (bot == null) {
+            return;
+        }
         Roster.remove(ref());
-        if (bot.entity() != null) bot.entity().discard();
+        if (bot.entity() != null) {
+            bot.entity().discard();
+        }
     }
 
     @Override

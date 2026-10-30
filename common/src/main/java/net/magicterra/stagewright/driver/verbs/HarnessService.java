@@ -89,25 +89,32 @@ final class HarnessService implements TestHarnessApi {
             }
             case Unpin u -> {
                 Map<String, Object> saved = pins.remove(u.pin());
-                if (saved == null)
+                if (saved == null) {
                     throw ApiException.invalidParam(
                             "/pin", ApiIssue.Code.INVALID_VALUE, "no pin " + u.pin() + " is held");
+                }
                 BotConfig.restoreAll(saved);
                 yield new Unpinned(u.pin());
             }
             case Write w -> {
                 List<ApiIssue> issues = SettingsCommand.check(w.values(), "/values");
-                if (!issues.isEmpty()) throw ApiException.invalidParams(issues);
+                if (!issues.isEmpty()) {
+                    throw ApiException.invalidParams(issues);
+                }
                 BotApi bot = BotHooks.impl();
                 SettingsCommand.commit(bot, w.values());
                 List<Entry> now = new ArrayList<>();
-                for (Entry e : w.values()) now.add(new Entry(e.key(), SettingsCommand.read(bot, e.key())));
+                for (Entry e : w.values()) {
+                    now.add(new Entry(e.key(), SettingsCommand.read(bot, e.key())));
+                }
                 yield new Written(now);
             }
             case Read r -> {
                 BotApi bot = BotHooks.impl();
                 List<Entry> now = new ArrayList<>();
-                for (String k : r.keys()) now.add(new Entry(k, SettingsCommand.read(bot, k)));
+                for (String k : r.keys()) {
+                    now.add(new Entry(k, SettingsCommand.read(bot, k)));
+                }
                 yield new Values(now);
             }
         });
@@ -123,12 +130,16 @@ final class HarnessService implements TestHarnessApi {
                 case Clear c -> {
                     Set<Bot> gone = new HashSet<>();
                     for (Bot b : BotRegistry.all()) {
-                        if (BotRegistry.isSelf(b.id())) continue;
+                        if (BotRegistry.isSelf(b.id())) {
+                            continue;
+                        }
                         gone.add(b);
                         Roster.remove(b.id());
                     }
                     // A bot put on the tick list without joining the roster leaves with the rest.
-                    for (Bot b : BotTicker.all()) gone.add(b);
+                    for (Bot b : BotTicker.all()) {
+                        gone.add(b);
+                    }
                     BotTicker.clear();
                     yield new Cleared(gone.size());
                 }
@@ -146,12 +157,15 @@ final class HarnessService implements TestHarnessApi {
 
     private static int tick(Tick t) {
         if (t.bot().isEmpty()) {
-            if (t.part() != Part.ALL)
+            if (t.part() != Part.ALL) {
                 throw ApiException.invalidParam(
                         "/part", ApiIssue.Code.INVALID_VALUE, "part " + t.part().wireName() + " needs a bot");
+            }
             int n = 0;
             for (; n < t.ticks(); n++) {
-                if (t.untilIdle() && BotTicker.activeCount() == 0) break;
+                if (t.untilIdle() && BotTicker.activeCount() == 0) {
+                    break;
+                }
                 BotTicker.tickAll();
             }
             return n;
@@ -163,7 +177,9 @@ final class HarnessService implements TestHarnessApi {
         }
         int n = 0;
         for (; n < t.ticks(); n++) {
-            if (t.untilIdle() && !bot.busy()) break;
+            if (t.untilIdle() && !bot.busy()) {
+                break;
+            }
             switch (t.part()) {
                 case ALL -> server.tick();
                 case BODY -> server.stepBody();
@@ -225,9 +241,10 @@ final class HarnessService implements TestHarnessApi {
                         .commandUseItem(v));
         press.hit().ifPresent(id -> {
             Entity target = body.entity().level().getEntity(id);
-            if (target == null)
+            if (target == null) {
                 throw ApiException.invalidParam(
                         "/hit", ApiIssue.Code.INVALID_VALUE, "no entity " + id + " in the bot's level");
+            }
             body.attack()
                     .orElseThrow(() -> ApiException.invalidParam(
                             "/hit", ApiIssue.Code.INVALID_VALUE, press.bot() + " cannot attack"))
@@ -246,7 +263,9 @@ final class HarnessService implements TestHarnessApi {
     }
 
     private static float forward(Body body) {
-        if (body instanceof ServerPlayerBody p) return p.pendingForward();
+        if (body instanceof ServerPlayerBody p) {
+            return p.pendingForward();
+        }
         return body.dbgForwardImpulse() ? 1f : 0f;
     }
 
@@ -260,7 +279,9 @@ final class HarnessService implements TestHarnessApi {
 
     private static Bot named(String ref, String path) {
         Bot bot = BotRegistry.get(ref);
-        if (bot == null) throw ApiException.invalidParam(path, ApiIssue.Code.INVALID_VALUE, "no bot named " + ref);
+        if (bot == null) {
+            throw ApiException.invalidParam(path, ApiIssue.Code.INVALID_VALUE, "no bot named " + ref);
+        }
         return bot;
     }
 

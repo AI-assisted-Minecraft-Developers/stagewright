@@ -40,8 +40,9 @@ final class SceneWorld {
         overworld.setWeatherParameters(raining ? 0 : WEATHER_TICKS, raining ? WEATHER_TICKS : 0, raining, thundering);
         rules.getRule(GameRules.RULE_WEATHER_CYCLE).set(!w.get("weatherFrozen").getAsBoolean(), server);
         rules.getRule(GameRules.RULE_DOMOBSPAWNING).set(w.get("mobSpawning").getAsBoolean(), server);
-        if (w.has("tickRate"))
+        if (w.has("tickRate")) {
             server.tickRateManager().setTickRate(w.get("tickRate").getAsFloat());
+        }
 
         // Declared rules last, so one the scene names outright wins over one derived from time or weather.
         Map<String, GameRules.Key<?>> keys = new HashMap<>();
@@ -81,8 +82,16 @@ final class SceneWorld {
     private static void checkPacks(MinecraftServer server, List<String> enable, List<String> disable) {
         Collection<String> selected = server.getPackRepository().getSelectedIds();
         List<String> problems = new ArrayList<>();
-        for (String id : enable) if (!selected.contains(id)) problems.add(id + " is not enabled");
-        for (String id : disable) if (selected.contains(id)) problems.add(id + " is still enabled");
+        for (String id : enable) {
+            if (!selected.contains(id)) {
+                problems.add(id + " is not enabled");
+            }
+        }
+        for (String id : disable) {
+            if (selected.contains(id)) {
+                problems.add(id + " is still enabled");
+            }
+        }
         if (!problems.isEmpty()) {
             throw new IllegalStateException("the scene's datapacks did not take: " + problems + ". The packs this game"
                     + " has are " + new TreeSet<>(server.getPackRepository().getAvailableIds()));
@@ -91,7 +100,9 @@ final class SceneWorld {
 
     private static List<String> strings(JsonObject o, String key) {
         List<String> out = new ArrayList<>();
-        if (o.has(key)) o.getAsJsonArray(key).forEach(e -> out.add(e.getAsString()));
+        if (o.has(key)) {
+            o.getAsJsonArray(key).forEach(e -> out.add(e.getAsString()));
+        }
         return out;
     }
 }

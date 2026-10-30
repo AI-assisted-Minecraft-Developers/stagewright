@@ -59,7 +59,9 @@ public final class StageWrightCommon {
             clientVerbFailure = null;
         } catch (RuntimeException e) {
             String why = e.toString();
-            if (why.equals(clientVerbFailure)) return;
+            if (why.equals(clientVerbFailure)) {
+                return;
+            }
             clientVerbFailure = why;
             LOG.error("[{}] the mc.test.* verbs are not registered on this client; retrying each tick", MOD_ID, e);
         }
@@ -86,7 +88,9 @@ public final class StageWrightCommon {
 
     /** Called on the server thread while the world is still available for cleanup. */
     public static synchronized void onServerStopping(MinecraftServer server) {
-        if (server != armedServer) return;
+        if (server != armedServer) {
+            return;
+        }
         try {
             JupiterRun.stop();
         } finally {
@@ -114,9 +118,15 @@ public final class StageWrightCommon {
      * whole run — so the levels keep ticking entities.
      */
     public static void onServerTick(MinecraftServer server) {
-        for (ServerLevel level : server.getAllLevels()) level.resetEmptyTime();
-        if (++serverTicks % AGENT_TICK_INTERVAL == 0) AgentBridge.system().ticks(serverTicks);
-        if (!settled && !settle()) return;
+        for (ServerLevel level : server.getAllLevels()) {
+            level.resetEmptyTime();
+        }
+        if (++serverTicks % AGENT_TICK_INTERVAL == 0) {
+            AgentBridge.system().ticks(serverTicks);
+        }
+        if (!settled && !settle()) {
+            return;
+        }
         if (Boolean.getBoolean(AWAIT_PLAYER) && !playersOpped && server.getPlayerCount() > 0) {
             playersOpped = true;
             opTestPlayers(server);
@@ -152,7 +162,9 @@ public final class StageWrightCommon {
     /** The real client joining a test server may need to run commands, as a test drives it. */
     private static void opTestPlayers(MinecraftServer server) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (server.getPlayerList().isOp(player.getGameProfile())) continue;
+            if (server.getPlayerList().isOp(player.getGameProfile())) {
+                continue;
+            }
             server.getPlayerList().op(player.getGameProfile());
             LOG.info(
                     "[{}] op'd the test client '{}'",

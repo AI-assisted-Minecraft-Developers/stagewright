@@ -62,10 +62,14 @@ public final class Versions {
     public static List<JsonObject> libraries(List<JsonObject> chain) {
         Map<String, JsonObject> out = new LinkedHashMap<>();
         for (JsonObject data : chain) {
-            if (!data.has("libraries")) continue;
+            if (!data.has("libraries")) {
+                continue;
+            }
             for (JsonElement element : data.getAsJsonArray("libraries")) {
                 JsonObject library = element.getAsJsonObject();
-                if (!Rules.allowed(library)) continue;
+                if (!Rules.allowed(library)) {
+                    continue;
+                }
                 out.putIfAbsent(identity(library.get("name").getAsString()), library);
             }
         }
@@ -81,7 +85,9 @@ public final class Versions {
     public static String mavenPath(String name) {
         String extension = "jar";
         int at = name.indexOf('@');
-        if (at >= 0) extension = name.substring(at + 1);
+        if (at >= 0) {
+            extension = name.substring(at + 1);
+        }
         String[] parts = stripExtension(name).split(":");
         String classifier = parts.length > 3 ? "-" + parts[3] : "";
         return parts[0].replace('.', '/') + "/" + parts[1] + "/" + parts[2] + "/" + parts[1] + "-" + parts[2]

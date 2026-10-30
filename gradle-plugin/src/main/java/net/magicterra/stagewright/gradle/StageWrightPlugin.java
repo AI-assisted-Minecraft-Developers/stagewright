@@ -100,7 +100,9 @@ public class StageWrightPlugin implements Plugin<Project> {
         });
         // Once this build script has set the suites up; each loader project's runs follow its own evaluation.
         project.afterEvaluate(p -> tests.forEach(suite -> {
-            if (GeneratedRuns.generates(suite)) GeneratedRuns.declare(p, suite);
+            if (GeneratedRuns.generates(suite)) {
+                GeneratedRuns.declare(p, suite);
+            }
         }));
         DevJUnitRuntime.install(project, tests, topologies);
         SuiteDependencies.install(project, tests);
@@ -232,7 +234,9 @@ public class StageWrightPlugin implements Plugin<Project> {
     /** The topologies a suite's scenes may name: generated for it, or the build's, as it maps them. */
     static List<SuiteLaunch> launches(
             Project project, StageWrightTestSuite suite, NamedDomainObjectContainer<StageWrightTopology> topologies) {
-        if (GeneratedRuns.generates(suite)) return GeneratedRuns.launches(project, suite);
+        if (GeneratedRuns.generates(suite)) {
+            return GeneratedRuns.launches(project, suite);
+        }
         if (suite.getTopologies().get().isEmpty()) {
             throw new GradleException("stagewright test suite '" + suite.getName() + "' has no games to run in: set"
                     + " loaderProject, for runs the plugin declares, or map topologies the build declares");
@@ -350,7 +354,9 @@ public class StageWrightPlugin implements Plugin<Project> {
         SourceSetContainer sourceSets =
                 project.getExtensions().getByType(JavaPluginExtension.class).getSourceSets();
         SourceSet existing = sourceSets.findByName("testmod");
-        if (existing != null) return existing;
+        if (existing != null) {
+            return existing;
+        }
         SourceSet testmod = sourceSets.create("testmod");
         seeMain(project, testmod);
         return testmod;
@@ -370,7 +376,9 @@ public class StageWrightPlugin implements Plugin<Project> {
     }
 
     private static String capitalize(String s) {
-        if (s.isEmpty()) return s;
+        if (s.isEmpty()) {
+            return s;
+        }
         return s.substring(0, 1).toUpperCase(Locale.ROOT) + s.substring(1);
     }
 }

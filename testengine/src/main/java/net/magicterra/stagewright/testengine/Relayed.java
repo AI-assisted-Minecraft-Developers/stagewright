@@ -58,7 +58,9 @@ final class Relayed {
         if (trace instanceof List<?> lines) {
             for (Object line : lines) {
                 Matcher m = FRAME.matcher(String.valueOf(line));
-                if (!m.matches()) continue;
+                if (!m.matches()) {
+                    continue;
+                }
                 int number = m.group(4) == null ? -1 : Integer.parseInt(m.group(4));
                 out.add(new StackTraceElement(m.group(1), m.group(2), m.group(3), number));
             }

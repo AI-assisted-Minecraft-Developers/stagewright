@@ -51,7 +51,9 @@ final class ScriptScheduler {
         ScriptScheduler scheduler = new ScriptScheduler(parallel);
         List<ScriptTestEngine.Test> order = scheduler.plan(tests);
         if (!parallel) {
-            for (ScriptTestEngine.Test test : order) scheduler.runOne(test, run);
+            for (ScriptTestEngine.Test test : order) {
+                scheduler.runOne(test, run);
+            }
             return;
         }
         int threads = config.get(THREADS)
@@ -66,8 +68,9 @@ final class ScriptScheduler {
         });
         try {
             List<CompletableFuture<?>> all = new ArrayList<>();
-            for (ScriptTestEngine.Test test : order)
+            for (ScriptTestEngine.Test test : order) {
                 all.add(CompletableFuture.runAsync(() -> scheduler.runOne(test, run), pool));
+            }
             CompletableFuture.allOf(all.toArray(CompletableFuture[]::new)).join();
         } finally {
             pool.shutdown();
@@ -93,14 +96,20 @@ final class ScriptScheduler {
     /** Every test after the tests it depends on; the tests of a cycle are failed here, before any runs. */
     private List<ScriptTestEngine.Test> plan(List<ScriptTestEngine.Test> tests) {
         Map<String, ScriptTestEngine.Test> byKey = new LinkedHashMap<>();
-        for (ScriptTestEngine.Test test : tests) byKey.put(test.key(), test);
+        for (ScriptTestEngine.Test test : tests) {
+            byKey.put(test.key(), test);
+        }
         List<ScriptTestEngine.Test> order = new ArrayList<>();
         Set<ScriptTestEngine.Test> visiting = new HashSet<>();
         Set<String> javaSeen = new HashSet<>();
-        for (ScriptTestEngine.Test test : byKey.values()) visit(test, byKey, visiting, javaSeen, order);
+        for (ScriptTestEngine.Test test : byKey.values()) {
+            visit(test, byKey, visiting, javaSeen, order);
+        }
         for (ScriptTestEngine.Test test : order) {
             CompletableFuture<TestExecutionResult.Status> result = new CompletableFuture<>();
-            if (cycles.containsKey(test)) result.complete(TestExecutionResult.Status.FAILED);
+            if (cycles.containsKey(test)) {
+                result.complete(TestExecutionResult.Status.FAILED);
+            }
             results.put(test.key(), result);
         }
         return order;
@@ -112,14 +121,20 @@ final class ScriptScheduler {
             Set<ScriptTestEngine.Test> visiting,
             Set<String> javaSeen,
             List<ScriptTestEngine.Test> order) {
-        if (order.contains(test)) return;
+        if (order.contains(test)) {
+            return;
+        }
         if (!visiting.add(test)) {
             cycles.put(test, "dependsOn cycle through '" + test.key() + "', so none of them can go first");
             return;
         }
-        for (String dependency : test.dependsOn()) visitKey(dependency, byKey, visiting, javaSeen, order);
+        for (String dependency : test.dependsOn()) {
+            visitKey(dependency, byKey, visiting, javaSeen, order);
+        }
         visiting.remove(test);
-        if (!order.contains(test)) order.add(test);
+        if (!order.contains(test)) {
+            order.add(test);
+        }
     }
 
     /** A script test is visited; a Java test is passed through to the script tests it depends on. */
@@ -133,7 +148,9 @@ final class ScriptScheduler {
         if (upstream != null) {
             visit(upstream, byKey, visiting, javaSeen, order);
         } else if (!Dependencies.isScript(key) && javaSeen.add(key)) {
-            for (String next : Dependencies.edges(key)) visitKey(next, byKey, visiting, javaSeen, order);
+            for (String next : Dependencies.edges(key)) {
+                visitKey(next, byKey, visiting, javaSeen, order);
+            }
         }
     }
 
@@ -143,10 +160,14 @@ final class ScriptScheduler {
      */
     TestExecutionResult blocker(ScriptTestEngine.Test test) {
         String cycle = cycles.get(test);
-        if (cycle != null) return TestExecutionResult.failed(new IllegalStateException(cycle));
+        if (cycle != null) {
+            return TestExecutionResult.failed(new IllegalStateException(cycle));
+        }
         for (String dependency : test.dependsOn()) {
             CompletableFuture<TestExecutionResult.Status> upstream = results.get(dependency);
-            if (upstream == null) continue;
+            if (upstream == null) {
+                continue;
+            }
             TestExecutionResult.Status status = await(upstream);
             if (status != TestExecutionResult.Status.SUCCESSFUL) {
                 return TestExecutionResult.aborted(new IllegalStateException(

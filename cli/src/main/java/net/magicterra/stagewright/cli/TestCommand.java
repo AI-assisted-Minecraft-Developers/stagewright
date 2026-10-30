@@ -100,21 +100,30 @@ final class TestCommand {
                 systemProps.add(a);
             } else if (a.startsWith("--")) {
                 String name = a.substring(2);
-                if (!name.equals("mod") && !VALUED.contains(name))
+                if (!name.equals("mod") && !VALUED.contains(name)) {
                     throw new IllegalArgumentException("unknown option '" + a + "'");
-                if (i + 1 >= args.size()) throw new IllegalArgumentException(a + " needs a value");
+                }
+                if (i + 1 >= args.size()) {
+                    throw new IllegalArgumentException(a + " needs a value");
+                }
                 String value = args.get(++i);
-                if (name.equals("mod"))
+                if (name.equals("mod")) {
                     extraMods.add(Path.of(value).toAbsolutePath().normalize());
-                else opts.put(name, value);
+                } else {
+                    opts.put(name, value);
+                }
             } else if (gameDir == null) {
                 gameDir = Path.of(a).toAbsolutePath().normalize();
             } else {
                 throw new IllegalArgumentException("unexpected argument '" + a + "'");
             }
         }
-        if (gameDir == null) throw new IllegalArgumentException("stagewright test needs the pack's server directory");
-        if (!Files.isDirectory(gameDir)) throw new IllegalArgumentException(gameDir + " is not a directory");
+        if (gameDir == null) {
+            throw new IllegalArgumentException("stagewright test needs the pack's server directory");
+        }
+        if (!Files.isDirectory(gameDir)) {
+            throw new IllegalArgumentException(gameDir + " is not a directory");
+        }
         leaks(opts);
         // What the run writes stays under the server directory wherever the tests come from: they may be a
         // repository's.
@@ -142,7 +151,9 @@ final class TestCommand {
         for (String dir : List.of("scenes", "tests", "worlds")) {
             int copied =
                     copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir));
-            if (Files.isDirectory(source.resolve(dir))) log.accept(copied + " files from " + source.resolve(dir));
+            if (Files.isDirectory(source.resolve(dir))) {
+                log.accept(copied + " files from " + source.resolve(dir));
+            }
         }
         Path jar = modJar(root, work.resolve(MOD_ID + ".jar"));
         List<Path> mods = new ArrayList<>(extraMods);
@@ -205,7 +216,9 @@ final class TestCommand {
                     serverProcess(gameDir, launch, systemProps, injected, List.of("-Dstagewright.awaitPlayer=true"));
             write(launches, topology(WITH_CLIENT, gameDir, SERVER_WORLD, true, awaiting, joining, opts));
         } else {
-            if (clientSource != null) log.accept("--client-dir is unused: the run was given no --client");
+            if (clientSource != null) {
+                log.accept("--client-dir is unused: the run was given no --client");
+            }
             for (String name : List.of(INTEGRATED, WITH_CLIENT)) {
                 write(launches, unavailable(name, "the run was given no --client, so there is no client to start"));
             }
@@ -236,9 +249,13 @@ final class TestCommand {
 
     /** {@code --client-dir}, or null when there is none. */
     static Path clientDir(Map<String, String> opts) {
-        if (!opts.containsKey("client-dir")) return null;
+        if (!opts.containsKey("client-dir")) {
+            return null;
+        }
         Path dir = Path.of(opts.get("client-dir")).toAbsolutePath().normalize();
-        if (!Files.isDirectory(dir)) throw new IllegalArgumentException("--client-dir " + dir + " is not a directory");
+        if (!Files.isDirectory(dir)) {
+            throw new IllegalArgumentException("--client-dir " + dir + " is not a directory");
+        }
         return dir;
     }
 
@@ -246,8 +263,9 @@ final class TestCommand {
      * The jars the client loads: {@code --client-mods}, else the client directory's {@code mods/}, else the server's.
      */
     static Path clientMods(Path gameDir, Path clientSource, Map<String, String> opts) {
-        if (opts.containsKey("client-mods"))
+        if (opts.containsKey("client-mods")) {
             return Path.of(opts.get("client-mods")).toAbsolutePath().normalize();
+        }
         return (clientSource != null ? clientSource : gameDir).resolve("mods");
     }
 
@@ -285,10 +303,14 @@ final class TestCommand {
         }
         try (Stream<Path> list = Files.list(clientDir)) {
             for (Path p : list.toList()) {
-                if (Files.isSymbolicLink(p)) Files.delete(p);
+                if (Files.isSymbolicLink(p)) {
+                    Files.delete(p);
+                }
             }
         }
-        if (from == null) return 0;
+        if (from == null) {
+            return 0;
+        }
         for (Path entry : entries) {
             Path target = clientDir.resolve(entry.getFileName().toString());
             try {
@@ -318,8 +340,9 @@ final class TestCommand {
      * copied. A pack's client mods are not always its server's, so {@code --client-mods} may name others.
      */
     static void linkMods(Path from, Path to, Consumer<String> log) throws IOException {
-        if (!Files.isDirectory(from))
+        if (!Files.isDirectory(from)) {
             throw new IllegalArgumentException("--client-mods " + from + " is not a directory");
+        }
         deleteTree(to);
         Files.createDirectories(to);
         List<Path> jars;
@@ -348,7 +371,9 @@ final class TestCommand {
     /** A client's own properties: the user's, the topology's, and what the loader needs to find the mods. */
     static List<String> clientProps(List<String> systemProps, ModInjection.Arguments mods, String... properties) {
         List<String> props = new ArrayList<>(systemProps);
-        for (String p : properties) props.add("-D" + p);
+        for (String p : properties) {
+            props.add("-D" + p);
+        }
         props.addAll(mods.jvm());
         return props;
     }
@@ -368,11 +393,17 @@ final class TestCommand {
         spec.put("worldDirectory", worldDir);
         spec.put("cleanWorld", true);
         spec.put("server", server);
-        if (opts.containsKey("timeout")) spec.put("timeoutMinutes", Integer.parseInt(opts.get("timeout")));
-        if (opts.containsKey("stall-timeout")) spec.put("stallMinutes", Integer.parseInt(opts.get("stall-timeout")));
+        if (opts.containsKey("timeout")) {
+            spec.put("timeoutMinutes", Integer.parseInt(opts.get("timeout")));
+        }
+        if (opts.containsKey("stall-timeout")) {
+            spec.put("stallMinutes", Integer.parseInt(opts.get("stall-timeout")));
+        }
         spec.put("leaks", leaks(opts));
         spec.put("primary", primary);
-        if (companion != null) spec.put("companion", companion);
+        if (companion != null) {
+            spec.put("companion", companion);
+        }
         return spec;
     }
 
@@ -442,7 +473,9 @@ final class TestCommand {
         Map<String, Object> primary = new LinkedHashMap<>();
         primary.put("java", launch.get(0));
         primary.put("jvmArgs", jvmArgs);
-        if (mainClass != null) primary.put("mainClass", mainClass);
+        if (mainClass != null) {
+            primary.put("mainClass", mainClass);
+        }
         primary.put("args", args);
         primary.put("workingDirectory", gameDir.toString());
         return primary;
@@ -453,7 +486,9 @@ final class TestCommand {
             String main = file.getManifest() == null
                     ? null
                     : file.getManifest().getMainAttributes().getValue("Main-Class");
-            if (main == null) throw new IllegalArgumentException(jar + " names no Main-Class, so it cannot be started");
+            if (main == null) {
+                throw new IllegalArgumentException(jar + " names no Main-Class, so it cannot be started");
+            }
             return main;
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read " + jar, e);
@@ -477,7 +512,9 @@ final class TestCommand {
                     version = "0.0.0"
                     displayName = "StageWright pack tests"
                     """.formatted(MOD_ID));
-            if (!Files.isDirectory(root)) return jar;
+            if (!Files.isDirectory(root)) {
+                return jar;
+            }
             try (Stream<Path> walk = Files.walk(root)) {
                 for (Path p : walk.filter(Files::isRegularFile).sorted().toList()) {
                     zip.putNextEntry(new ZipEntry(root.relativize(p).toString().replace('\\', '/')));
@@ -533,7 +570,9 @@ final class TestCommand {
      * tests in from a repository of their own must not get an empty mod. Answers how many files were copied.
      */
     static int copyTree(Path from, Path to) throws IOException {
-        if (!Files.isDirectory(from)) return 0;
+        if (!Files.isDirectory(from)) {
+            return 0;
+        }
         int files = 0;
         try (Stream<Path> walk = Files.walk(from, FileVisitOption.FOLLOW_LINKS)) {
             for (Path p : walk.toList()) {
@@ -550,9 +589,13 @@ final class TestCommand {
     }
 
     private static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) return;
+        if (!Files.exists(root)) {
+            return;
+        }
         try (Stream<Path> walk = Files.walk(root)) {
-            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) Files.delete(p);
+            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(p);
+            }
         }
     }
 }

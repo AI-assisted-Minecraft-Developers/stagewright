@@ -46,7 +46,9 @@ final class ScriptScan {
     /** Every {@code .js} file under {@value #DIRECTORY} of {@code root}, as class-path resource names, sorted. */
     static List<String> scriptsUnder(Path root) {
         Path dir = root.resolve(DIRECTORY);
-        if (!Files.isDirectory(dir)) return List.of();
+        if (!Files.isDirectory(dir)) {
+            return List.of();
+        }
         try (Stream<Path> walk = Files.walk(dir)) {
             return walk.filter(p -> isScript(p.toString()) && Files.isRegularFile(p))
                     .map(p -> root.relativize(p)
@@ -62,13 +64,17 @@ final class ScriptScan {
     static Scanned scan(String resource, ClassLoader loader) {
         String source;
         try (var in = loader.getResourceAsStream(resource)) {
-            if (in == null) return new Scanned(resource, List.of(), "no " + resource + " on the test class path");
+            if (in == null) {
+                return new Scanned(resource, List.of(), "no " + resource + " on the test class path");
+            }
             source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             return new Scanned(resource, List.of(), "could not read " + resource + ": " + e.getMessage());
         }
         Map<String, Test> tests = new LinkedHashMap<>();
-        if (isYaml(resource)) return scanYaml(resource, source, tests);
+        if (isYaml(resource)) {
+            return scanYaml(resource, source, tests);
+        }
         try {
             Context cx = new ContextFactory().enter();
             ScriptableObject scope = cx.initStandardObjects();
@@ -139,8 +145,13 @@ final class ScriptScan {
 
     private static List<String> scenes(Object scene) {
         List<String> scenes = new ArrayList<>();
-        if (scene instanceof CharSequence s) scenes.add(s.toString());
-        else if (scene instanceof List<?> list) for (Object s : list) scenes.add(String.valueOf(s));
+        if (scene instanceof CharSequence s) {
+            scenes.add(s.toString());
+        } else if (scene instanceof List<?> list) {
+            for (Object s : list) {
+                scenes.add(String.valueOf(s));
+            }
+        }
         return scenes;
     }
 

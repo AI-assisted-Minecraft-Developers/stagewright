@@ -102,11 +102,21 @@ record SceneFile(
         /** {@code server.properties} entries for what applies at creation. */
         Map<String, String> serverProperties() {
             Map<String, String> p = new LinkedHashMap<>();
-            if (preset != null) p.put("level-type", preset);
-            if (seed != null) p.put("level-seed", seed);
-            if (structures != null) p.put("generate-structures", structures.toString());
-            if (gamemode != null) p.put("gamemode", gamemode);
-            if (difficulty != null) p.put("difficulty", difficulty);
+            if (preset != null) {
+                p.put("level-type", preset);
+            }
+            if (seed != null) {
+                p.put("level-seed", seed);
+            }
+            if (structures != null) {
+                p.put("generate-structures", structures.toString());
+            }
+            if (gamemode != null) {
+                p.put("gamemode", gamemode);
+            }
+            if (difficulty != null) {
+                p.put("difficulty", difficulty);
+            }
             return p;
         }
 
@@ -115,7 +125,9 @@ record SceneFile(
             StringBuilder out = new StringBuilder("{\"gamerules\":{");
             boolean first = true;
             for (Map.Entry<String, Object> rule : gamerules.entrySet()) {
-                if (!first) out.append(',');
+                if (!first) {
+                    out.append(',');
+                }
                 first = false;
                 out.append(quote(rule.getKey()))
                         .append(':')
@@ -136,7 +148,9 @@ record SceneFile(
                     .append(weatherFrozen)
                     .append(",\"mobSpawning\":")
                     .append(mobSpawning);
-            if (tickRate != null) out.append(",\"tickRate\":").append(tickRate);
+            if (tickRate != null) {
+                out.append(",\"tickRate\":").append(tickRate);
+            }
             out.append(",\"enablePacks\":")
                     .append(strings(enablePacks))
                     .append(",\"disablePacks\":")
@@ -195,7 +209,9 @@ record SceneFile(
     }
 
     private static List<String> excludedMods(String name, String at, Object value) {
-        if (value == null) return List.of();
+        if (value == null) {
+            return List.of();
+        }
         Map<?, ?> mods = mapping(name, at, value);
         if (mods.containsKey("only")) {
             // Every mod not listed would go, its dependencies with it, and a pack's library mods are many.
@@ -204,12 +220,16 @@ record SceneFile(
         }
         only(name, at, mods, Set.of("exclude"));
         List<String> exclude = strings(name, at + ".exclude", mods.get("exclude"));
-        if (exclude.isEmpty()) throw new IllegalStateException("scene '" + name + "': " + at + ".exclude names no mod");
+        if (exclude.isEmpty()) {
+            throw new IllegalStateException("scene '" + name + "': " + at + ".exclude names no mod");
+        }
         return exclude;
     }
 
     private static String from(String name, String at, Object value) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         if (!(value instanceof String s) || s.isBlank()) {
             throw new IllegalStateException("scene '" + name + "': " + at + " is a save's path under " + ROOT);
         }
@@ -218,7 +238,9 @@ record SceneFile(
     }
 
     private static Map<String, String> files(String name, String at, Object value) {
-        if (value == null) return Map.of();
+        if (value == null) {
+            return Map.of();
+        }
         Map<String, String> files = new LinkedHashMap<>();
         mapping(name, at, value).forEach((k, v) -> {
             String file = String.valueOf(k);
@@ -274,9 +296,11 @@ record SceneFile(
             Map<?, ?> t = mapping(name, at + ".time", w.get("time"));
             only(name, at + ".time", t, Set.of("at", "frozen"));
             Object atValue = t.get("at");
-            if (atValue instanceof String s && NAMED_TIMES.containsKey(s)) time = NAMED_TIMES.get(s);
-            else if (atValue instanceof Number n) time = n.longValue();
-            else if (atValue != null) {
+            if (atValue instanceof String s && NAMED_TIMES.containsKey(s)) {
+                time = NAMED_TIMES.get(s);
+            } else if (atValue instanceof Number n) {
+                time = n.longValue();
+            } else if (atValue != null) {
                 throw new IllegalStateException("scene '" + name + "': " + at + ".time.at is " + atValue
                         + "; it is one of " + new TreeSet<>(NAMED_TIMES.keySet()) + " or a tick of the day");
             }
@@ -295,8 +319,9 @@ record SceneFile(
         }
 
         Float tickRate = null;
-        if (w.get("tickRate") instanceof Number n) tickRate = n.floatValue();
-        else if (w.get("tickRate") != null) {
+        if (w.get("tickRate") instanceof Number n) {
+            tickRate = n.floatValue();
+        } else if (w.get("tickRate") != null) {
             throw new IllegalStateException("scene '" + name + "': " + at + ".tickRate is not a number");
         }
 
@@ -328,14 +353,19 @@ record SceneFile(
     }
 
     private static Map<?, ?> mapping(String name, String at, Object raw) {
-        if (!(raw instanceof Map<?, ?> map))
+        if (!(raw instanceof Map<?, ?> map)) {
             throw new IllegalStateException("scene '" + name + "': " + at + " is not a mapping");
+        }
         return map;
     }
 
     private static void only(String name, String at, Map<?, ?> map, Set<String> applied) {
         Set<String> unapplied = new TreeSet<>();
-        for (Object key : map.keySet()) if (!applied.contains(String.valueOf(key))) unapplied.add(String.valueOf(key));
+        for (Object key : map.keySet()) {
+            if (!applied.contains(String.valueOf(key))) {
+                unapplied.add(String.valueOf(key));
+            }
+        }
         if (!unapplied.isEmpty()) {
             throw new IllegalStateException("scene '" + name + "': " + at + " declares " + unapplied
                     + ", which this StageWright does not apply; it applies " + new TreeSet<>(applied));
@@ -344,7 +374,9 @@ record SceneFile(
 
     private static String choice(String name, String at, Map<?, ?> map, String key, Set<String> allowed) {
         Object value = map.get(key);
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         if (!allowed.contains(String.valueOf(value))) {
             throw new IllegalStateException("scene '" + name + "': " + at + "." + key + " is " + value
                     + "; it is one of " + new TreeSet<>(allowed));
@@ -353,15 +385,22 @@ record SceneFile(
     }
 
     private static boolean bool(String name, String at, Object value, boolean fallback) {
-        if (value == null) return fallback;
-        if (value instanceof Boolean b) return b;
+        if (value == null) {
+            return fallback;
+        }
+        if (value instanceof Boolean b) {
+            return b;
+        }
         throw new IllegalStateException("scene '" + name + "': " + at + " is true or false");
     }
 
     private static List<String> strings(String name, String at, Object value) {
-        if (value == null) return List.of();
-        if (!(value instanceof List<?> list))
+        if (value == null) {
+            return List.of();
+        }
+        if (!(value instanceof List<?> list)) {
             throw new IllegalStateException("scene '" + name + "': " + at + " is a list");
+        }
         List<String> out = new ArrayList<>();
         list.forEach(v -> out.add(String.valueOf(v)));
         return List.copyOf(out);
@@ -370,7 +409,9 @@ record SceneFile(
     private static String strings(List<String> values) {
         StringBuilder out = new StringBuilder("[");
         for (int i = 0; i < values.size(); i++) {
-            if (i > 0) out.append(',');
+            if (i > 0) {
+                out.append(',');
+            }
             out.append(quote(values.get(i)));
         }
         return out.append(']').toString();

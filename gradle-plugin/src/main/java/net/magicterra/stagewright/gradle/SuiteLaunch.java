@@ -28,7 +28,9 @@ record SuiteLaunch(
 
     /** {@code value}, refused unless it is one the engine reads, naming {@code owner}, the topology or suite set on. */
     static String leaks(String value, String owner) {
-        if (value == null) return LEAKS_FAIL;
+        if (value == null) {
+            return LEAKS_FAIL;
+        }
         if (!value.equals(LEAKS_FAIL) && !value.equals(LEAKS_REPORT)) {
             throw new org.gradle.api.GradleException(owner + ": leaks is '" + value + "'; it is 'fail' or 'report'");
         }

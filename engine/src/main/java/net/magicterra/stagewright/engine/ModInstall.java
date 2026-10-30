@@ -27,7 +27,9 @@ public final class ModInstall {
     /** The files an earlier version's ledger names that are still in {@code gameDir/mods}. */
     public static List<Path> ledgered(Path gameDir) {
         Path mods = gameDir.resolve("mods");
-        if (!Files.isDirectory(mods)) return List.of();
+        if (!Files.isDirectory(mods)) {
+            return List.of();
+        }
         try {
             return previouslyInstalled(mods).stream()
                     .filter(Files::isRegularFile)
@@ -41,13 +43,19 @@ public final class ModInstall {
     private static Set<Path> previouslyInstalled(Path mods) throws IOException {
         Set<Path> ours = new LinkedHashSet<>();
         Path ledger = mods.resolve(LEDGER);
-        if (!Files.isRegularFile(ledger)) return ours;
+        if (!Files.isRegularFile(ledger)) {
+            return ours;
+        }
         for (String name : Files.readAllLines(ledger, StandardCharsets.UTF_8)) {
             String trimmed = name.trim();
-            if (trimmed.isEmpty()) continue;
+            if (trimmed.isEmpty()) {
+                continue;
+            }
             Path old = mods.resolve(trimmed);
             // A name carrying a separator would escape mods/; refuse rather than name it.
-            if (!old.getParent().equals(mods)) continue;
+            if (!old.getParent().equals(mods)) {
+                continue;
+            }
             ours.add(old);
         }
         return ours;

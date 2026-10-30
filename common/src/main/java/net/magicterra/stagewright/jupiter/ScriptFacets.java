@@ -37,21 +37,28 @@ final class ScriptFacets {
         }
         Map<String, List<Method>> byName = new TreeMap<>();
         for (Method m : target.getClass().getMethods()) {
-            if (m.getDeclaringClass() == Object.class || Modifier.isStatic(m.getModifiers())) continue;
+            if (m.getDeclaringClass() == Object.class || Modifier.isStatic(m.getModifiers())) {
+                continue;
+            }
             Method callable = callable(m);
-            if (callable != null)
+            if (callable != null) {
                 byName.computeIfAbsent(m.getName(), k -> new ArrayList<>()).add(callable);
+            }
         }
         Map<String, Object> out = new LinkedHashMap<>();
         byName.forEach((name, methods) -> out.put(name, (Scripting.Function) args -> {
             for (Method m : methods) {
                 Object[] converted = arguments(game, m, args);
-                if (converted == null) continue;
+                if (converted == null) {
+                    continue;
+                }
                 Object result = invoke(m, target, converted);
                 return result == target ? out : plain(game, result);
             }
             List<String> shapes = new ArrayList<>();
-            for (Method m : methods) shapes.add(signature(m));
+            for (Method m : methods) {
+                shapes.add(signature(m));
+            }
             throw new IllegalArgumentException(name + " takes " + String.join(" or ", shapes) + ", not " + args.length
                     + " argument(s) like " + Expectations.show(List.of(args)));
         }));
@@ -60,12 +67,16 @@ final class ScriptFacets {
 
     /** {@code m}, or the same method on a public supertype when its class is not public and so cannot be called. */
     private static Method callable(Method m) {
-        if (Modifier.isPublic(m.getDeclaringClass().getModifiers())) return m;
+        if (Modifier.isPublic(m.getDeclaringClass().getModifiers())) {
+            return m;
+        }
         for (Class<?> c = m.getDeclaringClass(); c != null; c = c.getSuperclass()) {
             for (Class<?> i : c.getInterfaces()) {
                 try {
                     Method found = i.getMethod(m.getName(), m.getParameterTypes());
-                    if (Modifier.isPublic(found.getDeclaringClass().getModifiers())) return found;
+                    if (Modifier.isPublic(found.getDeclaringClass().getModifiers())) {
+                        return found;
+                    }
                 } catch (NoSuchMethodException ignored) {
                     // not on this interface
                 }
@@ -79,8 +90,12 @@ final class ScriptFacets {
             return m.invoke(target, args);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();
-            if (cause instanceof RuntimeException r) throw r;
-            if (cause instanceof Error err) throw err;
+            if (cause instanceof RuntimeException r) {
+                throw r;
+            }
+            if (cause instanceof Error err) {
+                throw err;
+            }
             throw new IllegalStateException(cause);
         } catch (IllegalAccessException e) {
             throw new IllegalStateException("cannot call " + signature(m) + ": " + e.getMessage(), e);
@@ -91,11 +106,15 @@ final class ScriptFacets {
     private static Object[] arguments(Game game, Method m, Object[] args) {
         Class<?>[] params = m.getParameterTypes();
         int fixed = m.isVarArgs() ? params.length - 1 : params.length;
-        if (m.isVarArgs() ? args.length < fixed : args.length != fixed) return null;
+        if (m.isVarArgs() ? args.length < fixed : args.length != fixed) {
+            return null;
+        }
         Object[] out = new Object[params.length];
         for (int i = 0; i < fixed; i++) {
             Object v = convert(game, params[i], args[i]);
-            if (v == NO) return null;
+            if (v == NO) {
+                return null;
+            }
             out[i] = v;
         }
         if (m.isVarArgs()) {
@@ -103,7 +122,9 @@ final class ScriptFacets {
             Object rest = Array.newInstance(component, args.length - fixed);
             for (int i = fixed; i < args.length; i++) {
                 Object v = convert(game, component, args[i]);
-                if (v == NO) return null;
+                if (v == NO) {
+                    return null;
+                }
                 Array.set(rest, i - fixed, v);
             }
             out[fixed] = rest;
@@ -112,17 +133,33 @@ final class ScriptFacets {
     }
 
     private static Object convert(Game game, Class<?> type, Object v) {
-        if (v == null) return type.isPrimitive() ? NO : null;
+        if (v == null) {
+            return type.isPrimitive() ? NO : null;
+        }
         if (v instanceof Number n) {
             boolean whole = n.doubleValue() == Math.rint(n.doubleValue());
-            if ((type == int.class || type == Integer.class) && whole) return n.intValue();
-            if ((type == long.class || type == Long.class) && whole) return n.longValue();
-            if ((type == short.class || type == Short.class) && whole) return n.shortValue();
-            if ((type == byte.class || type == Byte.class) && whole) return n.byteValue();
-            if (type == double.class || type == Double.class) return n.doubleValue();
-            if (type == float.class || type == Float.class) return n.floatValue();
+            if ((type == int.class || type == Integer.class) && whole) {
+                return n.intValue();
+            }
+            if ((type == long.class || type == Long.class) && whole) {
+                return n.longValue();
+            }
+            if ((type == short.class || type == Short.class) && whole) {
+                return n.shortValue();
+            }
+            if ((type == byte.class || type == Byte.class) && whole) {
+                return n.byteValue();
+            }
+            if (type == double.class || type == Double.class) {
+                return n.doubleValue();
+            }
+            if (type == float.class || type == Float.class) {
+                return n.floatValue();
+            }
         }
-        if (type == boolean.class && v instanceof Boolean) return v;
+        if (type == boolean.class && v instanceof Boolean) {
+            return v;
+        }
         if (v instanceof Map<?, ?> map) {
             if (type == Body.class && map.get("name") instanceof String name && map.get("ref") instanceof String) {
                 return new BodyImpl(game, name);
@@ -145,8 +182,12 @@ final class ScriptFacets {
                 || v instanceof Scripting.Function) {
             return v;
         }
-        if (v instanceof Character || v instanceof Enum<?>) return v.toString();
-        if (v instanceof BlockPos pos) return ScriptHandles.position(pos);
+        if (v instanceof Character || v instanceof Enum<?>) {
+            return v.toString();
+        }
+        if (v instanceof BlockPos pos) {
+            return ScriptHandles.position(pos);
+        }
         if (v instanceof Map<?, ?> map) {
             Map<String, Object> out = new LinkedHashMap<>();
             map.forEach((k, value) -> out.put(String.valueOf(k), plain(game, value)));
@@ -154,12 +195,16 @@ final class ScriptFacets {
         }
         if (v instanceof Collection<?> items) {
             List<Object> out = new ArrayList<>();
-            for (Object item : items) out.add(plain(game, item));
+            for (Object item : items) {
+                out.add(plain(game, item));
+            }
             return out;
         }
         if (v.getClass().isArray()) {
             List<Object> out = new ArrayList<>();
-            for (int i = 0; i < Array.getLength(v); i++) out.add(plain(game, Array.get(v, i)));
+            for (int i = 0; i < Array.getLength(v); i++) {
+                out.add(plain(game, Array.get(v, i)));
+            }
             return out;
         }
         return wrap(game, v);
@@ -167,7 +212,9 @@ final class ScriptFacets {
 
     private static String signature(Method m) {
         List<String> params = new ArrayList<>();
-        for (Class<?> p : m.getParameterTypes()) params.add(p.getSimpleName());
+        for (Class<?> p : m.getParameterTypes()) {
+            params.add(p.getSimpleName());
+        }
         return m.getName() + "(" + String.join(", ", params) + ")";
     }
 }

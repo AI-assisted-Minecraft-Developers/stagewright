@@ -49,7 +49,9 @@ class BodyImpl implements Body {
     public <T> T onServer(Function<ServerPlayer, T> work) {
         return game.onServer(server -> {
             ServerPlayer player = BotRegistry.serverPlayer(server, ref());
-            if (player == null) throw new IllegalStateException(name + " is not on the server");
+            if (player == null) {
+                throw new IllegalStateException(name + " is not on the server");
+            }
             return work.apply(player);
         });
     }
@@ -127,7 +129,9 @@ class BodyImpl implements Body {
             Handovers.Kept kept = Handovers.take(name);
             if (kept == null) {
                 String keeper = Handovers.takeFromBeforeRestart(name);
-                if (keeper != null) return rejoin(game, name, parked, keeper);
+                if (keeper != null) {
+                    return rejoin(game, name, parked, keeper);
+                }
                 throw new IllegalStateException("no passed test kept a bot named " + name + " for " + taker
                         + ": the test it depends on keeps one as @Bot.Keep under @Bot.Name(\"" + name + "\")");
             }
@@ -135,7 +139,9 @@ class BodyImpl implements Body {
             if (BotRegistry.get(bot.ref()) == null) {
                 throw new IllegalStateException(name + ", kept by " + kept.keeper() + ", is no longer on the server");
             }
-            if (!parked) bot.unpark();
+            if (!parked) {
+                bot.unpark();
+            }
             return bot;
         }
 
@@ -150,7 +156,9 @@ class BodyImpl implements Body {
                     throw new IllegalStateException(name + ", kept by " + keeper + " before the restart, could not"
                             + " join again: " + refused.message());
                 }
-                if (parked) BotTicker.unregister(BotRegistry.get(bot.ref()));
+                if (parked) {
+                    BotTicker.unregister(BotRegistry.get(bot.ref()));
+                }
             });
             return bot;
         }
@@ -172,7 +180,9 @@ class BodyImpl implements Body {
         /** Takes the bot out of the world if it is still there. */
         void remove() {
             game.runOnServer(server -> {
-                if (BotRegistry.get(ref()) != null) Roster.remove(ref());
+                if (BotRegistry.get(ref()) != null) {
+                    Roster.remove(ref());
+                }
             });
         }
 
@@ -187,7 +197,9 @@ class BodyImpl implements Body {
                         instanceof Roster.Refusal refused) {
                     throw new IllegalStateException("could not join " + chosen + ": " + refused.message());
                 }
-                if (parked) BotTicker.unregister(BotRegistry.get(bot.ref()));
+                if (parked) {
+                    BotTicker.unregister(BotRegistry.get(bot.ref()));
+                }
                 // A name used before in this world comes back with what it was saved with.
                 ServerPlayer player = BotRegistry.serverPlayer(server, bot.ref());
                 player.getInventory().clearContent();
@@ -245,7 +257,9 @@ class BodyImpl implements Body {
                 return;
             }
             // Parked so nothing ticks it between the two tests; the taker unparks it.
-            if (BotRegistry.get(ref()) != null) park();
+            if (BotRegistry.get(ref()) != null) {
+                park();
+            }
             Handovers.keep(this, keeper);
         }
     }

@@ -23,7 +23,9 @@ final class BuildInfo {
     static List<String> describe() {
         Properties p = new Properties();
         try (InputStream in = BuildInfo.class.getResourceAsStream(RESOURCE)) {
-            if (in == null) return List.of("build info missing — this jar was not built by cli/build.gradle");
+            if (in == null) {
+                return List.of("build info missing — this jar was not built by cli/build.gradle");
+            }
             p.load(in);
         } catch (IOException e) {
             return List.of("build info unreadable: " + e);

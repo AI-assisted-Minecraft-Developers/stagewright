@@ -85,7 +85,9 @@ public final class StageWrightRpc implements AutoCloseable {
         } finally {
             // Otherwise each failed attempt keeps a selector thread until the client is collected,
             // and attach retries many times. shutdownNow, as close waits out a handshake in flight.
-            if (!connected) client.shutdownNow();
+            if (!connected) {
+                client.shutdownNow();
+            }
         }
     }
 
@@ -114,12 +116,16 @@ public final class StageWrightRpc implements AutoCloseable {
             // the close; ignored, the call would wait out its timeout and read as a wedged server.
             send = sendAfterTheLast(payload, () -> pending.containsKey(id));
             send.whenComplete((ws, failed) -> {
-                if (failed != null) fut.completeExceptionally(failed);
+                if (failed != null) {
+                    fut.completeExceptionally(failed);
+                }
             });
             // Read after the put: a close that failAll drained before this call registered would
             // otherwise leave it waiting for an answer from a socket that has gone.
             Throwable gone = reader.closedBy();
-            if (gone != null) fut.completeExceptionally(gone);
+            if (gone != null) {
+                fut.completeExceptionally(gone);
+            }
             return fut.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             // Not sent in all that time: the server has stopped reading the socket, and every call after
@@ -165,7 +171,9 @@ public final class StageWrightRpc implements AutoCloseable {
         for (int i = 0; i < json.length(); i++) {
             char c = json.charAt(i);
             if (Character.isSurrogate(c)) {
-                if (out == null) out = new StringBuilder(json.length() + 16).append(json, 0, i);
+                if (out == null) {
+                    out = new StringBuilder(json.length() + 16).append(json, 0, i);
+                }
                 out.append("\\u").append(Integer.toHexString(c));
             } else if (out != null) {
                 out.append(c);
@@ -188,7 +196,9 @@ public final class StageWrightRpc implements AutoCloseable {
         // stopped reading never finishes, so the caller would hang with it.
         httpClient.shutdown();
         try {
-            if (!httpClient.awaitTermination(CLOSE_GRACE)) httpClient.shutdownNow();
+            if (!httpClient.awaitTermination(CLOSE_GRACE)) {
+                httpClient.shutdownNow();
+            }
         } catch (InterruptedException e) {
             httpClient.shutdownNow();
             Thread.currentThread().interrupt();
@@ -250,8 +260,12 @@ public final class StageWrightRpc implements AutoCloseable {
      * the raw JSON from anything else. A test reads this line, never a parse of it.
      */
     public static String describeError(JsonElement err) {
-        if (err.isJsonPrimitive()) return err.getAsString();
-        if (!err.isJsonObject()) return err.toString();
+        if (err.isJsonPrimitive()) {
+            return err.getAsString();
+        }
+        if (!err.isJsonObject()) {
+            return err.toString();
+        }
         JsonObject e = err.getAsJsonObject();
         StringBuilder out = new StringBuilder(stringOr(e.get("message"), e.toString()));
         JsonElement dataEl = e.get("data");
@@ -277,7 +291,9 @@ public final class StageWrightRpc implements AutoCloseable {
                 String path = stringOr(issue.get("path"), "");
                 out.append(path.isEmpty() ? "/" : path).append(' ').append(stringOr(issue.get("code"), "?"));
                 String msg = stringOr(issue.get("message"), "");
-                if (!msg.isEmpty()) out.append(" (").append(msg).append(')');
+                if (!msg.isEmpty()) {
+                    out.append(" (").append(msg).append(')');
+                }
             }
         }
         return out.toString();
@@ -366,7 +382,9 @@ public final class StageWrightRpc implements AutoCloseable {
             }
             for (Long id : pending.keySet()) {
                 CompletableFuture<JsonObject> f = pending.remove(id);
-                if (f != null) f.completeExceptionally(cause);
+                if (f != null) {
+                    f.completeExceptionally(cause);
+                }
             }
         }
     }

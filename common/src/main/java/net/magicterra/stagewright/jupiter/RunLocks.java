@@ -35,16 +35,22 @@ final class RunLocks {
             ReentrantReadWriteLock lock = NAMED.computeIfAbsent(name, k -> new ReentrantReadWriteLock());
             held.add(write ? lock.writeLock() : lock.readLock());
         });
-        for (Lock lock : held) lock.lock();
+        for (Lock lock : held) {
+            lock.lock();
+        }
         return () -> {
-            for (int i = held.size() - 1; i >= 0; i--) held.get(i).unlock();
+            for (int i = held.size() - 1; i >= 0; i--) {
+                held.get(i).unlock();
+            }
         };
     }
 
     /** {@code names}, every one read-write. */
     static Map<String, Boolean> exclusive(Set<String> names) {
         Map<String, Boolean> locks = new TreeMap<>();
-        for (String name : names) locks.put(name, true);
+        for (String name : names) {
+            locks.put(name, true);
+        }
         return locks;
     }
 }
