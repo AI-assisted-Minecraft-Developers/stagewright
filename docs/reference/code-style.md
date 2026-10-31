@@ -1,7 +1,7 @@
 # Code style and static checks
 
 Three tools judge the source, each on its own part, and all three are applied by the `stagewright.lint` plugin in
-`build-logic/` to every project of the three builds (the root, `engine/` and `gradle-plugin/`). Each runs under `check`.
+`build-logic/` to every project. Each runs under `check`.
 
 ## Layout: Spotless
 
@@ -14,8 +14,8 @@ Spotless alone decides layout. Nobody arranges it by hand, and no other tool has
 | JavaScript under `src/` (script tests) | Prettier 3.6.2, 120 columns, four-space indentation, trailing commas where ES5 allows them |
 | Markdown, properties, YAML, JSON, TOML, `pack.mcmeta`, the XML under `config/` | trailing whitespace removed, leading tabs turned into spaces, a final newline |
 
-`./gradlew spotlessApply` rewrites the files; `spotlessCheck` reports what it would change. Run them in each of the
-three builds (`-p engine`, `-p gradle-plugin`): a build formats only its own files.
+`./gradlew spotlessApply` rewrites the files; `spotlessCheck` reports what it would change. `build-logic/` is a build
+of its own and formats nothing; its files are formatted by the root project.
 
 The one-time reformat of every file is listed in `.git-blame-ignore-revs`. To have `git blame` skip it, run once:
 `git config blame.ignoreRevsFile .git-blame-ignore-revs`.
@@ -42,7 +42,7 @@ A finding from either fails `check`, and with it `build`. The reports are in eac
 
 ## Module boundaries: ArchitectureTest
 
-Each build's tests check which module may depend on what, on the compiled classes:
+Three modules' tests check which module may depend on what, on the compiled classes:
 
 | Test | Checks |
 |---|---|

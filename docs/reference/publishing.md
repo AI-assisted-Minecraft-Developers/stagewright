@@ -5,17 +5,20 @@ produces a link error rather than a version conflict.
 
 ## The build layout
 
-StageWright is not one Gradle build. It is three, and the split is structural rather than organisational:
+StageWright is one Gradle build, and each module is in the directory of the same name without the `stagewright-`
+prefix:
 
-| Build | Root | Contains | Why separate |
-|---|---|---|---|
-| root | `settings.gradle` | `:stagewright-api`, `:stagewright-common`, `:stagewright-fabric`, `:stagewright-neoforge`, `:stagewright-cli`; includes `engine` | Applies Fabric Loom to `:stagewright-fabric` and ModDevGradle to api, common and neoforge. |
-| engine | `engine/settings.gradle` | `stagewright-engine`, `stagewright-agent` (`agent/`), `stagewright-testengine` (`testengine/`) | Must never see a Minecraft classpath, and cannot be a subproject of the plugin, which is itself an included build of the root. |
-| Gradle plugin | `gradle-plugin/settings.gradle` | the plugin | Included by the root's `pluginManagement`; includes `engine`. |
+| Modules | Minecraft on the classpath | Plugins |
+|---|---|---|
+| `:stagewright-api`, `:stagewright-common`, `:stagewright-fabric`, `:stagewright-neoforge` | yes | Fabric Loom (`fabric`) or ModDevGradle (the other three), then `stagewright.mod` |
+| `:stagewright-engine`, `:stagewright-agent`, `:stagewright-testengine`, `:stagewright-gradle-plugin`, `:stagewright-cli` | never | `stagewright.module` alone |
 
-`stagewright-cli` is the one module of the root build kept out of the Loom and ModDevGradle pipeline: it is plain JVM, runs on a
-machine with no Minecraft classpath, and carries the two loader jars as resources, taken from the sibling modules, so
-building it builds them.
+Loom and ModDevGradle are declared once in the root build with `apply false`, and only the four Minecraft-side modules
+apply them, so the plain-JVM modules never see a Minecraft classpath; the `ArchitectureTest` of the engine, the plugin
+and the CLI checks that. Their
+classes reach a consumer's buildscript classpath through the Gradle plugin, or a pack author's JVM through the CLI.
+
+`stagewright-cli` carries the two loader jars as resources, taken from the sibling modules, so building it builds them.
 
 ### How the loader jars are made
 
@@ -52,7 +55,7 @@ that is where a consumer finds it, with `mavenLocal()` listed first in both bloc
 
 ## Versions
 
-One version, for every artifact of all three builds: `<base>-alpha.<n>+<minecraft>`, such as
+One version, for every artifact: `<base>-alpha.<n>+<minecraft>`, such as
 `0.1.0-alpha.42+1.21.1`.
 
 - `<base>` is `mod_base_version` from `gradle.properties`.
@@ -95,14 +98,13 @@ Group is `net.magicterra` throughout.
 
 Every jar above, `sources` and `dev` included, and the CLI's `stagewright.jar` carry `META-INF/COPYING` and
 `META-INF/COPYING.LESSER`, and every POM, the plugin marker's included, declares `LGPL-3.0-only` with its URL, plus the
-project and SCM URL. All three builds take both from the `stagewright.license` plugin; `scripts/check_packaging.py`
+project and SCM URL. Every module takes both from the `stagewright.license` plugin; `scripts/check_packaging.py`
 checks the built jars and POMs.
 
-The three builds (the root, `engine/` and `gradle-plugin/`) share their build logic through `build-logic/`, a build
-each of them includes in its `pluginManagement`. Each file `build-logic/src/main/groovy/<id>.gradle` is the plugin
+The build logic is in `build-logic/`, a build the root includes in its `pluginManagement`. Each file `build-logic/src/main/groovy/<id>.gradle` is the plugin
 with that id: `stagewright.version` (the version every artifact carries), `stagewright.license` (the terms above),
-`stagewright.nexus` (the repository CI publishes to) and `stagewright.lint` (formatting and static checks). The root
-build's modules each apply `stagewright.module` (version, license, lint, Nexus), and the four Minecraft-side ones also
+`stagewright.nexus` (the repository CI publishes to) and `stagewright.lint` (formatting and static checks). Every
+module applies `stagewright.module` (version, license, lint, Nexus), and the four Minecraft-side ones also
 `stagewright.mod` after their loader plugin (archive names, repositories, Java 21 and the publication described below).
 
 ### Why the Minecraft-facing POMs declare (almost) nothing
@@ -167,16 +169,16 @@ when that is not yet true — the very first versions, a new `<base>` that neith
 machine building both from source. `scripts/build_driver_pair.sh <worlddriver checkout>` runs it into `mavenLocal`, as
 `…-snapshot+1.21.1` with `BUILD_NUMBER` unset, and logs each step under `build/driver-pair-logs`:
 
-1. **StageWright** — the engine build (`./gradlew -p engine publishToMavenLocal`: engine, agent and test engine), then
-   the Gradle plugin (`-p gradle-plugin`). WorldDriver's root build *applies* the plugin, so nothing there configures
-   until the plugin is in a repository; and the plugin declares the engine as an `api` dependency, so the engine comes
-   first.
+1. **StageWright** — the engine, agent, test engine and Gradle plugin (`./gradlew :stagewright-engine:publishToMavenLocal`
+   and the same task of the other three). WorldDriver's root build *applies* the plugin, so nothing there configures
+   until the plugin is in a repository, and the plugin declares the engine as an `api` dependency. None of the four
+   needs WorldDriver, so they publish before any WorldDriver artifact exists.
 2. **WorldDriver** — `:api` and `:api-processor`, with `-PworlddriverBootstrap`, which declares no StageWright test
    suite, so nothing asks for StageWright's loader jars, which do not exist yet.
 3. **StageWright** — `:stagewright-api`, which compiles against WorldDriver's API and runs its annotation processor.
 4. **WorldDriver** — `:api` and `:common`, still with `-PworlddriverBootstrap`. StageWright's common module compiles
    against the development-mappings artifact of `:common`.
-5. **StageWright** — the rest of the root build.
+5. **StageWright** — the rest of the build.
 6. **WorldDriver** — its whole build, whose tests compile against `mc_stagewright-api:dev`.
 
 Each side names the other's version on every step: `-Pworlddriver_version=<v>` on StageWright's builds,
@@ -227,7 +229,7 @@ Every build is a `0.1.0` pre-release, and no surface carries a compatibility pro
 built programs rely on are written down under `docs/reference/`: the [scene file](scene-file.md), the
 [launch spec](launch-spec.md) and the [supervision protocol](supervision-protocol.md).
 
-Every artifact of all three builds carries the one version described under [Versions](#versions); there is no
+Every artifact carries the one version described under [Versions](#versions); there is no
 independent scheme for any of them.
 
 ## Checking a pair of candidates
