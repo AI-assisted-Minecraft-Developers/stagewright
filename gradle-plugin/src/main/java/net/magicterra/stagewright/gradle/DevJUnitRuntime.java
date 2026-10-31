@@ -22,6 +22,7 @@ final class DevJUnitRuntime {
         "org.junit.platform:junit-platform-launcher",
         "org.junit.platform:junit-platform-reporting",
         "org.junit.jupiter:junit-jupiter-engine",
+        "org.junit.jupiter:junit-jupiter-params",
     };
 
     private DevJUnitRuntime() {}

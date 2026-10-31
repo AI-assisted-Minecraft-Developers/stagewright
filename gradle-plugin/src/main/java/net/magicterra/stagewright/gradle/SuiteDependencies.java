@@ -202,6 +202,8 @@ final class SuiteDependencies {
                 }
                 deps.add(project.getDependencies().platform("org.junit:junit-bom:" + PluginVersion.junit()));
                 deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-api"));
+                // The loader jars carry it too, so @ParameterizedTest runs in the game.
+                deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-params"));
             });
         });
         constrainWorldDriver(project, COMPILE, "worlddriver-api");
