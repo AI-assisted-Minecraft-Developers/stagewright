@@ -26,6 +26,12 @@ component may have.
 Copying removes the question. There is no coordinate, no version to conflict with
 anything else on that classpath, and no repository that has to be reachable.
 
+Relocating a real dependency with Shadow was measured as the alternative. It works only with
+deliberate wiring: a project dependency resolves `runtimeElements`, the plain `jar`, so with
+the obvious configuration the plugin still gets the unrelocated library as a transitive
+dependency and the published POM still declares it. Worth revisiting if the engine ever needs
+several third-party libraries; overkill for one.
+
 ## Why not hand-written
 
 It was, and that was the wrong call. A parser is exactly the kind of code where the
