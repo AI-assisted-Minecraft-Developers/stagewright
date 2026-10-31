@@ -180,7 +180,7 @@ Tests in a game run concurrently by default, classes and methods alike. What two
 
 - `game.quitNow()` ends the game as soon as the calling test returns, as a player saving and quitting does, with
   whatever the world is in the middle of; the tests of the round that have not started are skipped, and the next
-  round begins on the world as it was saved. Call it from an `@Isolated` test, since a test running beside it holds
+  round begins on the world as it was saved. Call it from a class marked `@Isolated`, since a test running beside it holds
   the game until it ends. It is for Java tests: script tests running beside them are not stopped. A restart is a new
   game process, so leaving a world this way does not test what one client keeps from one world to the next.
 
@@ -190,18 +190,20 @@ Tests in a game run concurrently by default, classes and methods alike. What two
   save) and returns once the player is in it. `openWorld` leaves the current world first when one is open. The test
   goes on in the same thread, and `game` is the new world's server from then on; between the two calls nothing that
   needs a server answers. When the test ends, after its overrides are undone, the world it started on is opened again,
-  so the tests after it run where they expect. Nothing else may run meanwhile: use an `@Isolated` test, without plots
-  or bots, which belong to one world. A dedicated server refuses both, since its world is its process.
+  so the tests after it run where they expect. Nothing else may run meanwhile: put it in a class marked `@Isolated`,
+  without plots or bots, which belong to one world. A dedicated server refuses both, since its world is its process.
 
   ```java
-  @Test
-  @Isolated
+  @Isolated // on the class: JUnit takes it nowhere else
   @Requires(INTEGRATED_SERVER)
-  void retreatsAfterSwitchingSaves(Game game, Player player) {
-      // … enter the retreat on the scene's world
-      game.leaveWorld();
-      game.openWorld("second");
-      // … shake the bell in the new world; the client kept whatever it kept from the first
+  class SwitchingSavesTest {
+    @Test
+    void retreatsAfterSwitchingSaves(Game game, Player player) {
+        // … enter the retreat on the scene's world
+        game.leaveWorld();
+        game.openWorld("second");
+        // … shake the bell in the new world; the client kept whatever it kept from the first
+    }
   }
   ```
 

@@ -113,7 +113,7 @@ public interface Game {
      * End this game as soon as the calling test returns, as a player saving and quitting would, with whatever the world
      * is in the middle of. Tests of this round not started by then are skipped, and a later round starts where this one
      * stopped ({@link DependsOn#afterRestart()}). Tests still running beside it hold the game until they end, so it
-     * belongs in an {@code @Isolated} test. Java tests only; a script test running beside it is not stopped.
+     * belongs in a class marked {@code @Isolated}. Java tests only; a script test running beside it is not stopped.
      */
     void quitNow();
 
@@ -130,7 +130,7 @@ public interface Game {
      * is open, and return once the player is in it. {@link DependsOn#FIRST_WORLD} is the scene's own; a name with no
      * save yet is a new world, made as the scene declares its world. From then on this game is that world's server.
      * When the test ends, after its overrides are undone, the world it started on is opened again. Nothing else may run
-     * meanwhile, so it belongs in an {@code @Isolated} test, without plots or bots, which belong to one world.
+     * meanwhile, so it belongs in a class marked {@code @Isolated}, without plots or bots, which belong to one world.
      */
     void openWorld(String name);
 
