@@ -41,8 +41,9 @@ run_step() {
     fi
 }
 
-run_step "$stagewright_root" engine ./gradlew -p engine check publishToMavenLocal
-run_step "$stagewright_root" plugin ./gradlew -p gradle-plugin check publishToMavenLocal
+# The engine and the Gradle plugin first: WorldDriver's build applies the plugin before any StageWright mod exists.
+tooling=(:stagewright-engine :stagewright-agent :stagewright-testengine :stagewright-gradle-plugin)
+run_step "$stagewright_root" tooling ./gradlew "${tooling[@]/%/:check}" "${tooling[@]/%/:publishToMavenLocal}"
 # The Gradle plugin is applied to every build of WorldDriver's, so this one takes the plugin just published too,
 # bootstrapping: StageWright's loader mods, which its test runs would resolve, are not built yet. The processor
 # generates stagewright-api's typed callers.
