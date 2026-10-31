@@ -43,8 +43,8 @@ public final class ScriptTestEngine implements TestEngine {
     static final String SCENE = "stagewright.junit.scene";
 
     /** The options {@code test()} understands. The scene is read by the test engine outside the game, not here. */
-    private static final Set<String> OPTIONS =
-            Set.of("scene", "requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart");
+    private static final Set<String> OPTIONS = Set.of(
+            "scene", "requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart", "world", "worldFrom");
 
     private static final String TEST_LABEL = "test '";
 
@@ -94,7 +94,7 @@ public final class ScriptTestEngine implements TestEngine {
         for (TestDescriptor child : engine.getChildren()) {
             for (TestDescriptor t : child.getChildren()) {
                 Test test = (Test) t;
-                upstream.put(test.key(), new Rounds.Upstream(test.dependsOn(), test.afterRestart));
+                upstream.put(test.key(), test.upstream);
             }
         }
         Rounds.scripts(upstream);
@@ -271,15 +271,27 @@ public final class ScriptTestEngine implements TestEngine {
             if (afterRestart != null && !(afterRestart instanceof Boolean)) {
                 throw new IllegalArgumentException(TEST_LABEL + name + "': afterRestart is true or false");
             }
+            Object world = options.get("world");
+            Object worldFrom = options.get("worldFrom");
+            if (world != null && !(world instanceof String) || worldFrom != null && !(worldFrom instanceof String)) {
+                throw new IllegalArgumentException(TEST_LABEL + name + "': world and worldFrom are names, strings");
+            }
+            Rounds.World named = Rounds.World.of(
+                    TEST_LABEL + name + "'",
+                    Boolean.TRUE.equals(afterRestart),
+                    world == null ? "" : (String) world,
+                    worldFrom == null ? "" : (String) worldFrom);
             addChild(new Test(
                     id,
                     this,
                     name,
                     requires(name, options.get("requires")),
-                    dependencies(resource, name, options.get("dependsOn")),
+                    new Rounds.Upstream(
+                            dependencies(resource, name, options.get("dependsOn")),
+                            Boolean.TRUE.equals(afterRestart),
+                            named),
                     locks(name, options.get("locks")),
                     Boolean.TRUE.equals(isolated),
-                    Boolean.TRUE.equals(afterRestart),
                     (String) known,
                     body));
         }
@@ -396,13 +408,12 @@ public final class ScriptTestEngine implements TestEngine {
 
         private final Requirement requirement;
 
-        private final List<String> dependsOn;
+        /** What it depends on, whether after a restart, and on which world. */
+        private final Rounds.Upstream upstream;
 
         private final Set<String> locks;
 
         private final boolean isolated;
-
-        private final boolean afterRestart;
 
         private final String knownIssue;
 
@@ -413,20 +424,18 @@ public final class ScriptTestEngine implements TestEngine {
                 File file,
                 String name,
                 Requirement requirement,
-                List<String> dependsOn,
+                Rounds.Upstream upstream,
                 Set<String> locks,
                 boolean isolated,
-                boolean afterRestart,
                 String knownIssue,
                 Body body) {
             super(id, name, ClasspathResourceSource.from(file.resource));
             this.file = file;
             this.name = name;
             this.requirement = requirement;
-            this.dependsOn = dependsOn;
+            this.upstream = upstream;
             this.locks = locks;
             this.isolated = isolated;
-            this.afterRestart = afterRestart;
             this.knownIssue = knownIssue;
             this.body = body;
         }
@@ -437,7 +446,7 @@ public final class ScriptTestEngine implements TestEngine {
         }
 
         List<String> dependsOn() {
-            return dependsOn;
+            return upstream.keys();
         }
 
         @Override
@@ -473,7 +482,7 @@ public final class ScriptTestEngine implements TestEngine {
 
         /** Failed in a cycle, aborted when a test this one depends on did not pass or is not in the run; else null. */
         private TestExecutionResult upstream(ScriptScheduler scheduler) {
-            for (String dependency : dependsOn) {
+            for (String dependency : upstream.keys()) {
                 String why = null;
                 if (Dependencies.isScript(dependency)) {
                     if (!scheduler.has(dependency)) {

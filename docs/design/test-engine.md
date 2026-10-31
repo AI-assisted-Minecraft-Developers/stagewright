@@ -193,6 +193,13 @@ in a script, `t.store` in JavaScript), `stagewright/store.json`; the engine dele
 game. Each round's log is `<scene>-round<N>-game.log`. A class or script file is reported finished once, after the last
 round, so a class with tests in two rounds is one node outside.
 
+A round may run on another save, named by its tests (`world`, and `worldFrom` for one new to the scene). The game works
+out each round's world as it works out the rounds, refuses two different names for one round, and sends the next
+round's in the `restart` event. The game always opens the topology's world directory, so the engine moves worlds in and
+out of it rather than telling the game another path: the one there goes to `stagewright/saves/<its name>`, and the
+named one comes back from there, or is unpacked from its save, or is left absent for the game to create. The scene's
+first world is moved back when the scene ends, so a topology that keeps its world between runs keeps the one it had.
+
 ## Every test runs somewhere
 
 `@Requires` is checked in the game, which disables what its game lacks with a reason beginning `@Requires: `.

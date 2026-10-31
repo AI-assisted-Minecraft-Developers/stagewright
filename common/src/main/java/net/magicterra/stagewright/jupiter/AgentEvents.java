@@ -96,12 +96,17 @@ final class AgentEvents implements TestExecutionListener {
     }
 
     /**
-     * Tests remain for a later round: whoever started this game starts it again on the same world, with
-     * {@code -Dstagewright.junit.round=<round>}, once this one has exited.
+     * Tests remain for a later round: whoever started this game starts it again, with
+     * {@code -Dstagewright.junit.round=<round>}, once this one has exited: on the same world, or on the one
+     * {@code world} names.
      */
-    void restart(int round) {
+    void restart(int round, Rounds.World world) {
         JsonObject o = event("restart");
         o.addProperty("round", round);
+        if (world != null) {
+            o.addProperty("world", world.name());
+            o.addProperty("worldFrom", world.from());
+        }
         send(o);
     }
 

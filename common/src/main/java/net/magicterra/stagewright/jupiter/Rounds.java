@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import net.magicterra.stagewright.test.DependsOn;
 import org.junit.platform.engine.TestExecutionResult;
 
@@ -34,7 +35,40 @@ final class Rounds {
     static final String FILE = "rounds.json";
 
     /** What a test depends on, and whether only after a restart. */
-    record Upstream(List<String> keys, boolean afterRestart) {}
+    record Upstream(List<String> keys, boolean afterRestart, World world) {
+        Upstream(List<String> keys, boolean afterRestart) {
+            this(keys, afterRestart, null);
+        }
+    }
+
+    /**
+     * The save a round runs on, by the name its tests give it, and the save resource a world new to the scene starts
+     * from, or empty for a new world.
+     */
+    record World(String name, String from) {
+        private static final Pattern NAME = Pattern.compile("[A-Za-z0-9_.-]+");
+
+        /** What {@code test} declared; null when it names no world. Refused when it is not a world it could run on. */
+        static World of(String test, boolean afterRestart, String name, String from) {
+            if (name.isEmpty()) {
+                if (!from.isEmpty()) {
+                    throw new IllegalStateException(test + ": worldFrom needs world, the name of the save it starts");
+                }
+                return null;
+            }
+            if (!afterRestart) {
+                throw new IllegalStateException(test + ": world needs afterRestart, since a game runs on one world");
+            }
+            if (!NAME.matcher(name).matches() || ".".equals(name) || "..".equals(name)) {
+                throw new IllegalStateException(
+                        test + ": world '" + name + "' is a save's name, of letters, digits, '_', '-' and '.'");
+            }
+            return new World(name, from);
+        }
+    }
+
+    /** The world each later round's tests named for it. */
+    private static final Map<Integer, World> WORLDS = new ConcurrentHashMap<>();
 
     private static final Map<String, Upstream> SCRIPTS = new ConcurrentHashMap<>();
 
@@ -56,6 +90,12 @@ final class Rounds {
         SCRIPTS.clear();
         SCRIPTS.putAll(scripts);
         ROUND_OF.clear();
+        WORLDS.clear();
+    }
+
+    /** The world the tests of {@code round} named, or null when none did: that round runs on the one before's. */
+    static World world(int round) {
+        return WORLDS.get(round);
     }
 
     /**
@@ -123,6 +163,13 @@ final class Rounds {
         if (up.afterRestart()) {
             round++;
         }
+        if (up.world() != null) {
+            World named = WORLDS.putIfAbsent(round, up.world());
+            if (named != null && !named.equals(up.world())) {
+                throw new IllegalStateException("round " + round + " of the scene's restarts runs on one world, but "
+                        + key + " names " + up.world() + " and another test of it " + named);
+            }
+        }
         visiting.remove(key);
         ROUND_OF.put(key, round);
         return round;
@@ -136,6 +183,7 @@ final class Rounds {
         Dependencies.Ref ref = Dependencies.Ref.of(key);
         List<String> keys = new ArrayList<>();
         boolean afterRestart = false;
+        World world = null;
         try {
             Class<?> type =
                     Class.forName(ref.className(), false, Thread.currentThread().getContextClassLoader());
@@ -148,6 +196,8 @@ final class Rounds {
                     continue;
                 }
                 afterRestart |= d.afterRestart();
+                World named = World.of(key, d.afterRestart(), d.world(), d.worldFrom());
+                world = named != null ? named : world;
                 for (Dependencies.Ref r : Dependencies.upstream(type, m)) {
                     keys.add(r.key());
                 }
@@ -156,6 +206,6 @@ final class Rounds {
         } catch (ClassNotFoundException | LinkageError e) {
             // Not this game's: it runs in no round, and whatever depends on it is told it is not in the run.
         }
-        return new Upstream(keys, afterRestart);
+        return new Upstream(keys, afterRestart, world);
     }
 }

@@ -215,7 +215,7 @@ public final class JupiterRun {
                             Rounds.current(),
                             Rounds.current() + 1);
                 }
-                relay.restart(Rounds.current() + 1);
+                relay.restart(Rounds.current() + 1, Rounds.world(Rounds.current() + 1));
             }
             relay.ended();
             List<TestExecutionSummary> summaries = List.of(javaSummary.getSummary(), scriptSummary.getSummary());

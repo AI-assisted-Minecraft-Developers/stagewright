@@ -148,7 +148,12 @@ final class SceneRun {
             // the EULA accepted and offline mode before it starts at all. Inside the put-back, like the scene's own.
             RunDirectory.provision(spec.primary().workingDirectory(), spec.server());
             writeServerProperties(serverProperties, world);
-            return supervise(spec, world, relay, artifacts, logs);
+            SceneWorlds worlds = new SceneWorlds(spec.worldDirectory(), artifacts.resolve("saves"));
+            try {
+                return supervise(spec, world, relay, artifacts, logs, worlds, loader);
+            } finally {
+                worlds.restoreFirst();
+            }
         } finally {
             try {
                 clientFiles.run();
@@ -223,7 +228,13 @@ final class SceneRun {
     // The round loop below is long because each round is one game, its companion and their supervision in turn.
     @SuppressWarnings("checkstyle:javancss")
     private TestExecutionResult supervise(
-            LaunchSpec spec, SceneFile.World world, Relay relay, Path artifacts, Path logs)
+            LaunchSpec spec,
+            SceneFile.World world,
+            Relay relay,
+            Path artifacts,
+            Path logs,
+            SceneWorlds worlds,
+            ClassLoader loader)
             throws IOException, InterruptedException {
         List<String> classes = new ArrayList<>();
         List<String> scripts = new ArrayList<>();
@@ -324,8 +335,11 @@ final class SceneRun {
                 boolean again = ended == Supervisor.Ended.DONE && relay.ended() && relay.restart() == round + 1;
                 if (again) {
                     // The next round opens the same world: this game is gone, its session lock with it.
+                    worlds.switchTo(relay.restartWorld(), relay.restartWorldFrom(), loader);
                     relay.nextRound();
-                    listener.reportingEntryPublished(scene, ReportEntry.from("restart", "round " + (round + 1)));
+                    listener.reportingEntryPublished(
+                            scene,
+                            ReportEntry.from("restart", "round " + (round + 1) + " on world " + worlds.current()));
                     continue;
                 }
                 String why = describe(

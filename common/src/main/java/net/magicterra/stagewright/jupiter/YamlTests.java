@@ -38,7 +38,7 @@ final class YamlTests {
 
     /** The options {@code test()} takes, passed on as they are. */
     private static final List<String> OPTIONS =
-            List.of("requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart");
+            List.of("requires", "dependsOn", "knownIssue", "locks", "isolated", "afterRestart", "world", "worldFrom");
 
     private static final Set<String> TEST_KEYS = Set.of(
             "name",
@@ -49,6 +49,8 @@ final class YamlTests {
             "locks",
             "isolated",
             "afterRestart",
+            "world",
+            "worldFrom",
             "plot",
             "given",
             "when",

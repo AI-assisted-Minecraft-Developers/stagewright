@@ -160,6 +160,23 @@ Tests in a game run concurrently by default, classes and methods alike. What two
   program that reads them afterwards. Bots a test keeps with `@Bot.Keep` cross a restart too, without the store (see
   [Bodies](#bodies)).
 
+- `world = "name"` beside `afterRestart` starts the game again on another save instead: a name the scene has not run
+  on yet is a new world, made as the scene file declares its world, or from `worldFrom = "worlds/old.zip"` (a save
+  under `stagewright/` on the test class path, as the scene file's `world.from`). Each world stays as its last round
+  left it, so a later round can go back to one; the scene's own world is `DependsOn.FIRST_WORLD`, `"first"`. The two
+  tests of one round may not name different worlds. In a script or YAML test these are the `world` and `worldFrom`
+  options.
+
+  ```java
+  @Test
+  @DependsOn(value = "entersTheRetreat", afterRestart = true, world = "second")
+  void shakesTheBellOnANewWorld(Game game, Player player) { … }
+
+  @Test
+  @DependsOn(value = "shakesTheBellOnANewWorld", afterRestart = true, world = DependsOn.FIRST_WORLD)
+  void theFirstWorldStillHasItsRetreat(Game game, Player player) { … }
+  ```
+
 - `@Requires(CLIENT)`, `@Requires(DEDICATED_SERVER)`, `@Requires(INTEGRATED_SERVER)` or `@Requires(mods = "id")` runs
   the test only in a game that has it; elsewhere it is reported as disabled. A test that no scene it names can run
   fails the run, since it would otherwise never run and never fail.

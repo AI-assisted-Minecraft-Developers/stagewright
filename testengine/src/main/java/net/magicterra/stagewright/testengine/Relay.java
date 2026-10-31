@@ -55,6 +55,10 @@ final class Relay implements Consumer<Map<String, Object>> {
 
     private int restart = -1;
 
+    private String restartWorld;
+
+    private String restartWorldFrom;
+
     private Throwable error;
 
     Relay(Nodes.Scene scene, EngineExecutionListener listener, Coverage coverage) {
@@ -174,7 +178,11 @@ final class Relay implements Consumer<Map<String, Object>> {
                 error = event.get("failure") instanceof Map<?, ?> f
                         ? Relayed.failure(f, false)
                         : new IllegalStateException("the game's test run could not start");
-            case "restart" -> restart = event.get("round") instanceof Number n ? n.intValue() : -1;
+            case "restart" -> {
+                restart = event.get("round") instanceof Number n ? n.intValue() : -1;
+                restartWorld = event.get("world") instanceof String w ? w : null;
+                restartWorldFrom = event.get("worldFrom") instanceof String f ? f : "";
+            }
             case "ended" -> ended = true;
             default -> {
                 // A newer game may send more; what this version does not know it leaves alone.
@@ -192,10 +200,22 @@ final class Relay implements Consumer<Map<String, Object>> {
         return restart;
     }
 
+    /** The save the next round runs on, by its name in the scene; null for the world of the round that asked. */
+    synchronized String restartWorld() {
+        return restartWorld;
+    }
+
+    /** The save resource the next round's world starts from when it is new to the scene; empty for a new world. */
+    synchronized String restartWorldFrom() {
+        return restartWorldFrom;
+    }
+
     /** The next round's game is about to start: what this one said about its end no longer applies. */
     synchronized void nextRound() {
         ended = false;
         restart = -1;
+        restartWorld = null;
+        restartWorldFrom = null;
     }
 
     /**

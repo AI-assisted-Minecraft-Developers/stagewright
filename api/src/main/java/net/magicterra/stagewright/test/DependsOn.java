@@ -41,4 +41,22 @@ public @interface DependsOn {
      * {@link Game#store()}.
      */
     boolean afterRestart() default false;
+
+    /**
+     * With {@link #afterRestart}: the save the game starts again on, by a name the scene's tests choose. The scene's
+     * own world is {@link #FIRST_WORLD}; a name no round has run on yet is a new world, made as the scene declares its
+     * world, or from {@link #worldFrom}. Each world is kept as its last round left it, so a later round can go back to
+     * it. Without it, the round runs on the world of the round before; two tests of one round naming different worlds
+     * fail the run before any test starts.
+     */
+    String world() default "";
+
+    /**
+     * With {@link #world}: the save a world new to the scene starts from, a class path resource under
+     * {@code stagewright/} as the scene file's {@code world.from} is. Ignored once that world exists.
+     */
+    String worldFrom() default "";
+
+    /** The name {@link #world} gives the world the scene starts on. */
+    String FIRST_WORLD = "first";
 }
