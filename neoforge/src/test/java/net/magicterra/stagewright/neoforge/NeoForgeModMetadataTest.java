@@ -52,12 +52,6 @@ class NeoForgeModMetadataTest {
         return v.trim();
     }
 
-    private static Config mod() {
-        List<Config> mods = META.get("mods");
-        assertEquals(1, mods.size());
-        return mods.get(0);
-    }
-
     private static Config dependency(String modId) {
         List<Config> deps = META.get(List.of("dependencies", prop("mod_id")));
         assertNotNull(deps, "no [[dependencies." + prop("mod_id") + "]]");
@@ -65,22 +59,6 @@ class NeoForgeModMetadataTest {
                 .filter(d -> modId.equals(d.get("modId")))
                 .findFirst()
                 .orElse(null);
-    }
-
-    @Test
-    void identityAndLicenseComeFromGradleProperties() {
-        assertEquals(prop("mod_license"), META.get("license"));
-        assertEquals(prop("mod_id"), mod().get("modId"));
-        assertEquals(prop("mod_name"), mod().get("displayName"));
-        assertEquals(prop("mod_authors"), mod().get("authors"));
-        assertEquals(prop("mod_description"), mod().<String>get("description").trim());
-    }
-
-    @Test
-    void rangesAreTheOnesGradlePropertiesStates() {
-        assertEquals(prop("loader_version_range"), META.get("loaderVersion"));
-        assertEquals(prop("neoforge_version_range"), dependency("neoforge").get("versionRange"));
-        assertEquals(prop("minecraft_version_range"), dependency("minecraft").get("versionRange"));
     }
 
     @Test

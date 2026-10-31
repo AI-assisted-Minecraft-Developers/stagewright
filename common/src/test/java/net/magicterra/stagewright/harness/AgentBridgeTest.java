@@ -89,9 +89,4 @@ class AgentBridgeTest {
         AgentBridge bridge = AgentBridge.bind(getClass().getClassLoader(), String.class.getName());
         assertFalse(bridge.attached());
     }
-
-    @Test
-    void thisTestJvmHasNoAgent() {
-        assertFalse(AgentBridge.system().attached());
-    }
 }

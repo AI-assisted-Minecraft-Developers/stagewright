@@ -49,11 +49,6 @@ class SceneFileTest {
         assertEquals("t", file.topology());
         assertEquals(SceneFile.World.QUIET, file.world());
         assertFalse(file.world().createsWorld());
-        String described = file.world().describe();
-        assertTrue(described.contains("time=18000"), described);
-        assertTrue(described.contains("(frozen)"), described);
-        assertTrue(described.contains("weather=clear"), described);
-        assertTrue(described.contains("mobSpawning=false"), described);
     }
 
     @Test

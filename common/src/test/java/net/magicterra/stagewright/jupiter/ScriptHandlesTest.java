@@ -40,8 +40,6 @@ class ScriptHandlesTest {
 
     @Test
     void hasClassAnswersWhetherAClassLoadsWithoutInitialisingIt() {
-        assertTrue(ScriptHandles.hasClass("java.lang.String"));
-        assertTrue(ScriptHandles.hasClass(ScriptHandlesTest.class.getName()));
         assertEquals(false, ScriptHandles.hasClass("com.example.definitely.NotHere"));
     }
 

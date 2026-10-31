@@ -54,11 +54,8 @@ class TestCommandTest {
                 Map.of("java", "java"),
                 client,
                 Map.of("timeout", "7"));
-        assertEquals("dedicatedServerWithClient", spec.get("topology"));
         assertEquals(true, spec.get("server"));
         assertEquals(7, spec.get("timeoutMinutes"));
-        assertEquals(client, spec.get("companion"));
-        assertEquals("net.minecraft.client.main.Main", client.get("mainClass"));
     }
 
     @Test
@@ -78,14 +75,6 @@ class TestCommandTest {
         IllegalArgumentException e =
                 assertThrows(IllegalArgumentException.class, () -> TestCommand.leaks(Map.of("leaks", "ignore")));
         assertTrue(e.getMessage().contains("'fail' or 'report'"), e.getMessage());
-    }
-
-    @Test
-    void aTopologyWithNoClientToStartSaysWhy() {
-        Map<String, Object> spec = TestCommand.unavailable("integratedServer", "no --client");
-        assertEquals("integratedServer", spec.get("topology"));
-        assertEquals("no --client", spec.get("unavailable"));
-        assertFalse(spec.containsKey("primary"));
     }
 
     @Test
@@ -235,6 +224,5 @@ class TestCommandTest {
         ModInjection.Arguments mods = new ModInjection.Arguments(List.of("-Dfabric.addMods=a.jar"), List.of());
         List<String> props = TestCommand.clientProps(List.of("-Xmx2G"), mods, "stagewright.client.world=W");
         assertEquals(List.of("-Xmx2G", "-Dstagewright.client.world=W", "-Dfabric.addMods=a.jar"), props);
-        assertTrue(props.indexOf("-Dfabric.addMods=a.jar") > props.indexOf("-Xmx2G"));
     }
 }

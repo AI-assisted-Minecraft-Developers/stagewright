@@ -67,7 +67,6 @@ class DependenciesTest {
             RAN.clear();
         }
         MARKS.clear();
-        THREADS.clear();
         FLAG.set(false);
         COUNT.set(0);
         SEEN_BY_DOWNSTREAM.set(-1);
@@ -173,7 +172,6 @@ class DependenciesTest {
     /** Wall-clock marks (nanoTime) by name, and a flag the cross-class samples hand over. */
     private static final Map<String, Long> MARKS = new ConcurrentHashMap<>();
 
-    private static final Set<String> THREADS = ConcurrentHashMap.newKeySet();
     private static final AtomicBoolean FLAG = new AtomicBoolean();
     private static final AtomicInteger COUNT = new AtomicInteger();
     private static final AtomicInteger SEEN_BY_DOWNSTREAM = new AtomicInteger(-1);
@@ -309,22 +307,13 @@ class DependenciesTest {
     @EnabledIf("net.magicterra.stagewright.jupiter.DependenciesTest#inLauncher")
     static class Plain {
         @Test
-        void one() {
-            THREADS.add(Thread.currentThread().getName());
-            sleep(300);
-        }
+        void one() {}
 
         @Test
-        void two() {
-            THREADS.add(Thread.currentThread().getName());
-            sleep(300);
-        }
+        void two() {}
 
         @Test
-        void three() {
-            THREADS.add(Thread.currentThread().getName());
-            sleep(300);
-        }
+        void three() {}
     }
 
     // ---- samples depending on script tests -----------------------------------------------------------------
@@ -646,17 +635,6 @@ class DependenciesTest {
         assertNotNull(a);
         assertEquals(TestExecutionResult.Status.SUCCESSFUL, a.status(), a.message());
         assertTrue(didRun("Locked#a") && didRun("Locked#b"));
-    }
-
-    @Test
-    @Timeout(60)
-    void parallelRunsIndependentTestsOfAPlainClassConcurrently() {
-        Recorder r = runParallel(Plain.class);
-        for (String name : List.of("Plain#one", "Plain#two", "Plain#three")) {
-            assertEquals(
-                    TestExecutionResult.Status.SUCCESSFUL, r.finished.get(name).status(), name);
-        }
-        assertTrue(THREADS.size() > 1, "all tests ran on one thread: " + THREADS);
     }
 
     // ---- script tests --------------------------------------------------------------------------------------

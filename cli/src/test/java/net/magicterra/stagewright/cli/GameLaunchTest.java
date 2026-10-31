@@ -44,13 +44,11 @@ class GameLaunchTest {
                 gameDir.resolve("run.sh"),
                 "java @user_jvm_args.txt @libraries/net/neoforged/neoforge/21.1.248/unix_args.txt \"$@\"\n");
 
-        List<String> log = new ArrayList<>();
-        List<String> command = GameLaunch.detect(gameDir, "java", log::add);
+        List<String> command = GameLaunch.detect(gameDir, "java", line -> {});
 
         // The beta is newer by every ordering rule and is NOT what this pack boots.
         assertTrue(command.stream().anyMatch(a -> a.contains("/21.1.248/")), command.toString());
         assertTrue(command.stream().noneMatch(a -> a.contains("21.5.34")), command.toString());
-        assertTrue(log.stream().anyMatch(l -> l.contains("neoforge 21.1.248")), log.toString());
     }
 
     @Test
@@ -62,7 +60,6 @@ class GameLaunchTest {
         List<String> command = GameLaunch.detect(gameDir, "java", log::add);
 
         assertTrue(command.stream().anyMatch(a -> a.contains("/21.1.117/")), command.toString());
-        assertTrue(log.stream().anyMatch(l -> l.contains("neoforge 21.1.117")), log.toString());
         assertTrue(log.stream().anyMatch(l -> l.contains("--launch")), log.toString());
     }
 

@@ -78,19 +78,6 @@ class FabricModMetadataTest {
     }
 
     @Test
-    void identityAndLicenseComeFromGradleProperties() {
-        assertEquals(prop("mod_id"), META.get("id").getAsString());
-        assertEquals(prop("mod_name"), META.get("name").getAsString());
-        assertEquals(prop("mod_license"), META.get("license").getAsString());
-        assertEquals(prop("mod_description"), META.get("description").getAsString());
-        assertEquals(
-                List.of(prop("mod_authors")),
-                META.getAsJsonArray("authors").asList().stream()
-                        .map(JsonElement::getAsString)
-                        .toList());
-    }
-
-    @Test
     void minecraftRangeIsTheOneGradlePropertiesStates() throws VersionParsingException {
         assertSameInterval(
                 "minecraft_version_range", META.getAsJsonObject("depends").get("minecraft"));

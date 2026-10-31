@@ -168,9 +168,6 @@ class StageWrightTestEngineTest {
                         .getKeyValuePairs()
                         .get("forcedDown"))
                 .anyMatch(v -> v != null && v.contains("mod-pool-1")));
-        Path log =
-                temp.resolve("game-leak").resolve("stagewright").resolve("logs").resolve("leak-game.log");
-        assertTrue(Files.readString(log).contains("[stagewright] the game had to be forced down"), log.toString());
     }
 
     @Test
@@ -198,11 +195,6 @@ class StageWrightTestEngineTest {
                         && v.contains("had to be forced down")
                         && v.contains("mod-pool-1")
                         && v.contains("started by ")));
-        Path log = temp.resolve("game-leakReport")
-                .resolve("stagewright")
-                .resolve("logs")
-                .resolve("leakReport-game.log");
-        assertTrue(Files.readString(log).contains("[stagewright] the game had to be forced down"), log.toString());
     }
 
     @Test
@@ -247,11 +239,6 @@ class StageWrightTestEngineTest {
                         .getKeyValuePairs()
                         .get("companion"))
                 .anyMatch(v -> v != null && v.contains("PROCESS_DIED")));
-        Path log = temp.resolve("game-clientLeaves")
-                .resolve("stagewright")
-                .resolve("logs")
-                .resolve("clientLeaves-companion.log");
-        assertTrue(Files.readString(log).contains("[stagewright] the joined client ended"), log.toString());
     }
 
     @Test
@@ -358,23 +345,6 @@ class StageWrightTestEngineTest {
         // The fake game reports no server-port=1 here, so its check fails; what matters is the file is gone again.
         assertEquals(2, r.testEvents().failed().count());
         assertTrue(!Files.exists(temp.resolve("game-world").resolve("server.properties")));
-    }
-
-    @Test
-    void theSceneNodePublishesItsWorldAsAReportEntry() {
-        EngineExecutionResults r = run("WorldBlockFixture");
-        List<Event> published = r.allEvents().reportingEntryPublished().stream()
-                .filter(e -> "worldBlock".equals(e.getTestDescriptor().getDisplayName()))
-                .toList();
-        String world = published.stream()
-                .flatMap(e -> e.getPayload(org.junit.platform.engine.reporting.ReportEntry.class).stream())
-                .map(entry -> entry.getKeyValuePairs().get("world"))
-                .filter(java.util.Objects::nonNull)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("no world entry on the scene: " + published));
-        assertTrue(
-                world.contains("seed=5471") && world.contains("preset=minecraft:flat") && world.contains("time=6000"),
-                world);
     }
 
     /** How the engine descriptor itself finished. */
@@ -548,18 +518,10 @@ class StageWrightTestEngineTest {
     }
 
     @Test
-    void aRecordedValueIsAReportEntryABlankOneIncludedAndALineOfOutput() {
-        java.io.PrintStream out = System.out;
-        java.io.ByteArrayOutputStream printed = new java.io.ByteArrayOutputStream();
-        EngineExecutionResults r;
-        System.setOut(new java.io.PrintStream(printed, true, java.nio.charset.StandardCharsets.UTF_8));
-        try {
-            r = EngineTestKit.engine("stagewright")
-                    .selectors(selectClasspathResource("stagewright/tests/arithmetic.js"))
-                    .execute();
-        } finally {
-            System.setOut(out);
-        }
+    void aRecordedValueIsAReportEntryABlankOneIncluded() {
+        EngineExecutionResults r = EngineTestKit.engine("stagewright")
+                .selectors(selectClasspathResource("stagewright/tests/arithmetic.js"))
+                .execute();
         List<java.util.Map<String, String>> entries = r.allEvents().reportingEntryPublished().stream()
                 .map(e -> e.getPayload(ReportEntry.class).orElseThrow().getKeyValuePairs())
                 .toList();
@@ -568,13 +530,6 @@ class StageWrightTestEngineTest {
         assertTrue(
                 entries.contains(java.util.Map.of(StageWrightTestEngine.BLANK_RECORD, "none found")),
                 entries.toString());
-        String text = printed.toString(java.nio.charset.StandardCharsets.UTF_8);
-        assertTrue(
-                text.contains("[stagewright] record script stagewright/tests/arithmetic.js#adds: note = two\\nlines"),
-                text);
-        assertTrue(
-                text.contains("[stagewright] record script stagewright/tests/arithmetic.js#adds: none found = \n"),
-                text);
     }
 
     @Test

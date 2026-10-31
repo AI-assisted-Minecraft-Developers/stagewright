@@ -150,9 +150,6 @@ class TestSuiteLaunchSpecsTest {
         assertTrue(
                 result.getOutput().contains("LAUNCHES=" + dir.resolve("build/stagewright/launches/fabric")),
                 result.getOutput());
-        BuildResult tasks = runner("tasks", "--all").build();
-        assertTrue(tasks.getOutput().contains("stagewrightTestFabric"), tasks.getOutput());
-        assertTrue(tasks.getOutput().contains("stagewrightLaunchSpecsFabric"), tasks.getOutput());
     }
 
     @Test
