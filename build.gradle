@@ -1,32 +1,11 @@
-// StageWright — root build.
-//
-// A deliberately trimmed sibling of worlddriver's root build.gradle: this repo builds only the
-// framework, and consumes the driver it drives as a published artifact.
-//
-// RELEASE ORDER. The two repos depend on each other, in opposite directions and at different
-// points. Each pins a build of the other on the Nexus (worlddriver_version here), so neither needs
-// the other's source; a clean start has one working bootstrap sequence, written out with its
-// reasons in docs/reference/publishing.md.
-//
-// Differences from worlddriver's root, and why:
-//   - no `id 'net.magicterra.stagewright'` applied here. That plugin is StageWright's own
-//     product; applying it to its own build would be circular. worlddriver applies it as the
-//     first dogfood consumer, which is the point.
-//   - no rhino/netty wiring. Those are worlddriver's embedded runtime libraries.
-//   - the `dev` classifier publication is kept VERBATIM, because the dependency runs both
-//     ways: worlddriver's testmod compiles against mc_stagewright-api:dev.
-//
-// What every module shares is in build-logic's convention plugins, which each module applies itself:
-// stagewright.module (all of them) and stagewright.mod (the four Minecraft-side ones).
+// Every module applies its own convention plugin from build-logic/; see docs/reference/publishing.md for the
+// layout and the order a clean machine publishes in.
 plugins {
-    // :stagewright-fabric builds with Fabric Loom; api, common and neoforge with ModDevGradle. The same versions
-    // as WorldDriver's build; Loom 1.13 is the newest that runs on Gradle 8. See docs/reference/publishing.md.
+    // Declared here, applied only by the Minecraft-side modules. Loom 1.13 is the newest that runs on Gradle 8.
     id 'fabric-loom' version '1.13.6' apply false
     id 'net.neoforged.moddev' version '2.0.141' apply false
     // Shadow 9: 8.x unpacks the nested jars ModDevGradle's jarJar adds to the NeoForge jar.
     id 'com.gradleup.shadow' version '9.2.2' apply false
-    // The version every module reads from this project (stagewrightVersion, worlddriverVersionRange, ...), and the
-    // formatter for the files at the repository root.
     id 'stagewright.version'
     id 'stagewright.lint'
 }
@@ -38,9 +17,3 @@ repositories {
 
 group = maven_group
 version = stagewrightVersion
-
-// ---- Release order ----
-// The bootstrap sequence is the one in the header of this file. It is written out, with the
-// reason each step is needed and the artifacts each one produces, in docs/reference/publishing.md.
-// A shorter sequence used to be given here and was wrong: it omitted the engine build, the Gradle
-// plugin, the attached module and the bootstrap property, and so failed on a clean machine.

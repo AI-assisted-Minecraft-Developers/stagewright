@@ -26,13 +26,9 @@ dependencies {
     // The mixin annotations; each loader brings its own Mixin at run time.
     compileOnly "org.spongepowered:mixin:$rootProject.mixin_version"
 
-    // The published API (the test API and the capability layer). Split out so the artifact graph
-    // between this repo and worlddriver stays acyclic — see api/build.gradle.
     implementation project(':stagewright-api')
 
-    // StageWright depends on the driver it drives, so the mc.test.* methods register into its
-    // API registry directly. The `dev` classifier, not the plain jar: the published jar
-    // is remapped to intermediary and will not link against a dev-mapped compile classpath.
+    // The driver, whose API registry the mc.test.* methods register into. `dev`: the plain jar is in intermediary names.
     implementation "net.magicterra:worlddriver-common:${rootProject.worlddriver_version}:dev"
     // Its api is a module of its own; the `dev` jars declare no dependencies, so name it too.
     implementation "net.magicterra:worlddriver-api:${rootProject.worlddriver_version}:dev"

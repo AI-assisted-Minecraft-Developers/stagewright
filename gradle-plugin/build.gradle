@@ -1,17 +1,8 @@
-// stagewright gradle plugin — standalone included build.
-//
-// Publishes plugin id `net.magicterra.stagewright`. Applied to a mod project, it gives each declared
-// test suite a `stagewrightTest<Name>` Test task on the StageWright test engine, with launch specs
-// read off the host's dev runs. No external dependency besides our own engine: a JSON library on a
-// consumer's buildscript classpath is a version conflict waiting to happen.
-// See src/main/java/.../StageWrightPlugin.java.
+// Plugin `net.magicterra.stagewright` (docs/guide/gradle-plugin.md). No dependency besides the engine: it runs on a
+// consumer's buildscript classpath.
 plugins {
     id 'java-gradle-plugin'
-    // java-gradle-plugin only CREATES the plugin-marker publication once maven-publish is
-    // present; without this the plugin was reachable exclusively through includeBuild, i.e.
-    // only from inside this repo. An external consumer resolves it from the Nexus, as
-    // docs/reference/publishing.md shows:
-    //   plugins { id 'net.magicterra.stagewright' version '0.1.0-alpha.<n>+1.21.1' }
+    // Makes java-gradle-plugin publish the plugin marker, which consumers resolve the plugin id through.
     id 'maven-publish'
     id 'stagewright.module'
 }
@@ -26,8 +17,7 @@ repositories {
     mavenCentral()
 }
 
-// Standard java-gradle-plugin functional-test layout: a dedicated `functionalTest`
-// source set exercised through Gradle TestKit, separate from plain unit `test`.
+// Gradle TestKit tests, apart from the unit tests.
 def functionalTestSourceSet = sourceSets.create('functionalTest')
 
 configurations.named('functionalTestImplementation') {
@@ -38,7 +28,6 @@ configurations.named('functionalTestRuntimeOnly') {
 }
 
 dependencies {
-    // The one dependency, and it is ours: it pulls in nothing itself (the launch-spec JSON writer).
     api project(':stagewright-engine')
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
@@ -49,7 +38,6 @@ dependencies {
     // Gradle 8.x no longer bundles the platform launcher on the test runtime.
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-    // Gradle TestKit — spins up a synthetic consumer project in-process.
     functionalTestImplementation gradleTestKit()
 }
 
@@ -74,7 +62,7 @@ def versionResource = tasks.register('generateVersionResource') {
 }
 tasks.named('processResources') { from(versionResource) }
 
-// The test engine from the included engine build, for the functional test that runs a suite end to end.
+// The real test engine, for the functional test that runs a suite end to end.
 def realTestEngine = configurations.create('functionalTestEngine') {
     canBeConsumed = false
 }
@@ -111,8 +99,7 @@ tasks.named('check') {
 }
 
 gradlePlugin {
-    // Inject the plugin-under-test metadata onto the functionalTest classpath so
-    // GradleRunner.withPluginClasspath() can resolve `id 'net.magicterra.stagewright'`.
+    // For GradleRunner.withPluginClasspath().
     testSourceSets(functionalTestSourceSet)
     plugins {
         create('mcStageWright') {

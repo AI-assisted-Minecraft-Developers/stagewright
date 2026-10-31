@@ -1,5 +1,4 @@
-// Every module of the root build (api, common, fabric, neoforge, cli): the repository-wide version, the license
-// terms on every jar and POM, the formatter and lint, and the Nexus for whatever it publishes.
+// Every module: the repository-wide version, the license terms, the formatter and lint, and the Nexus.
 group = rootProject.maven_group
 version = rootProject.stagewrightVersion
 

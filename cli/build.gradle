@@ -1,7 +1,4 @@
-// A single executable jar a modpack author can run with the JVM they already have.
-//
-// Pure JVM: it carries the two loader jars as resources and runs on a machine with no Minecraft classpath, so it
-// takes stagewright.module alone and stays out of the Loom and ModDevGradle pipeline (stagewright.mod).
+// stagewright.jar, the one-file command-line runner; see "The command-line jar" in docs/reference/publishing.md.
 plugins {
     id 'application'
     id 'maven-publish'
@@ -18,11 +15,7 @@ repositories {
     mavenCentral()
 }
 
-// The Minecraft-side jars this CLI installs into a pack, carried as resources rather than
-// downloaded. A pack author gets one file; making them also fetch a matching loader build for a
-// matching Minecraft version is the step that fails, and it fails looking exactly like the mod not
-// working. Publishing the mods and rebuilding this are one release, not two, which
-// the stagewright.version plugin holds to one version.
+// The loader jars this CLI installs into a pack.
 configurations {
     bundledMods { transitive = false }
 }
@@ -34,14 +27,11 @@ dependencies {
     implementation 'org.junit.platform:junit-platform-launcher'
     implementation 'org.junit.platform:junit-platform-reporting'
 
-    // The two loader jars, as the sibling projects build them (the shadow-bundled jar a loader loads,
-    // remapped on Fabric), so building this builds them and a skew between the mods and this jar cannot
-    // exist. NeoForge's mod jar is its shadowJar; its runtimeElements carries the module's own classes.
+    // The jar a loader loads: NeoForge's is its shadowJar; its runtimeElements is the module's own classes.
     bundledMods project(path: ':stagewright-neoforge', configuration: 'shadowRuntimeElements')
     bundledMods project(path: ':stagewright-fabric', configuration: 'runtimeElements')
 
-    // The client installer and the launch specs. The supervision agent and Rhino arrive inside the
-    // test engine's jar.
+    // The client installer and the launch specs.
     implementation 'com.google.code.gson:gson:2.11.0'
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
@@ -56,8 +46,7 @@ tasks.named('test', Test) {
     useJUnitPlatform()
 }
 
-// Staged under /mods/mc_stagewright-<loader>.jar — version stripped on purpose, so the extraction
-// code never has to know which version it carries and an upgrade is a rebuild rather than an edit.
+// Under /mods/mc_stagewright-<loader>.jar, without the version.
 def stageBundledMods = tasks.register('stageBundledMods', Copy) {
     from configurations.bundledMods
     into layout.buildDirectory.dir('bundled-mods')
@@ -69,8 +58,7 @@ tasks.named('processResources') { into('mods') { from stageBundledMods } }
 def buildInfo = tasks.register('buildInfo') {
     def out = layout.buildDirectory.file('generated/build-info/stagewright-cli-build.properties')
     def parts = configurations.runtimeClasspath.incoming.files + configurations.bundledMods
-    // No build time here: CI publishes the jar it tested because each later Gradle run in the job
-    // finds this file up to date. A part's time is its file's, which the job writes only once.
+    // No build time, so later runs find this up to date and CI publishes the jar it tested.
     def version = stagewrightVersion
     inputs.files(parts)
     inputs.property('version', version)
@@ -93,13 +81,7 @@ application {
     mainClass = 'net.magicterra.stagewright.cli.Main'
 }
 
-// Fat jar, deliberately: the audience is someone who downloads one file and runs it. A CLI that
-// needed a -cp with the engine beside it would be a worse experience than the Gradle plugin it
-// exists to replace for them.
-//
-// Merging a library's classes conveys that library, so each one needs its entry in
-// src/main/resources/META-INF/THIRD-PARTY-NOTICES and its license text beside it; the merged jars
-// carry none of their own. scripts/check_packaging.py fails a jar holding classes it cannot place.
+// Every library merged in; each needs its entry in META-INF/THIRD-PARTY-NOTICES.
 tasks.named('jar', Jar) {
     archiveBaseName = 'stagewright'
     archiveClassifier = ''
@@ -112,11 +94,9 @@ tasks.named('jar', Jar) {
             it.isDirectory() ? it : zipTree(it)
         }
     }) {
-        // Rhino is itself a mod jar. Its loader metadata at this jar's root would make a copy
-        // dropped into mods/ by mistake load as a second `rhino` mod on either loader.
+        // Rhino's mod metadata, so a copy dropped into mods/ does not load as a second mod.
         exclude 'fabric.mod.json', 'quilt.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml',
                 'pack.mcmeta', 'rhino_logo.png'
-        // A library's module descriptor describes that library alone, not this merged jar.
         exclude 'module-info.class', 'META-INF/versions/*/module-info.class'
     }
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE

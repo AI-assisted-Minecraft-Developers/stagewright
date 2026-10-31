@@ -1,12 +1,4 @@
-// StageWright's published API: the test API (net.magicterra.stagewright.test) and the capability layer
-// (net.magicterra.stagewright.capability). It depends on nothing of StageWright's, only on WorldDriver's :api,
-// so worlddriver's testmod can compile against it without a version cycle:
-//
-//     worlddriver :api  <-  stagewright-api  <-  worlddriver :common testmod
-//                                ^
-//                                `-- stagewright-common/-fabric/-neoforge  (+ worlddriver)
-//
-// It owns its packages outright: a package split across two modules is a ResolutionException under FML.
+// The test API and the capability layer. Depends only on WorldDriver's :api (docs/reference/publishing.md).
 plugins {
     // java-library for the `api` configuration, which ModDevGradle does not add.
     id 'java-library'

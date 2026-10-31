@@ -1,9 +1,4 @@
-// The agent a supervised game process is started with (-javaagent). See docs/design/supervision.md.
-//
-// JDK ONLY, and no class transformation. It runs in the game's system class loader before any loader
-// has started, so anything it linked against would have to be on the game's class path, and a
-// transformer could collide with mixins or another agent. It speaks to the supervisor in JSON lines
-// written by hand, which is why it carries no JSON library.
+// The -javaagent a supervised game starts with: JDK only, no class transformation (docs/design/supervision.md).
 plugins {
     id 'java-library'
     id 'maven-publish'

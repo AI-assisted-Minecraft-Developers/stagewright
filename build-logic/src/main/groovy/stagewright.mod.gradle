@@ -1,5 +1,4 @@
-// A Minecraft-side module of the root build (api, common, fabric, neoforge). Applied after `java-library` and the
-// module's loader plugin (Fabric Loom or ModDevGradle), which each module's own plugins {} block names first.
+// A Minecraft-side module (api, common, fabric, neoforge), applied after `java-library` and its loader plugin.
 pluginManager.apply('maven-publish')
 pluginManager.apply('stagewright.module')
 
@@ -25,9 +24,7 @@ base {
 }
 
 repositories {
-    // stagewright-common compiles against net.magicterra:worlddriver-common:<v>:dev, which
-    // worlddriver's CI publishes to the Nexus below. mavenLocal comes first, so a worlddriver
-    // published locally for development is found without it.
+    // WorldDriver: a local development build first, then CI's builds on the Nexus.
     mavenLocal()
     maven {
         name = 'gardelNexus'
@@ -35,10 +32,8 @@ repositories {
         content { includeGroup 'net.magicterra' }
     }
     mavenCentral()
-    // Rhino (KubeJS fork), compile-only, for the JavaScript scene loader. Not on Maven Central.
-    // Fenced to its own group: Gradle takes the first repository that answers, and a third-party
-    // host whose parking page answers 200 to any path would otherwise serve bogus POMs for every
-    // artifact not found earlier.
+    // Rhino (KubeJS fork), not on Maven Central. Fenced to its group: a host that answers 200 to any path would
+    // otherwise serve bogus POMs for everything not found earlier.
     maven {
         name = 'latvian-releases'
         url = 'https://maven.latvian.dev/releases'
@@ -61,11 +56,8 @@ publishing {
         mavenJava(MavenPublication) {
             // The artifacts are each module's own, attached below once its script has named them.
 
-            // No <dependency> entries, because a mod jar NESTS its runtime deps via Jar-in-Jar: a
-            // consumer resolving the raw POM would end up with a second copy of something the jar
-            // already carries. The first external consumer hit exactly this. A module keeps the
-            // `api` dependencies it lists in ext.pomKeeps ('group:artifact'); see
-            // docs/reference/publishing.md.
+            // No dependencies but those a module lists in ext.pomKeeps ('group:artifact'): a mod jar nests its own
+            // (docs/reference/publishing.md).
             pom.withXml {
                 def keep = module.findProperty('pomKeeps') ?: []
                 def kept = module.configurations.api.dependencies.findAll {
@@ -90,14 +82,8 @@ publishing {
         }
     }
 
-    // artifactId must be resolved AFTER the module's own build script has run: this plugin is
-    // applied BEFORE the rest of that script, so an eager archivesName.get() here would capture
-    // the default instead of the module's override.
-    //
-    // Each module's script names its jars: `shippedJar`, the plain artifact (intermediary on Fabric;
-    // api's and common's are remapped by :stagewright-fabric, which has the mappings), `devJar`, the `dev`
-    // classifier in Mojang names, which worlddriver's testmod compiles against for api, and
-    // `devShadowJar`, a loader's whole mod in Mojang names.
+    // After the module's script, which sets archivesName and names its jars: `shippedJar` (the plain artifact),
+    // `devJar` (Mojang names) and `devShadowJar` (a loader's whole mod in Mojang names).
     afterEvaluate {
         publishing.publications.named('mavenJava') {
             artifactId = base.archivesName.get()

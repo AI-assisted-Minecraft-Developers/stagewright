@@ -1,15 +1,8 @@
-// The LGPL-3.0-only terms, attached to every jar and POM a StageWright build produces. Applied by
-// the root build to each subproject and by the standalone engine, cli and gradle-plugin builds, so
-// no artifact can leave any of them without the terms it is conveyed under.
-//
-// Resolved against the repository root, not the applying project: the standalone builds
-// each have their own rootProject, and none of them is the repository root.
+// The LGPL-3.0-only terms, on every jar and POM (docs/reference/publishing.md).
 def repoRoot = StageWrightRepo.ROOT
 
-// LGPLv3 builds on GPLv3 §4/§6, which require a copy of the license to accompany object code.
-// Both files, because COPYING.LESSER is only additional permissions on top of COPYING.
-// shadowJar is left out: it bundles this build's own jars, which already carry both, and Shadow
-// writes a path it reads from a bundled jar again even when the task itself added it.
+// Both files: COPYING.LESSER only adds permissions to COPYING. Not shadowJar, whose bundled jars carry them already
+// and which would write them twice.
 tasks.withType(Jar).matching { it.name != 'shadowJar' }.configureEach {
     into('META-INF') {
         from(new File(repoRoot, 'COPYING'))

@@ -77,12 +77,8 @@ shadowJar {
     // The mod jar. ModDevGradle nests the jarJar output into `jar` only, so it is added here too.
     archiveClassifier = ''
     from(tasks.named('jarJar'))
-    // Load-bearing. Capability providers arrive through META-INF/services, and that path now exists
-    // in BOTH :stagewright-api (the shipped Curios/FTB Quests adapters) and this module. Shadow's
-    // default is last-writer-wins per path, so without this the jar ships one file and every
-    // provider in the other reports itself absent — which is indistinguishable from an uninstalled
-    // mod, and would be found by a scene skipping for a reason that is not true.
-    // Shadow 9 hands a transformer only the duplicates the strategy lets through.
+    // api and this module both ship capability providers in META-INF/services; merge them, not keep the last
+    // (docs/design/capability-extensions.md). Shadow 9 hands a transformer only the duplicates the strategy keeps.
     filesMatching('META-INF/services/**') {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
     }
