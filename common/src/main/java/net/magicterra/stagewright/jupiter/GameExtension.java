@@ -11,8 +11,11 @@ import net.magicterra.stagewright.test.Plot;
 import net.minecraft.core.Vec3i;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
+import org.junit.jupiter.api.extension.ConditionEvaluationResult;
+import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
@@ -25,7 +28,8 @@ import org.junit.jupiter.api.extension.ParameterResolver;
  * it. Registered for every test through Jupiter's extension auto-detection (META-INF/services), which the in-game
  * launcher turns on.
  */
-public final class GameExtension implements ParameterResolver, BeforeEachCallback, AfterEachCallback {
+public final class GameExtension
+        implements ParameterResolver, ExecutionCondition, BeforeEachCallback, AfterEachCallback {
 
     private static final ExtensionContext.Namespace NAMESPACE = ExtensionContext.Namespace.create(GameExtension.class);
 
@@ -36,6 +40,16 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
     /** The game the next run's tests receive. */
     static void bind(Game g) {
         game = g;
+        Quit.reset();
+    }
+
+    /** Skips whatever has not started once a test called {@code game.quitNow()}. */
+    @Override
+    public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
+        String quit = Quit.reason();
+        return quit == null
+                ? ConditionEvaluationResult.enabled("the game runs")
+                : ConditionEvaluationResult.disabled(quit);
     }
 
     @Override
@@ -140,6 +154,11 @@ public final class GameExtension implements ParameterResolver, BeforeEachCallbac
     @Override
     public void beforeEach(ExtensionContext context) throws InterruptedException {
         Dependencies.awaitUpstream(context);
+        // Passed the condition before the test it waited for quit.
+        String quit = Quit.reason();
+        if (quit != null) {
+            Assumptions.abort(quit);
+        }
         TestScope scope = TestScope.of(context);
         scope.hold(!context.getConfigurationParameter(PARALLEL)
                 .map(Boolean::parseBoolean)

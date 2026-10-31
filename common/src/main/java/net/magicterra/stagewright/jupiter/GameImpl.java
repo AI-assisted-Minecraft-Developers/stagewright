@@ -78,6 +78,16 @@ final class GameImpl implements Game {
     }
 
     @Override
+    public void quitNow() {
+        TestScope scope = TestScope.bound();
+        if (scope != null && scope.script()) {
+            throw new IllegalStateException(
+                    "game.quitNow() is for Java tests; script tests running beside the Java" + " ones would not stop");
+        }
+        Quit.request(scope == null ? "a test" : scope.name());
+    }
+
+    @Override
     public ApiRegistry registry() {
         ApiRegistry r = registry;
         if (r == null) {

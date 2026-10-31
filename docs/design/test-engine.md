@@ -199,6 +199,8 @@ round's in the `restart` event. The game always opens the topology's world direc
 out of it rather than telling the game another path: the one there goes to `stagewright/saves/<its name>`, and the
 named one comes back from there, or is unpacked from its save, or is left absent for the game to create. The scene's
 first world is moved back when the scene ends, so a topology that keeps its world between runs keeps the one it had.
+`Game.quitNow()` skips the round's tests not yet started, so the run, and the game, end right after the test that
+called it.
 
 ## Every test runs somewhere
 

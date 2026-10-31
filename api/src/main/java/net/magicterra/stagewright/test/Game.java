@@ -110,6 +110,14 @@ public interface Game {
     Store store();
 
     /**
+     * End this game as soon as the calling test returns, as a player saving and quitting would, with whatever the world
+     * is in the middle of. Tests of this round not started by then are skipped, and a later round starts where this one
+     * stopped ({@link DependsOn#afterRestart()}). Tests still running beside it hold the game until they end, so it
+     * belongs in an {@code @Isolated} test. Java tests only; a script test running beside it is not stopped.
+     */
+    void quitNow();
+
+    /**
      * Set a game rule for the rest of this test; it is put back when the test ends. Needs
      * {@code @ResourceLock(Locks.WORLD_RULES)}, as every override here needs the lock {@link Locks} names for it.
      */

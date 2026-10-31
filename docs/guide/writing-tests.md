@@ -177,6 +177,12 @@ Tests in a game run concurrently by default, classes and methods alike. What two
   void theFirstWorldStillHasItsRetreat(Game game, Player player) { … }
   ```
 
+- `game.quitNow()` ends the game as soon as the calling test returns, as a player saving and quitting does, with
+  whatever the world is in the middle of; the tests of the round that have not started are skipped, and the next
+  round begins on the world as it was saved. Call it from an `@Isolated` test, since a test running beside it holds
+  the game until it ends. It is for Java tests: script tests running beside them are not stopped. A restart is a new
+  game process, so leaving a world this way does not test what one client keeps from one world to the next.
+
 - `@Requires(CLIENT)`, `@Requires(DEDICATED_SERVER)`, `@Requires(INTEGRATED_SERVER)` or `@Requires(mods = "id")` runs
   the test only in a game that has it; elsewhere it is reported as disabled. A test that no scene it names can run
   fails the run, since it would otherwise never run and never fail.

@@ -115,6 +115,16 @@ final class TestScope {
         CURRENT.remove();
     }
 
+    /** The test's display name. */
+    String name() {
+        return name;
+    }
+
+    /** Whether this is a script test's. */
+    boolean script() {
+        return script;
+    }
+
     /** The test on this thread, or the one whose server task this thread is running; or null. */
     static TestScope bound() {
         TestScope scope = CURRENT.get();
