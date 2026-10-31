@@ -7,8 +7,8 @@ first, then the YAML and JavaScript forms, which offer the same things as plain 
 ## What a Java test receives
 
 A test class carries `@Scene("<name>")` (several, `@Scene({"mymod", "mymod.integrated"})`, run the class once in each
-game) and ordinary JUnit 5 `@Test`
-methods. StageWright resolves these parameters:
+game) and ordinary JUnit 5 test methods: `@Test`, `@RepeatedTest`, `@ParameterizedTest` and `@TestFactory` with its
+`DynamicTest`s all run in the game. StageWright resolves these parameters:
 
 | Parameter | What it is |
 |---|---|
@@ -19,6 +19,11 @@ methods. StageWright resolves these parameters:
 | `Client` | The real client itself, for WorldDriver's client methods. |
 
 `Player` and `Client` exist only where a client is connected; a test taking them carries `@Requires(CLIENT)`.
+
+Where a client joins a dedicated server, `Client` forwards each method the server's WorldDriver has, as it has it when
+a test first asks for a `Client`, to the client over its RPC connection. A mod's own method therefore reaches the
+client only if the mod registers it on both sides, in its common setup (`WorldDriver.whenReady(registry -> …)`), not in
+client-only code. The player's `ref()` names the client's own player to WorldDriver's client methods, as `self` does.
 
 A plot is a 16-block cube in the overworld unless its parameter says otherwise: `@Plot.Size(32)`, or each axis on its
 own, `@Plot.Size(x = 120, y = 16, z = 8)` (up to 256 across and the dimension's height); `@Plot.Centered` puts relative
@@ -120,7 +125,8 @@ Tests in a game run concurrently by default, classes and methods alike. What two
   the world on by exactly `n` ticks instead of waiting for them, and `game.await()` moves it on one tick at a time until
   its condition holds, so a test can watch the world tick by tick.
 - `@Isolated` on a class runs it with the game to itself; `@Execution(ExecutionMode.SAME_THREAD)` keeps a class's own
-  methods one at a time. A `junit-platform.properties` on the game's class path changes the defaults.
+  methods one at a time. A `junit-platform.properties` on the game's class path, or a `-D` system property of the
+  game, changes the defaults: `junit.jupiter.execution.parallel.enabled=false` runs every test one at a time.
 - Anything else a test changes, it undoes with `game.afterTest(server -> …)`, which runs when the test ends, passed or
   not.
 
