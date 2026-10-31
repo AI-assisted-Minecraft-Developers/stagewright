@@ -59,6 +59,21 @@ This is also how a scene supplies [capability descriptors](../guide/capabilities
 game reads them only from `config/stagewright/capabilities/` in its working directory, so a descriptor the pack does
 not already have there is written by the scene as `config/stagewright/capabilities/<file>.json`.
 
+## `clientFiles`
+
+The same as `files`, for the game client's working directory: the joining client's on `dedicatedServerWithClient`, the
+game's own on `integratedServer`, where the game is the client. Put back the same way. A scene that declares them on a
+topology with no client fails rather than running without them.
+
+```yaml
+clientFiles:
+  options.txt: |
+    onboardAccessibility:false
+    pauseOnLostFocus:false
+  config/fml.toml: |
+    earlyWindowControl = false
+```
+
 ## `world.from`
 
 A save to start from instead of a new world: a zip or a directory, as a class path resource under `stagewright/`

@@ -131,6 +131,13 @@ final class SceneRun {
         Path serverProperties = spec.primary().workingDirectory().resolve("server.properties");
         byte[] original = Files.isRegularFile(serverProperties) ? Files.readAllBytes(serverProperties) : null;
         SceneSetup.Restore files = SceneSetup.writeFiles(spec.primary().workingDirectory(), declaration.files());
+        SceneSetup.Restore clientFiles;
+        try {
+            clientFiles = SceneSetup.writeFiles(clientDirectory(spec, declaration), declaration.clientFiles());
+        } catch (IOException | RuntimeException e) {
+            files.run();
+            throw e;
+        }
         Path modsScratch = artifacts.resolve("scene-mods");
         SceneFile.World world = declaration.world();
         try {
@@ -144,6 +151,7 @@ final class SceneRun {
             return supervise(spec, world, relay, artifacts, logs);
         } finally {
             try {
+                clientFiles.run();
                 files.run();
                 SceneMods.deleteTree(modsScratch);
             } finally {
@@ -154,6 +162,24 @@ final class SceneRun {
                 }
             }
         }
+    }
+
+    /**
+     * Where {@code clientFiles} go: the joining client's directory, or the game's when it is itself a client. A scene
+     * that declares some on a topology with no client is refused rather than run without them.
+     */
+    static Path clientDirectory(LaunchSpec spec, SceneFile declaration) {
+        if (spec.companion() != null) {
+            return spec.companion().workingDirectory();
+        }
+        if (!spec.server()) {
+            return spec.primary().workingDirectory();
+        }
+        if (!declaration.clientFiles().isEmpty()) {
+            throw new IllegalStateException("scene '" + declaration.name() + "': clientFiles needs a game client, and"
+                    + " topology '" + spec.topology() + "' starts a dedicated server alone");
+        }
+        return spec.primary().workingDirectory();
     }
 
     /** {@code spec} with both its games started without {@code exclude}, and a report entry saying which jars went. */

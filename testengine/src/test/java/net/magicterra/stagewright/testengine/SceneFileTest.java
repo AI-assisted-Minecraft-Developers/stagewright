@@ -223,6 +223,20 @@ class SceneFileTest {
     }
 
     @Test
+    void clientFilesAreKeptApartFromTheGamesFiles() throws IOException {
+        SceneFile file =
+                load("topology: t\nfiles:\n  a.txt: s\nclientFiles:\n  options.txt: |\n    pauseOnLostFocus:false\n");
+        assertEquals(Map.of("a.txt", "s"), file.files());
+        assertEquals(Map.of("options.txt", "pauseOnLostFocus:false\n"), file.clientFiles());
+    }
+
+    @Test
+    void aClientFileOutsideTheClientDirectoryIsRefused() {
+        String message = refusal("topology: t\nclientFiles:\n  ../escape.txt: x\n");
+        assertTrue(message.contains("../escape.txt"), message);
+    }
+
+    @Test
     void aFileOutsideTheGameDirectoryIsRefused() {
         String message = refusal("topology: t\nfiles:\n  ../escape.txt: x\n");
         assertTrue(message.contains("../escape.txt"), message);

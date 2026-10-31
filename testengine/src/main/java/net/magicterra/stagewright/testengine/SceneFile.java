@@ -21,20 +21,28 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  * @param from {@code world.from}: a save to start from instead of a new world, a class path resource under
  *     {@code stagewright/}; null for a new world
  * @param files {@code files}: text written into the game's directory before it starts, by path relative to it
+ * @param clientFiles {@code clientFiles}: the same for the game client's directory, the joining client's or, when the
+ *     game is itself a client, the game's
  * @param excludedMods {@code mods.exclude}: mods the game starts without, each a mod id or a jar file name pattern
  */
 // One validator for the whole file: keys are checked in one fixed order and the first bad one is reported, so the
 // checks stay together. The messages share the "scene '…': " shape by design.
 @SuppressWarnings({"checkstyle:javancss", "checkstyle:multiplestringliterals"})
 record SceneFile(
-        String name, String topology, World world, String from, Map<String, String> files, List<String> excludedMods) {
+        String name,
+        String topology,
+        World world,
+        String from,
+        Map<String, String> files,
+        Map<String, String> clientFiles,
+        List<String> excludedMods) {
 
     static final String DIRECTORY = "stagewright/scenes/";
 
     /** What {@code world.from} is relative to on the test class path. */
     static final String ROOT = "stagewright/";
 
-    private static final Set<String> TOP = Set.of("topology", "world", "files", "mods");
+    private static final Set<String> TOP = Set.of("topology", "world", "files", "clientFiles", "mods");
 
     private static final Set<String> WORLD = Set.of(
             "preset",
@@ -214,6 +222,7 @@ record SceneFile(
                 w,
                 from,
                 files(name, path + " files", map.get("files")),
+                files(name, path + " clientFiles", map.get("clientFiles")),
                 excludedMods(name, path + " mods", map.get("mods")));
     }
 
