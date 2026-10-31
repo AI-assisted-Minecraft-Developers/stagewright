@@ -161,7 +161,7 @@ public final class JupiterRun {
             // Two plans, run side by side so a test of either kind may wait for one of the other. The scripts are
             // discovered first: the Java tests' order, decided as they are discovered, follows dependencies through
             // them.
-            TestPlan scriptPlan = launcher.discover(request(
+            final TestPlan scriptPlan = launcher.discover(request(
                     scripts.stream()
                             .map(DiscoverySelectors::selectClasspathResource)
                             .toList(),
@@ -169,6 +169,8 @@ public final class JupiterRun {
             Dependencies.scripts(scriptEngine.discoveredTests());
             TestPlan javaPlan = launcher.discover(request(
                     classes.stream().map(DiscoverySelectors::selectClass).toList(), "junit-jupiter"));
+            // Every test's round, and the world it names, is known once both plans are discovered.
+            Rounds.checkWorlds();
             List<String> cycles = Dependencies.prepare(javaPlan);
             if (!cycles.isEmpty()) {
                 throw new IllegalStateException("@DependsOn cycles, so no test can go first: " + cycles);

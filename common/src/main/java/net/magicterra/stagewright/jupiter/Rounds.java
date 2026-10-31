@@ -75,6 +75,9 @@ final class Rounds {
     /** The world each later round's tests named for it. */
     private static final Map<Integer, World> WORLDS = new ConcurrentHashMap<>();
 
+    /** For each later round, a test that restarts into it naming no world, so expecting the round before's. */
+    private static final Map<Integer, String> UNNAMED = new ConcurrentHashMap<>();
+
     private static final Map<String, Upstream> SCRIPTS = new ConcurrentHashMap<>();
 
     private static final Map<String, Integer> ROUND_OF = new ConcurrentHashMap<>();
@@ -96,6 +99,31 @@ final class Rounds {
         SCRIPTS.putAll(scripts);
         ROUND_OF.clear();
         WORLDS.clear();
+        UNNAMED.clear();
+    }
+
+    /**
+     * Once every test's round is known: refuses a round where one test names a world and another, naming none, expects
+     * the world of the round before, unless that is the world named.
+     */
+    static void checkWorlds() {
+        int last = 0;
+        for (int r : WORLDS.keySet()) {
+            last = Math.max(last, r);
+        }
+        String before = DependsOn.FIRST_WORLD;
+        for (int r = 1; r <= last; r++) {
+            World named = WORLDS.get(r);
+            String unnamed = UNNAMED.get(r);
+            if (named != null && unnamed != null && !named.name().equals(before)) {
+                throw new IllegalStateException("round " + r + " of the scene's restarts runs on one world, but "
+                        + unnamed + " names none, so expects the round before's (" + before + "), and another test"
+                        + " of it names " + named.name());
+            }
+            if (named != null) {
+                before = named.name();
+            }
+        }
     }
 
     /** The world the tests of {@code round} named, or null when none did: that round runs on the one before's. */
@@ -167,6 +195,9 @@ final class Rounds {
         }
         if (up.afterRestart()) {
             round++;
+        }
+        if (up.afterRestart() && up.world() == null) {
+            UNNAMED.putIfAbsent(round, key);
         }
         if (up.world() != null) {
             World named = WORLDS.putIfAbsent(round, up.world());

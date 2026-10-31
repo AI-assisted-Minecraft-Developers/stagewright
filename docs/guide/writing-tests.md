@@ -163,8 +163,9 @@ Tests in a game run concurrently by default, classes and methods alike. What two
 - `world = "name"` beside `afterRestart` starts the game again on another save instead: a name the scene has not run
   on yet is a new world, made as the scene file declares its world, or from `worldFrom = "worlds/old.zip"` (a save
   under `stagewright/` on the test class path, as the scene file's `world.from`). Each world stays as its last round
-  left it, so a later round can go back to one; the scene's own world is `DependsOn.FIRST_WORLD`, `"first"`. The two
-  tests of one round may not name different worlds. In a script or YAML test these are the `world` and `worldFrom`
+  left it, so a later round can go back to one; the scene's own world is `DependsOn.FIRST_WORLD`, `"first"`. Tests of one
+  round must agree on its world: two naming different ones, or one naming another world than the round before's
+  while a test after the same restart names none, fail the run before any test starts. In a script or YAML test these are the `world` and `worldFrom`
   options.
 
   ```java

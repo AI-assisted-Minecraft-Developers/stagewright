@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 import java.util.Map;
+import net.magicterra.stagewright.test.DependsOn;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +43,28 @@ class RoundsWorldTest {
                 C, new Rounds.Upstream(List.of(A), true, new Rounds.World("third", ""))));
         Rounds.of(B);
         assertThrows(IllegalStateException.class, () -> Rounds.of(C));
+    }
+
+    @Test
+    void aTestNamingNoWorldRefusesARoundMovedToAnother() {
+        Rounds.scripts(Map.of(
+                A, new Rounds.Upstream(List.of(), false),
+                B, new Rounds.Upstream(List.of(A), true, new Rounds.World("second", "")),
+                C, new Rounds.Upstream(List.of(A), true)));
+        Rounds.of(B);
+        Rounds.of(C);
+        assertThrows(IllegalStateException.class, Rounds::checkWorlds);
+    }
+
+    @Test
+    void aTestNamingNoWorldMayShareARoundThatStaysOnIt() {
+        Rounds.scripts(Map.of(
+                A, new Rounds.Upstream(List.of(), false),
+                B, new Rounds.Upstream(List.of(A), true, new Rounds.World(DependsOn.FIRST_WORLD, "")),
+                C, new Rounds.Upstream(List.of(A), true)));
+        Rounds.of(B);
+        Rounds.of(C);
+        Rounds.checkWorlds();
     }
 
     @Test

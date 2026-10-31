@@ -46,7 +46,7 @@ public @interface DependsOn {
      * With {@link #afterRestart}: the save the game starts again on, by a name the scene's tests choose. The scene's
      * own world is {@link #FIRST_WORLD}; a name no round has run on yet is a new world, made as the scene declares its
      * world, or from {@link #worldFrom}. Each world is kept as its last round left it, so a later round can go back to
-     * it. Without it, the round runs on the world of the round before; two tests of one round naming different worlds
+     * it. Without it, the test expects the world of the round before; two tests of one round expecting different worlds
      * fail the run before any test starts.
      */
     String world() default "";
