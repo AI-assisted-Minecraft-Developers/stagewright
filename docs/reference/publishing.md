@@ -15,10 +15,37 @@ prefix:
 
 Loom and ModDevGradle are declared once in the root build with `apply false`, and only the four Minecraft-side modules
 apply them, so the plain-JVM modules never see a Minecraft classpath; the `ArchitectureTest` of the engine, the plugin
-and the CLI checks that. Their
-classes reach a consumer's buildscript classpath through the Gradle plugin, or a pack author's JVM through the CLI.
+and the CLI checks that. Their classes reach a consumer's buildscript classpath through the Gradle plugin, or a pack
+author's JVM through the CLI.
 
-`stagewright-cli` carries the two loader jars as resources, taken from the sibling modules, so building it builds them.
+`:stagewright-api`, the test API and the capability layer, depends on nothing of StageWright's, only on WorldDriver's
+`:api`, so WorldDriver's tests can compile against it without a version cycle:
+
+```
+worlddriver :api  <-  stagewright-api  <-  worlddriver :common testmod
+                           ^
+                           `-- stagewright-common, -fabric, -neoforge  (+ worlddriver)
+```
+
+It owns its packages outright: a package split across two modules is a `ResolutionException` under NeoForge.
+
+### The command-line jar
+
+`stagewright.jar` is one executable jar with every library merged into it, because its audience downloads one file and
+runs it with the JVM they already have; a launcher that needed a class path beside it would be worse than the Gradle
+plugin it replaces for them.
+
+- **It carries the two loader jars** as resources (`/mods/mc_stagewright-<loader>.jar`, the version left out of the name
+  so an upgrade is a rebuild, not an edit), taken from the sibling modules. Building it builds them, so the mods and the
+  jar cannot be out of step, and a pack author never fetches a matching loader build, the step that fails looking
+  exactly like the mod not working.
+- **Merging a library conveys it.** Each one needs its entry in `cli/src/main/resources/META-INF/THIRD-PARTY-NOTICES`
+  and its license text beside it; `scripts/check_packaging.py` fails a jar holding classes it cannot place.
+- **Rhino's own mod metadata is left out**, so a copy dropped into `mods/` by mistake does not load as a second `rhino`
+  mod, and so are the libraries' `module-info` classes, which describe them alone.
+- **`--version` prints what it was built from**: each StageWright part with its file time and hash, and no build time,
+  so CI's later Gradle runs find the file up to date and publish the jar it tested.
+- **Its POM declares no dependencies**: everything it needs is inside it.
 
 ### How the loader jars are made
 
