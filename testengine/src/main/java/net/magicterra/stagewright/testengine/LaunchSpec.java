@@ -115,15 +115,35 @@ record LaunchSpec(
     }
 
     /** Whether the primary's server asks for a free port. */
-    boolean wantsFreePort() {
-        return primary.args().contains(FREE_PORT);
+    boolean wantsFreePort() throws IOException {
+        for (String a : primary.args()) {
+            if (FREE_PORT.equals(a)
+                    || argumentFile(a) != null
+                            && Files.readString(argumentFile(a)).contains(FREE_PORT)) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    /** This spec with the primary's {@link #FREE_PORT} replaced by {@code port}. */
-    LaunchSpec withServerPort(int port) {
+    /**
+     * This spec with the primary's {@link #FREE_PORT} replaced by {@code port}: in an argument itself, or in an
+     * argument file, as ModDevGradle passes a run's program arguments, by a copy written into {@code scratch}.
+     */
+    LaunchSpec withServerPort(int port, Path scratch) throws IOException {
         List<String> args = new ArrayList<>();
         for (String a : primary.args()) {
-            args.add(FREE_PORT.equals(a) ? String.valueOf(port) : a);
+            Path file = argumentFile(a);
+            if (FREE_PORT.equals(a)) {
+                args.add(String.valueOf(port));
+            } else if (file != null && Files.readString(file).contains(FREE_PORT)) {
+                Files.createDirectories(scratch);
+                Path copy = scratch.resolve(file.getFileName());
+                Files.writeString(copy, Files.readString(file).replace(FREE_PORT, String.valueOf(port)));
+                args.add("@" + copy.toAbsolutePath());
+            } else {
+                args.add(a);
+            }
         }
         Process p = new Process(
                 primary.java(),
@@ -143,6 +163,15 @@ record LaunchSpec(
                 leaks,
                 p,
                 companion);
+    }
+
+    /** The file an {@code @file} argument names, when it is one that exists; null otherwise. */
+    private static Path argumentFile(String argument) {
+        if (!argument.startsWith("@") || argument.length() == 1) {
+            return null;
+        }
+        Path file = Path.of(argument.substring(1));
+        return Files.isRegularFile(file) ? file : null;
     }
 
     /** The spec for {@code topology}; refuses when none was written for it, saying where it looked. */

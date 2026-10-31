@@ -152,7 +152,8 @@ final class SceneRun {
             int serverPort = 0;
             if (spec.wantsFreePort()) {
                 serverPort = freePort();
-                spec = spec.withServerPort(serverPort);
+                // Beside the scene's other rewritten argument files, and deleted with them.
+                spec = spec.withServerPort(serverPort, modsScratch.resolve("server-port"));
                 listener.reportingEntryPublished(scene, ReportEntry.from("serverPort", String.valueOf(serverPort)));
             }
             // A run directory nothing else prepares, such as one the plugin generated: a dedicated server there needs

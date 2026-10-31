@@ -58,7 +58,8 @@ A process is `java jvmArgs… mainClass args…` run in `workingDirectory` with 
 `jvmArgs` holds everything before the main class, class path included, in the order the run would have used.
 
 An argument of the primary that is exactly `{stagewright.freePort}` is replaced by a port nothing listens on as each
-scene starts, and the companion gets `-Dstagewright.client.port=<that port>`, which StageWright's client dials instead
+scene starts; in an `@file` argument, as ModDevGradle passes a run's program arguments, the engine starts the server
+with a copy of the file that has the port in its place, and the companion gets `-Dstagewright.client.port=<that port>`, which StageWright's client dials instead
 of the port in its connect address. The Gradle plugin writes it as the server's `--port` when a suite sets no
 `serverPort`.
 
