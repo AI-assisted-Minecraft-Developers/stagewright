@@ -1,5 +1,7 @@
 package net.magicterra.stagewright.jupiter;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -14,6 +16,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import net.magicterra.stagewright.capability.CapabilityProvider;
+import net.magicterra.stagewright.client.WorldSwitch;
 import net.magicterra.stagewright.test.Await;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Locks;
@@ -52,7 +55,14 @@ final class GameImpl implements Game {
      */
     static final long THREAD_WAIT_MS = CallContext.SERVER_CAP_MS;
 
-    private final MinecraftServer server;
+    /** The server of the world the client has open; another one once a test opened another world. */
+    private volatile MinecraftServer server;
+
+    /** A test left the world and opened none yet: nothing that needs a server can answer. */
+    private volatile boolean between;
+
+    /** The save the switching test started on, opened again when it ends; null while no test switched. */
+    private volatile String returnTo;
 
     private final StoreImpl store;
 
@@ -75,6 +85,85 @@ final class GameImpl implements Game {
     @Override
     public Store store() {
         return store;
+    }
+
+    /** The server of the world open now; refused between worlds, where there is none. */
+    MinecraftServer server() {
+        if (between) {
+            throw new IllegalStateException("no world is open: the test left one with game.leaveWorld(), and"
+                    + " game.openWorld(name) opens the next");
+        }
+        return server;
+    }
+
+    /** Whether a test left the world and has opened none yet. */
+    boolean between() {
+        return between;
+    }
+
+    @Override
+    public void leaveWorld() {
+        integratedOnly("leaveWorld");
+        String left = WorldSwitch.current();
+        between = true;
+        WorldSwitch.leave();
+        if (returnTo == null) {
+            returnTo = left;
+        }
+    }
+
+    @Override
+    public void openWorld(String name) {
+        integratedOnly("openWorld");
+        Rounds.World.checkName("game.openWorld", name);
+        if (!between) {
+            leaveWorld();
+        }
+        server = WorldSwitch.open(name);
+        between = false;
+        applySceneWorld();
+    }
+
+    /** As a test ends: the world it started on open again, when it switched to another. */
+    // between is volatile and read by other threads while the client changes worlds, and stays set if that fails.
+    @SuppressWarnings("PMD.UnusedAssignment")
+    void putWorldBack() {
+        String back = returnTo;
+        returnTo = null;
+        if (back == null || !between && back.equals(WorldSwitch.current())) {
+            return;
+        }
+        if (!between) {
+            between = true;
+            WorldSwitch.leave();
+        }
+        server = WorldSwitch.open(back);
+        between = false;
+        applySceneWorld();
+    }
+
+    /**
+     * The scene's once-loaded world settings, {@code -Dstagewright.scene.world}, applied to the world open now; what
+     * was applied, or null when the scene declared none.
+     */
+    Object applySceneWorld() {
+        String world = System.getProperty(SceneWorld.PROPERTY);
+        if (world == null) {
+            return null;
+        }
+        JsonObject declared = JsonParser.parseString(world).getAsJsonObject();
+        return onServer(s -> SceneWorld.apply(s, declared));
+    }
+
+    private void integratedOnly(String method) {
+        if (server.isDedicatedServer()) {
+            throw new UnsupportedOperationException("game." + method + "() needs an integrated server, which a client"
+                    + " opens and leaves; a dedicated server's world is its process, so a test there starts another"
+                    + " world with @DependsOn(afterRestart = true, world = …)");
+        }
+        if (server.isSameThread()) {
+            throw new IllegalStateException("game." + method + "() waits for the server to stop, so not from it");
+        }
     }
 
     @Override
@@ -114,6 +203,7 @@ final class GameImpl implements Game {
     @SuppressWarnings("PMD.PreserveStackTrace")
     @Override
     public <T> T onServer(Function<MinecraftServer, T> work) {
+        MinecraftServer server = server();
         // Already there, as an await condition is: nothing to wait for, so run it now.
         if (server.isSameThread()) {
             return work.apply(server);
@@ -323,7 +413,7 @@ final class GameImpl implements Game {
     // A timeout is reported as an assertion with no cause on purpose: the message names the stall, not the future.
     @SuppressWarnings("PMD.PreserveStackTrace")
     private boolean waitFor(BooleanSupplier condition, int budget) {
-        if (server.isSameThread()) {
+        if (server().isSameThread()) {
             throw new IllegalStateException(
                     "a tick wait was started on the server thread, which would wait for itself");
         }

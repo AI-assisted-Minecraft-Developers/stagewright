@@ -3,7 +3,6 @@ package net.magicterra.stagewright.jupiter;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,6 +23,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import net.magicterra.stagewright.StageWrightCommon;
+import net.magicterra.stagewright.client.WorldSwitch;
 import net.magicterra.stagewright.harness.AgentBridge;
 import net.minecraft.server.MinecraftServer;
 import org.junit.platform.engine.ConfigurationParameters;
@@ -128,6 +128,7 @@ public final class JupiterRun {
     private static void run(MinecraftServer server, ClassLoader loader) {
         Path reports = server.getServerDirectory().resolve("stagewright/junit");
         AgentEvents relay = new AgentEvents(AgentBridge.system());
+        GameImpl game = null;
         try {
             Files.createDirectories(reports);
             List<String> entries = selected()
@@ -142,12 +143,10 @@ public final class JupiterRun {
                         classes.size(),
                         scripts.size());
             }
-            GameImpl game = new GameImpl(server);
-            String world = System.getProperty(SceneWorld.PROPERTY);
-            if (world != null) {
-                JsonObject declared = JsonParser.parseString(world).getAsJsonObject();
-                // Applied whether or not the line is logged: the world change is the point, the log is not.
-                Object applied = game.onServer(s -> SceneWorld.apply(s, declared));
+            game = new GameImpl(server);
+            // Applied whether or not the line is logged: the world change is the point, the log is not.
+            Object applied = game.applySceneWorld();
+            if (applied != null) {
                 StageWrightCommon.LOG.info("[{}] scene world: {}", StageWrightCommon.MOD_ID, applied);
             }
             GameExtension.bind(game);
@@ -238,7 +237,15 @@ public final class JupiterRun {
             }
         } finally {
             if (Boolean.getBoolean(EXIT)) {
-                server.execute(() -> halt(server));
+                if (game != null && game.between()) {
+                    // A test left the client at the title screen: no server to halt, and the client ends itself.
+                    AgentBridge.system().done();
+                    WorldSwitch.end();
+                } else {
+                    // The world open now, which a test may have switched to.
+                    MinecraftServer current = game == null ? server : game.server();
+                    current.execute(() -> halt(current));
+                }
             }
         }
     }

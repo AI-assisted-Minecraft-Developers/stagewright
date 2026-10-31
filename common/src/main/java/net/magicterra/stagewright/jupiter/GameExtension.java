@@ -209,14 +209,24 @@ public final class GameExtension
         // Unbound when the test was aborted before beforeEach got here; nothing to undo then, and throwing would
         // replace that abort with a failure.
         TestScope scope = TestScope.bound();
+        Game g = game();
+        boolean between = g instanceof GameImpl impl && impl.between();
         try {
-            if (scope != null && scope.changedAnything()) {
-                game().runOnServer(scope::restore);
+            // Undone on the world open now; a test between worlds has none to undo them on.
+            if (scope != null && scope.changedAnything() && !between) {
+                g.runOnServer(scope::restore);
             }
         } finally {
-            TestScope.unbind();
-            if (scope != null) {
-                scope.release();
+            try {
+                // Still holding the test's locks: nothing else runs while the world it started on opens again.
+                if (g instanceof GameImpl impl) {
+                    impl.putWorldBack();
+                }
+            } finally {
+                TestScope.unbind();
+                if (scope != null) {
+                    scope.release();
+                }
             }
         }
         AssertionError checks = scope == null ? null : scope.takeChecks();

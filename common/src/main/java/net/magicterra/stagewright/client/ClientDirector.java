@@ -203,7 +203,7 @@ public final class ClientDirector {
             case IN_WORLD -> {
                 // The server ends the run by halting itself, integrated or dedicated, which drops this
                 // client out of its world: losing the level is the completion signal in both topologies.
-                if (mc.level == null) {
+                if (mc.level == null && !WorldSwitch.active()) {
                     StageWrightCommon.LOG.info(
                             "[{}] the server ended the run; closing client", StageWrightCommon.MOD_ID);
                     finish();
@@ -321,7 +321,16 @@ public final class ClientDirector {
             return;
         }
 
-        String world = System.getProperty(P_WORLD, "").trim();
+        openOrCreate(mc, firstWorld());
+    }
+
+    /** The save the client opens first, as the run names it. */
+    static String firstWorld() {
+        return System.getProperty(P_WORLD, "").trim();
+    }
+
+    /** Open the save {@code world}, or create it as the scene declares its world when there is none. Render thread. */
+    static void openOrCreate(Minecraft mc, String world) {
         WorldOpenFlows flows = mc.createWorldOpenFlows();
         if (mc.getLevelSource().levelExists(world)) {
             StageWrightCommon.LOG.info("[{}] opening existing world '{}'", StageWrightCommon.MOD_ID, world);

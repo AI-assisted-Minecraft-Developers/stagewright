@@ -118,6 +118,23 @@ public interface Game {
     void quitNow();
 
     /**
+     * On an integrated server only: save and leave this world for the title screen, as a player quitting does, and
+     * return once its server has stopped. The client and the tests' run go on; nothing that needs a server answers
+     * until {@link #openWorld} has opened one. For what one client keeps from one world to the next; a dedicated
+     * server's world is its process, so there a test uses {@link DependsOn#world()} after a restart instead.
+     */
+    void leaveWorld();
+
+    /**
+     * On an integrated server only: open the save {@code name} in this client, leaving the current world first if one
+     * is open, and return once the player is in it. {@link DependsOn#FIRST_WORLD} is the scene's own; a name with no
+     * save yet is a new world, made as the scene declares its world. From then on this game is that world's server.
+     * When the test ends, after its overrides are undone, the world it started on is opened again. Nothing else may run
+     * meanwhile, so it belongs in an {@code @Isolated} test, without plots or bots, which belong to one world.
+     */
+    void openWorld(String name);
+
+    /**
      * Set a game rule for the rest of this test; it is put back when the test ends. Needs
      * {@code @ResourceLock(Locks.WORLD_RULES)}, as every override here needs the lock {@link Locks} names for it.
      */

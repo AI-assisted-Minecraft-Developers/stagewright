@@ -183,6 +183,27 @@ Tests in a game run concurrently by default, classes and methods alike. What two
   the game until it ends. It is for Java tests: script tests running beside them are not stopped. A restart is a new
   game process, so leaving a world this way does not test what one client keeps from one world to the next.
 
+- On `integratedServer`, `game.leaveWorld()` and `game.openWorld(name)` do that inside one client: the first saves and
+  quits to the title screen and returns once the world's server has stopped; the second opens the save `name`
+  (`DependsOn.FIRST_WORLD` for the scene's own, a new world, made as the scene declares its world, for a name with no
+  save) and returns once the player is in it. `openWorld` leaves the current world first when one is open. The test
+  goes on in the same thread, and `game` is the new world's server from then on; between the two calls nothing that
+  needs a server answers. When the test ends, after its overrides are undone, the world it started on is opened again,
+  so the tests after it run where they expect. Nothing else may run meanwhile: use an `@Isolated` test, without plots
+  or bots, which belong to one world. A dedicated server refuses both, since its world is its process.
+
+  ```java
+  @Test
+  @Isolated
+  @Requires(INTEGRATED_SERVER)
+  void retreatsAfterSwitchingSaves(Game game, Player player) {
+      // … enter the retreat on the scene's world
+      game.leaveWorld();
+      game.openWorld("second");
+      // … shake the bell in the new world; the client kept whatever it kept from the first
+  }
+  ```
+
 - `@Requires(CLIENT)`, `@Requires(DEDICATED_SERVER)`, `@Requires(INTEGRATED_SERVER)` or `@Requires(mods = "id")` runs
   the test only in a game that has it; elsewhere it is reported as disabled. A test that no scene it names can run
   fails the run, since it would otherwise never run and never fail.

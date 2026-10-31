@@ -202,6 +202,14 @@ first world is moved back when the scene ends, so a topology that keeps its worl
 `Game.quitNow()` skips the round's tests not yet started, so the run, and the game, end right after the test that
 called it.
 
+On an integrated server a test can change worlds without a restart, `Game.leaveWorld()` and `Game.openWorld(name)`,
+because the run's thread belongs to the client's JVM rather than to the server that started it: it starts on the first
+server's tick, and nothing ties it to that server afterwards. The client does what its pause screen's quit button does,
+then opens the save as the director opens the first one; the director does not read the lost world as the end of the
+run meanwhile. `Game` points at whichever server is open, and at the end of the test the world it started on is opened
+again. The run ends by halting the server open then; if it ends between worlds, the client ends itself as it does when
+its server halts.
+
 ## Every test runs somewhere
 
 `@Requires` is checked in the game, which disables what its game lacks with a reason beginning `@Requires: `.

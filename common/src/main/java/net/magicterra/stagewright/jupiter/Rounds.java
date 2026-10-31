@@ -59,11 +59,16 @@ final class Rounds {
             if (!afterRestart) {
                 throw new IllegalStateException(test + ": world needs afterRestart, since a game runs on one world");
             }
+            checkName(test, name);
+            return new World(name, from);
+        }
+
+        /** Refuses a world name that is not a save folder's. */
+        static void checkName(String test, String name) {
             if (!NAME.matcher(name).matches() || ".".equals(name) || "..".equals(name)) {
                 throw new IllegalStateException(
                         test + ": world '" + name + "' is a save's name, of letters, digits, '_', '-' and '.'");
             }
-            return new World(name, from);
         }
     }
 
