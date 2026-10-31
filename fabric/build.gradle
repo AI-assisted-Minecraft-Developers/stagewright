@@ -119,6 +119,8 @@ ext.sourcesJarTask = tasks.named('remapSourcesJar')
         archiveClassifier = ''
         destinationDirectory = module.layout.buildDirectory.dir('libs')
         addNestedDependencies = false
+        // Only what the module compiled against; this project's classpath would compile :stagewright-common first.
+        classpath.setFrom(module.configurations.named('compileClasspath'))
     }.get() // Created here: realized lazily from the other project's publication, it races this one's tasks.
     module.tasks.named('assemble') { dependsOn remap }
     module.publishing.publications.named('mavenJava') { artifact(remap) }
