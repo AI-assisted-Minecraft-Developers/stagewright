@@ -86,4 +86,33 @@ class TestScopeTest {
         assertDoesNotThrow(() -> TestScope.ofScript("rains", Set.of(), true)
                 .require(Locks.WEATHER, "Locks.WEATHER", "game.overrideWeather"));
     }
+
+    @Test
+    void aDynamicTestKeepsItsOwnChecksButUndoesAndFreezesWithItsFactory() {
+        TestScope factory = TestScope.ofScript("factory", Set.of(Locks.WEATHER), false);
+        TestScope dynamic = factory.dynamic("[1] case");
+        dynamic.failed(new AssertionError("only this case"));
+        dynamic.onEnd(server -> {});
+        dynamic.frozeTicks(true);
+        assertNull(factory.takeChecks());
+        assertEquals("only this case", dynamic.takeChecks().getMessage());
+        assertTrue(factory.changedAnything());
+        assertTrue(factory.frozeTicks());
+        assertDoesNotThrow(() -> dynamic.require(Locks.WEATHER, "Locks.WEATHER", "game.overrideWeather"));
+    }
+
+    @Test
+    void swappingInADynamicTestsScopeSwapsBack() {
+        TestScope factory = TestScope.ofScript("factory", Set.of(), false);
+        TestScope dynamic = factory.dynamic("[1] case");
+        TestScope.bind(factory);
+        try {
+            TestScope before = TestScope.swap(dynamic);
+            assertSame(dynamic, TestScope.bound());
+            TestScope.swap(before);
+            assertSame(factory, TestScope.bound());
+        } finally {
+            TestScope.unbind();
+        }
+    }
 }

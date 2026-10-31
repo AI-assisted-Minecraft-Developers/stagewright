@@ -15,8 +15,10 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ConditionEvaluationResult;
+import org.junit.jupiter.api.extension.DynamicTestInvocationContext;
 import org.junit.jupiter.api.extension.ExecutionCondition;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.InvocationInterceptor;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.ParameterResolver;
@@ -29,11 +31,13 @@ import org.junit.jupiter.api.extension.ParameterResolver;
  * launcher turns on.
  */
 public final class GameExtension
-        implements ParameterResolver, ExecutionCondition, BeforeEachCallback, AfterEachCallback {
+        implements ParameterResolver, ExecutionCondition, BeforeEachCallback, AfterEachCallback, InvocationInterceptor {
 
     private static final ExtensionContext.Namespace NAMESPACE = ExtensionContext.Namespace.create(GameExtension.class);
 
     private static final String PARALLEL = "junit.jupiter.execution.parallel.enabled";
+
+    private static final String SCOPE = "scope";
 
     private static volatile Game game;
 
@@ -41,6 +45,38 @@ public final class GameExtension
     static void bind(Game g) {
         game = g;
         Quit.reset();
+    }
+
+    /**
+     * A {@code @TestFactory}'s dynamic test runs as a test of its own, on whichever thread runs it: under the factory's
+     * locks and overrides, with soft checks reported as it ends.
+     */
+    @Override
+    public void interceptDynamicTest(
+            Invocation<Void> invocation, DynamicTestInvocationContext invocationContext, ExtensionContext context)
+            throws Throwable {
+        TestScope factory = context.getStore(NAMESPACE).get(SCOPE, TestScope.class);
+        if (factory == null) {
+            invocation.proceed();
+            return;
+        }
+        TestScope scope = factory.dynamic(context.getDisplayName());
+        TestScope before = TestScope.swap(scope);
+        try {
+            invocation.proceed();
+        } catch (Throwable t) {
+            AssertionError checks = scope.takeChecks();
+            if (checks != null) {
+                t.addSuppressed(checks);
+            }
+            throw t;
+        } finally {
+            TestScope.swap(before);
+        }
+        AssertionError checks = scope.takeChecks();
+        if (checks != null) {
+            throw checks;
+        }
     }
 
     /** Skips whatever has not started once a test called {@code game.quitNow()}. */
@@ -164,6 +200,8 @@ public final class GameExtension
                 .map(Boolean::parseBoolean)
                 .orElse(false));
         TestScope.bind(scope);
+        // For a @TestFactory's dynamic tests, which may run on other threads.
+        context.getStore(NAMESPACE).put(SCOPE, scope);
     }
 
     @Override

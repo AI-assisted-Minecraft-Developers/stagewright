@@ -52,12 +52,33 @@ final class TestScope {
     /** Whether the test froze the server's ticks, so its waits step them; see {@code Game.freezeTicks}. */
     private volatile boolean frozeTicks;
 
+    /**
+     * The factory's scope, for a dynamic test's: what it changes and freezes is the factory's; only its checks are its
+     * own.
+     */
+    private final TestScope parent;
+
     private TestScope(String name, Set<String> locks, Set<String> readLocks, boolean isolated, boolean script) {
+        this(name, locks, readLocks, isolated, script, null);
+    }
+
+    private TestScope(
+            String name, Set<String> locks, Set<String> readLocks, boolean isolated, boolean script, TestScope parent) {
         this.name = name;
         this.locks = locks;
         this.readLocks = readLocks;
         this.isolated = isolated;
         this.script = script;
+        this.parent = parent;
+    }
+
+    /**
+     * The scope of a dynamic test {@code name} this {@code @TestFactory}'s scope generated: under its locks, which the
+     * factory holds until every dynamic test has ended, with checks of its own, reported as that dynamic test ends.
+     */
+    TestScope dynamic(String name) {
+        TestScope root = parent == null ? this : parent;
+        return new TestScope(name, locks, readLocks, isolated, script, root);
     }
 
     /** The locks the test, its class and every enclosing class declare. */
@@ -113,6 +134,17 @@ final class TestScope {
 
     static void unbind() {
         CURRENT.remove();
+    }
+
+    /** Make {@code scope} this thread's test, null for none; returns the one it replaces, to swap back. */
+    static TestScope swap(TestScope scope) {
+        TestScope before = CURRENT.get();
+        if (scope == null) {
+            CURRENT.remove();
+        } else {
+            CURRENT.set(scope);
+        }
+        return before;
     }
 
     /** The test's display name. */
@@ -176,11 +208,15 @@ final class TestScope {
     }
 
     boolean frozeTicks() {
-        return frozeTicks;
+        return parent != null ? parent.frozeTicks() : frozeTicks;
     }
 
     void frozeTicks(boolean frozen) {
-        frozeTicks = frozen;
+        if (parent != null) {
+            parent.frozeTicks(frozen);
+        } else {
+            frozeTicks = frozen;
+        }
     }
 
     /** Keep a failed soft check; {@link #takeChecks} reports it when the test ends. */
@@ -206,8 +242,14 @@ final class TestScope {
     }
 
     /** Remember how to put back what an override or a facet just changed; run on the server thread at the end. */
-    synchronized void onEnd(Consumer<MinecraftServer> restore) {
-        undo.push(restore);
+    void onEnd(Consumer<MinecraftServer> restore) {
+        if (parent != null) {
+            parent.onEnd(restore);
+            return;
+        }
+        synchronized (this) {
+            undo.push(restore);
+        }
     }
 
     /** Whether an override is waiting to be undone. */
