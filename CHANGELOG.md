@@ -10,6 +10,41 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-11-01
+
+Found while a third-party mod moved its tests onto StageWright. All **green in the self-test suite** (WorldDriver's
+whole suite on both loaders, with a test for each); not yet green against that mod.
+
+### A system property or `junit-platform.properties` can turn parallel execution off
+
+The in-game run handed JUnit its defaults (parallel on, among others) as the launcher's parent configuration, which
+JUnit reads before system properties and `junit-platform.properties`, so neither could change them. A default is now
+left out when either sets that key.
+
+### `@ParameterizedTest` runs in the game, and a `@TestFactory`'s dynamic tests can make soft checks
+
+Both loader jars carry `junit-jupiter-params`, and a suite compiles against it by default. A dynamic test runs on
+whichever thread JUnit gives it, where `game.check` used to refuse it as not the test's own thread; each dynamic test
+now has its own checks, reported as it ends, under its factory's locks and overrides.
+
+### A scene can write files for the game client: `clientFiles`
+
+The same as `files`, into the joining client's directory on `dedicatedServerWithClient` and the game's own on
+`integratedServer`; a scene declaring them on a topology with no client fails.
+
+### Tests can change worlds
+
+- `@DependsOn(afterRestart = true, world = "name")`, `worldFrom` for a save to start a new one from: the round after
+  the restart runs on that save, new or as an earlier round left it; `DependsOn.FIRST_WORLD` is the scene's own. A
+  round whose tests disagree on its world fails the run before any test starts.
+- `game.quitNow()`: the game ends as soon as the calling test returns, with the world as it is; the round's tests not
+  yet started are skipped.
+- `game.leaveWorld()` and `game.openWorld(name)`, on an integrated server: the client quits to the title screen and
+  opens another save while the test goes on, so a test sees what one client keeps from one world to the next. The world
+  the test started on is opened again when it ends.
+
+---
+
 ## 2026-10-31
 
 ### The build uses Fabric Loom and ModDevGradle instead of Architectury's Gradle plugin · green in the self-test suite (WorldDriver's whole suite on NeoForge, a part of it on Fabric)
