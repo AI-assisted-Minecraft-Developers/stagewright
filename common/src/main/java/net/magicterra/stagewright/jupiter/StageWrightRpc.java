@@ -31,7 +31,7 @@ import java.util.function.BooleanSupplier;
  * </pre>
  *
  * <p><b>Concurrency contract:</b> this client is designed for a <i>serial lease</i> — one test thread issuing one call
- * at a time (there is one attach per JVM, per {@link StageWrightExtension}). It is thread-safe enough for that: ids
+ * at a time (there is one connection per JVM, held by {@link ClientConnection}). It is thread-safe enough for that: ids
  * come from an {@link AtomicLong} and the in-flight table is a {@link ConcurrentHashMap}, so the websocket reader
  * thread can complete a call issued by the test thread. It does NOT guarantee ordering or fairness under genuinely
  * concurrent callers; do not share one instance across parallel calls.

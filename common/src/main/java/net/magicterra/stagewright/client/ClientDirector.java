@@ -33,7 +33,7 @@ import net.minecraft.world.level.storage.LevelStorageSource;
  *       production-shaped test rather than a single-JVM one.
  * </ul>
  *
- * <p>With neither property set {@link #arm(String)} returns false and the launcher does not drive the client.
+ * <p>With neither property set {@link #arm()} returns false and the launcher does not drive the client.
  *
  * <p><b>Client-only.</b> This class imports {@code net.minecraft.client.*}. The rule is about LOADING, not presence:
  * each loader module reaches this class from a client-only branch, so a dedicated server never resolves it. Do not
