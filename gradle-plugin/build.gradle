@@ -13,14 +13,8 @@ plugins {
     // docs/reference/publishing.md shows:
     //   plugins { id 'net.magicterra.stagewright' version '0.1.0-alpha.<n>+1.21.1' }
     id 'maven-publish'
-    id 'stagewright.version'
-    id 'stagewright.license'
-    id 'stagewright.nexus'
-    id 'stagewright.lint'
+    id 'stagewright.module'
 }
-
-group = 'net.magicterra'
-version = stagewrightVersion
 
 java {
     toolchain {
@@ -45,7 +39,7 @@ configurations.named('functionalTestRuntimeOnly') {
 
 dependencies {
     // The one dependency, and it is ours: it pulls in nothing itself (the launch-spec JSON writer).
-    api "net.magicterra:stagewright-engine:${stagewrightVersion}"
+    api project(':stagewright-engine')
 
     testImplementation platform('org.junit:junit-bom:5.11.3')
     testImplementation 'org.junit.jupiter:junit-jupiter'
@@ -85,7 +79,7 @@ def realTestEngine = configurations.create('functionalTestEngine') {
     canBeConsumed = false
 }
 dependencies {
-    functionalTestEngine "net.magicterra:stagewright-testengine:${stagewrightVersion}"
+    functionalTestEngine project(':stagewright-testengine')
     functionalTestEngine platform('org.junit:junit-bom:5.11.3')
     functionalTestEngine 'org.junit.platform:junit-platform-launcher'
 }

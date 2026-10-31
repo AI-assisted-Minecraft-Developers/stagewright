@@ -2,14 +2,9 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'com.gradleup.shadow' version '8.3.6'
-    id 'stagewright.license'
-    id 'stagewright.nexus'
-    id 'stagewright.lint'
+    id 'com.gradleup.shadow'
+    id 'stagewright.module'
 }
-
-group = 'net.magicterra'
-version = rootProject.stagewrightVersion
 
 java {
     toolchain {
@@ -36,7 +31,7 @@ configurations {
 }
 
 dependencies {
-    implementation project(':')
+    implementation project(':stagewright-engine')
     bundledAgent project(':stagewright-agent')
 
     // The JUnit the game runs; the Test task that loads this engine brings its own launcher.
@@ -92,6 +87,10 @@ def engineJar = tasks.register('engineJar', Jar) {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
 tasks.named('jar') { archiveClassifier = 'plain' }
+// Shadow's own variant would be a second, identical choice for consumers to trip over.
+shadow {
+    addShadowVariantIntoJavaComponent = false
+}
 tasks.named('assemble') { dependsOn engineJar }
 [
     'apiElements',
@@ -101,10 +100,6 @@ tasks.named('assemble') { dependsOn engineJar }
         outgoing.artifacts.clear()
         outgoing.artifact(engineJar)
     }
-}
-// Shadow's own variant would be a second, identical choice for consumers to trip over.
-components.java.withVariantsFromConfiguration(configurations.shadowRuntimeElements) {
-    skip()
 }
 
 publishing {

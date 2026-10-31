@@ -1,12 +1,5 @@
-// StageWright — build settings.
-//
-// worlddriver is a separate repository and build; it consumes these modules only as published
-// artifacts (see RELEASE ORDER in build.gradle), so nothing here has to resolve inside its build.
+// worlddriver consumes these modules only as published artifacts; see docs/reference/publishing.md.
 pluginManagement {
-    // The gradle plugin is its own build. worlddriver, its first consumer, resolves a published
-    // build of it by version instead.
-    includeBuild('gradle-plugin')
-    // The convention plugins all three builds share.
     includeBuild('build-logic')
 
     repositories {
@@ -18,17 +11,18 @@ pluginManagement {
 
 rootProject.name = 'stagewright'
 
-// The engine, for :stagewright-cli. The plugin build above includes it as well, and Gradle treats
-// the one directory as one build.
-includeBuild('engine')
-
-include 'stagewright-api'
-include 'stagewright-common'
-include 'stagewright-fabric'
-include 'stagewright-neoforge'
-include 'stagewright-cli'
-project(':stagewright-cli').projectDir = file('cli')
-project(':stagewright-api').projectDir = file('api')
-project(':stagewright-common').projectDir = file('common')
-project(':stagewright-fabric').projectDir = file('fabric')
-project(':stagewright-neoforge').projectDir = file('neoforge')
+// Each module applies its own convention plugin: only the four Minecraft-side ones take Loom or ModDevGradle.
+[
+    'stagewright-api': 'api',
+    'stagewright-common': 'common',
+    'stagewright-fabric': 'fabric',
+    'stagewright-neoforge': 'neoforge',
+    'stagewright-cli': 'cli',
+    'stagewright-engine': 'engine',
+    'stagewright-agent': 'agent',
+    'stagewright-testengine': 'testengine',
+    'stagewright-gradle-plugin': 'gradle-plugin',
+].each { name, dir ->
+    include name
+    project(":${name}").projectDir = file(dir)
+}

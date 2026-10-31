@@ -27,11 +27,9 @@ configurations {
     bundledMods { transitive = false }
 }
 dependencies {
-    // Built from engine/ through the includeBuild in settings.gradle, so this jar always carries
-    // the engine in the tree.
-    implementation "net.magicterra:stagewright-engine:${stagewrightVersion}"
+    implementation project(':stagewright-engine')
     // `stagewright test`: the JUnit engine a test task runs, launched here instead.
-    implementation "net.magicterra:stagewright-testengine:${stagewrightVersion}"
+    implementation project(':stagewright-testengine')
     implementation platform('org.junit:junit-bom:5.11.3')
     implementation 'org.junit.platform:junit-platform-launcher'
     implementation 'org.junit.platform:junit-platform-reporting'

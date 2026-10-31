@@ -26,15 +26,6 @@ rootProject.allprojects.findAll {
 }.each {
     notMine << here.relativize(it.projectDir.toPath()).toString() + '/**'
 }
-if (projectDir == StageWrightRepo.ROOT) {
-    // The engine build (engine, agent, testengine) and the Gradle plugin's build.
-    notMine += [
-        'engine/**',
-        'agent/**',
-        'testengine/**',
-        'gradle-plugin/**'
-    ]
-}
 def mine = { List<String> patterns ->
     fileTree(projectDir) {
         include patterns
