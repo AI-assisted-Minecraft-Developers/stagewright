@@ -19,7 +19,9 @@ scenes all failed as "Failed to initialize server", with the bind error only in 
 unset the engine now picks a free port as each scene starts and tells the joining client; a fixed `serverPort`
 behaves as before. A server that cannot bind its port fails its scene saying so, with the cause from its log. The
 generated server run now carries `--port {stagewright.freePort}`, so starting it by hand needs `serverPort` set.
-VERIFY_PORT
+**Green in the self-test suite**: WorldDriver's whole suite on both loaders on free ports, run while the third
+party's own suite held its fixed port on the same machine; four client-movement scenes that failed under that load
+passed again run alone.
 
 Found while a third-party mod moved its tests onto StageWright. All **green in the self-test suite** (WorldDriver's
 whole suite on both loaders, with a test for each); not yet green against that mod.
