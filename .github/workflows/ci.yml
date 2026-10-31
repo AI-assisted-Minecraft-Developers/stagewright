@@ -67,18 +67,8 @@ jobs:
         if: steps.companion.outputs.sha != ''
         run: ./scripts/build_driver_pair.sh .ci/worlddriver
 
-      # The engine reaches the plugin and the root build (the CLI is a module of it) through
-      # includeBuild, which leaves the order of the first three free.
-      - name: Engine
-        if: steps.companion.outputs.sha == ''
-        run: ./gradlew -p engine check publishToMavenLocal
-
-      - name: Gradle plugin
-        if: steps.companion.outputs.sha == ''
-        run: ./gradlew -p gradle-plugin check publishToMavenLocal
-
-      # Includes the command-line runner, which is a module of this build. Each build's tests include its
-      # ArchitectureTest; the CLI's also checks the loader jars it carries.
+      # Every module, the engine, Gradle plugin and command-line runner included. The engine's, plugin's and
+      # CLI's tests include an ArchitectureTest; the CLI's also checks the loader jars it carries.
       - name: Framework
         if: steps.companion.outputs.sha == ''
         run: ./gradlew build publishToMavenLocal
@@ -97,7 +87,4 @@ jobs:
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-        run: |
-          ./gradlew -p engine publishAllPublicationsToGardelNexusRepository
-          ./gradlew -p gradle-plugin publishAllPublicationsToGardelNexusRepository
-          ./gradlew publishAllPublicationsToGardelNexusRepository
+        run: ./gradlew publishAllPublicationsToGardelNexusRepository
