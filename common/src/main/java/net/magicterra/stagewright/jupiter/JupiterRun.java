@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -20,6 +21,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.harness.AgentBridge;
@@ -276,12 +278,12 @@ public final class JupiterRun {
     }
 
     /** What one engine discovers from {@code selectors}, configured as every in-game run is. */
-    private static LauncherDiscoveryRequest request(List<? extends DiscoverySelector> selectors, String engine) {
+    static LauncherDiscoveryRequest request(List<? extends DiscoverySelector> selectors, String engine) {
         return LauncherDiscoveryRequestBuilder.request()
                 .selectors(selectors)
                 .filters(EngineFilter.includeEngines(engine), THIS_ROUND)
                 .configurationParameter("junit.jupiter.extensions.autodetection.enabled", "true")
-                // Below a junit-platform.properties on the game's class path, or a -D, so either may change them.
+                // Defaults only: a junit-platform.properties on the game's class path, or a -D, changes them.
                 .parentConfigurationParameters(new Defaults(Map.of(
                         "junit.jupiter.testmethod.order.default", DependencyOrder.class.getName(),
                         "junit.jupiter.testclass.order.default", DependencyOrder.class.getName(),
@@ -373,11 +375,39 @@ public final class JupiterRun {
         Files.writeString(file, new GsonBuilder().setPrettyPrinting().create().toJson(o));
     }
 
-    /** StageWright's defaults, consulted after everything the run's own configuration says. */
-    private record Defaults(Map<String, String> values) implements ConfigurationParameters {
+    /**
+     * StageWright's defaults, for the keys nothing else sets. JUnit consults parent parameters before the system
+     * properties and {@code junit-platform.properties}, so a default steps aside for a key either of those names.
+     */
+    private record Defaults(Map<String, String> values, Properties file) implements ConfigurationParameters {
+        Defaults(Map<String, String> values) {
+            this(values, platformProperties());
+        }
+
+        /** The {@code junit-platform.properties} JUnit itself reads: the first on the default class loader. */
+        private static Properties platformProperties() {
+            Properties p = new Properties();
+            ClassLoader loader = Thread.currentThread().getContextClassLoader();
+            URL url = (loader != null ? loader : JupiterRun.class.getClassLoader())
+                    .getResource("junit-platform.properties");
+            if (url != null) {
+                try (InputStream in = url.openStream()) {
+                    p.load(in);
+                } catch (IOException unreadable) {
+                    // JUnit logs and ignores an unreadable file the same way; the defaults then apply.
+                    StageWrightCommon.LOG.warn("[{}] cannot read {}", StageWrightCommon.MOD_ID, url, unreadable);
+                }
+            }
+            return p;
+        }
+
+        private boolean setElsewhere(String key) {
+            return System.getProperty(key) != null || file.containsKey(key);
+        }
+
         @Override
         public Optional<String> get(String key) {
-            return Optional.ofNullable(values.get(key));
+            return setElsewhere(key) ? Optional.empty() : Optional.ofNullable(values.get(key));
         }
 
         @Override
@@ -388,12 +418,14 @@ public final class JupiterRun {
         @Override
         @SuppressWarnings("deprecation")
         public int size() {
-            return values.size();
+            return keySet().size();
         }
 
         @Override
         public Set<String> keySet() {
-            return values.keySet();
+            Set<String> keys = new LinkedHashSet<>(values.keySet());
+            keys.removeIf(this::setElsewhere);
+            return keys;
         }
     }
 }
