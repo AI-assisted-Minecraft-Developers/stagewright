@@ -37,8 +37,8 @@ each file says what it adds or leaves out.
 To silence one finding, say why in a comment beside it and use `@SuppressWarnings("checkstyle:<check name in lower
 case>")` or `@SuppressWarnings("PMD.<RuleName>")`.
 
-For now both only report: the build does not fail on their findings until the existing ones are fixed. The reports
-are in each project's `build/reports/checkstyle/` and `build/reports/pmd/`.
+A finding from either fails `check`, and with it `build`. The reports are in each project's
+`build/reports/checkstyle/` and `build/reports/pmd/`.
 
 ## Module boundaries: ArchitectureTest
 

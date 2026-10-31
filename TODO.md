@@ -5,11 +5,6 @@ comment next to it. This file is only for what is *not done*.
 
 ---
 
-## Checkstyle and PMD only report
-
-Their findings on the main sources have to be fixed before `ignoreFailures` comes off in the `stagewright.lint` plugin
-(`build-logic/`), which then fails the build on any new one.
-
 ## The game still forces a JVM down when no agent is attached
 
 `JupiterRun.halt` arms an exit watchdog for a dedicated server started without the agent, by hand or

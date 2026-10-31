@@ -78,7 +78,7 @@ spotless {
     }
 }
 
-// Checkstyle and PMD, on main sources only. They report without failing until today's findings are fixed.
+// Checkstyle and PMD, on main sources only; a finding fails `check`.
 plugins.withId('java') {
     pluginManager.apply('checkstyle')
     pluginManager.apply('pmd')
@@ -86,14 +86,12 @@ plugins.withId('java') {
         toolVersion = '14.3.0'
         configDirectory = new File(configDir, 'checkstyle')
         sourceSets = [project.sourceSets.main]
-        ignoreFailures = true
     }
     project.pmd {
         toolVersion = '7.29.0'
         ruleSets = []
         ruleSetFiles = project.files(new File(configDir, 'pmd/ruleset.xml'))
         sourceSets = [project.sourceSets.main]
-        ignoreFailures = true
     }
     tasks.withType(Checkstyle).configureEach { exclude vendored }
     tasks.withType(Pmd).configureEach { exclude vendored }
