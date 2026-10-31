@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-01
 
+### Each scene's server gets a free port unless the suite fixes one
+
+Two builds running their suites on one machine both started their dedicated servers on 25621, so the second one's
+scenes all failed as "Failed to initialize server", with the bind error only in the game's log. With `serverPort`
+unset the engine now picks a free port as each scene starts and tells the joining client; a fixed `serverPort`
+behaves as before. A server that cannot bind its port fails its scene saying so, with the cause from its log. The
+generated server run now carries `--port {stagewright.freePort}`, so starting it by hand needs `serverPort` set.
+VERIFY_PORT
+
 Found while a third-party mod moved its tests onto StageWright. All **green in the self-test suite** (WorldDriver's
 whole suite on both loaders, with a test for each); not yet green against that mod.
 

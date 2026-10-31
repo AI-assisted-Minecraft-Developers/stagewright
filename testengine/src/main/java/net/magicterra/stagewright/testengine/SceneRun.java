@@ -1,9 +1,14 @@
 package net.magicterra.stagewright.testengine;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.Reader;
+import java.io.UncheckedIOException;
 import java.io.Writer;
+import java.net.ServerSocket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -144,13 +149,19 @@ final class SceneRun {
             if (!declaration.excludedMods().isEmpty()) {
                 spec = withoutMods(spec, declaration.excludedMods(), modsScratch);
             }
+            int serverPort = 0;
+            if (spec.wantsFreePort()) {
+                serverPort = freePort();
+                spec = spec.withServerPort(serverPort);
+                listener.reportingEntryPublished(scene, ReportEntry.from("serverPort", String.valueOf(serverPort)));
+            }
             // A run directory nothing else prepares, such as one the plugin generated: a dedicated server there needs
             // the EULA accepted and offline mode before it starts at all. Inside the put-back, like the scene's own.
             RunDirectory.provision(spec.primary().workingDirectory(), spec.server());
             writeServerProperties(serverProperties, world);
             SceneWorlds worlds = new SceneWorlds(spec.worldDirectory(), artifacts.resolve("saves"));
             try {
-                return supervise(spec, world, relay, artifacts, logs, worlds, loader);
+                return supervise(spec, world, relay, artifacts, logs, worlds, loader, serverPort);
             } finally {
                 worlds.restoreFirst();
             }
@@ -234,7 +245,8 @@ final class SceneRun {
             Path artifacts,
             Path logs,
             SceneWorlds worlds,
-            ClassLoader loader)
+            ClassLoader loader,
+            int serverPort)
             throws IOException, InterruptedException {
         List<String> classes = new ArrayList<>();
         List<String> scripts = new ArrayList<>();
@@ -281,10 +293,13 @@ final class SceneRun {
                 }
                 Process game = start(spec.primary(), extra, gameLog);
                 if (joined != null) {
-                    companion = start(
-                            spec.companion(),
-                            List.of(joined.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS)),
-                            companionLog);
+                    List<String> companionExtra = new ArrayList<>(
+                            List.of(joined.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS)));
+                    // The free port the server was given; the client's own connect address carries none that fits.
+                    if (serverPort > 0) {
+                        companionExtra.add("-Dstagewright.client.port=" + serverPort);
+                    }
+                    companion = start(spec.companion(), companionExtra, companionLog);
                 }
                 Duration total = Duration.ofMinutes(spec.timeoutMinutes());
                 Duration stall = spec.stallMinutes() == 0 ? total : Duration.ofMinutes(spec.stallMinutes());
@@ -377,6 +392,39 @@ final class SceneRun {
         return builder.start();
     }
 
+    /** A port nothing listens on now, for a server the scene starts next; another program may still take it first. */
+    static int freePort() throws IOException {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+    }
+
+    /**
+     * What a dedicated server's log says when it could not bind its port, which only names the cause in the line after
+     * {@code FAILED TO BIND TO PORT}; null when it does not say so, or there is no log.
+     */
+    static String bindFailure(File log) {
+        if (log == null || !log.isFile()) {
+            return null;
+        }
+        // A reader that replaces bytes it cannot decode rather than throwing: a game log is not always clean UTF-8.
+        try (BufferedReader in =
+                new BufferedReader(new InputStreamReader(Files.newInputStream(log.toPath()), StandardCharsets.UTF_8))) {
+            boolean failed = false;
+            for (String line = in.readLine(); line != null; line = in.readLine()) {
+                if (line.contains("FAILED TO BIND TO PORT")) {
+                    failed = true;
+                } else if (failed && line.contains("The exception was:")) {
+                    return line.substring(line.indexOf("The exception was:") + "The exception was:".length())
+                            .trim();
+                }
+            }
+            return failed ? "FAILED TO BIND TO PORT" : null;
+        } catch (IOException | UncheckedIOException e) {
+            return null;
+        }
+    }
+
     /**
      * Why the game ended, for every test it did not finish. Where its own threads stood goes with it whenever the agent
      * had sampled them, which it does once nothing has moved for a while: for a stall that is the stuck frame.
@@ -397,13 +445,20 @@ final class SceneRun {
             case NEVER_CONNECTED -> "without ever reaching its supervision agent";
             case PROCESS_DIED -> "by exiting without finishing its run";
         };
-        StringBuilder out = new StringBuilder(128)
+        StringBuilder out = new StringBuilder(384)
                 .append('(')
                 .append(ended)
                 .append(") ")
                 .append(detail)
                 .append("; its log is ")
                 .append(log);
+        String bind = bindFailure(log);
+        if (bind != null) {
+            out.append("\nthe server could not listen on its port (")
+                    .append(bind)
+                    .append("): another game on this machine may hold it. A suite that leaves serverPort unset gets a"
+                            + " free port for each scene");
+        }
         if (ended != Supervisor.Ended.DONE && !stacks.isEmpty()) {
             out.append("\nwhere its threads were when it last stood still:");
             for (Supervisor.ThreadStack t : stacks) {

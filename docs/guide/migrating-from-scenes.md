@@ -64,7 +64,7 @@ plugins {
 stagewright {
     tests {
         neoforge {
-            serverPort = 25597   // only when two projects' suites may run at once on one machine
+            serverPort = 25597   // only to start the generated runs by hand: unset, each scene gets a free port
         }
     }
 }

@@ -45,6 +45,9 @@ public final class ClientDirector {
 
     private static final String P_CONNECT = "stagewright.client.connect";
 
+    /** The port to dial instead of the connect address's: the free one the test engine gave the server. */
+    private static final String P_PORT = "stagewright.client.port";
+
     private static final String P_EXIT = "stagewright.client.exitWhenDone";
 
     /**
@@ -309,7 +312,7 @@ public final class ClientDirector {
     private static void drive(Minecraft mc) {
         String connect = System.getProperty(P_CONNECT);
         if (connect != null && !connect.isBlank()) {
-            String address = connect.trim();
+            String address = withPort(connect.trim(), System.getProperty(P_PORT));
             StageWrightCommon.LOG.info("[{}] connecting to {}", StageWrightCommon.MOD_ID, address);
             ConnectScreen.startConnecting(
                     mc.screen,
@@ -322,6 +325,18 @@ public final class ClientDirector {
         }
 
         openOrCreate(mc, firstWorld());
+    }
+
+    /** {@code address} with its port replaced by {@code port}, or as it is when {@code port} is blank. */
+    static String withPort(String address, String port) {
+        if (port == null || port.isBlank()) {
+            return address;
+        }
+        // A bracketed IPv6 host keeps its colons; otherwise the last colon, if any, opens the port.
+        int close = address.lastIndexOf(']');
+        int colon = address.lastIndexOf(':');
+        String host = colon > close ? address.substring(0, colon) : address;
+        return host + ":" + port.trim();
     }
 
     /** The save the client opens first, as the run names it. */

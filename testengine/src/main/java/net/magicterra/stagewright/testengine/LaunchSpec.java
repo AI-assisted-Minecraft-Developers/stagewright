@@ -29,6 +29,13 @@ record LaunchSpec(
     static final String PROPERTY = "stagewright.launches";
 
     /**
+     * In the primary's program arguments: the port its server listens on is a free one the engine picks as the scene
+     * starts, which the joining client is told as {@code -Dstagewright.client.port}. The Gradle plugin writes it unless
+     * a suite fixes {@code serverPort}, so two builds' suites on one machine do not fight over a port.
+     */
+    static final String FREE_PORT = "{stagewright.freePort}";
+
+    /**
      * {@code skip} when a topology without a spec is to be reported as one this run cannot launch rather than as a
      * mistake, as the CLI does, whose user chooses what to install; {@code fail}, the default, as the Gradle plugin
      * does, where a missing spec means the build is not configured for that topology.
@@ -105,6 +112,37 @@ record LaunchSpec(
             command.addAll(args);
             return command;
         }
+    }
+
+    /** Whether the primary's server asks for a free port. */
+    boolean wantsFreePort() {
+        return primary.args().contains(FREE_PORT);
+    }
+
+    /** This spec with the primary's {@link #FREE_PORT} replaced by {@code port}. */
+    LaunchSpec withServerPort(int port) {
+        List<String> args = new ArrayList<>();
+        for (String a : primary.args()) {
+            args.add(FREE_PORT.equals(a) ? String.valueOf(port) : a);
+        }
+        Process p = new Process(
+                primary.java(),
+                primary.jvmArgs(),
+                primary.mainClass(),
+                args,
+                primary.workingDirectory(),
+                primary.environment());
+        return new LaunchSpec(
+                topology,
+                gameDirectory,
+                worldDirectory,
+                cleanWorld,
+                timeoutMinutes,
+                stallMinutes,
+                server,
+                leaks,
+                p,
+                companion);
     }
 
     /** The spec for {@code topology}; refuses when none was written for it, saying where it looked. */

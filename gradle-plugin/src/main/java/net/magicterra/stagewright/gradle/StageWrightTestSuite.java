@@ -81,7 +81,10 @@ public abstract class StageWrightTestSuite implements Named {
     /** System properties every generated run gets. */
     public abstract MapProperty<String, String> getSystemProperties();
 
-    /** The port the generated dedicated servers listen on and the joining client dials. Convention: 25621. */
+    /**
+     * The port the generated dedicated servers listen on and the joining client dials. Convention: 0, a free port the
+     * test engine picks as each scene starts, so suites of two builds can run at once on one machine.
+     */
     public abstract Property<Integer> getServerPort();
 
     /** The longest one scene's games may run on a generated topology, in minutes. Convention: 20. */

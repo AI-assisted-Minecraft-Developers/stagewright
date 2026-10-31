@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.gradle;
 
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -45,7 +46,11 @@ final class GeneratedRuns {
     /** The singleplayer world the integrated server's client creates; the test engine deletes it before each scene. */
     static final String INTEGRATED_WORLD = "StageWright";
 
-    static final int DEFAULT_SERVER_PORT = 25_621;
+    /** {@code serverPort} unset: the test engine picks a free port as each scene starts. */
+    static final int FREE_SERVER_PORT = 0;
+
+    /** What the test engine replaces with that port; its own {@code LaunchSpec.FREE_PORT}. */
+    static final String FREE_PORT_ARGUMENT = "{stagewright.freePort}";
 
     static final String TESTMOD = "testmod";
 
@@ -124,8 +129,13 @@ final class GeneratedRuns {
         if (modDev != null) {
             testsMod(loader, modDev, suite, source, runs);
         }
-        int port = suite.getServerPort().getOrElse(DEFAULT_SERVER_PORT);
-        List<String> serverArgs = List.of("--port", String.valueOf(port));
+        int port = suite.getServerPort().getOrElse(FREE_SERVER_PORT);
+        // A free port unless the suite fixes one, so two builds' suites on one machine never fight over it; the
+        // engine tells the joining client which with -Dstagewright.client.port, overriding the address below.
+        String portArgument = port == FREE_SERVER_PORT ? FREE_PORT_ARGUMENT : String.valueOf(port);
+        List<String> serverArgs = List.of("--port", portArgument);
+        String loopback = InetAddress.getLoopbackAddress().getHostAddress();
+        String connect = port == FREE_SERVER_PORT ? loopback : loopback + ":" + port;
 
         declare(
                 loader,
@@ -156,7 +166,7 @@ final class GeneratedRuns {
                 "client",
                 runDir(suite, "joining-client"),
                 List.of(),
-                Map.of("stagewright.client.connect", "127.0.0.1:" + port),
+                Map.of("stagewright.client.connect", connect),
                 suite,
                 source);
         // A client hosting the world: it creates the singleplayer world from the scene's settings and opens it, and the

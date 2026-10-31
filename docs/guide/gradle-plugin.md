@@ -78,7 +78,7 @@ The rest is conventions, each of which a suite may set:
 | `testDependencies` | true: the `stagewrightTestCompile` configuration goes on that source set's `compileOnly` |
 | `includeWorldDriver` | true: WorldDriver is among the defaults of both configurations below |
 | `worldDriverVersion` | the WorldDriver build this StageWright was built against |
-| `serverPort`, `timeoutMinutes` | 25621, 20 |
+| `serverPort`, `timeoutMinutes` | unset: a free port for each scene; 20 |
 | `leaks` | `'fail'`: a game forced down after its run fails its scene; `'report'` only reports it (see the topology table below) |
 
 What a suite needs comes as the defaults of two configurations of the plugin's own, in its loader
@@ -166,8 +166,14 @@ The engine deletes the client's saves before each scene, as it deletes a server'
 
 The runs start from the run source set, so under loom `runClient` goes without the tests; they get no
 IDE run configuration. `jvmArgs` and `systemProperties` go on all of them, the servers listen on
-`serverPort` (default 25621), and `timeoutMinutes` (default 20) bounds one scene. The engine accepts the
-EULA in a server's directory itself, so nothing has to be prepared beforehand. Under another loader
+`serverPort`, and `timeoutMinutes` (default 20) bounds one scene. The engine accepts the
+EULA in a server's directory itself, so nothing has to be prepared beforehand.
+
+Left unset, `serverPort` is a free port the engine picks as each scene starts, reported as the scene's
+`serverPort` entry, so builds on one machine can run their suites at once. The generated server run then
+carries `--port {stagewright.freePort}`, which only the engine fills in, and the joining client is told the
+port as `-Dstagewright.client.port`; start those runs through the test task, or set `serverPort` to start
+them by hand. A server that cannot bind its port fails its scene saying so, with the cause from its log. Under another loader
 plugin, declare the runs there and map them instead: `topologies.put('dedicatedServerWithClient',
 'myTopology')` maps the name a scene declares to a topology declared in `topologies { }`; an unknown
 target fails the build naming the suite and the topology.

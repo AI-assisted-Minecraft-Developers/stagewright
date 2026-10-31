@@ -57,6 +57,11 @@ A process is `java jvmArgs… mainClass args…` run in `workingDirectory` with 
 `mainClass` may be left out when an argument file in `jvmArgs` names it, as a NeoForge server's `unix_args.txt` does.
 `jvmArgs` holds everything before the main class, class path included, in the order the run would have used.
 
+An argument of the primary that is exactly `{stagewright.freePort}` is replaced by a port nothing listens on as each
+scene starts, and the companion gets `-Dstagewright.client.port=<that port>`, which StageWright's client dials instead
+of the port in its connect address. The Gradle plugin writes it as the server's `--port` when a suite sets no
+`serverPort`.
+
 ## What the engine adds
 
 To the primary only, placed after the run's own system properties and before the first `-cp` or argument file, so

@@ -104,7 +104,9 @@ class GeneratedRunsTest {
         assertEquals(null, alone.get("companion"));
         JsonObject primary = alone.get("primary").asObject();
         assertEquals("server", primary.getString("mainClass", null));
-        assertEquals("[\"--port\",\"25621\"]", primary.get("args").toString());
+        // No serverPort: the engine puts a free port in place of the placeholder.
+        assertEquals(
+                "[\"--port\",\"{stagewright.freePort}\"]", primary.get("args").toString());
         assertEquals(
                 dir.resolve("loader/run-stagewright/fabric/dedicated-server").toString(),
                 primary.getString("workingDirectory", null));
@@ -126,7 +128,7 @@ class GeneratedRunsTest {
         assertEquals("client", companion.getString("mainClass", null));
         String clientArgs = companion.get("jvmArgs").toString();
         assertTrue(
-                clientArgs.contains("-Dstagewright.client.connect=127.0.0.1:25621") && clientArgs.contains("-Da.b=c"),
+                clientArgs.contains("-Dstagewright.client.connect=127.0.0.1\"") && clientArgs.contains("-Da.b=c"),
                 clientArgs);
         assertEquals(
                 dir.resolve("loader/run-stagewright/fabric/joining-client").toString(),

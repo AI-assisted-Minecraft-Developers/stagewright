@@ -86,7 +86,7 @@ public class StageWrightPlugin implements Plugin<Project> {
         });
 
         tests.all(suite -> {
-            suite.getServerPort().convention(GeneratedRuns.DEFAULT_SERVER_PORT);
+            suite.getServerPort().convention(GeneratedRuns.FREE_SERVER_PORT);
             suite.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
             suite.getLeaks().convention(SuiteLaunch.LEAKS_FAIL);
             // A single-loader project is its own loader; null leaves it unset elsewhere.
