@@ -66,12 +66,10 @@ FOREIGN_MOD_METADATA = [
 ]
 
 
+# A task name given without a project runs in every project that has it.
 BUILD_COMMANDS = [
-    ['./gradlew', '--console=plain', 'jar', 'sourcesJar', 'remapJar', 'remapSourcesJar', 'shadowJar',
-     'generatePomFileForMavenJavaPublication'],
-    ['./gradlew', '--console=plain', '-p', 'engine', 'jar', 'sourcesJar', 'engineJar',
-     'generatePomFileForMavenJavaPublication'],
-    ['./gradlew', '--console=plain', '-p', 'gradle-plugin', 'jar', 'generatePomFileForPluginMavenPublication',
+    ['./gradlew', '--console=plain', 'jar', 'sourcesJar', 'remapJar', 'remapSourcesJar', 'shadowJar', 'engineJar',
+     'generatePomFileForMavenJavaPublication', 'generatePomFileForPluginMavenPublication',
      'generatePomFileForMcStageWrightPluginMarkerMavenPublication'],
 ]
 
