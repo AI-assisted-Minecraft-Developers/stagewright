@@ -13,7 +13,7 @@ game) and ordinary JUnit 5 test methods: `@Test`, `@RepeatedTest`, `@Parameteriz
 | Parameter | What it is |
 |---|---|
 | `Game` | The game: WorldDriver's methods, the server thread, waits, soft checks, overrides. Also a constructor parameter. |
-| `Plot` | A box of a dimension leased to this test, handed over empty (air, chunks loaded) and put back exactly as it was when the test ends, entities included. Plots never overlap. |
+| `Plot` | A box of a dimension leased to this test, handed over empty (air, chunks loaded and ticking entities) and put back exactly as it was when the test ends, entities included. Plots never overlap. An entity a mod would not let go of when the plot was emptied or put back is named in a warning in the game's log. |
 | `Bot` | A server-side player joined for this test: survival, empty inventory, full health, at the world spawn. It is on the player list like any player, and leaves when the test ends unless the test keeps it for a later one. |
 | `Player` | The real client's player. Shared by every test of the run, and keeps what a test leaves on it. |
 | `Client` | The real client itself, for WorldDriver's client methods. |
