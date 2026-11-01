@@ -3,8 +3,10 @@ package net.magicterra.stagewright.jupiter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Plot;
 import net.magicterra.worlddriver.api.methods.world.WorldContracts;
@@ -22,6 +24,7 @@ import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
@@ -160,8 +163,10 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
             // First: what the box held before the lease comes back as it was, not kept.
             LeasedPlots.remove(dimension, box);
             ServerLevel level = level(server);
+            List<Entity> leaving = nonPlayers(level);
             before.restore(level);
             before.restoreEntities(level);
+            warnAboutSurvivors(leaving, "put back");
             forceChunks(server, false);
         });
         // Only a plot that was put back may be handed out again; a failed restore leaves its stretch taken.
@@ -344,9 +349,31 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
                 level.setBlock(pos, air, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
             }
         }
-        AABB area = AABB.of(box);
-        for (Entity e : level.getEntities((Entity) null, area, e -> !(e instanceof Player))) {
-            e.discard();
+        List<Entity> leaving = nonPlayers(level);
+        leaving.forEach(Entity::discard);
+        warnAboutSurvivors(leaving, "leased");
+    }
+
+    private List<Entity> nonPlayers(ServerLevel level) {
+        return level.getEntities((Entity) null, AABB.of(box), e -> !(e instanceof Player));
+    }
+
+    /**
+     * Name each of {@code discarded} still in the world: a mod may refuse a removal, and the entity then turns up in a
+     * later test's plot at the same place, where nothing else says where it came from.
+     */
+    private void warnAboutSurvivors(List<Entity> discarded, String when) {
+        for (Entity e : discarded) {
+            if (!e.isRemoved()) {
+                StageWrightCommon.LOG.warn(
+                        "[stagewright] {} was {}, but {} {} at {} was not removed from it (a mod refused?): it stays in"
+                                + " the world, and a later plot here will find it",
+                        this,
+                        when,
+                        EntityType.getKey(e.getType()),
+                        e.getUUID(),
+                        e.blockPosition().toShortString());
+            }
         }
     }
 }
