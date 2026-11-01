@@ -62,6 +62,24 @@ final class SceneRun {
         this.coverage = coverage;
     }
 
+    /**
+     * What scene {@code name} holds while it runs, for {@link SceneScheduler}: a game client, and the world of a
+     * topology that keeps it between scenes. Nothing when its declaration or launch cannot be read, which {@link #run}
+     * then reports.
+     */
+    static SceneScheduler.Needs needs(String name, ClassLoader loader) {
+        try {
+            LaunchSpec spec = LaunchSpec.load(SceneFile.load(name, loader).topology());
+            return new SceneScheduler.Needs(
+                    spec.companion() != null || !spec.server(),
+                    spec.cleanWorld()
+                            ? null
+                            : spec.gameDirectory().toAbsolutePath().normalize().toString());
+        } catch (RuntimeException e) {
+            return SceneScheduler.Needs.NOTHING;
+        }
+    }
+
     void run(ClassLoader loader) {
         SceneFile declaration = null;
         LaunchSpec spec = null;

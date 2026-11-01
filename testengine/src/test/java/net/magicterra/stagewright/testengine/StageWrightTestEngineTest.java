@@ -374,6 +374,29 @@ class StageWrightTestEngineTest {
     }
 
     @Test
+    void scenesRunSideBySideEachInItsOwnDirectory() {
+        EngineExecutionResults r = EngineTestKit.engine("stagewright")
+                .configurationParameter(SceneScheduler.SCENES, "3")
+                .selectors(
+                        selectClass(FIXTURES + "PassFixture"),
+                        selectClass(FIXTURES + "DynamicFixture"),
+                        selectClass(FIXTURES + "AssertFailFixture"))
+                .execute();
+        assertEquals(
+                5,
+                r.testEvents().succeeded().count(),
+                () -> String.valueOf(r.testEvents().failed().list()));
+        assertEquals(1, r.testEvents().failed().count());
+        assertEquals(0, containersFailed(r).count());
+        for (String scene : List.of("pass", "dynamic", "assertFail")) {
+            assertTrue(
+                    Files.isRegularFile(SceneDirectory.of(temp.resolve("game-" + scene), scene)
+                            .resolve("stagewright/logs/" + scene + "-game.log")),
+                    scene);
+        }
+    }
+
+    @Test
     void aFailingSceneKeepsItsWholeDirectory() throws IOException {
         Path topology = temp.resolve("game-assertFail");
         Files.writeString(topology.resolve("options.txt"), "copied");

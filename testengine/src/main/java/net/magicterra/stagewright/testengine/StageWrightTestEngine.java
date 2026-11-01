@@ -179,15 +179,28 @@ public final class StageWrightTestEngine implements TestEngine {
         request.getEngineExecutionListener().executionStarted(engine);
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
         Coverage coverage = new Coverage();
+        List<SceneScheduler.Job> scenes = new ArrayList<>();
         for (TestDescriptor child : new ArrayList<>(engine.getChildren())) {
             if (child instanceof Nodes.Scene scene) {
-                new SceneRun(scene, request.getEngineExecutionListener(), coverage).run(loader);
+                scenes.add(new SceneScheduler.Job(
+                        SceneRun.needs(scene.name, loader),
+                        () -> new SceneRun(scene, request.getEngineExecutionListener(), coverage).run(loader)));
             } else if (child instanceof Nodes.Unreadable unreadable) {
                 request.getEngineExecutionListener().executionStarted(unreadable);
                 request.getEngineExecutionListener()
                         .executionFinished(
                                 unreadable, TestExecutionResult.failed(new AssertionError(unreadable.error)));
             }
+        }
+        try {
+            SceneScheduler.from(request.getConfigurationParameters()).run(scenes);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            request.getEngineExecutionListener().executionFinished(engine, TestExecutionResult.aborted(e));
+            return;
+        } catch (RuntimeException e) {
+            request.getEngineExecutionListener().executionFinished(engine, TestExecutionResult.failed(e));
+            return;
         }
         List<String> neverRan = coverage.neverRan();
         request.getEngineExecutionListener()
