@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-01
 
+### A plot is handed over once its chunks tick entities, and an entity it cannot remove is named
+
+A plot waited only for its chunks to be loaded, but a chunk reaches the entity-ticking level its ticket asks for some
+ticks later — hundreds, with several games sharing the processor — and a mob placed meanwhile stood still, failing
+timing-sensitive tests of a third-party mod. The lease now waits for entity ticking too. And a mod that refuses an
+entity's removal left it in the world when the plot was emptied or put back, to turn up unexplained in a later test's
+plot at the same place; each such entity is now named in a warning in the game's log. **Green in the self-test
+suite**: WorldDriver's whole suite with three scenes at once, NeoForge all passing, Fabric failing only
+`ClientDigTest` and `ClientWaterTest`, known to fail under load. Not yet run by that mod.
+
 ### Each scene runs in a directory of its own, and several scenes can run at once
 
 A suite with several scenes ran them one after another, each mostly waiting for its game to start, and could not do
