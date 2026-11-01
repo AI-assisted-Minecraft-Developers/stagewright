@@ -37,8 +37,24 @@ class TestCommandTest {
         assertFalse(server.containsKey("mainClass"), "the argument file names it");
         @SuppressWarnings("unchecked")
         List<String> args = (List<String>) server.get("args");
-        // Relative: the server runs in the scene's own directory, and plays in the world under it.
-        assertEquals(List.of("nogui", "--universe", "stagewright", "--world", "world"), args);
+        // Relative: the server runs in the scene's own directory, and plays in the world under it. On a free port.
+        assertEquals(
+                List.of("nogui", "--universe", "stagewright", "--world", "world", "--port", "{stagewright.freePort}"),
+                args);
+    }
+
+    @Test
+    void scenesRunOneAtATimeUnlessAskedAndTheLimitsAreChecked() {
+        assertEquals(
+                Map.of("stagewright.parallel.scenes", "1", "stagewright.parallel.clients", "1"),
+                TestCommand.parallel(Map.of()));
+        assertEquals(
+                Map.of("stagewright.parallel.scenes", "3", "stagewright.parallel.clients", "2"),
+                TestCommand.parallel(Map.of("parallel-scenes", "3", "parallel-clients", "2")));
+        String message = assertThrows(
+                        IllegalArgumentException.class, () -> TestCommand.parallel(Map.of("parallel-scenes", "0")))
+                .getMessage();
+        assertTrue(message.contains("--parallel-scenes"), message);
     }
 
     @Test

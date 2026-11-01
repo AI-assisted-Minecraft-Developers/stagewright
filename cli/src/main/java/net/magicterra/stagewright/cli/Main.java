@@ -1,8 +1,6 @@
 package net.magicterra.stagewright.cli;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -77,29 +75,6 @@ public final class Main {
         return opts.getOrDefault("username", ClientLaunch.DEFAULT_USERNAME);
     }
 
-    /**
-     * The port the pack's server will listen on.
-     *
-     * <p>Read from {@code server.properties} rather than assumed, because a pack that moved off 25565 would otherwise
-     * produce a client dialling a port nothing answers — which looks from the outside exactly like the server failing
-     * to start.
-     */
-    static int serverPort(Path gameDir) throws IOException {
-        Path properties = gameDir.resolve("server.properties");
-        if (Files.isRegularFile(properties)) {
-            for (String line : Files.readAllLines(properties, StandardCharsets.UTF_8)) {
-                String trimmed = line.trim();
-                if (trimmed.startsWith("server-port=")) {
-                    String value = trimmed.substring("server-port=".length()).trim();
-                    if (!value.isEmpty()) {
-                        return Integer.parseInt(value);
-                    }
-                }
-            }
-        }
-        return 25_565;
-    }
-
     private static void usage(java.io.PrintStream out) {
         out.println("""
                 stagewright — run a modpack's tests
@@ -107,7 +82,8 @@ public final class Main {
                   java -jar stagewright.jar test <server-dir> [--tests <dir>] [--mod <jar>]...
                                                         [--reports <dir>] [--launch "<cmd>"] [--java <path>]
                                                         [--timeout <min>] [--stall-timeout <min>]
-                                                        [--leaks fail|report] [-D…] [-X…]
+                                                        [--leaks fail|report] [--parallel-scenes <n>]
+                                                        [--parallel-clients <n>] [-D…] [-X…]
                                                         [--client <spec> [--client-dir <dir>]
                                                          [--client-mods <dir>] [--install-dir <dir>]
                                                          [--username <name>] [--mirror bmclapi]]
@@ -131,6 +107,13 @@ public final class Main {
                   --leaks fail|report a game that has to be forced down after its run, because a mod's
                                       thread keeps it up, fails its scene (fail, the default) or is
                                       only reported (report)
+                  --parallel-scenes <n>
+                                      run up to n scenes at once (default 1), each in a directory of
+                                      its own under <server-dir>/stagewright/scenes; each game takes
+                                      its own memory
+                  --parallel-clients <n>
+                                      of those, up to n that start a client (default 1): clients share
+                                      one display, and the game slows a window without the focus
                   -D<key>=<value>, -X<option>
                                       passed to the games' JVMs as given (e.g. -Xmx8G)
 

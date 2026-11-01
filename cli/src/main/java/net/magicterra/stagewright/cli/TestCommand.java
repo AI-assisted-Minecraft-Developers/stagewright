@@ -76,6 +76,13 @@ final class TestCommand {
 
     private static final String NOT_A_DIRECTORY = " is not a directory";
 
+    /** The placeholder the test engine replaces with a free port (docs/reference/launch-spec.md). */
+    private static final String FREE_PORT = "{stagewright.freePort}";
+
+    private static final String PARALLEL_SCENES = "parallel-scenes";
+
+    private static final String PARALLEL_CLIENTS = "parallel-clients";
+
     private static final Set<String> VALUED = Set.of(
             "launch",
             JAVA,
@@ -89,7 +96,9 @@ final class TestCommand {
             "install-dir",
             "username",
             "mirror",
-            "leaks");
+            "leaks",
+            PARALLEL_SCENES,
+            PARALLEL_CLIENTS);
 
     /**
      * What a client directory named by {@code --client-dir} keeps to itself: {@code mods/} comes from
@@ -144,6 +153,7 @@ final class TestCommand {
             throw new IllegalArgumentException(gameDir + NOT_A_DIRECTORY);
         }
         leaks(opts);
+        parallel(opts);
         // What the run writes stays under the server directory wherever the tests come from: they may be a
         // repository's.
         Path artifacts = gameDir.resolve(RunDirectory.ARTIFACT_DIR);
@@ -229,7 +239,8 @@ final class TestCommand {
                             clientProps(
                                     systemProps,
                                     clientMods,
-                                    "stagewright.client.connect=127.0.0.1:" + Main.serverPort(gameDir)),
+                                    // No port: the engine tells the client the free one the server was given.
+                                    "stagewright.client.connect=127.0.0.1"),
                             clientMods.game(),
                             username),
                     clientDir);
@@ -252,7 +263,25 @@ final class TestCommand {
         Path reports = Path.of(opts.getOrDefault(
                         "reports", artifacts.resolve("reports").toString()))
                 .toAbsolutePath();
-        return execute(root, reports, log);
+        return execute(root, reports, parallel(opts), log);
+    }
+
+    /**
+     * {@code --parallel-scenes} and {@code --parallel-clients}, as the engine's configuration parameters: how many
+     * scenes run at once, and how many of them may start a client. Each is 1 when not given.
+     */
+    static Map<String, String> parallel(Map<String, String> opts) {
+        Map<String, String> parameters = new LinkedHashMap<>();
+        for (String[] option : new String[][] {
+            {PARALLEL_SCENES, "stagewright.parallel.scenes"}, {PARALLEL_CLIENTS, "stagewright.parallel.clients"}
+        }) {
+            String value = opts.getOrDefault(option[0], "1");
+            if (!value.matches("[1-9][0-9]*")) {
+                throw new IllegalArgumentException("--" + option[0] + " is a whole number from 1 up, not " + value);
+            }
+            parameters.put(option[1], value);
+        }
+        return parameters;
     }
 
     /**
@@ -490,6 +519,10 @@ final class TestCommand {
         args.add("nogui");
         // The world the scenes play in, never the pack's. Relative, so it is under the directory each scene runs in.
         args.addAll(List.of("--universe", RunDirectory.ARTIFACT_DIR, "--world", "world"));
+        // A free port the engine picks as each scene starts, never the pack's: a server of the pack may be up on it,
+        // and
+        // scenes run at once each need their own.
+        args.addAll(List.of("--port", FREE_PORT));
         args.addAll(injected.game());
 
         Map<String, Object> primary = new LinkedHashMap<>();
@@ -555,7 +588,8 @@ final class TestCommand {
     }
 
     /** Discover under {@code root} and run, as a Gradle test task would, writing JUnit XML to {@code reports}. */
-    private static int execute(Path root, Path reports, Consumer<String> log) throws IOException {
+    private static int execute(Path root, Path reports, Map<String, String> parameters, Consumer<String> log)
+            throws IOException {
         Files.createDirectories(reports);
         ClassLoader previous = Thread.currentThread().getContextClassLoader();
         try (URLClassLoader tests = new URLClassLoader(new URL[] {root.toUri().toURL()}, previous)) {
@@ -564,6 +598,7 @@ final class TestCommand {
             LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
                     .selectors(selectClasspathRoots(Set.of(root)))
                     .filters(org.junit.platform.launcher.EngineFilter.includeEngines("stagewright"))
+                    .configurationParameters(parameters)
                     .build();
             Launcher launcher = LauncherFactory.create();
             SummaryGeneratingListener summary = new SummaryGeneratingListener();
