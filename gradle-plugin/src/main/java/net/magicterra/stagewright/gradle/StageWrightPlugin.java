@@ -47,6 +47,15 @@ public class StageWrightPlugin implements Plugin<Project> {
     /** The Gradle property whose whitespace-separated arguments every game the plugin starts gets last. */
     static final String JVM_ARGS_PROPERTY = "stagewright.jvmArgs";
 
+    /** How many scenes the engine runs at once: the Gradle property, else the suite's, passed on under this name. */
+    static final String PARALLEL_SCENES_PROPERTY = "stagewright.parallel.scenes";
+
+    /** How many of them may start a game client, likewise. */
+    static final String PARALLEL_CLIENTS_PROPERTY = "stagewright.parallel.clients";
+
+    /** Opens every failure about a suite, so the name reads the same wherever one is reported. */
+    private static final String SUITE = "stagewright test suite '";
+
     @Override
     public void apply(Project project) {
         NamedDomainObjectContainer<StageWrightTopology> topologies = project.getObjects()
@@ -87,6 +96,8 @@ public class StageWrightPlugin implements Plugin<Project> {
 
         tests.all(suite -> {
             suite.getServerPort().convention(GeneratedRuns.FREE_SERVER_PORT);
+            suite.getMaxParallelScenes().convention(1);
+            suite.getMaxParallelClients().convention(1);
             suite.getTimeoutMinutes().convention(DEFAULT_TIMEOUT_MINUTES);
             suite.getLeaks().convention(SuiteLaunch.LEAKS_FAIL);
             // A single-loader project is its own loader; null leaves it unset elsewhere.
@@ -196,6 +207,21 @@ public class StageWrightPlugin implements Plugin<Project> {
             task.getJvmArgumentProviders()
                     .add(() -> List.of("-D" + TEST_ROOTS_PROPERTY + "="
                             + suite.getClasses().getAsPath()));
+            Provider<Integer> scenes = parallel(project, PARALLEL_SCENES_PROPERTY, suite.getMaxParallelScenes());
+            Provider<Integer> clients = parallel(project, PARALLEL_CLIENTS_PROPERTY, suite.getMaxParallelClients());
+            Provider<Integer> port = suite.getServerPort();
+            String suiteName = suite.getName();
+            task.getJvmArgumentProviders().add(() -> {
+                // Read as the task runs, so a fixed port set after the limit is still caught.
+                if (scenes.get() > 1 && port.get() != GeneratedRuns.FREE_SERVER_PORT) {
+                    throw new GradleException(SUITE + suiteName + "' runs " + scenes.get()
+                            + " scenes at once but fixes serverPort " + port.get() + ": their servers would all"
+                            + " listen on it. Leave serverPort unset, so each scene's server gets a free one");
+                }
+                return List.of(
+                        "-D" + PARALLEL_SCENES_PROPERTY + "=" + scenes.get(),
+                        "-D" + PARALLEL_CLIENTS_PROPERTY + "=" + clients.get());
+            });
             // Script tests are matched by --tests as `<path>.<name>`; a pattern naming a path must reach them.
             task.doFirst(ScriptPatterns.INSTANCE);
             task.addTestListener(new SceneSummary());
@@ -216,7 +242,7 @@ public class StageWrightPlugin implements Plugin<Project> {
             String declaredName) {
         StageWrightTopology topology = topologies.findByName(declaredName);
         if (topology == null) {
-            throw new GradleException("stagewright test suite '" + suite.getName() + "' maps topology '"
+            throw new GradleException(SUITE + suite.getName() + "' maps topology '"
                     + sceneName + "' to '" + declaredName + "', which is not declared in stagewright.topologies"
                     + " (declared: " + String.join(", ", topologies.getNames()) + ")");
         }
@@ -227,7 +253,7 @@ public class StageWrightPlugin implements Plugin<Project> {
             Project project, StageWrightTestSuite suite, String topology, String taskName, String role) {
         Task task = resolveRunTask(project, taskName);
         if (!(task instanceof JavaExec exec)) {
-            throw new GradleException("stagewright test suite '" + suite.getName() + "': topology '"
+            throw new GradleException(SUITE + suite.getName() + "': topology '"
                     + topology + "' names " + role + " '" + taskName + "', which is "
                     + (task == null
                             ? "not a task in this build"
@@ -244,7 +270,7 @@ public class StageWrightPlugin implements Plugin<Project> {
             return GeneratedRuns.launches(project, suite);
         }
         if (suite.getTopologies().get().isEmpty()) {
-            throw new GradleException("stagewright test suite '" + suite.getName() + "' has no games to run in: set"
+            throw new GradleException(SUITE + suite.getName() + "' has no games to run in: set"
                     + " loaderProject, for runs the plugin declares, or map topologies the build declares");
         }
         List<SuiteLaunch> launches = new ArrayList<>();
@@ -285,6 +311,22 @@ public class StageWrightPlugin implements Plugin<Project> {
             }
         }
         return runs;
+    }
+
+    /**
+     * The suite's limit, unless this machine's Gradle property {@code key} sets another; the engine reads it as such.
+     */
+    private static Provider<Integer> parallel(Project project, String key, Provider<Integer> suite) {
+        return project.getProviders()
+                .gradleProperty(key)
+                .map(v -> {
+                    try {
+                        return Integer.parseInt(v.trim());
+                    } catch (NumberFormatException e) {
+                        throw new GradleException("-P" + key + " is a whole number, not '" + v + "'", e);
+                    }
+                })
+                .orElse(suite);
     }
 
     /**

@@ -87,6 +87,20 @@ public abstract class StageWrightTestSuite implements Named {
      */
     public abstract Property<Integer> getServerPort();
 
+    /**
+     * How many scenes run at once, each with its games in a directory of its own. Convention: 1, one after another.
+     * Every game takes its own memory and processor; the Gradle property {@code stagewright.parallel.scenes} overrides
+     * this on one machine. A fixed {@link #getServerPort()} allows no more than 1.
+     */
+    public abstract Property<Integer> getMaxParallelScenes();
+
+    /**
+     * How many of those scenes may start a game client: an integrated server, or a client joining a dedicated one.
+     * Convention: 1, since clients share one display, and Minecraft slows the window without the focus. The Gradle
+     * property {@code stagewright.parallel.clients} overrides it.
+     */
+    public abstract Property<Integer> getMaxParallelClients();
+
     /** The longest one scene's games may run on a generated topology, in minutes. Convention: 20. */
     public abstract Property<Integer> getTimeoutMinutes();
 

@@ -152,6 +152,50 @@ class TestSuiteLaunchSpecsTest {
                 result.getOutput());
     }
 
+    private BuildResult parallelArguments(String suiteBody, boolean fails, String... args) throws Exception {
+        consumer("classes.from(files('classes'))\n" + "topologies.put('dedicatedServerWithClient', 'withClient')\n"
+                + suiteBody);
+        Files.writeString(dir.resolve("build.gradle"), Files.readString(dir.resolve("build.gradle")) + """
+                tasks.register('parallel') {
+                    doLast {
+                        println 'ARGS=' + tasks.named('stagewrightTestFabric').get().allJvmArgs
+                                .findAll { it.startsWith('-Dstagewright.parallel.') }
+                    }
+                }
+                """);
+        java.util.List<String> all = new java.util.ArrayList<>(java.util.List.of("parallel", "-q"));
+        all.addAll(java.util.List.of(args));
+        return fails
+                ? runner(all.toArray(String[]::new)).buildAndFail()
+                : runner(all.toArray(String[]::new)).build();
+    }
+
+    @Test
+    void scenesRunOneAtATimeUnlessTheSuiteSaysOtherwise() throws Exception {
+        BuildResult result = parallelArguments("", false);
+        assertTrue(
+                result.getOutput().contains("ARGS=[-Dstagewright.parallel.clients=1, -Dstagewright.parallel.scenes=1]"),
+                result.getOutput());
+    }
+
+    @Test
+    void theSuitesLimitsReachTheEngineAndAGradlePropertyOverridesThem() throws Exception {
+        BuildResult result = parallelArguments(
+                "maxParallelScenes = 3\nmaxParallelClients = 1", false, "-Pstagewright.parallel.clients=2");
+        assertTrue(
+                result.getOutput().contains("ARGS=[-Dstagewright.parallel.clients=2, -Dstagewright.parallel.scenes=3]"),
+                result.getOutput());
+    }
+
+    @Test
+    void runningScenesAtOnceOnAFixedPortFailsNamingIt() throws Exception {
+        BuildResult result = parallelArguments("maxParallelScenes = 2\nserverPort = 25700", true);
+        assertTrue(
+                result.getOutput().contains("fixes serverPort 25700")
+                        && result.getOutput().contains("test suite 'fabric'"),
+                result.getOutput());
+    }
+
     @Test
     void aTestsPatternNamingAScriptPathIsWidenedSoGradleStartsTheEngine() throws Exception {
         consumer(
