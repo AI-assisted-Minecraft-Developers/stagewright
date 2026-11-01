@@ -130,6 +130,21 @@ Tests in a game run concurrently by default, classes and methods alike. What two
 - Anything else a test changes, it undoes with `game.afterTest(server -> …)`, which runs when the test ends, passed or
   not.
 
+### Speeding up a test that waits on the game
+
+A test that spends its time waiting for game ticks — a crop to grow, a furnace to smelt, a spell's cooldown to run
+out — runs much faster under `game.overrideTickRate(1000)` (`t.overrideTickRate(1000)` in a script). The server
+then runs its ticks as fast as it can rather than 20 a second. One consumer cut such a test from 228 seconds to 24.
+Three things to know before you reach for it:
+
+- Waits are counted in ticks, so `game.await(…).within(200)` and `t.waitUntil(fn, {within: 200})` still allow 200
+  ticks, but at 1000 ticks a second that is a fifth of a second of wall clock.
+- It does not suit a test that waits on work the game does off its tick: chunks being generated or loaded, the world
+  being saved, a client catching up. That work does not speed up, so the tick budget runs out before it finishes.
+- The tick rate is the whole server's. It needs `@ResourceLock(Locks.TICK_RATE)`, which keeps it from running beside
+  another test that holds that lock. A test that must run at the normal rate takes the lock read-only,
+  `@ResourceLock(value = Locks.TICK_RATE, mode = ResourceAccessMode.READ)`, and is then never run during the speed-up.
+
 ### Order, restarts and known failures
 
 - `@DependsOn("otherTest")` runs a test after the named ones, on the world they leave; if one of them did not pass,
