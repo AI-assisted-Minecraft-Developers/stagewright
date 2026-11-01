@@ -20,7 +20,6 @@ import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 import java.util.zip.ZipFile;
-import java.util.zip.ZipInputStream;
 
 /** Checks the required driver in the effective mod set before changing a world or downloading. */
 final class DriverRequirement {
@@ -30,9 +29,12 @@ final class DriverRequirement {
     private static final String NEOFORGE_METADATA = "META-INF/neoforge.mods.toml";
 
     /** The mod ids of StageWright's framework and of the driver it requires. */
-    private static final String FRAMEWORK_ID = "mc_testkit";
+    static final String FRAMEWORK_ID = "mc_testkit";
 
-    private static final String DRIVER_ID = "worlddriver";
+    static final String DRIVER_ID = "worlddriver";
+
+    /** What WorldDriver's Fabric build depends on besides the loader; read from Fabric metadata only. */
+    private static final String FABRIC_API_ID = "fabric-api";
 
     private static final Map<Read, List<Mod>> READS = new ConcurrentHashMap<>();
 
@@ -40,13 +42,26 @@ final class DriverRequirement {
 
     private DriverRequirement() {}
 
+    /** The jars this CLI carries for one loader, unpacked: StageWright's and WorldDriver's. */
+    record Carried(Path framework, Path driver) {}
+
     /**
-     * A null {@code loader} is a pack whose loader could not be told, which only --no-install lets through: each jar is
-     * then read by whichever metadata file it carries. A loader that is told and has no StageWright build is refused
+     * What a run loads besides the pack's mods: whether the effective set has no StageWright, or no WorldDriver, so the
+     * CLI's own is loaded, and what to warn about. Only this decides it, so the check and the run cannot disagree.
+     */
+    record Verdict(boolean carriedFramework, boolean carriedDriver, List<String> warnings) {}
+
+    /**
+     * Checks the effective mod set: the pack's mods/, then each of {@code extras} whose file name mods/ does not
+     * already hold, then the {@code carried} jars where that set has no StageWright or no WorldDriver. A null
+     * {@code carried} is a run that injects nothing.
+     *
+     * <p>A null {@code loader} is a pack whose loader could not be told, which only --no-install lets through: each jar
+     * is then read by whichever metadata file it carries. A loader that is told and has no StageWright build is refused
      * either way.
      */
-    static void check(Path gameDir, String loader, List<Path> extras, boolean bundledFramework) {
-        if (loader != null || bundledFramework) {
+    static Verdict check(Path gameDir, String loader, List<Path> extras, Carried carried) {
+        if (loader != null || carried != null) {
             ModInjection.requireLoader(loader);
         }
         final String loaderName = loader == null ? "this pack's loader" : loader;
@@ -71,18 +86,9 @@ final class DriverRequirement {
         }
         List<Mod> frameworks =
                 mods.stream().filter(m -> FRAMEWORK_ID.equals(m.id())).toList();
-        if (frameworks.isEmpty() && bundledFramework) {
-            String resource = "/mods/mc_stagewright-" + loader + ".jar";
-            try (InputStream in = DriverRequirement.class.getResourceAsStream(resource)) {
-                if (in == null) {
-                    throw new IllegalStateException("this CLI carries no " + resource);
-                }
-                frameworks = metadata(in, loader, resource).stream()
-                        .filter(m -> FRAMEWORK_ID.equals(m.id()))
-                        .toList();
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+        boolean carriedFramework = frameworks.isEmpty() && carried != null;
+        if (carriedFramework) {
+            frameworks = withId(carried.framework(), loader, FRAMEWORK_ID);
         }
         if (frameworks.size() != 1) {
             throw new IllegalArgumentException(
@@ -94,6 +100,18 @@ final class DriverRequirement {
                     + " does not declare a required WorldDriver dependency; install the current StageWright");
         }
         List<Mod> drivers = mods.stream().filter(m -> DRIVER_ID.equals(m.id())).toList();
+        boolean carriedDriver = drivers.isEmpty() && carried != null;
+        List<String> warnings = new ArrayList<>();
+        if (carriedDriver) {
+            drivers = withId(carried.driver(), loader, DRIVER_ID);
+            // WorldDriver's Fabric build needs Fabric API. Only a jar that is Fabric API by id is seen here; one that
+            // provides it, or nests it, the loader accepts, so a pack without the first is warned, not refused.
+            if ("fabric".equals(loader) && mods.stream().noneMatch(m -> FABRIC_API_ID.equals(m.id()))) {
+                warnings.add("WARNING: the WorldDriver this CLI carries needs Fabric API, and no jar in " + dir
+                        + " is Fabric API. Unless a mod there provides it, the game will refuse to start: install"
+                        + " Fabric API in the pack, or pass --mod <fabric-api.jar>");
+            }
+        }
         if (drivers.size() != 1) {
             throw new IllegalArgumentException("StageWright requires one compatible WorldDriver mod for "
                     + loaderName + ", found " + drivers.size()
@@ -110,6 +128,11 @@ final class DriverRequirement {
             throw new IllegalArgumentException("WorldDriver " + driver.version() + " in " + driver.source()
                     + " is incompatible with " + framework.source() + ": requires " + framework.driverRange());
         }
+        return new Verdict(carriedFramework, carriedDriver, List.copyOf(warnings));
+    }
+
+    private static List<Mod> withId(Path jar, String loader, String id) {
+        return read(jar, loader).stream().filter(m -> id.equals(m.id())).toList();
     }
 
     /**
@@ -207,21 +230,6 @@ final class DriverRequirement {
         }
     }
 
-    /** The CLI's own bundled jar, which is only reachable as a stream. */
-    private static List<Mod> metadata(InputStream input, String loader, String source) throws IOException {
-        List<String> paths = metadataPaths(loader);
-        try (ZipInputStream zip = new ZipInputStream(input)) {
-            ZipEntry entry = zip.getNextEntry();
-            while (entry != null && !paths.contains(entry.getName())) {
-                entry = zip.getNextEntry();
-            }
-            if (entry != null) {
-                return parse(entry.getName(), new String(zip.readAllBytes(), StandardCharsets.UTF_8), source);
-            }
-        }
-        return List.of();
-    }
-
     private static List<String> metadataPaths(String loader) {
         if (loader == null) {
             return List.of(FABRIC_METADATA, NEOFORGE_METADATA);
@@ -230,8 +238,8 @@ final class DriverRequirement {
     }
 
     /**
-     * Only our two mods are read; metadata this cannot read as one of them, in whatever shape, is that mod's loader's
-     * business. A missing field of ours reads as null and is refused by name.
+     * Only our two mods, and Fabric API on Fabric, are read; metadata this cannot read as one of them, in whatever
+     * shape, is that mod's loader's business. A missing field of ours reads as null and is refused by name.
      */
     private static List<Mod> parse(String path, String text, String source) {
         if (FABRIC_METADATA.equals(path)) {
@@ -246,7 +254,7 @@ final class DriverRequirement {
             }
             JsonObject json = root.getAsJsonObject();
             String id = string(json, "id");
-            if (!DRIVER_ID.equals(id) && !FRAMEWORK_ID.equals(id)) {
+            if (!DRIVER_ID.equals(id) && !FRAMEWORK_ID.equals(id) && !FABRIC_API_ID.equals(id)) {
                 return List.of();
             }
             String range = json.get("depends") instanceof JsonObject deps ? string(deps, DRIVER_ID) : null;

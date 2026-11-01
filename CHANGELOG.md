@@ -12,6 +12,19 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-02
 
+### The command-line runner carries WorldDriver
+
+StageWright requires WorldDriver, and the runner carried only StageWright, so every pack fetched a WorldDriver build
+whose version had to fall in StageWright's range — the step that fails looking like the mod not working — and passed
+it with `--mod`. The runner now carries the build it was built against, for each loader, and loads it when the pack's
+`mods/` and `--mod` have none. A pack shipping its own WorldDriver still gets that one, refused as before when it is
+out of range; `--mod` now only replaces the carried one with another build. On Fabric the carried WorldDriver needs
+Fabric API; a pack with no jar that is Fabric API by id is warned before the game starts, not refused, since a mod
+that provides or nests it satisfies the loader. Which of StageWright and WorldDriver to load is decided once, from the
+mods that actually load: a `--mod` jar is skipped when `mods/` has a file of its name, and that skipped jar no longer
+counts as the pack having a WorldDriver.
+**Green in the CLI's unit tests and the packaging check.**
+
 ### A scene's `mods/` is a real directory, and the scenes run under `stagewright/runs/`
 
 A scene's directory linked the topology's `mods/` as a whole. NeoForge's FML lists `mods/` for its launch plugins

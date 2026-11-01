@@ -50,7 +50,9 @@ run_step "$stagewright_root" tooling ./gradlew "${tooling[@]/%/:check}" "${tooli
 run_step "$worlddriver_root" driver-api ./gradlew :api:publishToMavenLocal :api-processor:publishToMavenLocal \
     -PworlddriverBootstrap "-Pstagewright_version=$stagewright_candidate"
 run_step "$stagewright_root" contracts ./gradlew :stagewright-api:publishToMavenLocal "-Pworlddriver_version=$worlddriver_candidate"
-run_step "$worlddriver_root" driver-bootstrap ./gradlew :api:publishToMavenLocal :common:publishToMavenLocal -PworlddriverBootstrap "-Pstagewright_version=$stagewright_candidate"
+# The loader jars too: the CLI carries them, for a pack without a WorldDriver of its own.
+run_step "$worlddriver_root" driver-bootstrap ./gradlew :api:publishToMavenLocal :common:publishToMavenLocal \
+    :fabric:publishToMavenLocal :neoforge:publishToMavenLocal -PworlddriverBootstrap "-Pstagewright_version=$stagewright_candidate"
 run_step "$stagewright_root" framework ./gradlew build publishToMavenLocal "-Pworlddriver_version=$worlddriver_candidate"
 run_step "$worlddriver_root" driver ./gradlew build :api:generatePomFileForMavenJavaPublication :common:generatePomFileForMavenJavaPublication :fabric:generatePomFileForMavenJavaPublication :neoforge:generatePomFileForMavenJavaPublication "-Pstagewright_version=$stagewright_candidate"
 run_step "$stagewright_root" framework-packaging python3 scripts/check_packaging.py --build "--gradle-arg=-Pworlddriver_version=$worlddriver_candidate"

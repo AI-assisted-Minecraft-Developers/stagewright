@@ -143,7 +143,7 @@ test('a placed block reads back', { scene: 'mymod' }, (t) => {
 [WorldDriver](https://github.com/AI-assisted-Minecraft-Developers/worlddriver) 是一个把运行中的游戏暴露为一套
 可编程 API 的 Minecraft 模组。StageWright 最初在它内部诞生，后来成为独立的仓库。StageWright 的测试通过
 WorldDriver 的方法操作游戏，所以 StageWright 在 Fabric 和 NeoForge 上都必须有 WorldDriver：Gradle 插件会把它带进
-测试运行，整合包则把它放在 `mods/` 里，或者用 `--mod` 交给运行器。
+测试运行；命令行运行器自带构建时所用的那个 WorldDriver 版本，整合包的 `mods/` 里没有 WorldDriver 时就加载它。
 
 两者互相依赖，方向相反、位置不同：StageWright 的 API 和运行时编译时依赖 WorldDriver 发布的 API 和 common 模块；
 WorldDriver 则用 StageWright 的 API 编写自己的测试，并用 StageWright 的 Gradle 插件运行它们。这并不构成循环——

@@ -164,6 +164,36 @@ class ModInjectionTest {
     }
 
     @Test
+    void aPackWithoutWorldDriverGetsTheOneThisCliCarries(@TempDir Path tmp) throws IOException {
+        Path gameDir = tmp.resolve("pack");
+        Files.writeString(Files.createDirectories(gameDir.resolve("mods")).resolve("jei.jar"), "the pack's");
+
+        List<String> log = new java.util.ArrayList<>();
+        ModInjection.Arguments args = ModInjection.prepare(gameDir, "neoforge", List.of(), log::add);
+
+        assertEquals(
+                "stagewright.mods:mc_stagewright-neoforge:0,stagewright.mods:worlddriver-neoforge:0",
+                args.game().get(3));
+        assertTrue(log.stream().anyMatch(l -> l.startsWith("the pack has no WorldDriver")), log.toString());
+    }
+
+    @Test
+    void theCarriedFabricWorldDriverWarnsOfAPackWithoutFabricApi(@TempDir Path tmp) throws IOException {
+        Path gameDir = Files.createDirectories(tmp.resolve("pack"));
+        List<String> log = new java.util.ArrayList<>();
+        ModInjection.prepare(gameDir, "fabric", List.of(), log::add);
+        assertTrue(
+                log.stream().anyMatch(l -> l.startsWith("WARNING") && l.contains("needs Fabric API")), log.toString());
+
+        TestModJar.create(gameDir.resolve("mods/fabric-api.jar"), "fabric-api", "0.116.4+1.21.1", "api");
+        ModInjection.Arguments args = ModInjection.prepare(gameDir, "fabric", List.of(), l -> {});
+        String[] paths =
+                args.jvm().get(0).substring("-Dfabric.addMods=".length()).split(File.pathSeparator);
+        assertEquals(2, paths.length, args.jvm().toString());
+        assertTrue(paths[1].endsWith("worlddriver-fabric.jar"), paths[1]);
+    }
+
+    @Test
     void aModThePackAlreadyShipsIsNotLoadedTwice(@TempDir Path tmp) throws IOException {
         Path gameDir = tmp.resolve("pack");
         Path mods = Files.createDirectories(gameDir.resolve("mods"));

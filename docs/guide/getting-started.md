@@ -203,7 +203,7 @@ Lay the tests out inside the pack's server directory:
 
 ```
 <server-dir>/
-  mods/                         the pack's mods, WorldDriver among them (or pass it with --mod)
+  mods/                         the pack's mods; WorldDriver need not be among them
   stagewright/
     scenes/<name>.yaml          scene files
     tests/*.yaml, tests/*.js    the tests
@@ -243,7 +243,7 @@ The exit code is `0` when every test passed, `1` when one did not, and `3` when 
 | Option | What it does |
 |---|---|
 | `--tests <dir>` | The directory holding `tests/`, `scenes/` and `worlds/`, instead of `<server-dir>/stagewright`. |
-| `--mod <jar>` | Also load this mod, such as WorldDriver. Repeatable. Skipped when `mods/` already has that file. |
+| `--mod <jar>` | Also load this mod, such as a pack's own mod under test, or a WorldDriver build other than the one the runner carries. Repeatable. Skipped when `mods/` already has that file. |
 | `--launch "<cmd>"` | Start the server this way instead of detecting how. |
 | `--java <path>` | The Java to start the games with. |
 | `--timeout <min>` | The longest one scene's games may run. |

@@ -148,7 +148,8 @@ larger decisions under [`docs/design/`](docs/design/), and [`docs/README.md`](do
 [WorldDriver](https://github.com/AI-assisted-Minecraft-Developers/worlddriver) is a Minecraft mod that exposes the
 running game as one programmable API. StageWright began inside it and became its own repository. StageWright's tests
 reach the game through WorldDriver's methods, so StageWright requires WorldDriver on both Fabric and NeoForge: the
-Gradle plugin brings it into the test runs, and a modpack has it in `mods/` or passes it to the runner with `--mod`.
+Gradle plugin brings it into the test runs, and the command-line runner carries the WorldDriver it was built against,
+loaded for a modpack that has none in `mods/`.
 
 The two depend on each other, in opposite directions and at different points: StageWright's API and runtime compile
 against WorldDriver's published API and common module, while WorldDriver compiles its own tests against StageWright's

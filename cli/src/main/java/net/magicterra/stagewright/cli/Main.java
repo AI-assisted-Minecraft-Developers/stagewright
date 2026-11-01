@@ -98,8 +98,9 @@ public final class Main {
 
                   --tests <dir>       the directory holding tests/, scenes/ and worlds/ (default:
                                       <server-dir>/stagewright), so they can live outside the server
-                  --mod <jar>         also load this mod (repeatable — e.g. the driver whose verbs your
-                                      tests call). Skipped if the pack's mods/ already has that file
+                  --mod <jar>         also load this mod (repeatable). WorldDriver is carried and loaded
+                                      when the pack has none; a WorldDriver given here is used instead.
+                                      Skipped if the pack's mods/ already has that file
                   --launch "<cmd>"    start the server this way instead of detecting it
                   --java <path>       java executable to launch with
                   --timeout <min>     the longest one scene's games may run

@@ -25,9 +25,11 @@ import net.magicterra.stagewright.engine.RunDirectory;
  * {@code -Dfabric.addMods}, and NeoForge's FML resolves {@code --fml.mods} coordinates against {@code --fml.mavenRoots}
  * — the locator it lists as "maven libs". The jars are staged under the run's own {@code stagewright/} directory.
  *
- * <p>StageWright's own jar rides inside this one (about 100 KB per loader, cheaper than the paragraph of instructions
- * it replaces). Anything else — a driver mod whose verbs the scenes call, a pack's own mod under test — comes in
- * through {@code --mod}, because a framework that shipped a copy of its consumers would have the dependency backwards.
+ * <p>StageWright's own jar rides inside this one, and so does the WorldDriver it was built against: StageWright
+ * requires exactly that driver's line, and a matching copy fetched separately is the step that fails looking like the
+ * mod not working. The CLI's WorldDriver loads only where neither the pack's mods/ nor {@code --mod} has one, so a pack
+ * that ships its own, or a run testing another build, is never given two. Anything else — a pack's own mod under test —
+ * comes in through {@code --mod}.
  */
 final class ModInjection {
 
@@ -36,10 +38,12 @@ final class ModInjection {
         static final Arguments NONE = new Arguments(List.of(), List.of());
     }
 
-    /** Where the build stages the loader jars inside this fat jar. */
-    private static final String RESOURCE_DIR = "/mods/";
+    /** Where the build stages the loader jars inside this fat jar, each {@code <prefix><loader>.jar}. */
+    static final String RESOURCE_DIR = "/mods/";
 
-    private static final String FRAMEWORK = "mc_stagewright-";
+    static final String FRAMEWORK = "mc_stagewright-";
+
+    static final String DRIVER = "worlddriver-";
 
     /** Any version will do: FML only needs a coordinate that resolves to the file. */
     private static final String VERSION = "0";
@@ -60,10 +64,12 @@ final class ModInjection {
         requireLoader(loader);
         Path staged = gameDir.resolve(RunDirectory.ARTIFACT_DIR).resolve("mods");
         deleteTree(staged);
-        Path ours = unpackFramework(loader, staged);
+        DriverRequirement.Carried carried = unpackCarried(loader, staged);
+        Path ours = carried.framework();
         // Before the checks: an old StageWright in mods/ fails them, and the warning says which file it is.
         warnOtherHarnessJars(gameDir, loader, ours, extras, log);
-        DriverRequirement.check(gameDir, loader, extras, true);
+        DriverRequirement.Verdict verdict = DriverRequirement.check(gameDir, loader, extras, carried);
+        verdict.warnings().forEach(log);
         for (Path left : ModInstall.ledgered(gameDir)) {
             log.accept("NOTE: an older StageWright CLI copied " + left.getFileName() + " into mods/."
                     + " It is left there and loads as the pack's own; delete it if the pack did not"
@@ -71,17 +77,20 @@ final class ModInjection {
         }
 
         List<Path> jars = new ArrayList<>();
-        List<Path> packs = DriverRequirement.frameworkJars(gameDir, loader);
-        boolean extraFramework = extras.stream().anyMatch(p -> DriverRequirement.isFramework(p, loader));
-        if (packs.isEmpty() && !extraFramework) {
+        if (verdict.carriedFramework()) {
             jars.add(ours);
         } else {
             // A copy with other bytes was warned about above.
-            for (Path pack : packs) {
+            for (Path pack : DriverRequirement.frameworkJars(gameDir, loader)) {
                 if (sha1(pack).equals(sha1(ours))) {
                     log.accept(usingThePacks(pack, ours, "this CLI's StageWright"));
                 }
             }
+        }
+        if (verdict.carriedDriver()) {
+            log.accept("the pack has no WorldDriver: loading this CLI's, "
+                    + DriverRequirement.declaredVersion(carried.driver(), loader, DriverRequirement.DRIVER_ID));
+            jars.add(carried.driver());
         }
         for (Path extra : extras) {
             if (!Files.isRegularFile(extra)) {
@@ -160,17 +169,22 @@ final class ModInjection {
         return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", "_");
     }
 
+    /** Unpack both jars this CLI carries for {@code loader} into {@code staged}, where the checks read them. */
+    static DriverRequirement.Carried unpackCarried(String loader, Path staged) {
+        return new DriverRequirement.Carried(unpack(FRAMEWORK, loader, staged), unpack(DRIVER, loader, staged));
+    }
+
     /**
-     * Unpack the loader jar this CLI carries. Named without its version, as the build stages it, so nothing here has to
-     * know which version it carries and an upgrade is a rebuild rather than an edit.
+     * Unpack a loader jar this CLI carries, StageWright's or WorldDriver's. Named without its version, as the build
+     * stages it, so nothing here has to know which version it carries and an upgrade is a rebuild rather than an edit.
      */
-    private static Path unpackFramework(String loader, Path staged) {
-        String name = FRAMEWORK + loader + ".jar";
+    private static Path unpack(String prefix, String loader, Path staged) {
+        String name = prefix + loader + ".jar";
         String resource = RESOURCE_DIR + name;
         try (InputStream in = ModInjection.class.getResourceAsStream(resource)) {
             if (in == null) {
                 throw new IllegalStateException(
-                        "this CLI carries no StageWright build for '" + loader + "' (looked for " + resource + ")");
+                        "this CLI carries no " + prefix + " build for '" + loader + "' (looked for " + resource + ")");
             }
             Files.createDirectories(staged);
             Path out = staged.resolve(name);
@@ -190,17 +204,18 @@ final class ModInjection {
     static void warnOtherHarnessJars(Path gameDir, String loader, Path ours, List<Path> extras, Consumer<String> log) {
         List<Path> extraDrivers = extras.stream()
                 .filter(Files::isRegularFile)
-                .filter(p -> DriverRequirement.declaredVersion(p, loader, "worlddriver") != null)
+                .filter(p -> DriverRequirement.declaredVersion(p, loader, DriverRequirement.DRIVER_ID) != null)
                 .toList();
         for (Path jar : DriverRequirement.jars(gameDir.resolve("mods"))) {
-            String framework = DriverRequirement.declaredVersion(jar, loader, "mc_testkit");
+            String framework = DriverRequirement.declaredVersion(jar, loader, DriverRequirement.FRAMEWORK_ID);
             if (framework != null && !sha1(jar).equals(sha1(ours))) {
                 log.accept("WARNING: " + jar + " is a StageWright build (" + framework + ") other than the one this"
-                        + " CLI carries (" + DriverRequirement.declaredVersion(ours, loader, "mc_testkit") + "). The"
+                        + " CLI carries ("
+                        + DriverRequirement.declaredVersion(ours, loader, DriverRequirement.FRAMEWORK_ID) + "). The"
                         + " game loads it instead, so this run tests that copy. Take it out of mods/ unless the pack"
                         + " ships StageWright on purpose.");
             }
-            String driver = DriverRequirement.declaredVersion(jar, loader, "worlddriver");
+            String driver = DriverRequirement.declaredVersion(jar, loader, DriverRequirement.DRIVER_ID);
             if (driver == null) {
                 continue;
             }
@@ -210,7 +225,8 @@ final class ModInjection {
                     continue;
                 }
                 log.accept("WARNING: " + jar + " is a WorldDriver build (" + driver + "), and --mod " + extra
-                        + " is another (" + DriverRequirement.declaredVersion(extra, loader, "worlddriver") + "). A"
+                        + " is another ("
+                        + DriverRequirement.declaredVersion(extra, loader, DriverRequirement.DRIVER_ID) + "). A"
                         + " game loads one WorldDriver: take " + jar.getFileName()
                         + " out of mods/ to test the other.");
             }

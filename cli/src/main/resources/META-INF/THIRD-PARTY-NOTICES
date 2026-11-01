@@ -55,3 +55,27 @@ SnakeYAML (org.yaml:snakeyaml)
   Copyright (c) 2008, SnakeYAML.
   License: Apache License 2.0, full text in META-INF/licenses/Apache-2.0.txt
   Source:  https://bitbucket.org/snakeyaml/snakeyaml
+
+================================================================================
+The mods this jar carries under mods/, unmodified, which it hands a game to load. Each is a
+jar of its own, carrying its own license files, and nests the jars named below it, unmodified.
+
+--------------------------------------------------------------------------------
+StageWright's loader mods (mods/mc_stagewright-fabric.jar, mods/mc_stagewright-neoforge.jar)
+  License: GNU Lesser General Public License v3.0 only, as StageWright above.
+  Nested:  JUnit Platform (above); JUnit Jupiter (org.junit.jupiter:junit-jupiter-api,
+           -engine, -params), Copyright 2015-2024 the original author or authors, Eclipse
+           Public License 2.0, full text in META-INF/licenses/EPL-2.0.txt, source
+           https://github.com/junit-team/junit5; opentest4j (above); API Guardian
+           (org.apiguardian:apiguardian-api), Copyright 2002-2017 the original author or
+           authors, Apache License 2.0, full text in META-INF/licenses/Apache-2.0.txt, source
+           https://github.com/apiguardian-team/apiguardian.
+
+--------------------------------------------------------------------------------
+WorldDriver (net.magicterra:worlddriver-fabric, net.magicterra:worlddriver-neoforge), loaded
+when the pack has no WorldDriver of its own (mods/worlddriver-fabric.jar,
+mods/worlddriver-neoforge.jar)
+  License: GNU Lesser General Public License v3.0 only; the texts are in each jar's META-INF.
+  Source:  https://github.com/AI-assisted-Minecraft-Developers/worlddriver
+  Nested:  Netty (io.netty:netty-codec-http), Copyright The Netty Project, Apache License 2.0,
+           full text in META-INF/licenses/Apache-2.0.txt, source https://github.com/netty/netty.

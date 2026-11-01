@@ -39,6 +39,10 @@ plugin it replaces for them.
   so an upgrade is a rebuild, not an edit), taken from the sibling modules. Building it builds them, so the mods and the
   jar cannot be out of step, and a pack author never fetches a matching loader build, the step that fails looking
   exactly like the mod not working.
+- **It carries WorldDriver too**, for the same reason: the build `worlddriver_version` names, its plain artifact per
+  loader, as `/mods/worlddriver-<loader>.jar`. It is loaded only when neither the pack's `mods/` nor `--mod` has a
+  WorldDriver, so a pack shipping its own, or a run testing another build, never gets two. On Fabric it needs Fabric
+  API, and a pack with no jar that is Fabric API by id is warned before the game starts.
 - **Merging a library conveys it.** Each one needs its entry in `cli/src/main/resources/META-INF/THIRD-PARTY-NOTICES`
   and its license text beside it; `scripts/check_packaging.py` fails a jar holding classes it cannot place.
 - **Rhino's own mod metadata is left out**, so a copy dropped into `mods/` by mistake does not load as a second `rhino`
@@ -203,8 +207,8 @@ machine building both from source. `scripts/build_driver_pair.sh <worlddriver ch
 2. **WorldDriver** — `:api` and `:api-processor`, with `-PworlddriverBootstrap`, which declares no StageWright test
    suite, so nothing asks for StageWright's loader jars, which do not exist yet.
 3. **StageWright** — `:stagewright-api`, which compiles against WorldDriver's API and runs its annotation processor.
-4. **WorldDriver** — `:api` and `:common`, still with `-PworlddriverBootstrap`. StageWright's common module compiles
-   against the development-mappings artifact of `:common`.
+4. **WorldDriver** — `:api`, `:common` and the two loaders, still with `-PworlddriverBootstrap`. StageWright's common
+   module compiles against the development-mappings artifact of `:common`, and the CLI carries the loaders' jars.
 5. **StageWright** — the rest of the build.
 6. **WorldDriver** — its whole build, whose tests compile against `mc_stagewright-api:dev`.
 

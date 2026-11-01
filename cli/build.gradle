@@ -3,6 +3,7 @@ plugins {
     id 'application'
     id 'maven-publish'
     id 'stagewright.module'
+    id 'stagewright.driver'
 }
 
 java {
@@ -15,7 +16,8 @@ repositories {
     mavenCentral()
 }
 
-// The loader jars this CLI installs into a pack.
+// The loader jars this CLI hands a pack's game: StageWright's, and the WorldDriver it was built against, loaded
+// only where the pack has no WorldDriver of its own.
 configurations {
     bundledMods { transitive = false }
 }
@@ -30,6 +32,9 @@ dependencies {
     // The jar a loader loads: NeoForge's is its shadowJar; its runtimeElements is the module's own classes.
     bundledMods project(path: ':stagewright-neoforge', configuration: 'shadowRuntimeElements')
     bundledMods project(path: ':stagewright-fabric', configuration: 'runtimeElements')
+    // The plain artifacts: what a loader loads, remapped to intermediary on Fabric.
+    bundledMods "net.magicterra:worlddriver-neoforge:${rootProject.worlddriver_version}"
+    bundledMods "net.magicterra:worlddriver-fabric:${rootProject.worlddriver_version}"
 
     // The client installer and the launch specs.
     implementation 'com.google.code.gson:gson:2.11.0'
@@ -46,11 +51,11 @@ tasks.named('test', Test) {
     useJUnitPlatform()
 }
 
-// Under /mods/mc_stagewright-<loader>.jar, without the version.
+// Under /mods/mc_stagewright-<loader>.jar and /mods/worlddriver-<loader>.jar, without the version.
 def stageBundledMods = tasks.register('stageBundledMods', Copy) {
     from configurations.bundledMods
     into layout.buildDirectory.dir('bundled-mods')
-    rename(/^(mc_stagewright-(?:neoforge|fabric))-.*\.jar$/, '$1.jar')
+    rename(/^((?:mc_stagewright|worlddriver)-(?:neoforge|fabric))-.*\.jar$/, '$1.jar')
 }
 tasks.named('processResources') { into('mods') { from stageBundledMods } }
 
@@ -67,6 +72,7 @@ def buildInfo = tasks.register('buildInfo') {
         def lines = ["version=${version}"]
         parts.files.findAll {
             it.name.startsWith('stagewright-') || it.name.startsWith('mc_stagewright-')
+                    || it.name.startsWith('worlddriver-')
         }
         .sort { it.name }.each { f ->
             def sha1 = java.security.MessageDigest.getInstance('SHA-1').digest(f.bytes).encodeHex().toString()

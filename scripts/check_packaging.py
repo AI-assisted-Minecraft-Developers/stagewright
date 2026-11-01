@@ -18,6 +18,7 @@ Checked:
 Exit 0 when all hold, 1 with one line per violation otherwise.
 """
 import argparse
+import io
 import re
 import subprocess
 import sys
@@ -66,6 +67,18 @@ FOREIGN_MOD_METADATA = [
 ]
 
 
+CLI_MODS = [f'mods/{mod}-{loader}.jar' for mod in ('mc_stagewright', 'worlddriver') for loader in ('fabric', 'neoforge')]
+
+# A jar a carried mod nests (Fabric's META-INF/jars/, NeoForge's META-INF/jarjar/), by its file name's start, and the
+# library THIRD-PARTY-NOTICES names it under.
+NESTED_LIBRARIES = [
+    ('junit-platform-', 'JUnit Platform'),
+    ('junit-jupiter-', 'JUnit Jupiter'),
+    ('opentest4j-', 'opentest4j'),
+    ('apiguardian-api-', 'API Guardian'),
+    ('netty-codec-http-', 'Netty'),
+]
+
 # A task name given without a project runs in every project that has it.
 BUILD_COMMANDS = [
     ['./gradlew', '--console=plain', 'jar', 'sourcesJar', 'remapJar', 'remapSourcesJar', 'shadowJar', 'engineJar',
@@ -112,17 +125,38 @@ def check_jars(problems):
                         if n.endswith('.class') and not n.startswith(known):
                             problems.append(f'{rel}: {n} belongs to no library with a notice')
                             break
+                    notices = ''
                     if 'META-INF/THIRD-PARTY-NOTICES' not in names:
                         problems.append(f'{rel}: missing META-INF/THIRD-PARTY-NOTICES')
                     else:
                         notices = z.read('META-INF/THIRD-PARTY-NOTICES').decode('utf-8')
                         for lib in ('minimal-json', 'Rhino', 'Gson', 'Error Prone', 'JUnit Platform', 'opentest4j',
-                                    'ASM', 'SnakeYAML'):
+                                    'ASM', 'SnakeYAML', 'WorldDriver'):
                             if lib not in notices:
                                 problems.append(f'{rel}: THIRD-PARTY-NOTICES does not name {lib}')
                     for entry in FOREIGN_MOD_METADATA:
                         if entry in names:
                             problems.append(f'{rel}: carries third-party mod metadata {entry}')
+                    # The loader jars it hands a pack's game: StageWright's, and WorldDriver's for a pack without one.
+                    for entry in CLI_MODS:
+                        if entry not in names:
+                            problems.append(f'{rel}: does not carry {entry}')
+                        else:
+                            check_carried_mod(rel, entry, z.read(entry), notices, problems)
+
+
+def check_carried_mod(rel, entry, data, notices, problems):
+    """A jar a carried mod nests is conveyed too: each needs a library its notices name."""
+    with zipfile.ZipFile(io.BytesIO(data)) as mod:
+        for name in mod.namelist():
+            if not re.fullmatch(r'META-INF/(jars|jarjar)/[^/]+\.jar', name):
+                continue
+            jar = name.rsplit('/', 1)[1]
+            lib = next((lib for prefix, lib in NESTED_LIBRARIES if jar.startswith(prefix)), None)
+            if lib is None:
+                problems.append(f'{rel}: {entry} nests {jar}, which belongs to no library with a notice')
+            elif lib not in notices:
+                problems.append(f'{rel}: {entry} nests {jar}, and THIRD-PARTY-NOTICES does not name {lib}')
 
 
 def check_poms(problems):

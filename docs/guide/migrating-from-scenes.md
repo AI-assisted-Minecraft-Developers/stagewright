@@ -162,8 +162,8 @@ scene names. The new one takes only the server directory and finds the rest unde
 ```bash
 # Before
 java -jar stagewright.jar --game-dir server --scenes tests/scenes --expect tests/expected-scenes.txt --mod worlddriver.jar
-# After
-java -jar stagewright.jar test server --mod worlddriver.jar
+# After: the runner carries WorldDriver, so --mod is only for another build of it
+java -jar stagewright.jar test server
 java -jar stagewright.jar test server --tests tests --client neoforge:1.21.1:21.1.248   # tests kept elsewhere, with a client
 ```
 
