@@ -70,6 +70,14 @@ class SceneDirectoryTest {
     }
 
     @Test
+    void aKeptWorldIsLinkedBeforeAnyScenesMadeIt() throws IOException {
+        Path empty = Files.createDirectories(temp.resolve("empty"));
+        Path dir = SceneDirectory.create(empty, "s", "world", true);
+        Files.writeString(dir.resolve("world/level.dat"), "first");
+        assertEquals("first", Files.readString(empty.resolve("world/level.dat")), "the next scene opens it");
+    }
+
+    @Test
     void aWorldUnderAnotherNameIsLeftOutToo() throws IOException {
         Files.createDirectories(topology.resolve("lab"));
         Path dir = SceneDirectory.create(topology, "s", "lab", false);

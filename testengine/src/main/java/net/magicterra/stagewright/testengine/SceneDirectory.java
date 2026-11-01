@@ -57,6 +57,10 @@ final class SceneDirectory {
         Path dir = of(original, scene);
         SceneMods.deleteTree(dir);
         Files.createDirectories(dir);
+        if (keepWorld && world != null) {
+            // Linked even before there is one, so the world the first scene makes is the one the next opens.
+            Files.createDirectories(original.resolve(world));
+        }
         if (!Files.isDirectory(original)) {
             return dir;
         }
