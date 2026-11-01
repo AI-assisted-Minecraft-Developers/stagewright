@@ -53,6 +53,9 @@ final class Relay implements Consumer<Map<String, Object>> {
 
     private boolean ended;
 
+    /** Whether any test or container it reported ended other than successfully. */
+    private boolean failed;
+
     private int restart = -1;
 
     private String restartWorld;
@@ -193,6 +196,11 @@ final class Relay implements Consumer<Map<String, Object>> {
     /** Whether the game finished its run, reporting everything it was going to report. */
     synchronized boolean ended() {
         return ended;
+    }
+
+    /** Whether any test or container it reported failed or was aborted; a skip is not a failure. */
+    synchronized boolean anyFailed() {
+        return failed;
     }
 
     /** The round the game asked to be started again for, once its run ended; -1 when it asked for none. */
@@ -363,6 +371,9 @@ final class Relay implements Consumer<Map<String, Object>> {
     private void finish(TestDescriptor d, TestExecutionResult result) {
         if (!started.contains(d) || !finished.add(d)) {
             return;
+        }
+        if (result.getStatus() != TestExecutionResult.Status.SUCCESSFUL) {
+            failed = true;
         }
         listener.executionFinished(d, result);
     }

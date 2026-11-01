@@ -6,10 +6,6 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -108,54 +104,16 @@ final class SceneSetup {
     }
 
     /**
-     * Write {@code files} under {@code directory}, and answer what puts every one back as it was: the old text, or no
-     * file. A scene's files are never the next scene's.
+     * Write {@code files} under {@code directory}, a scene's own ({@link SceneDirectory}): nothing is put back after,
+     * since the next scene starts from a directory of its own. A file under a directory shared by link is written into
+     * a copy of the way to it, never into the shared one.
      */
-    static Restore writeFiles(Path directory, Map<String, String> files) throws IOException {
-        Map<Path, byte[]> before = new LinkedHashMap<>();
-        List<Path> createdDirs = new ArrayList<>();
-        Restore restore = () -> {
-            for (Map.Entry<Path, byte[]> e : before.entrySet()) {
-                if (e.getValue() != null) {
-                    Files.write(e.getKey(), e.getValue());
-                } else {
-                    Files.deleteIfExists(e.getKey());
-                }
-            }
-            // Deepest first, so a parent is empty by the time it is reached; one something else wrote into is left.
-            List<Path> dirs = new ArrayList<>(createdDirs);
-            dirs.sort(Comparator.comparingInt(Path::getNameCount).reversed());
-            for (Path dir : dirs) {
-                if (!Files.isDirectory(dir)) {
-                    continue;
-                }
-                try (Stream<Path> left = Files.list(dir)) {
-                    if (left.findAny().isEmpty()) {
-                        Files.delete(dir);
-                    }
-                }
-            }
-        };
-        try {
-            for (Map.Entry<String, String> file : files.entrySet()) {
-                Path target = directory.resolve(file.getKey()).normalize();
-                before.put(target, Files.isRegularFile(target) ? Files.readAllBytes(target) : null);
-                for (Path d = target.getParent(); d != null && !Files.exists(d); d = d.getParent()) {
-                    createdDirs.add(d);
-                }
-                Files.createDirectories(target.getParent());
-                Files.writeString(target, file.getValue(), StandardCharsets.UTF_8);
-            }
-        } catch (IOException | RuntimeException e) {
-            restore.run();
-            throw e;
+    static void writeFiles(Path directory, Map<String, String> files) throws IOException {
+        for (Map.Entry<String, String> file : files.entrySet()) {
+            Path target = directory.resolve(file.getKey()).normalize();
+            SceneDirectory.writable(directory, target);
+            Files.createDirectories(target.getParent());
+            Files.writeString(target, file.getValue(), StandardCharsets.UTF_8);
         }
-        return restore;
-    }
-
-    /** Puts back what {@link #writeFiles} changed. */
-    @FunctionalInterface
-    interface Restore {
-        void run() throws IOException;
     }
 }

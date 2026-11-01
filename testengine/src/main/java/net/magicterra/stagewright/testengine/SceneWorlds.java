@@ -6,9 +6,9 @@ import java.nio.file.Path;
 
 /**
  * The saves a scene's rounds run on, each by the name its tests gave it ({@code @DependsOn(world = …)}). The game
- * always opens the topology's world directory; a round on another world moves the one there onto a shelf under its
- * name, and moves the named one in from the shelf, or starts it new. At the end the scene's first world is put back, so
- * the topology's world is the one the scene began with.
+ * always opens the scene's world directory; a round on another world moves the one there onto a shelf under its name,
+ * and moves the named one in from the shelf, or starts it new. At the end the scene's first world is put back, so a
+ * topology that keeps its world between scenes hands the next one the world this scene began with.
  */
 final class SceneWorlds {
 

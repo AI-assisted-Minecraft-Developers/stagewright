@@ -37,7 +37,8 @@ class TestCommandTest {
         assertFalse(server.containsKey("mainClass"), "the argument file names it");
         @SuppressWarnings("unchecked")
         List<String> args = (List<String>) server.get("args");
-        assertEquals(List.of("nogui", "--universe", PACK.resolve("stagewright").toString(), "--world", "world"), args);
+        // Relative: the server runs in the scene's own directory, and plays in the world under it.
+        assertEquals(List.of("nogui", "--universe", "stagewright", "--world", "world"), args);
     }
 
     @Test

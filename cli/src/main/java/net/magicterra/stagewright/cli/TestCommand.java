@@ -488,9 +488,8 @@ final class TestCommand {
             jvmArgs.addAll(command);
         }
         args.add("nogui");
-        // The world the scenes play in, never the pack's: cleanWorld deletes it before each scene.
-        args.addAll(
-                List.of("--universe", gameDir.resolve(RunDirectory.ARTIFACT_DIR).toString(), "--world", "world"));
+        // The world the scenes play in, never the pack's. Relative, so it is under the directory each scene runs in.
+        args.addAll(List.of("--universe", RunDirectory.ARTIFACT_DIR, "--world", "world"));
         args.addAll(injected.game());
 
         Map<String, Object> primary = new LinkedHashMap<>();

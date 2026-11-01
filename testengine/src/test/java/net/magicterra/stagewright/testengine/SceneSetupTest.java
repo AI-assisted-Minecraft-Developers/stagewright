@@ -79,24 +79,27 @@ class SceneSetupTest {
     }
 
     @Test
-    void filesArePutBackAsTheyWere(@TempDir Path game) throws IOException {
+    void filesAreWrittenOverWhatIsThereAndUnderNewDirectories(@TempDir Path game) throws IOException {
         Path existing = Files.createDirectories(game.resolve("config")).resolve("a.toml");
         Files.writeString(existing, "old");
-        SceneSetup.Restore restore =
-                SceneSetup.writeFiles(game, Map.of("config/a.toml", "new", "config/deep/b.toml", "made"));
+        SceneSetup.writeFiles(game, Map.of("config/a.toml", "new", "config/deep/b.toml", "made"));
         assertEquals("new", Files.readString(existing));
         assertEquals("made", Files.readString(game.resolve("config/deep/b.toml")));
-        restore.run();
-        assertEquals("old", Files.readString(existing));
-        assertFalse(Files.exists(game.resolve("config/deep")), "a directory the scene made is gone again");
     }
 
     @Test
-    void aDirectoryTwoFilesMadeIsGoneAgainWhicheverCameFirst(@TempDir Path game) throws IOException {
-        Map<String, String> files = new java.util.LinkedHashMap<>();
-        files.put("packs/probe/pack.mcmeta", "{}");
-        files.put("packs/probe/data/probe/function/hello.mcfunction", "return 1");
-        SceneSetup.writeFiles(game, files).run();
-        assertFalse(Files.exists(game.resolve("packs")), "left behind: a directory the scene made");
+    void aFileUnderALinkedDirectoryLeavesTheSharedOneAlone() throws IOException {
+        Path shared = Files.createDirectories(temp.resolve("shared/kubejs/server_scripts"));
+        Files.writeString(shared.resolve("a.js"), "shared");
+        Files.writeString(shared.resolve("b.js"), "kept");
+        Path game = Files.createDirectories(temp.resolve("game"));
+        Files.createSymbolicLink(game.resolve("kubejs"), temp.resolve("shared/kubejs"));
+        SceneSetup.writeFiles(game, Map.of("kubejs/server_scripts/a.js", "scene", "kubejs/server_scripts/c.js", "new"));
+        assertEquals("scene", Files.readString(game.resolve("kubejs/server_scripts/a.js")));
+        assertEquals("new", Files.readString(game.resolve("kubejs/server_scripts/c.js")));
+        assertEquals(
+                "kept", Files.readString(game.resolve("kubejs/server_scripts/b.js")), "the rest still reads through");
+        assertEquals("shared", Files.readString(shared.resolve("a.js")));
+        assertFalse(Files.exists(shared.resolve("c.js")));
     }
 }

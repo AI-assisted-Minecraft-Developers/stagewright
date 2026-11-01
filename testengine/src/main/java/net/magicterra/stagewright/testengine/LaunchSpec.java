@@ -165,6 +165,65 @@ record LaunchSpec(
                 companion);
     }
 
+    /**
+     * This spec run in {@code scene}'s own directories ({@link SceneDirectory}), made afresh: each game's working
+     * directory, the game directory, the world under it, and a {@code --gameDir} that named one of them. A topology
+     * that keeps its world between scenes links it into them.
+     */
+    LaunchSpec inSceneDirectories(String scene) throws IOException {
+        Path gameDir = gameDirectory.toAbsolutePath().normalize();
+        Path relativeWorld = gameDir.relativize(worldDirectory.toAbsolutePath().normalize());
+        String world = relativeWorld.toString().isEmpty()
+                ? null
+                : relativeWorld.getName(0).toString();
+        Map<Path, Path> moved = new LinkedHashMap<>();
+        for (Path dir : directories()) {
+            moved.put(dir, SceneDirectory.create(dir, scene, world, !cleanWorld));
+        }
+        Path game = moved.get(gameDir);
+        return new LaunchSpec(
+                topology,
+                game,
+                game.resolve(relativeWorld.toString()),
+                cleanWorld,
+                timeoutMinutes,
+                stallMinutes,
+                server,
+                leaks,
+                moved(primary, moved),
+                companion == null ? null : moved(companion, moved));
+    }
+
+    /** The distinct directories the games run in: the game directory, and each process's working directory. */
+    List<Path> directories() {
+        List<Path> dirs = new ArrayList<>();
+        List<Path> all = new ArrayList<>(List.of(gameDirectory, primary.workingDirectory()));
+        if (companion != null) {
+            all.add(companion.workingDirectory());
+        }
+        for (Path p : all) {
+            Path dir = p.toAbsolutePath().normalize();
+            if (!dirs.contains(dir)) {
+                dirs.add(dir);
+            }
+        }
+        return dirs;
+    }
+
+    private static Process moved(Process p, Map<Path, Path> moved) {
+        Path from = p.workingDirectory().toAbsolutePath().normalize();
+        List<String> args = new ArrayList<>(p.args());
+        for (int i = 0; i + 1 < args.size(); i++) {
+            if ("--gameDir".equals(args.get(i))) {
+                Path named = from.resolve(args.get(i + 1)).normalize();
+                if (moved.containsKey(named)) {
+                    args.set(i + 1, moved.get(named).toString());
+                }
+            }
+        }
+        return new Process(p.java(), p.jvmArgs(), p.mainClass(), args, moved.get(from), p.environment());
+    }
+
     /** The file an {@code @file} argument names, when it is one that exists; null otherwise. */
     private static Path argumentFile(String argument) {
         if (!argument.startsWith("@") || argument.length() == 1) {

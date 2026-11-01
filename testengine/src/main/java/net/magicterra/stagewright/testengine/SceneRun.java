@@ -14,14 +14,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Stream;
 import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.supervise.AgentJar;
 import net.magicterra.stagewright.engine.supervise.Supervisor;
@@ -116,67 +114,53 @@ final class SceneRun {
         listener.executionFinished(scene, result);
     }
 
-    private TestExecutionResult launch(LaunchSpec spec, SceneFile declaration, Relay relay, ClassLoader loader)
+    private TestExecutionResult launch(LaunchSpec topology, SceneFile declaration, Relay relay, ClassLoader loader)
             throws IOException, InterruptedException {
-        Path artifacts = spec.gameDirectory().resolve("stagewright");
+        // Everything below writes into the scene's own directories, never the topology's: nothing is put back after,
+        // and another scene of the topology may be running beside this one.
+        LaunchSpec spec = topology.inSceneDirectories(scene.name);
+        listener.reportingEntryPublished(
+                scene, ReportEntry.from("directory", spec.gameDirectory().toString()));
+        Path artifacts = spec.gameDirectory().resolve(RunDirectory.ARTIFACT_DIR);
         Path logs = artifacts.resolve("logs");
         Files.createDirectories(logs);
-        // Both layouts: a dedicated server's world, and an integrated server's under the client's saves.
-        if (spec.cleanWorld()) {
-            deleteTree(spec.worldDirectory());
-            deleteTree(spec.gameDirectory().resolve("saves"));
-        }
-        if (declaration.from() != null) {
-            SceneSetup.installSave(declaration.from(), loader, spec.worldDirectory());
-        }
-        if (spec.companion() != null) {
-            Files.createDirectories(spec.companion().workingDirectory());
-        }
-        // Put back afterwards, so a setting one scene declares is not the next scene's undeclared default.
-        Path serverProperties = spec.primary().workingDirectory().resolve("server.properties");
-        byte[] original = Files.isRegularFile(serverProperties) ? Files.readAllBytes(serverProperties) : null;
-        SceneSetup.Restore files = SceneSetup.writeFiles(spec.primary().workingDirectory(), declaration.files());
-        SceneSetup.Restore clientFiles;
-        try {
-            clientFiles = SceneSetup.writeFiles(clientDirectory(spec, declaration), declaration.clientFiles());
-        } catch (IOException | RuntimeException e) {
-            files.run();
-            throw e;
-        }
         Path modsScratch = artifacts.resolve("scene-mods");
         SceneFile.World world = declaration.world();
+        TestExecutionResult result = null;
         try {
+            if (declaration.from() != null) {
+                SceneSetup.installSave(declaration.from(), loader, spec.worldDirectory());
+            }
+            SceneSetup.writeFiles(spec.primary().workingDirectory(), declaration.files());
+            SceneSetup.writeFiles(clientDirectory(spec, declaration), declaration.clientFiles());
             if (!declaration.excludedMods().isEmpty()) {
                 spec = withoutMods(spec, declaration.excludedMods(), modsScratch);
             }
             int serverPort = 0;
             if (spec.wantsFreePort()) {
                 serverPort = freePort();
-                // Beside the scene's other rewritten argument files, and deleted with them.
+                // Beside the scene's other rewritten argument files.
                 spec = spec.withServerPort(serverPort, modsScratch.resolve("server-port"));
                 listener.reportingEntryPublished(scene, ReportEntry.from("serverPort", String.valueOf(serverPort)));
             }
             // A run directory nothing else prepares, such as one the plugin generated: a dedicated server there needs
-            // the EULA accepted and offline mode before it starts at all. Inside the put-back, like the scene's own.
+            // the EULA accepted and offline mode before it starts at all.
+            Path serverProperties = spec.primary().workingDirectory().resolve("server.properties");
+            SceneDirectory.writable(spec.primary().workingDirectory(), serverProperties);
             RunDirectory.provision(spec.primary().workingDirectory(), spec.server());
             writeServerProperties(serverProperties, world);
             SceneWorlds worlds = new SceneWorlds(spec.worldDirectory(), artifacts.resolve("saves"));
             try {
-                return supervise(spec, world, relay, artifacts, logs, worlds, loader, serverPort);
+                result = supervise(spec, world, relay, artifacts, logs, worlds, loader, serverPort);
             } finally {
                 worlds.restoreFirst();
             }
+            return result;
         } finally {
-            try {
-                clientFiles.run();
-                files.run();
-                SceneMods.deleteTree(modsScratch);
-            } finally {
-                if (original != null) {
-                    Files.write(serverProperties, original);
-                } else {
-                    Files.deleteIfExists(serverProperties);
-                }
+            boolean passed =
+                    result != null && result.getStatus() == TestExecutionResult.Status.SUCCESSFUL && !relay.anyFailed();
+            for (Path dir : spec.directories()) {
+                SceneDirectory.finish(dir, passed);
             }
         }
     }
@@ -583,16 +567,5 @@ final class SceneRun {
         }
         all.addAll(added);
         return String.join(",", all);
-    }
-
-    private static void deleteTree(Path root) throws IOException {
-        if (!Files.exists(root)) {
-            return;
-        }
-        try (Stream<Path> walk = Files.walk(root)) {
-            for (Path p : walk.sorted(Comparator.reverseOrder()).toList()) {
-                Files.delete(p);
-            }
-        }
     }
 }

@@ -324,7 +324,7 @@ class StageWrightTestEngineTest {
     }
 
     @Test
-    void aWorldBlockReachesTheGameAndServerPropertiesComeBackAfterwards() throws IOException {
+    void aWorldBlockReachesTheGameAndTheTopologysServerPropertiesAreLeftAlone() throws IOException {
         Path properties = temp.resolve("game-world").resolve("server.properties");
         Files.writeString(properties, "server-port=1\n");
         EngineExecutionResults r = run("WorldBlockFixture");
@@ -340,11 +340,48 @@ class StageWrightTestEngineTest {
     }
 
     @Test
-    void serverPropertiesTheSceneCreatedAreRemovedWhenThereWasNoneBefore() {
+    void serverPropertiesTheSceneWritesNeverReachTheTopologysDirectory() {
         EngineExecutionResults r = run("WorldBlockFixture");
-        // The fake game reports no server-port=1 here, so its check fails; what matters is the file is gone again.
+        // The fake game reports no server-port=1 here, so its check fails; what matters is where the file went.
         assertEquals(2, r.testEvents().failed().count());
         assertTrue(!Files.exists(temp.resolve("game-world").resolve("server.properties")));
+        assertTrue(Files.isRegularFile(
+                SceneDirectory.of(temp.resolve("game-world"), "worldBlock").resolve("server.properties")));
+    }
+
+    @Test
+    void aPassingSceneKeepsOnlyItsArtifactsInItsOwnDirectory() throws IOException {
+        Path topology = temp.resolve("game-pass");
+        Files.writeString(topology.resolve("options.txt"), "copied");
+        Files.createDirectories(topology.resolve("mods"));
+        EngineExecutionResults r = run("PassFixture");
+        assertEquals(2, r.testEvents().succeeded().count());
+        Path scene = SceneDirectory.of(topology, "pass");
+        assertTrue(
+                Files.isRegularFile(scene.resolve("stagewright/logs/pass-game.log")), "its log, under its directory");
+        try (var left = Files.list(scene)) {
+            assertEquals(
+                    List.of("stagewright"),
+                    left.map(p -> p.getFileName().toString()).toList());
+        }
+        assertTrue(r.allEvents().reportingEntryPublished().stream()
+                .map(e -> e.getPayload(ReportEntry.class)
+                        .orElseThrow()
+                        .getKeyValuePairs()
+                        .get("directory"))
+                .anyMatch(scene.toString()::equals));
+        assertTrue(Files.isDirectory(topology.resolve("mods")), "the shared directory is not touched through the link");
+    }
+
+    @Test
+    void aFailingSceneKeepsItsWholeDirectory() throws IOException {
+        Path topology = temp.resolve("game-assertFail");
+        Files.writeString(topology.resolve("options.txt"), "copied");
+        Files.createDirectories(topology.resolve("mods"));
+        run("AssertFailFixture");
+        Path scene = SceneDirectory.of(topology, "assertFail");
+        assertEquals("copied", Files.readString(scene.resolve("options.txt")));
+        assertTrue(Files.isSymbolicLink(scene.resolve("mods")));
     }
 
     /** How the engine descriptor itself finished. */
