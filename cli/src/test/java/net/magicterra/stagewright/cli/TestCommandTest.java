@@ -142,6 +142,25 @@ class TestCommandTest {
     }
 
     @Test
+    void aSceneDirectoryLeftInScenesByAnOlderRunnerIsNotPacked(@TempDir Path dir) throws IOException {
+        Path scenes = Files.createDirectories(dir.resolve("pack/stagewright/scenes"));
+        Files.writeString(scenes.resolve("s.yaml"), "topology: dedicatedServer");
+        Path old = Files.createDirectories(scenes.resolve("s/stagewright/logs"));
+        Files.writeString(old.resolve("latest.log"), "log");
+        Path libraries = Files.createDirectories(dir.resolve("pack/libraries"));
+        Files.writeString(libraries.resolve("big.jar"), "jar");
+        Files.createSymbolicLink(scenes.resolve("s/libraries"), libraries);
+
+        List<String> log = new java.util.ArrayList<>();
+        Path to = dir.resolve("root/stagewright/scenes");
+        assertEquals(1, TestCommand.copyTree(scenes, to, TestCommand.oldSceneRuns(scenes, log::add)));
+        assertEquals("topology: dedicatedServer", Files.readString(to.resolve("s.yaml")));
+        assertFalse(Files.exists(to.resolve("s")));
+        assertTrue(
+                log.stream().anyMatch(l -> l.startsWith("WARNING") && l.contains("stagewright/runs/")), log.toString());
+    }
+
+    @Test
     void theTestsComeFromTheServerUnlessTestsNamesADirectory(@TempDir Path dir) throws IOException {
         Path server = Files.createDirectories(dir.resolve("server/stagewright/tests"))
                 .getParent()

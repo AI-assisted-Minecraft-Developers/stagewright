@@ -11,11 +11,15 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +77,8 @@ final class TestCommand {
     private static final String CLIENT = "client";
 
     private static final String TESTS = "tests";
+
+    private static final String SCENES = "scenes";
 
     private static final String NOT_A_DIRECTORY = " is not a directory";
 
@@ -179,9 +185,10 @@ final class TestCommand {
         deleteTree(work);
         Path root = work.resolve("root");
         // worlds: the saves a scene's world.from names.
-        for (String dir : List.of("scenes", TESTS, "worlds")) {
+        for (String dir : List.of(SCENES, TESTS, "worlds")) {
+            Set<Path> skipped = SCENES.equals(dir) ? oldSceneRuns(source.resolve(dir), log) : Set.of();
             int copied =
-                    copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir));
+                    copyTree(source.resolve(dir), root.resolve("stagewright").resolve(dir), skipped);
             if (Files.isDirectory(source.resolve(dir))) {
                 log.accept(copied + " files from " + source.resolve(dir));
             }
@@ -629,22 +636,56 @@ final class TestCommand {
      * tests in from a repository of their own must not get an empty mod. Answers how many files were copied.
      */
     static int copyTree(Path from, Path to) throws IOException {
+        return copyTree(from, to, Set.of());
+    }
+
+    /** {@link #copyTree(Path, Path)}, leaving out the subtrees {@code skipped} names, unread. */
+    static int copyTree(Path from, Path to, Set<Path> skipped) throws IOException {
         if (!Files.isDirectory(from)) {
             return 0;
         }
-        int files = 0;
-        try (Stream<Path> walk = Files.walk(from, FileVisitOption.FOLLOW_LINKS)) {
-            for (Path p : walk.toList()) {
-                Path target = to.resolve(from.relativize(p).toString());
-                if (Files.isDirectory(p)) {
-                    Files.createDirectories(target);
-                } else {
-                    Files.copy(p, target);
-                    files++;
+        int[] files = {0};
+        Files.walkFileTree(
+                from, EnumSet.of(FileVisitOption.FOLLOW_LINKS), Integer.MAX_VALUE, new SimpleFileVisitor<>() {
+                    @Override
+                    public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                        if (skipped.contains(dir)) {
+                            return FileVisitResult.SKIP_SUBTREE;
+                        }
+                        Files.createDirectories(to.resolve(from.relativize(dir).toString()));
+                        return FileVisitResult.CONTINUE;
+                    }
+
+                    @Override
+                    public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                        Files.copy(file, to.resolve(from.relativize(file).toString()));
+                        files[0]++;
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
+        return files[0];
+    }
+
+    /**
+     * The directories in a pack's {@code scenes/} that scenes ran in before their runs moved to {@code runs/}: each
+     * holds a {@code stagewright/} of its own, and its links reach the pack's mods and libraries, which packing it
+     * would put into the tests' jar.
+     */
+    static Set<Path> oldSceneRuns(Path scenes, Consumer<String> log) throws IOException {
+        if (!Files.isDirectory(scenes)) {
+            return Set.of();
+        }
+        Set<Path> runs = new java.util.LinkedHashSet<>();
+        try (Stream<Path> list = Files.list(scenes)) {
+            for (Path dir : list.sorted().toList()) {
+                if (Files.isDirectory(dir.resolve(RunDirectory.ARTIFACT_DIR))) {
+                    runs.add(dir);
+                    log.accept("WARNING: " + dir + " is where a scene ran before runs moved to stagewright/runs/."
+                            + " It is not packed with the tests; delete it.");
                 }
             }
         }
-        return files;
+        return runs;
     }
 
     private static void deleteTree(Path root) throws IOException {

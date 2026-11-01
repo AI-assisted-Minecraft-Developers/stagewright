@@ -31,7 +31,7 @@ matching file when it starts that scene. Why the engine does not ask Gradle is i
 | Field | Meaning |
 |---|---|
 | `topology` | the name, as the scene declaration spells it |
-| `gameDirectory` | the primary game's directory. No game runs in it: each scene's runs in a copy, `<gameDirectory>/stagewright/scenes/<scene>/`, and so does each working directory below; see [Scene directories](#scene-directories) |
+| `gameDirectory` | the primary game's directory. No game runs in it: each scene's runs in a copy, `<gameDirectory>/stagewright/runs/<scene>/`, and so does each working directory below; see [Scene directories](#scene-directories) |
 | `worldDirectory` | the world the primary plays in, relative to `gameDirectory`; default `world`. The command-line runner points a pack's server at `stagewright/world` |
 | `cleanWorld` | each scene starts on a new world; default true. `false` links the topology's world (or a client's `saves`) into every scene's directory, so a scene opens what the scene before left, and such scenes run one at a time |
 | `timeoutMinutes` | the longest a scene's game may run; default 20 |
@@ -83,17 +83,23 @@ Before starting the primary, the engine also writes the scene's creation setting
 working directory, the scene's own copy.
 
 The companion gets nothing added. Its output and the primary's go to
-`<gameDirectory>/stagewright/scenes/<scene>/stagewright/logs/`.
+`<gameDirectory>/stagewright/runs/<scene>/stagewright/logs/`.
 
 ## Scene directories
 
 Every directory a spec names — `gameDirectory` and each process's `workingDirectory` — is the template for a
-directory per scene, `<directory>/stagewright/scenes/<scene>/`, made afresh as the scene starts:
+directory per scene, `<directory>/stagewright/runs/<scene>/`, made afresh as the scene starts:
 
 - copied: the files at its top level but jars, and `config/` and `defaultconfigs/` (followed through a link);
 - left out: the world (`worldDirectory`'s first name), `world/`, `saves/`, `logs/`, `crash-reports/` and
   `stagewright/`, unless `cleanWorld` is false, which links the world and `saves/` instead;
-- linked: everything else, so a relative path in the launch, such as `@libraries/…/unix_args.txt`, still resolves.
+- linked: everything else, one level down — each directory, `mods/` and `libraries/` among them, is a real one whose
+  entries link to the template's, so a relative path in the launch, such as `@libraries/…/unix_args.txt`, still
+  resolves, and a walk that starts at the directory without following links still sees its entries. NeoForge's FML
+  lists `mods/` for its launch plugins that way.
+
+The directory is under `runs/`, not `scenes/`, where a pack keeps its scene files, so that replacing those does not
+remove the runs.
 
 Each game starts with that directory as its working directory, and a `--gameDir` naming the template is rewritten
 to name it. The scene's `files` and `clientFiles` are written there; one under a linked directory turns the

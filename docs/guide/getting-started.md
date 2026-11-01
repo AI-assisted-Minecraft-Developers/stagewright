@@ -167,7 +167,7 @@ any YAML or JavaScript tests in `src/testmod/resources/stagewright/tests/`, as i
 
 The task is a Gradle `Test` task: results appear in Gradle's test report under `build/reports/tests/`, a failure
 inside the game is a failed test with the game's stack trace, and each game's log is under
-`stagewright/scenes/<scene>/stagewright/logs/` in that topology's game directory
+`stagewright/runs/<scene>/stagewright/logs/` in that topology's game directory
 ([which one](gradle-plugin.md#test-suites-tests--)). The task is not part of `check`,
 because it starts games.
 
@@ -229,7 +229,7 @@ port: each scene's server listens on a free one. JUnit XML
 reports go to `<server-dir>/stagewright/reports` (or `--reports <dir>`), one file per scene, `TEST-<scene>.xml`, whose
 suite is named for the scene and whose test classes read `<scene>/<file>`, so a test that runs in two scenes shows as
 two rows that say which is which. What each test recorded (`t.record`) is a `<property>` element of its `<testcase>`.
-Each scene's games run in a directory of their own, `<server-dir>/stagewright/scenes/<scene>/`, with the pack's
+Each scene's games run in a directory of their own, `<server-dir>/stagewright/runs/<scene>/`, with the pack's
 settings copied and its mods and libraries linked, and its logs go to `stagewright/logs/` in there;
 `--parallel-scenes <n>` runs up to `n` scenes at once, each server on a free port. The console has a line for each scene as it ends: passed
 or failed, with how many of its tests passed, failed and were skipped.

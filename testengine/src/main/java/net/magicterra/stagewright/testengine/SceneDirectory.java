@@ -11,7 +11,7 @@ import java.util.stream.Stream;
 import net.magicterra.stagewright.engine.RunDirectory;
 
 /**
- * The directory one scene's game runs in, derived from the topology's: {@code <dir>/stagewright/scenes/<scene>/}. What
+ * The directory one scene's game runs in, derived from the topology's: {@code <dir>/stagewright/runs/<scene>/}. What
  * the game or the scene may write is the scene's own, so two scenes of one topology can run at once and neither leaves
  * its settings, world or logs to the next.
  *
@@ -20,14 +20,24 @@ import net.magicterra.stagewright.engine.RunDirectory;
  *       rewrite as they load; two games rewriting one shared file can corrupt it.
  *   <li>Left out: the world, {@code saves/}, {@code logs/}, {@code crash-reports/} and {@code stagewright/} itself. A
  *       topology that keeps its world between scenes links the world and {@code saves/} instead.
- *   <li>Linked: everything else — {@code mods/}, {@code libraries/}, loader caches. A modpack server's directory holds
- *       hundreds of megabytes there that no scene writes; a relative path in its launch arguments, such as
- *       {@code @libraries/…/unix_args.txt}, still resolves through the link.
+ *   <li>Linked: everything else — {@code mods/}, {@code libraries/}, loader caches — one level down: each directory is
+ *       a real one whose entries link to the topology's. A modpack server's directory holds hundreds of megabytes there
+ *       that no scene writes; a relative path in its launch arguments, such as {@code @libraries/…/unix_args.txt},
+ *       still resolves through the links.
  * </ul>
+ *
+ * <p>Not the directory itself: a walk that starts at a link and does not follow links sees the link alone. NeoForge's
+ * FML lists {@code mods/} for its launch plugins ({@code ITransformationService}, {@code IDependencyLocator}) that way,
+ * so a linked {@code mods/} lost every one of them without a word while the ordinary mods still loaded. Any other
+ * directory a mod lists that way would lose its contents alike. A file the game creates at a directory's top level is
+ * the scene's own, as everything else it writes is.
+ *
+ * <p>Under {@code runs/}, not {@code scenes/}: that is where a pack keeps its scene files, so a directory holding the
+ * scenes' runs there would be replaced along with them.
  */
 final class SceneDirectory {
 
-    static final String SCENES = "scenes";
+    static final String RUNS = "runs";
 
     private static final Set<String> COPIED_DIRECTORIES = Set.of("config", "defaultconfigs");
 
@@ -45,7 +55,7 @@ final class SceneDirectory {
 
     /** Where {@code scene}'s copy of {@code original} goes. */
     static Path of(Path original, String scene) {
-        return original.resolve(RunDirectory.ARTIFACT_DIR).resolve(SCENES).resolve(scene);
+        return original.resolve(RunDirectory.ARTIFACT_DIR).resolve(RUNS).resolve(scene);
     }
 
     /**
@@ -78,7 +88,7 @@ final class SceneDirectory {
                     if (COPIED_DIRECTORIES.contains(name)) {
                         copyTree(entry, target);
                     } else {
-                        link(target, entry);
+                        linkEntries(target, entry);
                     }
                 } else if (name.endsWith(".jar")) {
                     link(target, entry);
@@ -106,14 +116,7 @@ final class SceneDirectory {
             if (Files.isSymbolicLink(at)) {
                 Path shared = Files.readSymbolicLink(at);
                 Files.delete(at);
-                Files.createDirectories(at);
-                if (Files.isDirectory(shared)) {
-                    try (Stream<Path> entries = Files.list(shared)) {
-                        for (Path entry : entries.toList()) {
-                            link(at.resolve(entry.getFileName().toString()), entry);
-                        }
-                    }
-                }
+                linkEntries(at, shared);
             } else if (!Files.exists(at, LinkOption.NOFOLLOW_LINKS)) {
                 return;
             }
@@ -151,6 +154,19 @@ final class SceneDirectory {
 
     private static void link(Path link, Path target) throws IOException {
         Files.createSymbolicLink(link, target.toAbsolutePath());
+    }
+
+    /** {@code dir} as a real directory whose entries link to those of {@code shared}, if that is one. */
+    private static void linkEntries(Path dir, Path shared) throws IOException {
+        Files.createDirectories(dir);
+        if (!Files.isDirectory(shared)) {
+            return;
+        }
+        try (Stream<Path> entries = Files.list(shared)) {
+            for (Path entry : entries.toList()) {
+                link(dir.resolve(entry.getFileName().toString()), entry);
+            }
+        }
     }
 
     private static void copyTree(Path link, Path to) throws IOException {

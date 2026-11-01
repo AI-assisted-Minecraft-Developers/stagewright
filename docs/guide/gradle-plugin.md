@@ -165,9 +165,10 @@ server would from `server.properties`: `preset`, `seed`, `structures`, `gamemode
 datapacks. Undeclared, it is a dedicated server's default, survival on easy with the fixed seed 5471.
 
 Each scene's games run in a directory of their own, made from the topology's as the scene starts:
-`<topology directory>/stagewright/scenes/<scene>/`. The settings at its top level and its `config/` are
+`<topology directory>/stagewright/runs/<scene>/`. The settings at its top level and its `config/` are
 copied, the world, `saves/`, `logs/` and `crash-reports/` are left out, so every scene starts on a new
-world, and everything else — `mods/`, a loader's caches — is a link to the topology's. What a scene
+world, and everything else — `mods/`, a loader's caches — is linked to the topology's one level down: the
+directory is its own, each entry in it a link. What a scene
 writes, its `files`, its `server.properties`, whatever its game writes, stays in its own directory: the
 next scene starts from the topology's directory as it was. A scene whose tests all passed keeps only its
 `stagewright/` (logs, `store.json`, the game's JUnit XML); a scene with a failure keeps its whole

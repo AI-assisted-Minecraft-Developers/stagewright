@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,22 +34,49 @@ class SceneDirectoryTest {
         Files.writeString(Files.createDirectories(topology.resolve("world")).resolve("level.dat"), "w");
         Files.createDirectories(topology.resolve("saves/StageWright"));
         Files.createDirectories(topology.resolve("logs"));
-        Files.createDirectories(topology.resolve("stagewright/scenes/other"));
+        Files.createDirectories(topology.resolve("stagewright/runs/other"));
     }
 
     @Test
     void settingsAreCopiedTheRestLinkedAndWorldsAndArtifactsLeftOut() throws IOException {
         Path dir = SceneDirectory.create(topology, "s", null, false);
-        assertEquals(topology.resolve("stagewright/scenes/s"), dir);
+        assertEquals(topology.resolve("stagewright/runs/s"), dir);
         assertFalse(Files.isSymbolicLink(dir.resolve("server.properties")));
         assertFalse(Files.isSymbolicLink(dir.resolve("config")));
         assertEquals("a=1", Files.readString(dir.resolve("config/mod.toml")));
         assertTrue(Files.isSymbolicLink(dir.resolve("server.jar")));
-        assertTrue(Files.isSymbolicLink(dir.resolve("mods")));
         assertEquals("-Dx", Files.readString(dir.resolve("libraries/x/args.txt")), "a relative path still resolves");
         for (String gone : List.of("world", "saves", "logs", "stagewright")) {
             assertFalse(Files.exists(dir.resolve(gone)), gone);
         }
+    }
+
+    @Test
+    void eachLinkedDirectoryIsARealOneALoaderCanListWithoutFollowingLinks() throws IOException {
+        Path dir = SceneDirectory.create(topology, "s", null, false);
+        for (String linked : List.of("mods", "libraries")) {
+            assertFalse(Files.isSymbolicLink(dir.resolve(linked)), linked);
+            assertTrue(Files.isDirectory(dir.resolve(linked)), linked);
+        }
+        assertTrue(Files.isSymbolicLink(dir.resolve("mods/m.jar")));
+        assertTrue(Files.isSymbolicLink(dir.resolve("libraries/x")));
+        // How FML finds its launch plugins: a walk one deep that does not follow a link it starts at.
+        try (Stream<Path> walk = Files.walk(dir.resolve("mods"), 1)) {
+            assertEquals(
+                    List.of(dir.resolve("mods/m.jar")),
+                    walk.filter(p -> !p.equals(dir.resolve("mods"))).toList());
+        }
+        assertEquals("m", Files.readString(dir.resolve("mods/m.jar")));
+    }
+
+    @Test
+    void replacingThePacksSceneFilesLeavesTheRunsAlone() throws IOException {
+        Files.writeString(
+                Files.createDirectories(topology.resolve("stagewright/scenes")).resolve("s.yaml"), "x");
+        Path dir = SceneDirectory.create(topology, "s", null, false);
+        Files.writeString(Files.createDirectories(dir.resolve("stagewright")).resolve("store.json"), "{}");
+        SceneMods.deleteTree(topology.resolve("stagewright/scenes"));
+        assertTrue(Files.isRegularFile(dir.resolve("stagewright/store.json")));
     }
 
     @Test

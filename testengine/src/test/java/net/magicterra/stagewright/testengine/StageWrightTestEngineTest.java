@@ -8,6 +8,7 @@ import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -404,7 +405,9 @@ class StageWrightTestEngineTest {
         run("AssertFailFixture");
         Path scene = SceneDirectory.of(topology, "assertFail");
         assertEquals("copied", Files.readString(scene.resolve("options.txt")));
-        assertTrue(Files.isSymbolicLink(scene.resolve("mods")));
+        assertTrue(
+                Files.isDirectory(scene.resolve("mods"), LinkOption.NOFOLLOW_LINKS),
+                "mods/ is a real directory, not a link to the topology's");
     }
 
     /** How the engine descriptor itself finished. */

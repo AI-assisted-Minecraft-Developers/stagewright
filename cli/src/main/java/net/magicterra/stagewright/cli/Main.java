@@ -91,7 +91,7 @@ public final class Main {
 
                 Runs the YAML and JavaScript tests in <server-dir>/stagewright/tests, with the scenes in
                 <server-dir>/stagewright/scenes. A dedicatedServer scene runs in the pack's server, in a
-                directory of its own under <server-dir>/stagewright/scenes/<scene>, with a fresh world and
+                directory of its own under <server-dir>/stagewright/runs/<scene>, with a fresh world and
                 a free port; the pack's own world and settings are not touched. Mods are
                 handed to the loader, never copied into mods/. JUnit XML goes to --reports (default
                 <server-dir>/stagewright/reports).
@@ -110,7 +110,7 @@ public final class Main {
                                       only reported (report)
                   --parallel-scenes <n>
                                       run up to n scenes at once (default 1), each in a directory of
-                                      its own under <server-dir>/stagewright/scenes; each game takes
+                                      its own under <server-dir>/stagewright/runs; each game takes
                                       its own memory
                   --parallel-clients <n>
                                       of those, up to n that start a client (default 1): clients share

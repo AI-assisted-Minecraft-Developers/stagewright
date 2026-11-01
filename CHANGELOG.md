@@ -10,6 +10,28 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-11-02
+
+### A scene's `mods/` is a real directory, and the scenes run under `stagewright/runs/`
+
+A scene's directory linked the topology's `mods/` as a whole. NeoForge's FML lists `mods/` for its launch plugins
+(`ITransformationService`, `IDependencyLocator`) with a walk that does not follow a link it starts at, so on NeoForge
+every such jar was skipped without a word while the ordinary mods still loaded; in a modpack whose client depends on
+one, the client crashed four seconds in on a Mixin configuration that plugin was to provide. Every linked directory,
+`mods/` and `libraries/` among them, is now a real directory whose entries are links, so no other directory a mod lists
+the same way can lose its contents alike. A file the game creates at such a directory's top level is now the scene's
+own rather than the topology's.
+
+A directory a scene ran in under the old location is not packed with the tests by the command-line runner, which
+would have followed its links into the pack's mods and libraries (one such directory made a 159 MB tests jar); the
+runner names it in a warning, to be deleted.
+
+The scenes' directories also moved from `stagewright/scenes/<scene>/` to `stagewright/runs/<scene>/`.
+`stagewright/scenes/` is where a pack keeps its scene files, so a consumer that put fresh ones there before the next
+suite deleted the last suite's logs and `store.json` along with them. Anything that reads a scene's logs, JUnit XML
+or `store.json` by path reads it under `runs/` now. **Green in the test engine's unit tests**; not yet run by the
+modpack that found both.
+
 ## 2026-11-01
 
 ### A plot is handed over once its chunks tick entities, and an entity it cannot remove is named
