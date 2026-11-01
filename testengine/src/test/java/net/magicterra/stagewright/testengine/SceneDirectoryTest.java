@@ -52,6 +52,17 @@ class SceneDirectoryTest {
     }
 
     @Test
+    void aLinkedSettingsDirectoryIsCopiedFromWhereItPoints() throws IOException {
+        Path pack = Files.createDirectories(temp.resolve("pack/config/deep"));
+        Files.writeString(pack.resolve("x.toml"), "x=1");
+        Path client = Files.createDirectories(temp.resolve("client"));
+        Files.createSymbolicLink(client.resolve("config"), temp.resolve("pack/config"));
+        Path dir = SceneDirectory.create(client, "s", null, false);
+        assertFalse(Files.isSymbolicLink(dir.resolve("config")));
+        assertEquals("x=1", Files.readString(dir.resolve("config/deep/x.toml")));
+    }
+
+    @Test
     void aTopologyKeepingItsWorldLinksIt() throws IOException {
         Path dir = SceneDirectory.create(topology, "s", "world", true);
         assertTrue(Files.isSymbolicLink(dir.resolve("world")));

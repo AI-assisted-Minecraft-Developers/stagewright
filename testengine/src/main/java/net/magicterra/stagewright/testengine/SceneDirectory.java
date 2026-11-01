@@ -143,7 +143,10 @@ final class SceneDirectory {
         Files.createSymbolicLink(link, target.toAbsolutePath());
     }
 
-    private static void copyTree(Path from, Path to) throws IOException {
+    private static void copyTree(Path link, Path to) throws IOException {
+        // Through a link to the directory itself, as the command-line runner's client directory has for config/: a walk
+        // started on the link would see the link alone.
+        Path from = link.toRealPath();
         try (Stream<Path> walk = Files.walk(from)) {
             for (Path p : walk.toList()) {
                 Path target = to.resolve(from.relativize(p).toString());
