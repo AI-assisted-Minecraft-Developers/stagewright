@@ -25,6 +25,20 @@ class. So a scene's node has a class source named for the scene, and a class's n
 (`survival/com.example.FurnaceTest`): a class that runs in three scenes gets three files, each saying its scene,
 instead of `TEST-<class>-1.xml` to `-3.xml`. A test's own method source still names the real class.
 
+## Scenes side by side
+
+A scene's games run in a directory of their own, derived from the topology's as it starts
+([scene directories](../reference/launch-spec.md#scene-directories)), and its server on a free port. Nothing a scene
+writes reaches another, so nothing has to be put back after it, and two scenes of one topology can run at once.
+
+How many do is `stagewright.parallel.scenes`, a configuration parameter (a system property, or
+`junit-platform.properties` on the test class path), 1 unless set; the Gradle plugin passes the suite's
+`maxParallelScenes`, the CLI its `--parallel-scenes`. `stagewright.parallel.clients` limits, among those, the scenes
+that start a game client, which share one display. Before any starts, the engine reads each scene's launch spec for
+what it will hold — a client, the world of a topology with `cleanWorld: false` — and starts the scenes in the order it
+found them, each as soon as a place and what it holds are free, so a client waiting for the display does not hold a
+place a server could use. With a limit of 1 the scenes run on the engine's own thread, one after another, as before.
+
 ## Finding tests without loading them
 
 A test class's signatures name Minecraft and the mods; loading one in the engine's JVM would fail, or worse,
@@ -239,8 +253,9 @@ in `mods/` that is not that jar and any WorldDriver there beside one given with 
 `dedicatedServer` launch spec from the start command it detects, with the `leaks` its `--leaks` names (`fail` unless
 told otherwise, as in the plugin). It then runs this engine in its own JVM and writes JUnit XML, split into one `<testsuite>` file per scene named
 for it, since JUnit's own report puts the whole engine in one suite; each testcase's `classname` is the engine's
-`<scene>/<file>`, as in Gradle's files. The server plays in `stagewright/world` (`--universe`, and the spec's `worldDirectory`), so the world each
-scene starts afresh is never the pack's. With `--client <spec>` it also installs that client
+`<scene>/<file>`, as in Gradle's files. The server plays in `stagewright/world` (`--universe`, relative, and the spec's `worldDirectory`) of the
+scene's own directory, so the world each scene starts afresh is never the pack's, and it listens on the free port the
+engine picks (`--port {stagewright.freePort}`), never the pack's. With `--client <spec>` it also installs that client
 and writes the other two specs: `integratedServer`, the client alone in `saves/StageWright`, and
 `dedicatedServerWithClient`, the pack's server waiting for that client to join. The client runs in
 `stagewright/client`, never a player's directory, since the engine deletes a client's saves before each scene, and
@@ -255,6 +270,5 @@ mistake in the build. A game that starts and then fails is a failure either way.
 
 - Scene declarations apply `topology`, `world`, `files` and `mods.exclude` ([scene file](../reference/scene-file.md));
   any other key, `clients` and `mods.only` among them, is refused rather than ignored.
-- Scenes run one after another.
 - `perf` counts frames only of a client in the game's own JVM, not of a joining one; `insert` and `container` reach only
   containers that are vanilla `Container`s, in the overworld.

@@ -169,7 +169,8 @@ Three things to know before you reach for it:
   The store is one set of values per scene, shared by all its tests, Java and scripts alike: `t.store.put(key,
   value)` and `t.store.get(key)` in JavaScript, the `store.put` and `store.get` steps in YAML. A value is plain (a
   string, number, boolean, list or map) or a record Gson can write. Every `put` is written straight away to
-  `stagewright/store.json` in the game's directory, so it is there after a restart, and after a crash. The file is
+  `stagewright/store.json` in the scene's directory (`<game directory>/stagewright/scenes/<scene>/`), so it is
+  there after a restart, and after a crash. The file is
   deleted before the scene's first game starts, so every run of a scene begins with an empty store; it is not
   deleted at the end, so after a run it holds what the tests put, which makes it a place to leave measurements for a
   program that reads them afterwards. Bots a test keeps with `@Bot.Keep` cross a restart too, without the store (see

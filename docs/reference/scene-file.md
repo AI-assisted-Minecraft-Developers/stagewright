@@ -43,8 +43,9 @@ those listed, is refused: it would take their dependencies too.
 
 ## `files`
 
-Text written into the primary game's working directory before it starts, by path relative to it, and put back when the
-scene is over: the file as it was, or none, and no directory the scene made. A path may not leave the directory.
+Text written into the primary game's working directory before it starts, by path relative to it. That directory is the
+scene's own copy of the topology's ([scene directories](launch-spec.md#scene-directories)), so nothing needs putting
+back and no other scene sees the file. A path may not leave the directory.
 
 ```yaml
 files:
@@ -78,8 +79,8 @@ clientFiles:
 
 A save to start from instead of a new world: a zip or a directory, as a class path resource under `stagewright/`
 (`from: worlds/v1.2.zip` is `src/test/resources/stagewright/worlds/v1.2.zip`, or a pack's
-`stagewright/worlds/v1.2.zip`). It is put where the topology's world is once that has been deleted, so every scene
-starts from the save as it was given. A zip is unpacked from the folder holding its `level.dat`, so a zip of the world
+`stagewright/worlds/v1.2.zip`). It is put where the scene's world goes in its own directory, so every scene starts from
+the save as it was given. A zip is unpacked from the folder holding its `level.dat`, so a zip of the world
 folder and a zip of its contents both do. The creation settings below cannot be declared with it, since they apply only
 to a new world; those applied once loaded still are. A client opening a save does not ask whether to back it up first,
 which it otherwise does for a save made with worldgen mods.
@@ -94,8 +95,8 @@ the scene's: it is set in the Gradle `topologies { }` block, or on the suite for
 
 ## `world` — at creation
 
-Written into the primary game's `server.properties` before it starts, on top of what is there, and put back when the
-scene is over, so one scene's settings are never the next one's undeclared defaults. A dedicated server reads these
+Written into the primary game's `server.properties` before it starts, on top of what is there, in the scene's own
+directory, so one scene's settings are never the next one's undeclared defaults. A dedicated server reads these
 when it creates its world; on `integratedServer`, StageWright reads the same keys from the file the same way and the
 client creates its singleplayer world from them.
 

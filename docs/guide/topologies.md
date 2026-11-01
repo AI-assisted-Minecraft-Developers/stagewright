@@ -22,7 +22,7 @@ On the two shapes with a client, the tests wait until the player has joined befo
 
 On `dedicatedServerWithClient` both games are started with StageWright's supervision agent. A client that crashes,
 hangs, or exits while the server's tests are running fails the scene at once, with a message beginning `the joined
-client ended` that says how and names the client's log (`stagewright/logs/<scene>-companion.log` in the game
+client ended` that says how and names the client's log (`stagewright/logs/<scene>-companion.log` in the scene's
 directory), rather than leaving the server to wait for a player until its time runs out
 ([how](../design/supervision.md#the-joined-client)).
 

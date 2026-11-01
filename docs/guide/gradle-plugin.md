@@ -79,6 +79,7 @@ The rest is conventions, each of which a suite may set:
 | `includeWorldDriver` | true: WorldDriver is among the defaults of both configurations below |
 | `worldDriverVersion` | the WorldDriver build this StageWright was built against |
 | `serverPort`, `timeoutMinutes` | unset: a free port for each scene; 20 |
+| `maxParallelScenes`, `maxParallelClients` | 1 and 1: scenes run one after another (see [Running scenes at once](#running-scenes-at-once)) |
 | `leaks` | `'fail'`: a game forced down after its run fails its scene; `'report'` only reports it (see the topology table below) |
 
 What a suite needs comes as the defaults of two configurations of the plugin's own, in its loader
@@ -162,7 +163,16 @@ launch, and gives a scene three topologies to name:
 On `integratedServer` the client creates the world from the scene's `world:` declaration as a dedicated
 server would from `server.properties`: `preset`, `seed`, `structures`, `gamemode`, `difficulty` and the
 datapacks. Undeclared, it is a dedicated server's default, survival on easy with the fixed seed 5471.
-The engine deletes the client's saves before each scene, as it deletes a server's world.
+
+Each scene's games run in a directory of their own, made from the topology's as the scene starts:
+`<topology directory>/stagewright/scenes/<scene>/`. The settings at its top level and its `config/` are
+copied, the world, `saves/`, `logs/` and `crash-reports/` are left out, so every scene starts on a new
+world, and everything else — `mods/`, a loader's caches — is a link to the topology's. What a scene
+writes, its `files`, its `server.properties`, whatever its game writes, stays in its own directory: the
+next scene starts from the topology's directory as it was. A scene whose tests all passed keeps only its
+`stagewright/` (logs, `store.json`, the game's JUnit XML); a scene with a failure keeps its whole
+directory, world and settings included, until it next runs. Creating links needs Developer Mode or
+administrator rights on Windows.
 
 The runs start from the run source set, so under loom `runClient` goes without the tests; they get no
 IDE run configuration. `jvmArgs` and `systemProperties` go on all of them, the servers listen on
@@ -197,7 +207,7 @@ A topology declares no task of its own; it only names the runs a suite's launch 
 | `runTask` | `String` | none | **Required.** A `JavaExec` run task: a plain name in this project, or a full path. |
 | `companionRunTask` | `String` | none | A second run whose game runs beside the first. Must resolve to a `JavaExec`. |
 | `gameDirectory` | directory | `<projectDir>/run-stagewright-<topologyName>` | Recorded in the launch spec. |
-| `cleanWorld` | `boolean` | `true` | Whether the engine deletes the world before each scene. |
+| `cleanWorld` | `boolean` | `true` | Whether each scene starts on a new world. `false` hands every scene the topology's world as the scene before left it, and runs those scenes one at a time. |
 | `timeoutMinutes` | `int` | `20` | The longest one scene's games may run. |
 | `stallMinutes` | `int` | `5` | How long a game may go without its phase, ticks delivered or loaded classes changing before the scene is ended. See [supervision](../reference/supervision-protocol.md). |
 | `client` | `boolean` | `false` | The run task is a game client rather than a dedicated server. The plugin never starts a display. |
@@ -209,6 +219,41 @@ Per suite `<name>` the plugin registers:
 |---|---|
 | `stagewrightLaunchSpecs<Name>` | Writes `build/stagewright/launches/<name>/<sceneTopology>.json` from each topology's run tasks, generated or mapped ([format](../reference/launch-spec.md)). The classpath goes into an argument file beside them, referenced from `jvmArgs`. Runs the run tasks' own prerequisites first; never up to date. |
 | `stagewrightTest<Name>` | A `Test` task on the JUnit Platform with only the `stagewright` engine, passing `-Dstagewright.launches` pointing at that directory. `--tests` matches a script test as `<path>.<name>` (`stagewright/tests/validation/42_combat.js.42_combat`); a pattern containing `/` gets a leading `*` before the run, since Gradle would otherwise hand the engine no class to start from. Never up to date; not part of `check`, because it starts games. |
+
+### Running scenes at once
+
+Most of a short scene's time is its game starting. A suite with several scenes can run more than one at
+once:
+
+```groovy
+stagewright { tests { neoforge {
+    maxParallelScenes = 3    // scenes at once
+    maxParallelClients = 1   // of those, scenes that start a game client
+} } }
+```
+
+Each scene already has a directory of its own and, unless `serverPort` is set, a port of its own, so
+nothing else changes. Setting `serverPort` with `maxParallelScenes` above 1 fails the task, since every
+server would listen on it. A mapped topology whose run fixes a port the same way has to stop doing so
+first.
+
+`maxParallelClients` counts the scenes on `integratedServer` and `dedicatedServerWithClient`. It stays at 1
+unless you know better: the clients share one display, only one window has the focus, and Minecraft lowers
+the frame rate of the others, which slows their game ticks as well. Two scenes of a topology with
+`cleanWorld = false` never run at once, since they share its world.
+
+Each game takes its own memory (the heap in its `-Xmx`, and more besides) and processor time. Count what
+one game takes, and do not run more at once than the machine holds; a game starved of either is slower to
+start, and a test with a tight tick budget can fail where it passes alone. To set the limits for one
+machine rather than the build, use the Gradle properties `stagewright.parallel.scenes` and
+`stagewright.parallel.clients`, which override the suite's:
+
+```bash
+./gradlew stagewrightTestNeoforge -Pstagewright.parallel.scenes=4
+```
+
+Scenes start in the order the engine found them, each as soon as a place is free, and the results arrive in
+the order the scenes end.
 
 ### Reading the results
 

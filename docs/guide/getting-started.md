@@ -166,8 +166,9 @@ any YAML or JavaScript tests in `src/testmod/resources/stagewright/tests/`, as i
 ```
 
 The task is a Gradle `Test` task: results appear in Gradle's test report under `build/reports/tests/`, a failure
-inside the game is a failed test with the game's stack trace, and each game's log is under `stagewright/logs/` in
-that topology's game directory ([which one](gradle-plugin.md#test-suites-tests--)). The task is not part of `check`,
+inside the game is a failed test with the game's stack trace, and each game's log is under
+`stagewright/scenes/<scene>/stagewright/logs/` in that topology's game directory
+([which one](gradle-plugin.md#test-suites-tests--)). The task is not part of `check`,
 because it starts games.
 
 While writing one test class, run only that class:
@@ -222,12 +223,15 @@ java -jar stagewright.jar test <server-dir>
 
 The runner works out how the pack's server starts (NeoForge argument files under `libraries/`, or a Fabric server
 launcher at the top level; `--launch "<command>"` when it cannot tell), hands StageWright and your tests to the loader
-as extra mods without copying anything into `mods/`, and runs every `dedicatedServer` scene. The server plays in
-`<server-dir>/stagewright/world`, which each scene starts afresh; the pack's own world is not touched. JUnit XML
+as extra mods without copying anything into `mods/`, and runs every `dedicatedServer` scene. The server plays in a
+new world of each scene's, `stagewright/world` in the scene's directory; the pack's own world is not touched, nor its
+port: each scene's server listens on a free one. JUnit XML
 reports go to `<server-dir>/stagewright/reports` (or `--reports <dir>`), one file per scene, `TEST-<scene>.xml`, whose
 suite is named for the scene and whose test classes read `<scene>/<file>`, so a test that runs in two scenes shows as
 two rows that say which is which. What each test recorded (`t.record`) is a `<property>` element of its `<testcase>`.
-Each game's log goes to `<server-dir>/stagewright/logs/`, and the console has a line for each scene as it ends: passed
+Each scene's games run in a directory of their own, `<server-dir>/stagewright/scenes/<scene>/`, with the pack's
+settings copied and its mods and libraries linked, and its logs go to `stagewright/logs/` in there;
+`--parallel-scenes <n>` runs up to `n` scenes at once, each server on a free port. The console has a line for each scene as it ends: passed
 or failed, with how many of its tests passed, failed and were skipped.
 
 A StageWright jar already in `mods/` loads instead of the runner's own; one that is not the build the runner carries
@@ -267,8 +271,10 @@ in `--client-mods <dir>`, as the offline player `--username` (`StageWright` by d
 
 A pack whose client needs more than its mods, such as its `config/`, `kubejs/` or `options.txt`, names its client
 directory with `--client-dir <dir>`. Everything in it except `mods/`, `saves/`, `logs/` and `crash-reports/` is linked
-into the client's directory, not copied, so the client reads the pack's files as they are when the run starts, and what
-a mod writes there lands in the pack's directory. The client then loads `<dir>/mods` unless `--client-mods` names
+into the client's directory, not copied, so the client reads the pack's files as they are when the run starts. Each
+scene then copies the settings among them, its `config/` and the files at the top such as `options.txt`, into a
+directory of its own, so a mod rewriting those leaves the pack's alone; what a mod writes into another linked
+directory, such as `kubejs/`, lands in the pack's directory. The client then loads `<dir>/mods` unless `--client-mods` names
 others. The links are symbolic links; on Windows they need Developer Mode or an administrator. If the client's
 directory already holds a real file or directory where a link should go — a `config/` the client wrote in a run
 without `--client-dir`, or one a script copied in — the run stops before changing anything and names each one: move
