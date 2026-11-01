@@ -1,0 +1,13 @@
+// Where a module finds WorldDriver's builds: a local development build first, then CI's builds on the Nexus.
+// Applied before the module's own repositories, so these are asked first; both only for this project's group, so
+// nothing else a module resolves can come from whatever happens to be in this machine's ~/.m2.
+repositories {
+    mavenLocal {
+        content { includeGroup 'net.magicterra' }
+    }
+    maven {
+        name = 'gardelNexus'
+        url = 'https://nexus.gardel.top/repository/maven-releases'
+        content { includeGroup 'net.magicterra' }
+    }
+}

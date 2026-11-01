@@ -24,14 +24,9 @@ base {
     archivesName = "$rootProject.archives_name-$project.name"
 }
 
+pluginManager.apply('stagewright.driver')
+
 repositories {
-    // WorldDriver: a local development build first, then CI's builds on the Nexus.
-    mavenLocal()
-    maven {
-        name = 'gardelNexus'
-        url = 'https://nexus.gardel.top/repository/maven-releases'
-        content { includeGroup 'net.magicterra' }
-    }
     mavenCentral()
     // Rhino (KubeJS fork), not on Maven Central. Fenced to its group: a host that answers 200 to any path would
     // otherwise serve bogus POMs for everything not found earlier.
