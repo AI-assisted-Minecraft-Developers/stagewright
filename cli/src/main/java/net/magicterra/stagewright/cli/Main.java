@@ -90,8 +90,9 @@ public final class Main {
                   java -jar stagewright.jar --version   what this jar was built from
 
                 Runs the YAML and JavaScript tests in <server-dir>/stagewright/tests, with the scenes in
-                <server-dir>/stagewright/scenes. A dedicatedServer scene runs in the pack's server, with a
-                fresh world in <server-dir>/stagewright/world; the pack's own is not touched. Mods are
+                <server-dir>/stagewright/scenes. A dedicatedServer scene runs in the pack's server, in a
+                directory of its own under <server-dir>/stagewright/scenes/<scene>, with a fresh world and
+                a free port; the pack's own world and settings are not touched. Mods are
                 handed to the loader, never copied into mods/. JUnit XML goes to --reports (default
                 <server-dir>/stagewright/reports).
 
