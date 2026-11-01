@@ -45,6 +45,9 @@ final class SceneDirectory {
 
     private static final Set<String> WORLDS = Set.of("world", "saves");
 
+    /** What a passed scene keeps: its artifacts and the game's own logs. */
+    private static final Set<String> KEPT_ON_PASS = Set.of(RunDirectory.ARTIFACT_DIR, "logs", "crash-reports");
+
     /**
      * What a passed scene does not keep of its artifacts: the command-line runner's world ({@code --universe
      * stagewright}), the worlds its rounds set aside, and its rewritten launch arguments.
@@ -127,8 +130,12 @@ final class SceneDirectory {
     }
 
     /**
-     * After the scene: a scene that passed keeps only its artifacts, {@code stagewright/}; one that failed keeps
-     * everything, world and settings, until it next runs, to be looked into.
+     * After the scene: a scene that passed keeps its artifacts, {@code stagewright/}, and what the game logged,
+     * {@code logs/} and {@code crash-reports/}; one that failed keeps everything, world and settings, until it next
+     * runs, to be looked into.
+     *
+     * <p>The game's own logs are kept on a pass too: {@code stagewright/logs/} has only its standard output, at INFO,
+     * and a scene can pass while something it did not assert went wrong, which only the game's {@code debug.log} says.
      */
     static void finish(Path dir, boolean passed) throws IOException {
         if (!passed || !Files.isDirectory(dir)) {
@@ -136,7 +143,7 @@ final class SceneDirectory {
         }
         try (Stream<Path> entries = Files.list(dir)) {
             for (Path entry : entries.toList()) {
-                if (!RunDirectory.ARTIFACT_DIR.equals(entry.getFileName().toString())) {
+                if (!KEPT_ON_PASS.contains(entry.getFileName().toString())) {
                     SceneMods.deleteTree(entry);
                 }
             }
@@ -144,7 +151,7 @@ final class SceneDirectory {
         for (String bulky : BULKY_ARTIFACTS) {
             SceneMods.deleteTree(dir.resolve(RunDirectory.ARTIFACT_DIR).resolve(bulky));
         }
-        // A joining client's directory holds no artifacts, its logs being the primary's: nothing is left to keep.
+        // A directory nothing was kept of — no artifacts, and a game that logged nothing there — is not left behind.
         try (Stream<Path> left = Files.list(dir)) {
             if (left.findAny().isEmpty()) {
                 Files.delete(dir);

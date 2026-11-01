@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-02
 
+### A scene that passed keeps the game's own logs
+
+A scene whose tests all passed kept only `stagewright/`, whose logs are the game's standard output at INFO. The game's
+`logs/` (`debug.log`, with the loaders' DEBUG and TRACE lines) and `crash-reports/` were deleted, so a scene that
+passed while something it did not assert went wrong left nothing to look into; the loader's judgement that had a
+modpack's client skip its launch plugins was in `debug.log` alone. Both are now kept beside `stagewright/` until the
+scene next runs. **Green in the test engine's unit tests.**
+
 ### The command-line runner carries WorldDriver
 
 StageWright requires WorldDriver, and the runner carried only StageWright, so every pack fetched a WorldDriver build

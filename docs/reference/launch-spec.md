@@ -104,6 +104,6 @@ remove the runs.
 Each game starts with that directory as its working directory, and a `--gameDir` naming the template is rewritten
 to name it. The scene's `files` and `clientFiles` are written there; one under a linked directory turns the
 directories on its way into real ones first, so nothing is written through a link. When the scene ends with every
-test passed, all but its `stagewright/` is deleted, and of that its world, set-aside worlds and rewritten launch
+test passed, all but its `stagewright/`, `logs/` and `crash-reports/` is deleted, and of `stagewright/` its world, set-aside worlds and rewritten launch
 files; otherwise the directory is kept as it is until the scene next runs. The scene's `directory` report entry
 names it.

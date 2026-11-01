@@ -170,8 +170,9 @@ copied, the world, `saves/`, `logs/` and `crash-reports/` are left out, so every
 world, and everything else — `mods/`, a loader's caches — is linked to the topology's one level down: the
 directory is its own, each entry in it a link. What a scene
 writes, its `files`, its `server.properties`, whatever its game writes, stays in its own directory: the
-next scene starts from the topology's directory as it was. A scene whose tests all passed keeps only its
-`stagewright/` (logs, `store.json`, the game's JUnit XML); a scene with a failure keeps its whole
+next scene starts from the topology's directory as it was. A scene whose tests all passed keeps its
+`stagewright/` (logs, `store.json`, the game's JUnit XML) and the game's own `logs/` (`debug.log` among them) and
+`crash-reports/`; a scene with a failure keeps its whole
 directory, world and settings included, until it next runs. Creating links needs Developer Mode or
 administrator rights on Windows.
 

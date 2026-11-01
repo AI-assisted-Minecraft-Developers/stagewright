@@ -126,12 +126,14 @@ class SceneDirectoryTest {
     }
 
     @Test
-    void aPassedSceneKeepsItsArtifactsOnlyAndNothingSharedIsDeleted() throws IOException {
+    void aPassedSceneKeepsItsArtifactsAndTheGamesLogsAndNothingSharedIsDeleted() throws IOException {
         Path dir = SceneDirectory.create(topology, "s", "world", true);
         Files.writeString(
                 Files.createDirectories(dir.resolve("stagewright/logs")).resolve("s-game.log"), "log");
         Files.createDirectories(dir.resolve("stagewright/world/region"));
         Files.createDirectories(dir.resolve("stagewright/saves/first"));
+        Files.writeString(Files.createDirectories(dir.resolve("logs")).resolve("debug.log"), "DEBUG");
+        Files.writeString(Files.createDirectories(dir.resolve("crash-reports")).resolve("crash.txt"), "crash");
         SceneDirectory.finish(dir, true);
         try (var artifacts = Files.list(dir.resolve("stagewright"))) {
             assertEquals(
@@ -140,9 +142,10 @@ class SceneDirectoryTest {
         }
         try (var left = Files.list(dir)) {
             assertEquals(
-                    List.of("stagewright"),
-                    left.map(p -> p.getFileName().toString()).toList());
+                    List.of("crash-reports", "logs", "stagewright"),
+                    left.map(p -> p.getFileName().toString()).sorted().toList());
         }
+        assertEquals("DEBUG", Files.readString(dir.resolve("logs/debug.log")));
         assertEquals("w", Files.readString(topology.resolve("world/level.dat")));
         assertEquals("m", Files.readString(topology.resolve("mods/m.jar")));
     }
