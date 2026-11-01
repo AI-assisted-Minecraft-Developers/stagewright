@@ -12,6 +12,31 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-01
 
+### Each scene runs in a directory of its own, and several scenes can run at once
+
+A suite with several scenes ran them one after another, each mostly waiting for its game to start, and could not do
+otherwise: every scene of a topology wrote into the topology's one directory — deleting its world, rewriting
+`server.properties` and `files`, putting them back after — so two at once would have wrecked each other.
+
+Each scene's games now run in `<topology directory>/stagewright/scenes/<scene>/`, made as the scene starts: settings
+(`config/`, the top-level files) copied, the world and logs left out, the rest (`mods/`, libraries, caches) linked.
+Nothing is put back any more; the topology's directory is never written. **This moves every artifact**: a scene's
+logs, `store.json` and the game's JUnit XML are now under `stagewright/scenes/<scene>/stagewright/` rather than
+`stagewright/`, and no longer replaced by the next scene's. A scene whose tests all passed keeps only those; one with
+a failure keeps its whole directory, world included, until it next runs. What a game writes into its config is no
+longer seen by the next scene. A topology with `cleanWorld = false` still hands its world on, through a link.
+
+On top of that, a suite's `maxParallelScenes` (Gradle property `stagewright.parallel.scenes`; the CLI's
+`--parallel-scenes`) runs that many scenes at once, of which `maxParallelClients` (default 1) may start a client,
+since clients share a display and Minecraft slows the window without the focus. Both default to 1, as before. A fixed
+`serverPort` with more than one scene at once fails the task. The command-line runner's server now listens on a free
+port too, rather than the pack's, so its scenes can run at once and a pack server already up does not stop them.
+
+**Green in the self-test suite**: WorldDriver's whole suite on both loaders, one scene at a time (NeoForge 847 s,
+Fabric 871 s) and three at once (478 s, 506 s). The failures across the four runs were all in tests already known to
+fail under load: `ClientDigTest` and `ClientWaterTest`, 12/12 passing on both loaders run alone; a bot-handover test
+that asserts a bot left in mid-air has not yet fallen; and one game whose world save outlasted the 30 s grace once.
+
 ### Each scene's server gets a free port unless the suite fixes one
 
 Two builds running their suites on one machine both started their dedicated servers on 25621, so the second one's
