@@ -120,6 +120,13 @@ class SceneDirectoryTest {
     }
 
     @Test
+    void aPassedSceneWithNoArtifactsLeavesNoDirectory() throws IOException {
+        Path dir = SceneDirectory.create(topology, "s", null, false);
+        SceneDirectory.finish(dir, true);
+        assertFalse(Files.exists(dir));
+    }
+
+    @Test
     void aFailedSceneKeepsEverythingUntilItRunsAgain() throws IOException {
         Path dir = SceneDirectory.create(topology, "s", null, false);
         Files.writeString(Files.createDirectories(dir.resolve("world")).resolve("level.dat"), "scene");

@@ -141,6 +141,12 @@ final class SceneDirectory {
         for (String bulky : BULKY_ARTIFACTS) {
             SceneMods.deleteTree(dir.resolve(RunDirectory.ARTIFACT_DIR).resolve(bulky));
         }
+        // A joining client's directory holds no artifacts, its logs being the primary's: nothing is left to keep.
+        try (Stream<Path> left = Files.list(dir)) {
+            if (left.findAny().isEmpty()) {
+                Files.delete(dir);
+            }
+        }
     }
 
     private static void link(Path link, Path target) throws IOException {
