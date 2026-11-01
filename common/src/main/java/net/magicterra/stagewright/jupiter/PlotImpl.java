@@ -321,8 +321,11 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         ServerLevel level = level(server);
         for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
             for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
+                // Entity-ticking too, the level the ticket asks for: a chunk is loaded well before it gets there, by
+                // hundreds of ticks while several games share the processor, and a mob placed meanwhile stands still.
                 if (level.getChunkSource().getChunkNow(cx, cz) == null
-                        || !level.areEntitiesLoaded(ChunkPos.asLong(cx, cz))) {
+                        || !level.areEntitiesLoaded(ChunkPos.asLong(cx, cz))
+                        || !level.isPositionEntityTicking(new ChunkPos(cx, cz).getWorldPosition())) {
                     return false;
                 }
             }
