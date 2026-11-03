@@ -23,6 +23,11 @@ The run now ticks on until no chunk is generating, a minute at most, saying how 
 the server. **Green against a third party**: 10 runs of 10, each waiting 200 to 500 ticks, where a ten-second wait
 had still hung 6 of 10.
 
+### A ModDevGradle dedicated server opens no window
+
+The generated server runs passed no `--nogui` under ModDevGradle (Loom adds it), so on a machine with a display
+the server opened its window, whose AWT threads outlived the game. **Green against a third party.**
+
 ## 2026-11-03
 
 ### Every project that applies the plugin gets its suite's dependencies

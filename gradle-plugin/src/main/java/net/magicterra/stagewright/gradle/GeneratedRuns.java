@@ -225,11 +225,16 @@ final class GeneratedRuns {
                 property(run, "getSourceSet").set(source);
             }
             String programArg = loom ? "programArg" : "programArgument";
-            String jvmArg = loom ? "vmArg" : "jvmArgument";
-            String systemProperty = loom ? "property" : "systemProperty";
             for (String arg : programArgs) {
                 InvokerHelper.invokeMethod(run, programArg, arg);
             }
+            // Loom gives a server run --nogui itself; ModDevGradle does not, and on a machine with a display the
+            // server opens its window, whose AWT threads outlive the game.
+            if (!loom && "server".equals(side)) {
+                InvokerHelper.invokeMethod(run, programArg, "--nogui");
+            }
+            String jvmArg = loom ? "vmArg" : "jvmArgument";
+            String systemProperty = loom ? "property" : "systemProperty";
             for (String arg : suite.getJvmArgs().get()) {
                 InvokerHelper.invokeMethod(run, jvmArg, arg);
             }
