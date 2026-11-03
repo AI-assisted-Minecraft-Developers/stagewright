@@ -6,7 +6,9 @@
   "client": [
     "client.OptionsMixin"
   ],
-  "mixins": [],
+  "mixins": [
+    "ChunkMapAccessor"
+  ],
   "injectors": {
     "defaultRequire": 1
   }

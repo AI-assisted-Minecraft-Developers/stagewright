@@ -10,6 +10,19 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-11-04
+
+### A game that ends while chunks are generating stops instead of hanging
+
+A run that ended with chunks still generating hung in vanilla's stop until it was forced down 30 s later, an
+execution error after every test had passed: 12 runs of 17 on a third party. Its bots had joined and left while
+the chunks around them loaded, so generations were cancelled after their last step had been queued for the main
+thread; each keeps its claim on its chunks until that step runs, at about twenty chunks a second, and the stop
+unloads with an always-true deadline, so a claimed chunk's unload requeues itself forever and the step never runs.
+The run now ticks on until no chunk is generating, a minute at most, saying how many it waits for, before it halts
+the server. **Green against a third party**: 10 runs of 10, each waiting 200 to 500 ticks, where a ten-second wait
+had still hung 6 of 10.
+
 ## 2026-11-03
 
 ### Every project that applies the plugin gets its suite's dependencies

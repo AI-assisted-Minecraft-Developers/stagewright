@@ -25,7 +25,10 @@ import java.util.Set;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.client.WorldSwitch;
 import net.magicterra.stagewright.harness.AgentBridge;
+import net.magicterra.stagewright.mixin.ChunkMapAccessor;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ChunkHolder;
+import net.minecraft.server.level.ServerLevel;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.DiscoverySelector;
 import org.junit.platform.engine.FilterResult;
@@ -69,6 +72,20 @@ public final class JupiterRun {
 
     private static volatile boolean started;
 
+    /** The server to halt once no chunk is generating; set when the run is over. Server thread only. */
+    private static MinecraftServer haltWhenSettled;
+
+    private static int settleTicks;
+
+    /**
+     * How long a halt waits for chunks to finish generating: a minute of ticks. Measured on a third-party pack, the
+     * main thread finishes about twenty chunks a second, and a suite can end with a few hundred queued.
+     */
+    private static final int SETTLE_TICKS = 1200;
+
+    /** How often the wait says how many chunks it is still waiting for. */
+    private static final int SETTLE_REPORT_TICKS = 200;
+
     /** Grace between the server halting and forcing the JVM down: long enough for the save {@code halt} triggers. */
     private static final long EXIT_GRACE_MS = 30_000;
 
@@ -94,9 +111,16 @@ public final class JupiterRun {
         return System.getProperty(CLASSES) != null || System.getProperty(SCRIPTS) != null;
     }
 
-    /** Server thread, every settled tick: answer pending waits, and start the run the first time it may. */
+    /**
+     * Server thread, every settled tick: answer pending waits, start the run the first time it may, and once it is over
+     * halt the server as soon as no chunk is generating.
+     */
     public static void tick(MinecraftServer server) {
         ServerTicks.tick();
+        if (haltWhenSettled == server) {
+            settle(server);
+            return;
+        }
         if (started) {
             return;
         }
@@ -246,10 +270,56 @@ public final class JupiterRun {
                 } else {
                     // The world open now, which a test may have switched to.
                     MinecraftServer current = game == null ? server : game.server();
-                    current.execute(() -> halt(current));
+                    current.execute(() -> haltWhenSettled = current);
                 }
             }
         }
+    }
+
+    /**
+     * One tick of the wait before the halt: halt once no chunk is generating, or once the wait is over.
+     *
+     * <p>Vanilla's stop cannot finish a chunk still generating. It unloads with an always-true deadline, a chunk whose
+     * generation holds a claim on it sends its own unload back to the queue being polled, and the main-thread step that
+     * would end the generation never gets a turn: the server spins in {@code stopServer} until it is forced down. A
+     * generation cancelled after its last step was queued for the main thread keeps its claims until that step runs,
+     * and the main thread works through that queue slowly, so a run that ends with chunks loading has them for a while.
+     */
+    private static void settle(MinecraftServer server) {
+        int generating = generating(server);
+        settleTicks++;
+        if (generating > 0 && settleTicks < SETTLE_TICKS) {
+            if (settleTicks % SETTLE_REPORT_TICKS == 0) {
+                StageWrightCommon.LOG.info(
+                        "[{}] waiting for {} chunks to finish generating before stopping ({} ticks)",
+                        StageWrightCommon.MOD_ID,
+                        generating,
+                        settleTicks);
+            }
+            return;
+        }
+        haltWhenSettled = null;
+        if (generating > 0) {
+            StageWrightCommon.LOG.warn(
+                    "[{}] {} chunks were still generating {} ticks after the run; stopping anyway",
+                    StageWrightCommon.MOD_ID,
+                    generating,
+                    SETTLE_TICKS);
+        }
+        halt(server);
+    }
+
+    /** How many chunks of all the levels are part way through generating: claimed by a generation not yet over. */
+    private static int generating(MinecraftServer server) {
+        int count = 0;
+        for (ServerLevel level : server.getAllLevels()) {
+            for (ChunkHolder holder : ((ChunkMapAccessor) level.getChunkSource().chunkMap).stagewright$chunks()) {
+                if (holder.getGenerationRefCount() != 0) {
+                    count++;
+                }
+            }
+        }
+        return count;
     }
 
     /**
