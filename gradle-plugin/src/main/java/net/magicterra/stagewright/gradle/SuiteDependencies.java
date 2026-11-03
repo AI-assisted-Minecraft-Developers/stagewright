@@ -1,8 +1,13 @@
 package net.magicterra.stagewright.gradle;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.codehaus.groovy.runtime.InvokerHelper;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
@@ -12,6 +17,7 @@ import org.gradle.api.Project;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.DependencySet;
 import org.gradle.api.artifacts.ExternalModuleDependency;
+import org.gradle.api.plugins.ExtraPropertiesExtension;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.provider.Property;
 import org.gradle.api.provider.Provider;
@@ -38,6 +44,8 @@ final class SuiteDependencies {
 
     static final String COMPILE = "stagewrightTestCompile";
 
+    private static final String RUN_SOURCE_SETS = "stagewright.runSourceSets";
+
     private static final String[] LOOM_PLUGINS = {"dev.architectury.loom", "fabric-loom", "net.fabricmc.fabric-loom"};
 
     private static final String MOD_DEV_PLUGIN = "net.neoforged.moddev";
@@ -47,17 +55,26 @@ final class SuiteDependencies {
 
     private SuiteDependencies() {}
 
+    /**
+     * Every project that applies the plugin installs this over the whole build, so a project a suite names may hear it
+     * from several. The first makes the configurations; each adds defaults for its own suites only.
+     */
     static void install(Project plugin, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
+        Set<Project> done = new HashSet<>();
         plugin.getRootProject().allprojects(p -> {
             for (String id : LOOM_PLUGINS) {
                 p.getPluginManager().withPlugin(id, applied -> {
-                    runtimeMods(p, tests);
-                    compileConfiguration(p, tests);
+                    if (done.add(p)) {
+                        runtimeMods(p, tests);
+                        compileConfiguration(p, tests);
+                    }
                 });
             }
             p.getPluginManager().withPlugin(MOD_DEV_PLUGIN, applied -> {
-                modDevRuntime(p, tests);
-                compileConfiguration(p, tests);
+                if (done.add(p)) {
+                    modDevRuntime(p, tests);
+                    compileConfiguration(p, tests);
+                }
             });
         });
     }
@@ -87,19 +104,30 @@ final class SuiteDependencies {
 
     private static void runtimeMods(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
         Object loom = project.getExtensions().getByName("loom");
+        runSourceSets(project).add(() -> {
+            StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
+            return suite == null ? null : GeneratedRuns.sourceSet(project, suite);
+        });
         NamedDomainObjectCollection<?> remaps =
                 (NamedDomainObjectCollection<?>) InvokerHelper.invokeMethod(loom, "getRemapConfigurations", null);
         if (remaps.findByName(RUNTIME) != null) {
+            project.getConfigurations()
+                    .named(RUNTIME)
+                    .configure(c -> runtimeDefaults(project, c, tests, suite -> loaderName(loom, project, suite)));
             return;
         }
+        List<Supplier<SourceSet>> claims = runSourceSets(project);
         Provider<SourceSet> source = project.provider(() -> {
-            StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
-            return suite != null
-                    ? GeneratedRuns.sourceSet(project, suite)
-                    : project.getExtensions()
-                            .getByType(JavaPluginExtension.class)
-                            .getSourceSets()
-                            .getByName(SourceSet.MAIN_SOURCE_SET_NAME);
+            for (Supplier<SourceSet> claim : claims) {
+                SourceSet set = claim.get();
+                if (set != null) {
+                    return set;
+                }
+            }
+            return project.getExtensions()
+                    .getByType(JavaPluginExtension.class)
+                    .getSourceSets()
+                    .getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         });
         InvokerHelper.invokeMethod(loom, "addRemapConfiguration", new Object[] {
             RUNTIME,
@@ -131,7 +159,9 @@ final class SuiteDependencies {
      * same classpath as the project's own, so Gradle settles a library both declare without help.
      */
     private static void modDevRuntime(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
-        if (project.getConfigurations().findByName(MOD_DEV_RUNTIME) != null) {
+        Configuration existing = project.getConfigurations().findByName(MOD_DEV_RUNTIME);
+        if (existing != null) {
+            runtimeDefaults(project, existing, tests, suite -> "neoforge");
             return;
         }
         project.getConfigurations().create(MOD_DEV_RUNTIME, c -> {
@@ -175,7 +205,9 @@ final class SuiteDependencies {
     }
 
     private static void compileConfiguration(Project project, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
-        if (project.getConfigurations().findByName(COMPILE) != null) {
+        Configuration existing = project.getConfigurations().findByName(COMPILE);
+        if (existing != null) {
+            compileDefaults(project, existing, tests);
             return;
         }
         project.getConfigurations().create(COMPILE, c -> {
@@ -183,30 +215,48 @@ final class SuiteDependencies {
                     + " Jupiter's by default, the first two in Mojang names.");
             c.setCanBeConsumed(false);
             c.setCanBeResolved(false);
-            c.defaultDependencies(deps -> {
-                StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
-                if (suite == null) {
-                    return;
-                }
-                // Its POM names WorldDriver's api, at the build StageWright was built against; which one the tests get,
-                // if any, is includeWorldDriver's and worldDriverVersion's to say, so the default brings it only below.
-                add(project, deps, "net.magicterra:mc_stagewright-api:" + PluginVersion.get(), "dev")
-                        .setTransitive(false);
-                if (suite.getIncludeWorldDriver().getOrElse(true)) {
-                    add(
-                            project,
-                            deps,
-                            "net.magicterra:worlddriver-api:"
-                                    + suite.getWorldDriverVersion().get(),
-                            "dev");
-                }
-                deps.add(project.getDependencies().platform("org.junit:junit-bom:" + PluginVersion.junit()));
-                deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-api"));
-                // The loader jars carry it too, so @ParameterizedTest runs in the game.
-                deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-params"));
-            });
+            compileDefaults(project, c, tests);
         });
         constrainWorldDriver(project, COMPILE, "worlddriver-api");
+    }
+
+    private static void compileDefaults(
+            Project project, Configuration c, NamedDomainObjectContainer<StageWrightTestSuite> tests) {
+        c.defaultDependencies(deps -> {
+            StageWrightTestSuite suite = GeneratedRuns.suiteOf(project, tests);
+            if (suite == null) {
+                return;
+            }
+            // Its POM names WorldDriver's api, at the build StageWright was built against; which one the tests get, if
+            // any, is includeWorldDriver's and worldDriverVersion's to say, so the default brings it only below.
+            add(project, deps, "net.magicterra:mc_stagewright-api:" + PluginVersion.get(), "dev")
+                    .setTransitive(false);
+            if (suite.getIncludeWorldDriver().getOrElse(true)) {
+                add(
+                        project,
+                        deps,
+                        "net.magicterra:worlddriver-api:"
+                                + suite.getWorldDriverVersion().get(),
+                        "dev");
+            }
+            deps.add(project.getDependencies().platform("org.junit:junit-bom:" + PluginVersion.junit()));
+            deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-api"));
+            // The loader jars carry it too, so @ParameterizedTest runs in the game.
+            deps.add(project.getDependencies().create("org.junit.jupiter:junit-jupiter-params"));
+        });
+    }
+
+    /**
+     * What each installing project says the project's run source set is, in the order they applied: JDK types only,
+     * since two projects may load the plugin through two class loaders.
+     */
+    @SuppressWarnings("unchecked")
+    private static List<Supplier<SourceSet>> runSourceSets(Project project) {
+        ExtraPropertiesExtension extra = project.getExtensions().getExtraProperties();
+        if (!extra.has(RUN_SOURCE_SETS)) {
+            extra.set(RUN_SOURCE_SETS, new ArrayList<>());
+        }
+        return (List<Supplier<SourceSet>>) extra.get(RUN_SOURCE_SETS);
     }
 
     /**

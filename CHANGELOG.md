@@ -10,6 +10,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-11-03
+
+### Every project that applies the plugin gets its suite's dependencies
+
+In a build where two projects each applied the plugin and declared a suite, the second project's
+`stagewrightTestCompile` and `stagewrightTestRuntime` came up empty, so its tests could not compile against
+StageWright, WorldDriver or JUnit. The first project to apply the plugin made those configurations in every project,
+with defaults only for its own suites, and the second found them already made and added nothing. Each project
+applying the plugin now adds the defaults of its own suites to configurations whichever made them. **Green against a
+third party**: a ModDevGradle build of a core mod and an addon, each with its own suite.
+
 ## 2026-11-02
 
 ### A scene that passed keeps the game's own logs
