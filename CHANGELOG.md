@@ -28,6 +28,11 @@ had still hung 6 of 10.
 The generated server runs passed no `--nogui` under ModDevGradle (Loom adds it), so on a machine with a display
 the server opened its window, whose AWT threads outlived the game. **Green against a third party.**
 
+### A passed scene keeps the game's `latest.log` alone
+
+Of the game's `logs/`, a scene that passed now keeps `latest.log` and drops `debug.log` and the rotated logs,
+tens of megabytes a scene in a dev run. Its crash reports are kept as before. **Green in the unit tests.**
+
 ## 2026-11-03
 
 ### Every project that applies the plugin gets its suite's dependencies

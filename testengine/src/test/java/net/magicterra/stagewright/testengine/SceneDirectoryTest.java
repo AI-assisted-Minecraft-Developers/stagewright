@@ -132,7 +132,10 @@ class SceneDirectoryTest {
                 Files.createDirectories(dir.resolve("stagewright/logs")).resolve("s-game.log"), "log");
         Files.createDirectories(dir.resolve("stagewright/world/region"));
         Files.createDirectories(dir.resolve("stagewright/saves/first"));
-        Files.writeString(Files.createDirectories(dir.resolve("logs")).resolve("debug.log"), "DEBUG");
+        Path logs = Files.createDirectories(dir.resolve("logs"));
+        Files.writeString(logs.resolve("latest.log"), "INFO");
+        Files.writeString(logs.resolve("debug.log"), "DEBUG");
+        Files.writeString(logs.resolve("2026-11-04-1.log.gz"), "rotated");
         Files.writeString(Files.createDirectories(dir.resolve("crash-reports")).resolve("crash.txt"), "crash");
         SceneDirectory.finish(dir, true);
         try (var artifacts = Files.list(dir.resolve("stagewright"))) {
@@ -145,7 +148,12 @@ class SceneDirectoryTest {
                     List.of("crash-reports", "logs", "stagewright"),
                     left.map(p -> p.getFileName().toString()).sorted().toList());
         }
-        assertEquals("DEBUG", Files.readString(dir.resolve("logs/debug.log")));
+        try (var kept = Files.list(logs)) {
+            assertEquals(
+                    List.of("latest.log"),
+                    kept.map(p -> p.getFileName().toString()).toList(),
+                    "of the game's logs a passed scene keeps latest.log alone");
+        }
         assertEquals("w", Files.readString(topology.resolve("world/level.dat")));
         assertEquals("m", Files.readString(topology.resolve("mods/m.jar")));
     }
