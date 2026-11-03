@@ -21,3 +21,12 @@ resolved at configuration time. Fabric Loom 1.19 needs Gradle 9.8, so worlddrive
 
 Moving six consumers to this path (2026-10-29) left this open: scene-level report entries (`world`, `mods`) reach
 no XML.
+
+A game the stall watch ends while its main thread is in `glfwCreateWindow` is reported as a plain stall; the report
+should say the display could not make a window, which is the environment's, not the scene's.
+
+A game with no test scripts still writes `stagewright/junit/TEST-stagewright-script.xml`, holding nothing but the
+system properties.
+
+Under ModDevGradle a suite's run of a project depending on another mod project finds that mod twice, its classes
+directory and its jar on `-cp` (FML keeps one). Whether the build's own run does the same is unchecked.
