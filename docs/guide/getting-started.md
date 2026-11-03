@@ -113,14 +113,15 @@ script and YAML forms in full.
 ### 1. Resolve the plugin
 
 Builds of StageWright's `master` are published to the Nexus at `https://nexus.gardel.top/repository/maven-releases` as
-`0.1.0-alpha.<n>+1.21.1`. Until a build of the version you want is there, publish StageWright to your local Maven
-repository and use `0.1.0-snapshot+1.21.1`; [Publishing](../reference/publishing.md) gives the order.
+`0.1.0-alpha.<n>+1.21.1`; use the latest of those. To try a change not released yet, publish StageWright to your
+local Maven repository, use `0.1.0-snapshot+1.21.1`, and add `mavenLocal()` to both repository lists below;
+[Publishing](../reference/publishing.md) gives the order. Leave it out otherwise: a stale local build with the same
+coordinates would win over the released one.
 
 ```groovy
 // settings.gradle
 pluginManagement {
     repositories {
-        mavenLocal()
         maven {
             url 'https://nexus.gardel.top/repository/maven-releases'
             content { includeGroupByRegex 'net\\.magicterra(\\..*)?' }
@@ -137,11 +138,10 @@ On a single-loader project under Fabric Loom, Architectury Loom or ModDevGradle:
 ```groovy
 // build.gradle
 plugins {
-    id 'net.magicterra.stagewright' version '0.1.0-snapshot+1.21.1'
+    id 'net.magicterra.stagewright' version '0.1.0-alpha.26+1.21.1'
 }
 
 repositories {
-    mavenLocal()
     maven { url 'https://nexus.gardel.top/repository/maven-releases'; content { includeGroup 'net.magicterra' } }
 }
 

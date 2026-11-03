@@ -36,8 +36,8 @@ the same one.
 
 | Tool | Works | Does not work |
 |---|---|---|
-| Gradle | 8.14, which StageWright and WorldDriver build with; 8.9 and 8.14.3 in projects that use the plugin | 9 when the runs belong to another project than the one the suite is declared in, as in a multi-loader build with `loaderProject = ':fabric'`: "Resolution of the configuration … was attempted without an exclusive lock". A single-loader project with the plugin in the loader project itself has run its suite on 9.3.1 |
-| ModDevGradle | 2.x (2.0.95 and 2.0.141 have run suites) | 1.x: the build fails with `No signature of method … RunModel$Inject.getLoadedMods()` |
+| Gradle | 8.14, which StageWright and WorldDriver build with; 8.9, 8.12 and 8.14.3 in projects that use the plugin, with the configuration cache on in 8.12 | 9 when the runs belong to another project than the one the suite is declared in, as in a multi-loader build with `loaderProject = ':fabric'`: "Resolution of the configuration … was attempted without an exclusive lock". A single-loader project with the plugin in the loader project itself has run its suite on 9.3.1 |
+| ModDevGradle | 2.x (2.0.95, 2.0.103 and 2.0.141 have run suites) | 1.x: the build fails with `No signature of method … RunModel$Inject.getLoadedMods()` |
 | Fabric Loom | 1.13, which WorldDriver builds with | 1.19 and newer need Gradle 9.8, so they wait for the Gradle 9 fix |
 | NeoForge | 21.1.209 and newer in projects that use the plugin; WorldDriver builds on 21.1.230 | Older WorldDriver builds fail to start the client on early 21.1 releases (21.1.8 and 21.1.80 were seen); WorldDriver now loads on every 21.1 release |
 
@@ -337,9 +337,10 @@ non-Java consumer with the flag left on does not crash. The create-or-not decisi
 so it reads the flag's final value regardless of whether the `stagewright { }` block is configured
 before or after the `plugins { }` block finishes.
 
-If you move classes from `main` into a `testmod` set that is folded into the same mod, they must
-occupy a package `main` does not also populate. A package owned by two source sets that feed one
-module is a split package, and the loader's module layer rejects it at boot.
+A run of your own that loads `testmod` as a mod beside `main`'s must keep the two in different packages: two mods
+are two modules, and a package in both is a split package, which the loader's module layer rejects at boot. A test
+suite's runs do not have this limit. They load `testmod` inside the one mod `stagewright_tests` with `main` (see
+test suites, above), so a test may share a package with `main` and reach its package-private members.
 
 ## Known limitations
 

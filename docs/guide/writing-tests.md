@@ -74,7 +74,9 @@ things it does.
   JUnit's `assertTrue` also takes a `BooleanSupplier` and the result type cannot be worked out.
 - **Time**: `game.ticks(n)` lets `n` server ticks pass. `game.await().within(200).as("the door opens").until(() -> …)`
   checks a condition on the server thread after every tick and fails the test with that description when the budget,
-  counted in ticks, runs out.
+  counted in ticks, runs out. The description says what did not happen, not why. When the answer is in an entity's
+  state, such as a mob's brain activity, running behaviours or target, catch the `AssertionError`, read that state
+  with `game.onServer`, and fail with both, so the report holds what you would otherwise rerun the scene to find.
 - **Soft checks**: `game.check(holds, "what")` or `game.check(() -> assertEquals(a, b))` keeps a failure and lets the
   test go on; every failed check is reported together when the test ends, and fails it. A check may also be made
   inside the test's `game.onServer` work and its `await` conditions.
@@ -94,7 +96,8 @@ void aBotWalksWhereItIsSent(Game game, Plot plot, Bot bot) {
 ### Bodies
 
 `Body` is what a `Bot` and the `Player` share: `name()`, `ref()`, `blockPos()`, `dimension()`, `moveTo(feet)` or
-`moveTo(dimension, feet)`, `give(item, count)` and `count(item)`. `game.translate(pos, from, to)` maps a position between
+`moveTo(dimension, feet)`, `give(item, count)` and `count(item)`, which counts the whole inventory, armour slots and
+off hand included, as vanilla's `Inventory.countItem` does. `game.translate(pos, from, to)` maps a position between
 dimensions as a portal does, so a test can say where a portal should have put a body.
 
 A bot is a real player on the server: it has an inventory, hunger, effects, advancements and quest progress, opens
@@ -103,11 +106,21 @@ advancement granted, an item crafted into the inventory, a menu's slots — take
 the dedicated server included; it needs no `@Requires(CLIENT)`. Only what exists on the client — a screen, a key
 binding, rendering, the client half of a mod — needs the real client's `Player` or `Client`.
 
+A bot is hurt and dies as any player does, as Carpet's fake player is: it drops what it carries, takes knockback, and
+stays dead, on the player list, until `bot.respawn()` (`bot.respawn()` in a script too) brings it back at its respawn
+point; the handle drives the player that replaces it. Game mode and `getAbilities().invulnerable` make it
+invulnerable, as they do any player. Two things vanilla does to every player are easy to mistake for a failure: for 60
+ticks after it joins, and after each respawn, it takes no damage, and a parked bot counts those ticks only as it is
+ticked, so a test that hurts it right away should tick or step it 61 times first; and on
+`peaceful` the damage a mob deals is scaled to nothing.
+
 `game.npc(EntityType.PIGLIN, feet)` spawns a mob and hands it to WorldDriver as a body, `mob:<name>`, for the rest of the
 test. While WorldDriver drives it, the mob's own AI is off.
 
-A bot and a mob can be ticked by hand. `park()` takes the body off the server's tick list (or `@Bot.Parked` joins a bot
-already parked); then `tick(n)` runs whole ticks of that body alone, `tickUntilIdle(max)` runs until its task ends,
+An unparked bot is updated once every server tick, by its driver or, with no task, by the server as any player is: it
+heals, starves, burns and falls with nothing driving it. A bot and a mob can be ticked by hand. `park()` takes the body
+off the server's tick list, and a bot off the server's update too (or `@Bot.Parked` joins a bot already parked); then
+`tick(n)` runs whole ticks of that body alone, `tickUntilIdle(max)` runs until its task ends,
 `step(n)` runs only its physics, `think()` only its decision, and `press(k -> k.move(0, 1).jump(true))` holds keys
 until a later press changes them. `unpark()`, or starting a task on it, puts it back on the list. A parked mob is still
 moved by the world: it falls, is pushed and keeps its momentum.
@@ -235,6 +248,11 @@ Three things to know before you reach for it:
 waits, and reports each phase's median window: ticks per second, tick intervals (mean and 99th percentile), retained
 heap, CPU, and, on an integrated server, the client's frame rate. Compare a phase with the baseline taken in the same
 run (`tpsDropVs`, `heapGrowthVs`, `cpuGrowthVs`, `fpsDropVs`), never with a constant.
+
+A time measured in one test depends on what ran before it in the same game, since the JIT compiles the code an
+earlier test warmed up: one consumer's measurement fell from 6.2 ms to 0.7 ms when a heavier test ran first. Before
+comparing a time with a threshold, warm the code up in the test itself, or fix the order with `@DependsOn`. Counts
+are not affected.
 
 A window's CPU is `cpu()` (it was `cpuLoad` in the old scene API): the process's CPU time over the window's wall time,
 counted in cores, so 1.0 is one core busy the whole time and the same work reads the same on any machine. It is NaN
