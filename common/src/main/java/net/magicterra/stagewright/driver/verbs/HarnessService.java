@@ -27,6 +27,8 @@ import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Pinned;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Pressed;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Read;
+import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Respawn;
+import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Respawned;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.SettingsOp;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.SettingsReply;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Tick;
@@ -48,6 +50,7 @@ import net.magicterra.worlddriver.bot.BotApi;
 import net.magicterra.worlddriver.bot.BotHooks;
 import net.magicterra.worlddriver.bot.BotRegistry;
 import net.magicterra.worlddriver.bot.BotTicker;
+import net.magicterra.worlddriver.bot.PlayerBot;
 import net.magicterra.worlddriver.bot.Roster;
 import net.magicterra.worlddriver.bot.ServerBot;
 import net.magicterra.worlddriver.bot.SettingsCommand;
@@ -151,15 +154,41 @@ final class HarnessService implements TestHarnessApi {
                     yield new Cleared(gone.size());
                 }
                 case Park p -> {
-                    BotTicker.unregister(named(p.bot(), BOT_POINTER));
+                    park(named(p.bot(), BOT_POINTER), true);
                     yield new Parked(p.bot(), true);
                 }
                 case Unpark u -> {
-                    BotTicker.register(named(u.bot(), BOT_POINTER));
+                    park(named(u.bot(), BOT_POINTER), false);
                     yield new Parked(u.bot(), false);
+                }
+                case Respawn r -> {
+                    if (!(named(r.bot(), BOT_POINTER) instanceof PlayerBot player)) {
+                        throw ApiException.invalidParam(
+                                BOT_POINTER, ApiIssue.Code.INVALID_VALUE, r.bot() + " is not a player bot");
+                    }
+                    if (!player.entity().isDeadOrDying()) {
+                        throw ApiException.invalidParam(
+                                BOT_POINTER, ApiIssue.Code.INVALID_VALUE, r.bot() + " is alive");
+                    }
+                    player.avatar().respawn();
+                    yield new Respawned(r.bot());
                 }
             };
         });
+    }
+
+    /**
+     * Park {@code bot} or put it back. A player bot leaves the level's entity loop with the tick list, so a parked one
+     * moves only by the ticks it is given; a mob's level still moves it.
+     */
+    private static void park(Bot bot, boolean parked) {
+        if (bot instanceof PlayerBot player) {
+            player.parked(parked);
+        } else if (parked) {
+            BotTicker.unregister(bot);
+        } else {
+            BotTicker.register(bot);
+        }
     }
 
     private static int tick(Tick t) {

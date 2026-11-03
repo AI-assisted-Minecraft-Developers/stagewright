@@ -25,6 +25,15 @@ public interface Bot extends Body, Driven {
     @Override
     Bot unpark();
 
+    /**
+     * Respawn the dead bot, as a player does from the death screen: at its respawn point, by vanilla's rules. A bot is
+     * hurt and dies as any player does, and stays dead until this is called; the handle drives the player that replaces
+     * it from then on.
+     *
+     * @throws IllegalStateException when the bot is alive
+     */
+    Bot respawn();
+
     /** The name a parameter's bot joins under; without it, one StageWright makes up. */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)

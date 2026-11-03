@@ -9,6 +9,7 @@ import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.BotsRepl
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Park;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Part;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
+import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Respawn;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Tick;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Ticked;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Unpark;
@@ -29,6 +30,10 @@ final class Drive {
 
     static void unpark(Game game, String ref) {
         bots(game, new Unpark(ref));
+    }
+
+    static void respawn(Game game, String ref) {
+        bots(game, new Respawn(ref));
     }
 
     static void tick(Game game, String ref, int ticks) {

@@ -11,9 +11,9 @@ import net.magicterra.stagewright.test.Player;
 import net.magicterra.worlddriver.api.methods.test.TestHarnessContracts.Press;
 import net.magicterra.worlddriver.api.methods.test.TestInputContracts.HeldKeys;
 import net.magicterra.worlddriver.bot.BotRegistry;
-import net.magicterra.worlddriver.bot.BotTicker;
+import net.magicterra.worlddriver.bot.PlayerBot;
 import net.magicterra.worlddriver.bot.Roster;
-import net.magicterra.worlddriver.game.body.JoinedPlayers;
+import net.magicterra.worlddriver.game.body.BotBody;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -91,7 +91,7 @@ class BodyImpl implements Body {
     /** The real client's player; the first player on the server that WorldDriver did not join itself. */
     static Player player(Game game) {
         Optional<String> name = game.onServer(server -> server.getPlayerList().getPlayers().stream()
-                .filter(p -> !(p instanceof JoinedPlayers.JoinedBody))
+                .filter(p -> !(p instanceof BotBody))
                 .map(p -> p.getGameProfile().getName())
                 .findFirst());
         if (name.isEmpty()) {
@@ -158,7 +158,7 @@ class BodyImpl implements Body {
                             + " join again: " + refused.message());
                 }
                 if (parked) {
-                    BotTicker.unregister(BotRegistry.get(bot.ref()));
+                    ((PlayerBot) BotRegistry.get(bot.ref())).parked(true);
                 }
             });
             return bot;
@@ -199,7 +199,7 @@ class BodyImpl implements Body {
                     throw new IllegalStateException("could not join " + chosen + ": " + refused.message());
                 }
                 if (parked) {
-                    BotTicker.unregister(BotRegistry.get(bot.ref()));
+                    ((PlayerBot) BotRegistry.get(bot.ref())).parked(true);
                 }
                 // A name used before in this world comes back with what it was saved with.
                 ServerPlayer player = BotRegistry.serverPlayer(server, bot.ref());
@@ -222,6 +222,12 @@ class BodyImpl implements Body {
         @Override
         public Bot unpark() {
             Drive.unpark(game, ref());
+            return this;
+        }
+
+        @Override
+        public Bot respawn() {
+            Drive.respawn(game, ref());
             return this;
         }
 

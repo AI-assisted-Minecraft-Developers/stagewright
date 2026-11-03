@@ -103,6 +103,10 @@ final class ScriptHandles {
             leases.add(bot);
             Map<String, Object> out = body(bot);
             driven(out, bot);
+            out.put("respawn", (Scripting.Function) unused -> {
+                bot.respawn();
+                return null;
+            });
             return out;
         });
         t.put("player", (Scripting.Function) args -> body(BodyImpl.player(game)));

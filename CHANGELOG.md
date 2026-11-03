@@ -21,6 +21,15 @@ with defaults only for its own suites, and the second found them already made an
 applying the plugin now adds the defaults of its own suites to configurations whichever made them. **Green against a
 third party**: a ModDevGradle build of a core mod and an addon, each with its own suite.
 
+### A bot is hurt, dies and respawns, and a parked one is moved only by its steps
+
+WorldDriver's bot could not be hurt, so a test of damage or death needed the real client's player and a topology with
+a client. Its player now takes damage and dies as any player does, and `Bot.respawn()` (`bot.respawn()` in a
+script) brings it back, the handle then driving the player that replaced it; game mode and `abilities.invulnerable`
+make it invulnerable. With the same change a bot no driver steps is updated by the server every tick, so `park()`, and
+`@Bot.Parked`, now take a bot off that update as well as the tick list: a parked bot still moves only by the
+ticks and steps it is given. **Green in WorldDriver's full suites on NeoForge and Fabric.**
+
 ## 2026-11-02
 
 ### A scene that passed keeps the game's own logs
