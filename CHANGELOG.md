@@ -17,8 +17,9 @@ does not control, which is the only level that proves a claim about such code).
 A scene ended its games in a `finally`, which a SIGTERM to the command-line runner or to a Gradle test worker skips, so
 the server and the joined client of a third party's run were left behind holding their port and world, a client hung
 in `glfwCreateWindow` among them. The engine now ends every game it started that is still running when its JVM exits:
-each is asked to end, and after 10 s it and what it started are killed. A SIGKILL still leaves them. **Green in the
-unit tests**: a JVM sent SIGTERM ends the process it started, and one that ignores SIGTERM is killed.
+each is asked to end, and after 10 s it and what it started are killed. A SIGKILL still leaves them. **Green against a
+third party**: with its client hung in `glfwCreateWindow`, a `dedicatedServerWithClient` run's runner, server and
+client were all gone within 2 s of a SIGTERM to the runner, which exited 143.
 
 ### A failed test says where its game logged, and a run's logs outlive the next run
 
