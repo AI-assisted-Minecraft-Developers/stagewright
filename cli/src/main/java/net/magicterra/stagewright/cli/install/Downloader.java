@@ -8,6 +8,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -16,10 +17,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Flow;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 /**
@@ -59,14 +66,26 @@ public final class Downloader implements AutoCloseable {
         return t;
     });
 
+    /**
+     * How long a request may go without a byte before it is given up and retried. {@link HttpRequest#timeout} ends when
+     * the response's headers arrive, so a body that stops coming halfway would otherwise be waited for forever.
+     */
+    private static final Duration STALL = Duration.ofSeconds(30);
+
+    /** How often a wait for a response looks at when its last byte came. */
+    private static final long POLL_MS = 250;
+
+    private final Duration stall;
+
     /** Downloads through {@code mirror}'s candidates into {@code installDir}, via the proxy the environment names. */
     public Downloader(Mirror mirror, Path installDir) {
-        this(mirror::candidates, new HmclCache(installDir), proxy(System.getenv()));
+        this(mirror::candidates, new HmclCache(installDir), proxy(System.getenv()), STALL);
     }
 
-    Downloader(Function<URI, List<URI>> candidates, HmclCache cache, ProxySelector proxy) {
+    Downloader(Function<URI, List<URI>> candidates, HmclCache cache, ProxySelector proxy, Duration stall) {
         this.candidates = candidates;
         this.cache = cache;
+        this.stall = stall;
         this.http = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .connectTimeout(Duration.ofSeconds(20))
@@ -144,7 +163,7 @@ public final class Downloader implements AutoCloseable {
             for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
                 try {
                     HttpResponse<String> response =
-                            http.send(request(uri), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+                            send(uri, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
                     check(uri, response.statusCode());
                     return response.body();
                 } catch (FileNotFoundException e) {
@@ -178,7 +197,7 @@ public final class Downloader implements AutoCloseable {
     private void downloadOnce(URI uri, Artifact a) throws IOException {
         Path temp = a.target().resolveSibling(a.target().getFileName() + "." + UUID.randomUUID() + ".part");
         try {
-            HttpResponse<Path> response = http.send(request(uri), HttpResponse.BodyHandlers.ofFile(temp));
+            HttpResponse<Path> response = send(uri, HttpResponse.BodyHandlers.ofFile(temp));
             check(uri, response.statusCode());
             if (!Sha1.matches(temp, a.sha1(), a.size())) {
                 throw new IOException(uri + " served a file that does not match its checksum" + " (expected sha1 "
@@ -190,6 +209,65 @@ public final class Downloader implements AutoCloseable {
             throw new IOException("interrupted downloading " + uri, e);
         } finally {
             Files.deleteIfExists(temp);
+        }
+    }
+
+    /**
+     * One request, given up once nothing has arrived for {@link #stall}: neither the headers nor a byte of the body.
+     * The exchange is cancelled then, which closes its connection, and the stall is an {@link IOException}, so the
+     * caller retries it and moves on to the next source as for any other failure.
+     */
+    private <T> HttpResponse<T> send(URI uri, HttpResponse.BodyHandler<T> handler)
+            throws IOException, InterruptedException {
+        AtomicLong lastByte = new AtomicLong(System.nanoTime());
+        CompletableFuture<HttpResponse<T>> sent =
+                http.sendAsync(request(uri), info -> new Watched<>(handler.apply(info), lastByte));
+        while (true) {
+            try {
+                return sent.get(POLL_MS, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                if (System.nanoTime() - lastByte.get() >= stall.toNanos()) {
+                    sent.cancel(true);
+                    throw new IOException(uri + " sent nothing for " + stall.toSeconds() + " s", e);
+                }
+            } catch (ExecutionException e) {
+                throw e.getCause() instanceof IOException io ? io : new IOException(uri + ": " + e.getCause(), e);
+            } catch (InterruptedException e) {
+                sent.cancel(true);
+                throw e;
+            }
+        }
+    }
+
+    /** A body subscriber that notes when each part of the body arrives, for {@link #send}'s stall check. */
+    private record Watched<T>(HttpResponse.BodySubscriber<T> body, AtomicLong lastByte)
+            implements HttpResponse.BodySubscriber<T> {
+
+        @Override
+        public CompletionStage<T> getBody() {
+            return body.getBody();
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            lastByte.set(System.nanoTime());
+            body.onSubscribe(subscription);
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> item) {
+            lastByte.set(System.nanoTime());
+            body.onNext(item);
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            body.onError(throwable);
+        }
+
+        @Override
+        public void onComplete() {
+            body.onComplete();
         }
     }
 

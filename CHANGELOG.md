@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-04
 
+### A download that stops halfway is retried instead of waited for
+
+The command-line runner's downloads had a time limit only until a response's headers arrived, so a mirror that sent
+part of a library and then nothing held a client install for 70 minutes on a third party, with no output and no error.
+A request now gives up once nothing has arrived for 30 s, headers or body, and is retried and then fetched from the
+next source as any failed one is; when every source fails, the run ends with exit code 3, saying which file. **Green
+in the unit tests**: a server that sends half a file and stalls is given up on three times in about two seconds, and
+the file comes from the next source.
+
 ### A test can disconnect a bot and reconnect it
 
 `bot.disconnect()` closes the bot's connection and returns once the server has taken it off the player list, through

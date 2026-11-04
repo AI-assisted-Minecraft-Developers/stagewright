@@ -14,9 +14,11 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +30,12 @@ class DownloaderTest {
 
     private static final byte[] BODY = "the real library".getBytes(StandardCharsets.UTF_8);
 
+    /** How long a test's downloader waits on a silent response. */
+    private static final Duration STALL = Duration.ofMillis(500);
+
+    /** How long the stalling handler holds its response open: far past {@link #STALL} times the retries. */
+    private static final long STALLED_FOR_MS = 20_000;
+
     private HttpServer server;
     private final Map<String, AtomicInteger> hits = new ConcurrentHashMap<>();
     private URI base;
@@ -35,6 +43,26 @@ class DownloaderTest {
     @BeforeEach
     void start() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        // A stalled body holds its handler's thread: the others must not wait behind it.
+        server.setExecutor(Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "downloader-test-server");
+            t.setDaemon(true);
+            return t;
+        }));
+        server.createContext("/stalls/", exchange -> {
+            hits.computeIfAbsent(exchange.getRequestURI().getPath(), k -> new AtomicInteger())
+                    .incrementAndGet();
+            exchange.sendResponseHeaders(200, BODY.length);
+            OutputStream out = exchange.getResponseBody();
+            out.write(BODY, 0, BODY.length / 2);
+            out.flush();
+            try {
+                Thread.sleep(STALLED_FOR_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            exchange.close();
+        });
         server.createContext("/", exchange -> {
             String path = exchange.getRequestURI().getPath();
             hits.computeIfAbsent(path, k -> new AtomicInteger()).incrementAndGet();
@@ -120,6 +148,19 @@ class DownloaderTest {
     }
 
     @Test
+    void aBodyThatStopsHalfwayIsGivenUpRetriedAndFetchedElsewhere(@TempDir Path install) throws IOException {
+        try (Downloader d = downloader(install, uri -> List.of(base.resolve("/stalls" + uri.getPath()), uri))) {
+            long start = System.nanoTime();
+            assertTrue(d.fetch(artifact(install, "/good.jar")));
+            assertEquals(3, hits.get("/stalls/good.jar").get(), "a stall is retried as any failure is");
+            assertEquals(1, hits.get("/good.jar").get(), "then the next source");
+            assertTrue(
+                    System.nanoTime() - start < STALLED_FOR_MS * 1_000_000L,
+                    "given up long before the stalled server would have closed");
+        }
+    }
+
+    @Test
     void aMissingTextResourceSaysSo(@TempDir Path install) throws IOException {
         try (Downloader d = downloader(install, List::of)) {
             assertThrows(java.io.FileNotFoundException.class, () -> d.text(base.resolve("/absent.sha1")));
@@ -135,7 +176,7 @@ class DownloaderTest {
             }
             return out;
         };
-        return new Downloader(candidates, new HmclCache(install), ProxySelector.getDefault());
+        return new Downloader(candidates, new HmclCache(install), ProxySelector.getDefault(), STALL);
     }
 
     private Downloader.Artifact artifact(Path install, String path) {
