@@ -259,12 +259,15 @@ class BodyImpl implements Body {
         @Override
         public void close() {
             String keeper = this.keeper;
+            // After a crash the bot stays as the server stopped, and a later round finds it as it was last saved.
             if (keeper == null) {
-                remove();
+                if (!Quit.crashed()) {
+                    remove();
+                }
                 return;
             }
             // Parked so nothing ticks it between the two tests; the taker unparks it.
-            if (BotRegistry.get(ref()) != null) {
+            if (!Quit.crashed() && BotRegistry.get(ref()) != null) {
                 park();
             }
             Handovers.keep(this, keeper);

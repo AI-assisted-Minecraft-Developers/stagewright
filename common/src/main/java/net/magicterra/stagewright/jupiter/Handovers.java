@@ -117,8 +117,11 @@ final class Handovers {
                             kept.bot().name());
                 }
             }
-            // Leaving saves its player data, which is what a later round's join reads.
-            kept.bot().remove();
+            // Leaving saves its player data, which is what a later round's join reads. After a crash nothing is saved,
+            // and that join reads the data last saved before it.
+            if (!Quit.crashed()) {
+                kept.bot().remove();
+            }
         }
         KEPT.clear();
         BEFORE_RESTART.forEach((name, keeper) -> {

@@ -213,6 +213,25 @@ Three things to know before you reach for it:
   the game until it ends. It is for Java tests: script tests running beside them are not stopped. A restart is a new
   game process, so leaving a world this way does not test what one client keeps from one world to the next.
 
+- `game.crashNow()` is the same with nothing saved, for what a mod keeps when the server dies: the server stops at the
+  end of the tick under way and writes nothing more, no autosave, chunk or player data, a kept bot's included, and the
+  game process ends as a killed one does. The next round begins on the save with only what had reached the disk. The
+  call returns once the server has stopped, and nothing after it may touch the game: a `game` call fails, a WorldDriver
+  call waits until the process ends. The same `@Isolated` class, in a scene with no script tests in that round.
+
+  ```java
+  @Test
+  void paysAndCrashes(Game game, @Bot.Name("payer") @Bot.Keep Bot bot) {
+      game.onServer(s -> s.saveEverything(true, true, true)); // what the next round finds
+      bot.give(Items.EMERALD, 2); // lost with the crash
+      game.crashNow();
+  }
+
+  @Test
+  @DependsOn(value = "paysAndCrashes", afterRestart = true)
+  void theLedgerMatchesThePurse(Game game, @Bot.Name("payer") @Bot.Kept Bot bot) { … }
+  ```
+
 - On `integratedServer`, `game.leaveWorld()` and `game.openWorld(name)` do that inside one client: the first saves and
   quits to the title screen and returns once the world's server has stopped; the second opens the save `name`
   (`DependsOn.FIRST_WORLD` for the scene's own, a new world, made as the scene declares its world, for a name with no

@@ -214,7 +214,12 @@ out of it rather than telling the game another path: the one there goes to `stag
 named one comes back from there, or is unpacked from its save, or is left absent for the game to create. The scene's
 first world is moved back when the scene ends, so a topology that keeps its world between runs keeps the one it had.
 `Game.quitNow()` skips the round's tests not yet started, so the run, and the game, end right after the test that
-called it.
+called it. `Game.crashNow()` skips them too, and first parks the server thread in a task of its own, so the server
+stops between two ticks and nothing after that saves. Whatever would ask that thread for something once the test
+returns is skipped: its overrides are not undone, its plots not put back, its bots not removed or saved, and a kept
+bot's name still goes to the next round, which joins it from its last save. The run then sends `done` and ends the JVM
+with `Runtime.halt`, so the supervisor reads a run that is over, and the engine starts the next round as after any
+other.
 
 On an integrated server a test can change worlds without a restart, `Game.leaveWorld()` and `Game.openWorld(name)`,
 because the run's thread belongs to the client's JVM rather than to the server that started it: it starts on the first

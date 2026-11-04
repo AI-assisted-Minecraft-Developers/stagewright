@@ -210,16 +210,18 @@ public final class GameExtension
         // replace that abort with a failure.
         TestScope scope = TestScope.bound();
         Game g = game();
+        // After a crash nothing is undone or put back: the server runs nothing more, and the save stays as it was.
+        boolean crashed = Quit.crashed();
         boolean between = g instanceof GameImpl impl && impl.between();
         try {
             // Undone on the world open now; a test between worlds has none to undo them on.
-            if (scope != null && scope.changedAnything() && !between) {
+            if (scope != null && scope.changedAnything() && !between && !crashed) {
                 g.runOnServer(scope::restore);
             }
         } finally {
             try {
                 // Still holding the test's locks: nothing else runs while the world it started on opens again.
-                if (g instanceof GameImpl impl) {
+                if (g instanceof GameImpl impl && !crashed) {
                     impl.putWorldBack();
                 }
             } finally {
@@ -231,10 +233,12 @@ public final class GameExtension
         }
         AssertionError checks = scope == null ? null : scope.takeChecks();
         // Decided here, before the store closes the bots: the outcome is only recorded after that.
-        IllegalStateException misplaced = Handovers.endOfTest(
-                bots(context),
-                plots(context),
-                checks != null || context.getExecutionException().isPresent());
+        IllegalStateException misplaced = crashed
+                ? null
+                : Handovers.endOfTest(
+                        bots(context),
+                        plots(context),
+                        checks != null || context.getExecutionException().isPresent());
         if (checks != null) {
             if (misplaced != null) {
                 checks.addSuppressed(misplaced);

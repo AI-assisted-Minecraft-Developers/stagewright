@@ -12,6 +12,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -87,8 +88,12 @@ final class GameImpl implements Game {
         return store;
     }
 
-    /** The server of the world open now; refused between worlds, where there is none. */
+    /** The server of the world open now; refused between worlds, where there is none, and after a crash. */
     MinecraftServer server() {
+        if (Quit.crashed()) {
+            // Its thread is stopped for good: a call would wait for it until the JVM ends.
+            throw new IllegalStateException(Quit.reason() + ", and its server runs nothing more");
+        }
         if (between) {
             throw new IllegalStateException("no world is open: the test left one with game.leaveWorld(), and"
                     + " game.openWorld(name) opens the next");
@@ -176,6 +181,45 @@ final class GameImpl implements Game {
                     "game.quitNow() is for Java tests; script tests running beside the Java" + " ones would not stop");
         }
         Quit.request(scope == null ? "a test" : scope.name());
+    }
+
+    @Override
+    public void crashNow() {
+        TestScope scope = TestScope.bound();
+        if (scope != null && scope.script()) {
+            throw new IllegalStateException(
+                    "game.crashNow() is for Java tests; script tests running beside the Java ones would not stop");
+        }
+        MinecraftServer s = server();
+        if (s.isSameThread()) {
+            throw new IllegalStateException("game.crashNow() stops the server thread where it stands, so not from it");
+        }
+        String test = scope == null ? "a test" : scope.name();
+        CompletableFuture<Void> stopped = new CompletableFuture<>();
+        // The server's own tasks run between ticks: it stops after a whole tick, before any save that would come later.
+        s.execute(() -> {
+            Quit.crash(test);
+            stopped.complete(null);
+            standStill();
+        });
+        try {
+            stopped.get(THREAD_WAIT_MS, TimeUnit.MILLISECONDS);
+        } catch (ExecutionException | TimeoutException e) {
+            throw new IllegalStateException(
+                    "game.crashNow(): the server thread did not take the task that stops it", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("game.crashNow() was interrupted before the server stopped", e);
+        }
+    }
+
+    /** The server thread, after a crash: parked until {@link JupiterRun} halts the JVM, which is the only way out. */
+    private static void standStill() {
+        while (true) {
+            LockSupport.park(Quit.class);
+            // Woken by an interrupt, which a crashed thread has nothing to do about.
+            Thread.interrupted();
+        }
     }
 
     @Override

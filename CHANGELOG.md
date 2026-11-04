@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-04
 
+### A test can crash its game and check what the next round comes back with
+
+`game.crashNow()` ends the game as a killed process ends, for a mod whose data must survive one: the server stops at
+the end of the tick under way and saves nothing more, not a chunk and not a player's data, a kept bot's included. Once
+the round's results are sent the JVM ends with `Runtime.halt`, and a test with `@DependsOn(afterRestart = true)` starts
+on the same save with only what had reached the disk. After the call nothing may touch the game: a `game` call fails
+and says why, and nothing the test changed is put back. **Green in the self-test suite** on both loaders: a block placed
+and diamonds given after a save are gone after the restart, the ones before it are there.
+
 ### A test can read the toasts its client shows
 
 `mc.test.toasts` (`TestQueriesBlockingApi.toasts`, through `client.api`) lists the toasts the client shows and the ones

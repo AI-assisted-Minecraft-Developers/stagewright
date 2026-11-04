@@ -159,6 +159,10 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     /** Put the plot back as the lease found it and release its chunks and stretch. */
     @Override
     public void close() {
+        // After a crash the plot stays as the server stopped; the save keeps whatever of it was written last.
+        if (Quit.crashed()) {
+            return;
+        }
         game.runOnServer(server -> {
             // First: what the box held before the lease comes back as it was, not kept.
             LeasedPlots.remove(dimension, box);

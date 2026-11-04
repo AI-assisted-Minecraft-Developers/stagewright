@@ -179,10 +179,24 @@ public final class JupiterRun {
         } catch (Throwable t) {
             recordFailure(reports, relay, t);
         } finally {
-            if (Boolean.getBoolean(EXIT)) {
+            if (Quit.crashed()) {
+                crash();
+            } else if (Boolean.getBoolean(EXIT)) {
                 exitGame(server, game);
             }
         }
+    }
+
+    /**
+     * End the JVM a test crashed, its results sent: {@link Runtime#halt}, so nothing saves on the way out, no shutdown
+     * hook included, as when the process is killed. Whether or not this game was to exit when done, since its server
+     * thread is stopped for good.
+     */
+    private static void crash() {
+        StageWrightCommon.LOG.warn("[{}] {}: halting the JVM, saving nothing", StageWrightCommon.MOD_ID, Quit.reason());
+        // Sent before the halt, so the supervisor reads the end of a run that is over rather than a death.
+        AgentBridge.system().done();
+        Runtime.getRuntime().halt(1);
     }
 
     /** Both plans run side by side; the Java tests' summary first, the scripts' second. */

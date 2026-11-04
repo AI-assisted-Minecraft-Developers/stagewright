@@ -118,6 +118,20 @@ public interface Game {
     void quitNow();
 
     /**
+     * Crash this game: its server stops where it stands, at the end of the tick under way, and saves nothing more — no
+     * autosave, no chunk, no player's data, a kept {@link Bot} included — and once the round's results are sent the JVM
+     * ends with {@link Runtime#halt}, as a killed process does. A later round starts on the same save
+     * ({@link DependsOn#afterRestart()}), with only what had reached the disk: a test there sees what a server that
+     * lost its power comes back with. Tests of this round not started by then are skipped.
+     *
+     * <p>Returns once the server has stopped; from then on nothing may ask it for anything, so the rest of the calling
+     * test, and any test running beside it, must not touch the game: a call through this {@code Game} fails, and one
+     * through WorldDriver waits until the JVM ends. Nothing a test changed is put back. It belongs in a class marked
+     * {@code @Isolated}, in a scene whose round has no script tests. Java tests only.
+     */
+    void crashNow();
+
+    /**
      * On an integrated server only: save and leave this world for the title screen, as a player quitting does, and
      * return once its server has stopped. The client and the tests' run go on; nothing that needs a server answers
      * until {@link #openWorld} has opened one. For what one client keeps from one world to the next; a dedicated
