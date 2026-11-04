@@ -440,7 +440,9 @@ final class SceneRun {
                 .redirectErrorStream(true)
                 .redirectOutput(log);
         builder.environment().putAll(p.environment());
-        return builder.start();
+        Process started = builder.start();
+        LiveGames.add(started);
+        return started;
     }
 
     /** A port nothing listens on now, for a server the scene starts next; another program may still take it first. */

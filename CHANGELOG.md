@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-04
 
+### Stopping the runner stops the games it started
+
+A scene ended its games in a `finally`, which a SIGTERM to the command-line runner or to a Gradle test worker skips, so
+the server and the joined client of a third party's run were left behind holding their port and world, a client hung
+in `glfwCreateWindow` among them. The engine now ends every game it started that is still running when its JVM exits:
+each is asked to end, and after 10 s it and what it started are killed. A SIGKILL still leaves them. **Green in the
+unit tests**: a JVM sent SIGTERM ends the process it started, and one that ignores SIGTERM is killed.
+
 ### A failed test says where its game logged, and a run's logs outlive the next run
 
 A scene's directory was made afresh as the scene started, so a crash report or `latest.log` from a run that had
