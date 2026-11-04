@@ -112,6 +112,10 @@ class. A scene that needed a connected player becomes a test taking `Player`, in
 skip. Many of those tests only need a player on the server — an inventory, an advancement, a menu, a quest — and a
 `Bot` does that on every topology; see [Bodies](writing-tests.md#bodies).
 
+The old API is gone from StageWright altogether, so a `testmod` that still holds one unmoved `SceneProvider` class
+does not compile. To move the classes one at a time, leave the unmoved ones out of the source set while you work —
+`sourceSets.testmod.java { exclude '**/*Scenes.java' }` — and drop the exclusion with the last of them.
+
 ```java
 // Before
 @SceneSet("ws")
