@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-04
 
+### A failed test says where its game logged, and a run's logs outlive the next run
+
+A scene's directory was made afresh as the scene started, so a crash report or `latest.log` from a run that had
+failed was gone as soon as anyone reran it, and a failure message gave no hint where to look before then. The next run
+of a scene now moves the run before's `stagewright/logs/`, `logs/latest.log` and `crash-reports/` to
+`stagewright/history/<scene>/<when it ended>/`, keeping the newest five, and every failed test's message ends with a
+line naming the game's log, its crash-report directory, and the joined client's log when there is one. **Green in the
+unit tests**.
+
 ### A test can assert what the server or the client logged
 
 `mc.test.logs` lists the warnings and errors a JVM of the game logged after a mark, by level and by logger prefix, each

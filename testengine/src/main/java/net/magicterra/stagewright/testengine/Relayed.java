@@ -19,8 +19,14 @@ final class Relayed {
     private Relayed() {}
 
     static Throwable failure(Map<?, ?> f, boolean aborted) {
+        return failure(f, aborted, null);
+    }
+
+    /** As {@link #failure(Map, boolean)}, its message followed by {@code note} on a line of its own, when not null. */
+    static Throwable failure(Map<?, ?> f, boolean aborted, String note) {
         String className = String.valueOf(f.get("class"));
-        String message = f.get("message") instanceof String s ? s : null;
+        String own = f.get("message") instanceof String s ? s : null;
+        String message = note == null ? own : (own == null ? "" : own + "\n") + note;
         Throwable cause = f.get("cause") instanceof Map<?, ?> c ? failure(c, false) : null;
         Throwable t;
         if (aborted) {

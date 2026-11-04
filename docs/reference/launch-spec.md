@@ -107,3 +107,9 @@ directories on its way into real ones first, so nothing is written through a lin
 test passed, all but its `stagewright/`, `logs/` and `crash-reports/` is deleted, and of `stagewright/` its world, set-aside worlds and rewritten launch
 files; otherwise the directory is kept as it is until the scene next runs. The scene's `directory` report entry
 names it.
+
+When the scene next runs, before its directory is made afresh, what the run before logged — `stagewright/logs/`
+(each game's output), `logs/latest.log` and `crash-reports/` — is moved to
+`<directory>/stagewright/history/<scene>/<when it ended>/`, and the newest five such runs are kept. A failed test's
+message ends with a line naming the game's log and where its crash reports go, and the joined client's log when
+there is one.

@@ -60,6 +60,9 @@ final class Relay implements Consumer<Map<String, Object>> {
 
     private int restart = -1;
 
+    /** Said under each failure the game reports: where its logs are. */
+    private String logsAt;
+
     private String restartWorld;
 
     private String restartWorldFrom;
@@ -180,7 +183,7 @@ final class Relay implements Consumer<Map<String, Object>> {
                 TestExecutionResult.failed(
                         failure == null
                                 ? new AssertionError("the game reported a failure without a throwable")
-                                : Relayed.failure(failure, false));
+                                : Relayed.failure(failure, false, logsAt));
         };
         // A class or script file may have tests in a later round, after a restart: it finishes at close-out,
         // with the first failure any round reported for it.
@@ -222,6 +225,11 @@ final class Relay implements Consumer<Map<String, Object>> {
     /** The save resource the next round's world starts from when it is new to the scene; empty for a new world. */
     synchronized String restartWorldFrom() {
         return restartWorldFrom;
+    }
+
+    /** Where the game now running logs, for the message of each test it fails; null for none. */
+    synchronized void logsAt(String where) {
+        logsAt = where;
     }
 
     /** The next round's game is about to start: what this one said about its end no longer applies. */

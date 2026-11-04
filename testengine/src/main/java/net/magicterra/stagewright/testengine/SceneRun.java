@@ -46,6 +46,9 @@ final class SceneRun {
 
     private static final int AGENT_IDLE_SECONDS = 20;
 
+    /** Where a game writes its crash reports, under its working directory. */
+    private static final String CRASH_REPORTS = "crash-reports";
+
     /** How long a game may take to end after its run before the agent ends it. Shortened by the engine's own tests. */
     static volatile int agentGraceSeconds = 30;
 
@@ -276,10 +279,9 @@ final class SceneRun {
         // Staged once for every round: each round's game loads the same agent.
         Path agentJar = AgentJar.stage(SceneRun.class, artifacts);
         for (int round = 0; ; round++) {
-            String suffix = round == 0 ? "" : "-round" + round;
-            File gameLog = logs.resolve(scene.name + suffix + "-game.log").toFile();
-            File companionLog =
-                    logs.resolve(scene.name + suffix + "-companion.log").toFile();
+            File gameLog = roundLog(logs, round, "game");
+            File companionLog = roundLog(logs, round, "companion");
+            relay.logsAt(logsAt(spec, gameLog, companionLog));
             Process companion = null;
             // The joined client carries the agent too, reporting to a supervisor of its own: one serves one process.
             try (Supervisor supervisor = Supervisor.open();
@@ -353,6 +355,32 @@ final class SceneRun {
                 }
             }
         }
+    }
+
+    /** The output of {@code round}'s {@code process}, the game or the companion client, in {@code logs}. */
+    private File roundLog(Path logs, int round, String process) {
+        String suffix = round == 0 ? "" : "-round" + round;
+        return logs.resolve(scene.name + suffix + "-" + process + ".log").toFile();
+    }
+
+    /**
+     * Where a round's games log, said under each test the round fails: kept past the next run, which moves them to the
+     * scene's history ({@link SceneDirectory#keepLogs}).
+     */
+    static String logsAt(LaunchSpec spec, File gameLog, File companionLog) {
+        // Sized for both processes' paths, which run long under a scene's directory.
+        StringBuilder out = new StringBuilder(512)
+                .append("the game's log is ")
+                .append(gameLog)
+                .append(", its crash reports go to ")
+                .append(spec.primary().workingDirectory().resolve(CRASH_REPORTS));
+        if (spec.companion() != null) {
+            out.append("; the joined client's log is ")
+                    .append(companionLog)
+                    .append(", its crash reports go to ")
+                    .append(spec.companion().workingDirectory().resolve(CRASH_REPORTS));
+        }
+        return out.toString();
     }
 
     /** The joined client ended the run: end the game too, and fail the scene saying it was the client. */

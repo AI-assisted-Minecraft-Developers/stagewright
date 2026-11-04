@@ -131,6 +131,11 @@ class StageWrightTestEngineTest {
                 .orElseThrow(() -> new AssertionError("no failure for " + displayName));
     }
 
+    /** The game's own message: the lines after it say where the game logged. */
+    private static String firstLine(Throwable t) {
+        return t.getMessage().lines().findFirst().orElse("");
+    }
+
     private static Events containersFailed(EngineExecutionResults r) {
         return r.containerEvents().failed();
     }
@@ -249,7 +254,11 @@ class StageWrightTestEngineTest {
         assertEquals(1, r.testEvents().failed().count());
         Throwable t = failureOf(r.testEvents(), "b()");
         assertInstanceOf(AssertionError.class, t);
-        assertEquals("expected 1 but was 2", t.getMessage());
+        String[] lines = t.getMessage().split("\n", -1);
+        assertEquals("expected 1 but was 2", lines[0], "the game's own message first");
+        assertTrue(
+                lines[1].startsWith("the game's log is ") && lines[1].contains("assertFail-game.log"),
+                "then where the game logged: " + lines[1]);
         assertEquals("x.Y", t.getStackTrace()[0].getClassName());
         assertEquals(3, t.getStackTrace()[0].getLineNumber());
         assertEquals(
@@ -577,7 +586,7 @@ class StageWrightTestEngineTest {
                                 .get("sum"))
                         .filter(java.util.Objects::nonNull)
                         .toList());
-        assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
+        assertEquals("expected 3 but was 2", firstLine(failureOf(r.testEvents(), "fails")));
     }
 
     @Test
@@ -601,7 +610,7 @@ class StageWrightTestEngineTest {
                 .selectors(selectClasspathResource("stagewright/tests/declared.yaml"))
                 .execute();
         assertEquals(1, r.testEvents().succeeded().count());
-        assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
+        assertEquals("expected 3 but was 2", firstLine(failureOf(r.testEvents(), "fails")));
     }
 
     /**
@@ -662,7 +671,7 @@ class StageWrightTestEngineTest {
                 r.testEvents().succeeded().stream()
                         .map(e -> e.getTestDescriptor().getDisplayName())
                         .toList());
-        assertEquals("expected 3 but was 2", failureOf(r.testEvents(), "fails").getMessage());
+        assertEquals("expected 3 but was 2", firstLine(failureOf(r.testEvents(), "fails")));
         // The unreadable file and the YAML one were left out as well.
         assertEquals(1, r.testEvents().failed().count());
     }

@@ -38,6 +38,37 @@ class SceneDirectoryTest {
     }
 
     @Test
+    void theNextRunKeepsTheLogsAndCrashReportsOfTheRunsBefore() throws IOException {
+        for (int run = 1; run <= SceneDirectory.RUNS_KEPT + 2; run++) {
+            Path dir = SceneDirectory.create(topology, "s", null, false);
+            Files.writeString(Files.createDirectories(dir.resolve("logs")).resolve("latest.log"), "run " + run);
+            Files.writeString(Files.createDirectories(dir.resolve("logs")).resolve("debug.log"), "bulky");
+            Files.writeString(
+                    Files.createDirectories(dir.resolve("crash-reports")).resolve("crash.txt"), "c" + run);
+            Files.writeString(
+                    Files.createDirectories(dir.resolve("stagewright/logs")).resolve("s-game.log"), "out " + run);
+            Files.writeString(Files.createDirectories(dir.resolve("world")).resolve("level.dat"), "w");
+        }
+        Path history = SceneDirectory.history(topology, "s");
+        List<Path> runs;
+        try (Stream<Path> listed = Files.list(history)) {
+            runs = listed.sorted().toList();
+        }
+        assertEquals(SceneDirectory.RUNS_KEPT, runs.size(), "the newest five");
+        Path last = runs.get(runs.size() - 1);
+        assertEquals("run " + (SceneDirectory.RUNS_KEPT + 1), Files.readString(last.resolve("logs/latest.log")));
+        assertEquals("c" + (SceneDirectory.RUNS_KEPT + 1), Files.readString(last.resolve("crash-reports/crash.txt")));
+        assertEquals(
+                "out " + (SceneDirectory.RUNS_KEPT + 1), Files.readString(last.resolve("stagewright/logs/s-game.log")));
+        assertFalse(Files.exists(last.resolve("logs/debug.log")), "not the bulky debug log");
+        assertFalse(Files.exists(last.resolve("world")), "nor the world");
+        assertEquals(
+                "run " + (SceneDirectory.RUNS_KEPT + 2),
+                Files.readString(SceneDirectory.of(topology, "s").resolve("logs/latest.log")),
+                "the run now is where it ran");
+    }
+
+    @Test
     void settingsAreCopiedTheRestLinkedAndWorldsAndArtifactsLeftOut() throws IOException {
         Path dir = SceneDirectory.create(topology, "s", null, false);
         assertEquals(topology.resolve("stagewright/runs/s"), dir);

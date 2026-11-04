@@ -5,6 +5,8 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -57,6 +59,18 @@ final class SceneDirectory {
      */
     private static final List<String> BULKY_ARTIFACTS = List.of("world", "saves", "scene-mods");
 
+    static final String HISTORY = "history";
+
+    /** How many earlier runs of a scene keep their logs. */
+    static final int RUNS_KEPT = 5;
+
+    /** What of a run is kept past the next one: each game's output, the game's own log, its crash reports. */
+    private static final List<String> EVIDENCE =
+            List.of(RunDirectory.ARTIFACT_DIR + "/logs", "logs/" + KEPT_LOG, "crash-reports");
+
+    /** A run's directory name in the history: when it ended, sorting oldest first. */
+    private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+
     private SceneDirectory() {}
 
     /** Where {@code scene}'s copy of {@code original} goes. */
@@ -71,6 +85,7 @@ final class SceneDirectory {
      */
     static Path create(Path original, String scene, String world, boolean keepWorld) throws IOException {
         Path dir = of(original, scene);
+        keepLogs(dir, history(original, scene));
         SceneMods.deleteTree(dir);
         Files.createDirectories(dir);
         if (keepWorld && world != null) {
@@ -169,6 +184,47 @@ final class SceneDirectory {
         try (Stream<Path> left = Files.list(dir)) {
             if (left.findAny().isEmpty()) {
                 Files.delete(dir);
+            }
+        }
+    }
+
+    /** Where the logs of {@code scene}'s earlier runs are kept: {@code <dir>/stagewright/history/<scene>/}. */
+    static Path history(Path original, String scene) {
+        return original.resolve(RunDirectory.ARTIFACT_DIR).resolve(HISTORY).resolve(scene);
+    }
+
+    /**
+     * Before a run makes {@code dir} afresh: move what the run before logged, {@code stagewright/logs/} (each game's
+     * output), {@code logs/latest.log} and {@code crash-reports/}, to a directory of {@code history} named for when
+     * that run ended, so the next run does not take it with the rest. The newest {@value #RUNS_KEPT} are kept.
+     */
+    static void keepLogs(Path dir, Path history) throws IOException {
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        String stamp = STAMP.format(Files.getLastModifiedTime(dir).toInstant().atZone(ZoneId.systemDefault()));
+        Path into = history.resolve(stamp);
+        // Two runs that ended within a second of each other.
+        for (int n = 2; Files.exists(into); n++) {
+            into = history.resolve(stamp + "-" + n);
+        }
+        boolean kept = false;
+        for (String evidence : EVIDENCE) {
+            Path from = dir.resolve(evidence);
+            if (Files.exists(from, LinkOption.NOFOLLOW_LINKS)) {
+                Path to = into.resolve(evidence);
+                Files.createDirectories(to.getParent());
+                Files.move(from, to, StandardCopyOption.REPLACE_EXISTING);
+                kept = true;
+            }
+        }
+        if (!kept) {
+            return;
+        }
+        try (Stream<Path> runs = Files.list(history)) {
+            List<Path> oldestFirst = runs.sorted().toList();
+            for (int i = 0; i < oldestFirst.size() - RUNS_KEPT; i++) {
+                SceneMods.deleteTree(oldestFirst.get(i));
             }
         }
     }

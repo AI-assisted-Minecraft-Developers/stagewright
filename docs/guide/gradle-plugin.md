@@ -171,9 +171,11 @@ world, and everything else — `mods/`, a loader's caches — is linked to the t
 directory is its own, each entry in it a link. What a scene
 writes, its `files`, its `server.properties`, whatever its game writes, stays in its own directory: the
 next scene starts from the topology's directory as it was. A scene whose tests all passed keeps its
-`stagewright/` (logs, `store.json`, the game's JUnit XML) and the game's own `logs/` (`debug.log` among them) and
+`stagewright/` (logs, `store.json`, the game's JUnit XML), the game's `logs/latest.log` and
 `crash-reports/`; a scene with a failure keeps its whole
-directory, world and settings included, until it next runs. Creating links needs Developer Mode or
+directory, world and settings included, until it next runs. The next run moves the logs and crash reports of the
+one before to `stagewright/history/<scene>/`, which keeps the last five, and a failed test's message names the log
+and crash-report directory of the game it ran in. Creating links needs Developer Mode or
 administrator rights on Windows.
 
 The runs start from the run source set, so under loom `runClient` goes without the tests; they get no
