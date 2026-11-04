@@ -19,7 +19,9 @@ failed; the reason given with a skip it drops. So every test the engine reported
 condition in the game, a disabled scene or a topology the run could not launch, read as a bare `<skipped/>` in CI,
 which a third party noticed. Each such test is now reported aborted with the reason, which Gradle, the command-line
 runner's report and the IDEs all still count as skipped; a container is started and finished around its tests. **Green
-in the unit tests**.
+in the self-test suite**: on NeoForge, the three `DrownRiseTest` tests a dedicated server cannot run read
+`<skipped message="@Requires: this game has no CLIENT" type="org.opentest4j.TestAbortedException">` in Gradle's
+XML, still counted skipped, and the same tests pass in the scene with a client.
 
 ### A scene whose tests are all disabled starts no game
 
