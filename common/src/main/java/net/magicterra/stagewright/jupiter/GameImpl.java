@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.WeakHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
@@ -47,6 +48,9 @@ final class GameImpl implements Game {
     private static final long WALL_MS_PER_TICK = 1_000;
 
     private static final long WALL_MARGIN_MS = 60_000;
+
+    /** How often a wait looks whether its condition has parked the server thread. */
+    private static final long WATCH_MS = 100;
 
     /**
      * WorldDriver's registry, every call through it allowed to wait this long for a busy game thread to take it. The
@@ -266,7 +270,7 @@ final class GameImpl implements Game {
 
     @Override
     public void ticks(int n) {
-        waitFor(() -> false, n);
+        waitFor(() -> false, n, "game.ticks(" + n + ")");
     }
 
     @Override
@@ -455,21 +459,37 @@ final class GameImpl implements Game {
         }
     }
 
-    /** Whether {@code condition} held within {@code budget} ticks. */
+    /** Whether {@code condition}, which {@code description} names, held within {@code budget} ticks. */
     // A timeout is reported as an assertion with no cause on purpose: the message names the stall, not the future.
     @SuppressWarnings("PMD.PreserveStackTrace")
-    private boolean waitFor(BooleanSupplier condition, int budget) {
+    private boolean waitFor(BooleanSupplier condition, int budget, String description) {
         if (server().isSameThread()) {
             throw new IllegalStateException(
                     "a tick wait was started on the server thread, which would wait for itself");
         }
         TestScope scope = TestScope.bound();
-        BooleanSupplier asTheTest = scope == null ? condition : () -> TestScope.lending(scope, condition::getAsBoolean);
+        ParkedCondition watch = new ParkedCondition();
+        BooleanSupplier watched = watch.watching(condition);
+        BooleanSupplier asTheTest = scope == null ? watched : () -> TestScope.lending(scope, watched::getAsBoolean);
         CompletableFuture<Boolean> done = scope != null && scope.frozeTicks()
                 ? stepping(asTheTest, budget)
                 : ServerTicks.await(asTheTest, budget);
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(budget * WALL_MS_PER_TICK + WALL_MARGIN_MS);
         try {
-            return done.get(budget * WALL_MS_PER_TICK + WALL_MARGIN_MS, TimeUnit.MILLISECONDS);
+            while (true) {
+                try {
+                    return done.get(WATCH_MS, TimeUnit.MILLISECONDS);
+                } catch (TimeoutException e) {
+                    Optional<StackTraceElement[]> parked = watch.parked();
+                    if (parked.isPresent()) {
+                        done.cancel(false);
+                        throw ParkedCondition.failure(parked.get(), description);
+                    }
+                    if (System.nanoTime() - deadline > 0) {
+                        throw e;
+                    }
+                }
+            }
         } catch (TimeoutException e) {
             done.cancel(false);
             throw new AssertionError("the server did not run " + budget + " ticks in time: it is stalled or stopped");
@@ -533,7 +553,7 @@ final class GameImpl implements Game {
 
         @Override
         public void until(BooleanSupplier condition) {
-            if (!waitFor(condition, within)) {
+            if (!waitFor(condition, within, description)) {
                 throw new AssertionError(description + " did not hold within " + within + " ticks");
             }
         }
