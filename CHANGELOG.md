@@ -21,7 +21,8 @@ written into the launch spec and reached the game, which on a third party entere
 for and held the scene until it timed out. What the run sets is now told apart where it is configured, so only
 that is written; each variable is then an input of the configuration cache, and a changed one configures anew.
 **Green against a third party**: with the variable unset after builds that had set it, no launch spec carried it
-and the game did not take its branch; the same build with the variable set to empty is not checked yet. The
+and the game did not take its branch, and set to empty after a build with it set, the same held. One the
+environment has and the run does not set is inherited where the task executes, not where it was configured. The
 plugin's functional tests reproduce it under `--configuration-cache` and keep what the run task sets itself.
 
 ### A test that did not run says why in Gradle's JUnit XML
