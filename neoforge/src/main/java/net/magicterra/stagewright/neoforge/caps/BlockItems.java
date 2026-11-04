@@ -138,7 +138,7 @@ public final class BlockItems implements BlockInventory {
     }
 
     /** The no-side view first, then the six faces, deduplicated. See {@link BlockEnergy#handlers}. */
-    @SuppressWarnings("PMD.CompareObjectsWithEquals") // identity on purpose: equals() may compare contents
+    // Identity on purpose: equals() may compare contents.
     private static List<IItemHandler> handlers(ServerLevel level, BlockPos pos) {
         List<IItemHandler> out = new ArrayList<>();
         IItemHandler noSide = level.getCapability(Capabilities.ItemHandler.BLOCK, pos, null);

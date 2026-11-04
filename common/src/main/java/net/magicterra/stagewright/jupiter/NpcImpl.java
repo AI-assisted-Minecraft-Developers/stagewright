@@ -12,7 +12,6 @@ import net.magicterra.worlddriver.bot.BotRegistry;
 import net.magicterra.worlddriver.bot.Roster;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -57,15 +56,13 @@ final class NpcImpl implements Npc {
                 throw new IllegalArgumentException(
                         "WorldDriver will not drive a " + EntityType.getKey(type) + ": " + refused.message());
             }
-            scope.onEnd(npc::remove);
+            scope.onEnd(ended -> npc.remove());
         });
         return npc;
     }
 
     /** Server thread: let the mob go and take it out of the world. */
-    // The server is part of the scope's end-callback signature; the body reaches the world through the bot.
-    @SuppressWarnings("PMD.UnusedFormalParameter")
-    private void remove(MinecraftServer server) {
+    private void remove() {
         Bot bot = BotRegistry.get(ref());
         if (bot == null) {
             return;

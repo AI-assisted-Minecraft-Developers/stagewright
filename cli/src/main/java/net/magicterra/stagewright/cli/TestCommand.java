@@ -116,14 +116,10 @@ final class TestCommand {
 
     private TestCommand() {}
 
-    /**
-     * Exit code: 0 when every test passed, 1 when one did not.
-     *
-     * <p>One straight run of the steps, in order: each step's locals feed the next, so splitting it would only pass
-     * them on.
-     */
-    @SuppressWarnings("checkstyle:javancss") // the steps are one ordered run; a split would only pass their locals on
-    static int run(List<String> args) throws IOException {
+    /** What the command line said: the {@code --name value} options, the JVM flags, the extra mods and the pack. */
+    private record Arguments(Map<String, String> opts, List<String> systemProps, List<Path> extraMods, Path gameDir) {}
+
+    private static Arguments parse(List<String> args) {
         Map<String, String> opts = new LinkedHashMap<>();
         List<String> systemProps = new ArrayList<>();
         List<Path> extraMods = new ArrayList<>();
@@ -158,6 +154,14 @@ final class TestCommand {
         if (!Files.isDirectory(gameDir)) {
             throw new IllegalArgumentException(gameDir + NOT_A_DIRECTORY);
         }
+        return new Arguments(opts, systemProps, extraMods, gameDir);
+    }
+
+    /** Exit code: 0 when every test passed, 1 when one did not. */
+    static int run(List<String> args) throws IOException {
+        Arguments arguments = parse(args);
+        Map<String, String> opts = arguments.opts();
+        Path gameDir = arguments.gameDir();
         leaks(opts);
         parallel(opts);
         // What the run writes stays under the server directory wherever the tests come from: they may be a
@@ -173,13 +177,10 @@ final class TestCommand {
         ModInjection.requireLoader(loader);
         String java = opts.getOrDefault(
                 JAVA, Path.of(System.getProperty("java.home"), "bin", "java").toString());
-        List<String> launch = opts.containsKey("launch")
+        String undetected = "cannot tell how to start the server in " + gameDir + " — pass --launch \"<command>\"";
+        final List<String> launch = opts.containsKey("launch")
                 ? new ArrayList<>(List.of(opts.get("launch").split("\\s+")))
-                : GameLaunch.detect(gameDir, java, log);
-        if (launch == null) {
-            throw new IllegalArgumentException(
-                    "cannot tell how to start the server in " + gameDir + " — pass --launch" + " \"<command>\"");
-        }
+                : GameLaunch.detect(gameDir, java, log).orElseThrow(() -> new IllegalArgumentException(undetected));
 
         Path work = artifacts.resolve("build");
         deleteTree(work);
@@ -194,14 +195,45 @@ final class TestCommand {
             }
         }
         Path jar = modJar(root, work.resolve(MOD_ID + ".jar"));
-        List<Path> mods = new ArrayList<>(extraMods);
+        List<Path> mods = new ArrayList<>(arguments.extraMods());
         mods.add(jar);
         ModInjection.Arguments injected = ModInjection.prepare(gameDir, loader, mods, log);
 
         Path launches = work.resolve("launches");
         Files.createDirectories(launches);
-        Map<String, Object> server = serverProcess(gameDir, launch, systemProps, injected, List.of());
+        Map<String, Object> server = serverProcess(gameDir, launch, arguments.systemProps(), injected, List.of());
         write(launches, topology(DEDICATED, gameDir, SERVER_WORLD, true, server, null, opts));
+        writeClientTopologies(arguments, loader, java, clientSource, artifacts, launches, launch, mods, injected, log);
+        System.setProperty("stagewright.launches", launches.toString());
+        // A scene whose topology this run cannot launch is reported skipped, not failed: what to install is the
+        // user's choice here, not a mistake in a build.
+        System.setProperty("stagewright.launches.missing", "skip");
+
+        Path reports = Path.of(opts.getOrDefault(
+                        "reports", artifacts.resolve("reports").toString()))
+                .toAbsolutePath();
+        return execute(root, reports, parallel(opts), log);
+    }
+
+    /**
+     * The two topologies that need a game client: the client's own integrated server, and the pack's server with the
+     * client joined to it. Without {@code --client} both are written as unavailable, so their scenes are skipped.
+     */
+    private static void writeClientTopologies(
+            Arguments arguments,
+            String loader,
+            String java,
+            Path clientSource,
+            Path artifacts,
+            Path launches,
+            List<String> launch,
+            List<Path> mods,
+            ModInjection.Arguments injected,
+            Consumer<String> log)
+            throws IOException {
+        Map<String, String> opts = arguments.opts();
+        List<String> systemProps = arguments.systemProps();
+        Path gameDir = arguments.gameDir();
         if (opts.containsKey(CLIENT)) {
             ClientSpec client = ClientSpec.parse(opts.get(CLIENT));
             if (client.modLoader() == null) {
@@ -262,15 +294,6 @@ final class TestCommand {
                 write(launches, unavailable(name, "the run was given no --client, so there is no client to start"));
             }
         }
-        System.setProperty("stagewright.launches", launches.toString());
-        // A scene whose topology this run cannot launch is reported skipped, not failed: what to install is the
-        // user's choice here, not a mistake in a build.
-        System.setProperty("stagewright.launches.missing", "skip");
-
-        Path reports = Path.of(opts.getOrDefault(
-                        "reports", artifacts.resolve("reports").toString()))
-                .toAbsolutePath();
-        return execute(root, reports, parallel(opts), log);
     }
 
     /**

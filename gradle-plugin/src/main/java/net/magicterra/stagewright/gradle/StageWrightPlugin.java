@@ -128,7 +128,7 @@ public class StageWrightPlugin implements Plugin<Project> {
                 GeneratedRuns.declare(p, suite);
             }
         }));
-        DevJUnitRuntime.install(project, tests, topologies);
+        DevJunitRuntime.install(project, tests, topologies);
         SuiteDependencies.install(project, tests);
         // Once a build, before any loom project is evaluated, which is when loom remaps.
         var extra = project.getRootProject().getExtensions().getExtraProperties();

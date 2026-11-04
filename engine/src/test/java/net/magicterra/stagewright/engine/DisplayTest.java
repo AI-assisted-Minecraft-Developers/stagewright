@@ -109,7 +109,7 @@ class DisplayTest {
     void aWildcardEntryWithoutADisplayNumberCoversEveryDisplay(@TempDir Path tmp) throws IOException {
         Path file = tmp.resolve("xauth");
         Files.write(file, entry(65535, "", "MIT-MAGIC-COOKIE-1", GOOD));
-        assertArrayEquals(GOOD, Display.cookie(file, 7, "host"));
+        assertArrayEquals(GOOD, Display.cookie(file, 7, "host").orElseThrow());
     }
 
     @Test

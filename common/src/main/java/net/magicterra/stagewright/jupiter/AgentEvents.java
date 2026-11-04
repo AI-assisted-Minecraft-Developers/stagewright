@@ -141,7 +141,6 @@ final class AgentEvents implements TestExecutionListener {
     }
 
     // A self-cause is the one cycle to stop on, and that test is identity by definition.
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     private static JsonObject failure(Throwable t, int depth) {
         JsonObject f = new JsonObject();
         f.addProperty("class", t.getClass().getName());

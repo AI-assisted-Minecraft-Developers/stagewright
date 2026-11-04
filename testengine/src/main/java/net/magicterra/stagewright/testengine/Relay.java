@@ -21,6 +21,8 @@ import org.junit.platform.engine.support.descriptor.MethodSource;
  */
 final class Relay implements Consumer<Map<String, Object>> {
 
+    private static final System.Logger LOG = System.getLogger(Relay.class.getName());
+
     /** The key every game node carries its id under. */
     private static final String ID = "id";
 
@@ -85,21 +87,11 @@ final class Relay implements Consumer<Map<String, Object>> {
         }
     }
 
-    // One case per message the game sends; each is a few lines, and the switch is the protocol's table.
+    // One case per message the game sends: the switch is the protocol's table.
     @Override
-    @SuppressWarnings("checkstyle:javancss")
     public synchronized void accept(Map<String, Object> event) {
         switch (String.valueOf(event.get("type"))) {
-            case "planned" -> {
-                plan = true;
-                if (event.get("nodes") instanceof List<?> nodes) {
-                    for (Object n : nodes) {
-                        if (n instanceof Map<?, ?> node) {
-                            match(node);
-                        }
-                    }
-                }
-            }
+            case "planned" -> onPlanned(event);
             case "dynamic" -> {
                 if (event.get("node") instanceof Map<?, ?> node) {
                     register(node);
@@ -113,57 +105,8 @@ final class Relay implements Consumer<Map<String, Object>> {
                 }
                 start(d);
             }
-            case "skipped" -> {
-                TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
-                String reason = String.valueOf(event.get("reason"));
-                if (d != null && !started.contains(d) && finished.add(d)) {
-                    listener.executionSkipped(d, reason);
-                    if (key(d) != null) {
-                        coverage.skipped(key(d), sceneName, reason);
-                    }
-                    // Skipping a node skips what is under it without an event of its own; closing those out
-                    // later would report them as never run.
-                    for (TestDescriptor child : d.getDescendants()) {
-                        finished.add(child);
-                        if (key(child) != null) {
-                            coverage.skipped(key(child), sceneName, reason);
-                        }
-                    }
-                }
-            }
-            case "finished" -> {
-                TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
-                if (d == null || finished.contains(d)) {
-                    return;
-                }
-                String status = String.valueOf(event.get("status"));
-                Map<?, ?> failure = event.get("failure") instanceof Map<?, ?> f ? f : null;
-                TestExecutionResult result = switch (status) {
-                    case "SUCCESSFUL" -> TestExecutionResult.successful();
-                    case "ABORTED" ->
-                        TestExecutionResult.aborted(failure == null ? null : Relayed.failure(failure, true));
-                    default ->
-                        TestExecutionResult.failed(
-                                failure == null
-                                        ? new AssertionError("the game reported a failure without a throwable")
-                                        : Relayed.failure(failure, false));
-                };
-                // A class or script file may have tests in a later round, after a restart: it finishes at close-out,
-                // with the first failure any round reported for it.
-                if (d instanceof Nodes.TestClass || d instanceof Nodes.ScriptFile) {
-                    if (result.getStatus() != TestExecutionResult.Status.SUCCESSFUL) {
-                        containers.putIfAbsent(d, result);
-                    }
-                    return;
-                }
-                // Children end before their parent: what the game never ran under this node is closed out first.
-                for (TestDescriptor child : d.getChildren()) {
-                    if (!finished.contains(child)) {
-                        closeOut(child, null, "the game finished its parent without running it");
-                    }
-                }
-                finish(d, result);
-            }
+            case "skipped" -> onSkipped(event);
+            case "finished" -> onFinished(event);
             case "record" -> {
                 TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
                 if (d != null && event.get("name") instanceof String name) {
@@ -191,6 +134,69 @@ final class Relay implements Consumer<Map<String, Object>> {
                 // A newer game may send more; what this version does not know it leaves alone.
             }
         }
+    }
+
+    private void onPlanned(Map<String, Object> event) {
+        plan = true;
+        if (event.get("nodes") instanceof List<?> nodes) {
+            for (Object n : nodes) {
+                if (n instanceof Map<?, ?> node) {
+                    match(node);
+                }
+            }
+        }
+    }
+
+    private void onSkipped(Map<String, Object> event) {
+        TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
+        String reason = String.valueOf(event.get("reason"));
+        if (d != null && !started.contains(d) && finished.add(d)) {
+            listener.executionSkipped(d, reason);
+            if (key(d) != null) {
+                coverage.skipped(key(d), sceneName, reason);
+            }
+            // Skipping a node skips what is under it without an event of its own; closing those out
+            // later would report them as never run.
+            for (TestDescriptor child : d.getDescendants()) {
+                finished.add(child);
+                if (key(child) != null) {
+                    coverage.skipped(key(child), sceneName, reason);
+                }
+            }
+        }
+    }
+
+    private void onFinished(Map<String, Object> event) {
+        TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
+        if (d == null || finished.contains(d)) {
+            return;
+        }
+        String status = String.valueOf(event.get("status"));
+        Map<?, ?> failure = event.get("failure") instanceof Map<?, ?> f ? f : null;
+        TestExecutionResult result = switch (status) {
+            case "SUCCESSFUL" -> TestExecutionResult.successful();
+            case "ABORTED" -> TestExecutionResult.aborted(failure == null ? null : Relayed.failure(failure, true));
+            default ->
+                TestExecutionResult.failed(
+                        failure == null
+                                ? new AssertionError("the game reported a failure without a throwable")
+                                : Relayed.failure(failure, false));
+        };
+        // A class or script file may have tests in a later round, after a restart: it finishes at close-out,
+        // with the first failure any round reported for it.
+        if (d instanceof Nodes.TestClass || d instanceof Nodes.ScriptFile) {
+            if (result.getStatus() != TestExecutionResult.Status.SUCCESSFUL) {
+                containers.putIfAbsent(d, result);
+            }
+            return;
+        }
+        // Children end before their parent: what the game never ran under this node is closed out first.
+        for (TestDescriptor child : d.getChildren()) {
+            if (!finished.contains(child)) {
+                closeOut(child, null, "the game finished its parent without running it");
+            }
+        }
+        finish(d, result);
     }
 
     /** Whether the game finished its run, reporting everything it was going to report. */
@@ -286,18 +292,18 @@ final class Relay implements Consumer<Map<String, Object>> {
     /**
      * A value the test recorded in the game. Published as a report entry under its name, which a build tool's report or
      * an IDE shows; a blank value, which a report entry cannot hold, as {@value StageWrightTestEngine#BLANK_RECORD}
-     * naming it. Also printed, one line each, since Gradle's own test report reads no report entries at all: in its
-     * test report the line is the output of whichever test was running then, and says which test it belongs to.
+     * naming it. Also logged, since Gradle's own test report reads no report entries at all: in its test report the
+     * line is the output of whichever test was running then, and says which test it belongs to.
      */
-    // Standard output is the build's log, where a recorded value is read beside the test that wrote it.
-    @SuppressWarnings("PMD.SystemPrintln")
     private void record(TestDescriptor d, String name, String value) {
         if (name.isBlank()) {
             return;
         }
         String label = key(d) != null ? key(d) : d.getDisplayName();
-        System.out.println("[stagewright] record " + sceneName + " " + label + ": " + name + " = "
-                + value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n"));
+        LOG.log(
+                System.Logger.Level.INFO,
+                "record " + sceneName + " " + label + ": " + name + " = "
+                        + value.replace("\\", "\\\\").replace("\r", "\\r").replace("\n", "\\n"));
         listener.reportingEntryPublished(
                 d,
                 value.isBlank()

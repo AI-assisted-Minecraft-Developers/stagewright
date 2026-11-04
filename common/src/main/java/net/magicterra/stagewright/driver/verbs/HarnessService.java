@@ -76,58 +76,63 @@ final class HarnessService implements TestHarnessApi {
 
     private final AtomicInteger nextPin = new AtomicInteger();
 
-    // One arm per operation, each a few lines; the switch is dense by its nature and reads better whole.
-    @SuppressWarnings("PMD.SwitchDensity")
     @Override
     public CompletionStage<SettingsReply> settings(SettingsOp op, CallContext ctx) {
         return now(() -> switch (op) {
-            case Pin p -> {
-                Map<String, Object> saved = BotConfig.snapshotAll();
-                switch (p.baseline()) {
-                    case TEST -> BotConfig.applyGameTestBaseline();
-                    case COMPILED -> BotConfig.applyCompiledDefaults();
-                    case CURRENT -> {}
-                    default -> throw new IllegalStateException("unhandled baseline " + p.baseline());
-                }
-                if (p.untimed()) {
-                    PlanningConfig.pathfinderMaxMs = Long.MAX_VALUE / 2;
-                    ControlConfig.pathfinderSliceMs = Long.MAX_VALUE / 2;
-                }
-                int id = nextPin.incrementAndGet();
-                pins.put(id, saved);
-                yield new Pinned(id);
-            }
-            case Unpin u -> {
-                Map<String, Object> saved = pins.remove(u.pin());
-                if (saved == null) {
-                    throw ApiException.invalidParam(
-                            "/pin", ApiIssue.Code.INVALID_VALUE, "no pin " + u.pin() + " is held");
-                }
-                BotConfig.restoreAll(saved);
-                yield new Unpinned(u.pin());
-            }
-            case Write w -> {
-                List<ApiIssue> issues = SettingsCommand.check(w.values(), "/values");
-                if (!issues.isEmpty()) {
-                    throw ApiException.invalidParams(issues);
-                }
-                BotApi bot = BotHooks.impl();
-                SettingsCommand.commit(bot, w.values());
-                List<Entry> now = new ArrayList<>();
-                for (Entry e : w.values()) {
-                    now.add(new Entry(e.key(), SettingsCommand.read(bot, e.key())));
-                }
-                yield new Written(now);
-            }
-            case Read r -> {
-                BotApi bot = BotHooks.impl();
-                List<Entry> now = new ArrayList<>();
-                for (String k : r.keys()) {
-                    now.add(new Entry(k, SettingsCommand.read(bot, k)));
-                }
-                yield new Values(now);
-            }
+            case Pin p -> pin(p);
+            case Unpin u -> unpin(u);
+            case Write w -> writeSettings(w);
+            case Read r -> readSettings(r);
         });
+    }
+
+    private SettingsReply pin(Pin p) {
+        Map<String, Object> saved = BotConfig.snapshotAll();
+        switch (p.baseline()) {
+            case TEST -> BotConfig.applyGameTestBaseline();
+            case COMPILED -> BotConfig.applyCompiledDefaults();
+            case CURRENT -> {}
+            default -> throw new IllegalStateException("unhandled baseline " + p.baseline());
+        }
+        if (p.untimed()) {
+            PlanningConfig.pathfinderMaxMs = Long.MAX_VALUE / 2;
+            ControlConfig.pathfinderSliceMs = Long.MAX_VALUE / 2;
+        }
+        int id = nextPin.incrementAndGet();
+        pins.put(id, saved);
+        return new Pinned(id);
+    }
+
+    private SettingsReply unpin(Unpin u) {
+        Map<String, Object> saved = pins.remove(u.pin());
+        if (saved == null) {
+            throw ApiException.invalidParam("/pin", ApiIssue.Code.INVALID_VALUE, "no pin " + u.pin() + " is held");
+        }
+        BotConfig.restoreAll(saved);
+        return new Unpinned(u.pin());
+    }
+
+    private static SettingsReply writeSettings(Write w) {
+        List<ApiIssue> issues = SettingsCommand.check(w.values(), "/values");
+        if (!issues.isEmpty()) {
+            throw ApiException.invalidParams(issues);
+        }
+        BotApi bot = BotHooks.impl();
+        SettingsCommand.commit(bot, w.values());
+        List<Entry> now = new ArrayList<>();
+        for (Entry e : w.values()) {
+            now.add(new Entry(e.key(), SettingsCommand.read(bot, e.key())));
+        }
+        return new Written(now);
+    }
+
+    private static SettingsReply readSettings(Read r) {
+        BotApi bot = BotHooks.impl();
+        List<Entry> now = new ArrayList<>();
+        for (String k : r.keys()) {
+            now.add(new Entry(k, SettingsCommand.read(bot, k)));
+        }
+        return new Values(now);
     }
 
     @Override

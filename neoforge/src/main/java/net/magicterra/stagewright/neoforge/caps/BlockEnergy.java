@@ -112,7 +112,7 @@ public final class BlockEnergy implements Energy {
      * true} through the no-side handler and took 0 of every 1000 offered. A write therefore tries each handler until
      * one accepts, and stops there.
      */
-    @SuppressWarnings("PMD.CompareObjectsWithEquals") // identity on purpose: equals() may compare contents
+    // Identity on purpose: equals() may compare contents.
     static List<IEnergyStorage> handlers(ServerLevel level, BlockPos pos) {
         List<IEnergyStorage> out = new ArrayList<>();
         IEnergyStorage noSide = level.getCapability(Capabilities.EnergyStorage.BLOCK, pos, null);

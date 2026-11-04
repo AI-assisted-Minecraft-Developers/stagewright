@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -96,19 +97,17 @@ final class YamlTests {
                     options.put(key, test.get(key));
                 }
             }
-            Map<String, Object> plot = plotOptions(test.get("plot"), where);
+            Optional<Map<String, Object>> plot = plotOptions(test.get("plot"), where);
             List<Map<?, ?>> steps = steps(test, where);
             out.add(new Test(name, options, context -> run(context, plot, steps)));
         }
         return out;
     }
 
-    /** A test's {@code plot}, the options {@code t.plot} takes; null when it leases none. */
-    // Null is the documented answer for a test that leases no plot, and the caller tests for it.
-    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
-    private static Map<String, Object> plotOptions(Object plot, String where) {
+    /** A test's {@code plot}, the options {@code t.plot} takes; empty when it leases none. */
+    private static Optional<Map<String, Object>> plotOptions(Object plot, String where) {
         if (plot == null) {
-            return null;
+            return Optional.empty();
         }
         if (plot instanceof Map<?, ?> m && PLOT_KEYS.containsAll(m.keySet())) {
             Map<String, Object> options = new LinkedHashMap<>();
@@ -117,7 +116,7 @@ final class YamlTests {
                 boolean side = !"centered".equals(key) && !"dimension".equals(key);
                 options.put(key, side ? ScriptContext.ticks(e.getValue(), where + ": plot " + key) : e.getValue());
             }
-            return options;
+            return Optional.of(options);
         }
         throw new IllegalArgumentException(where + ": plot is {size, x, y, z, centered, dimension}, each optional");
     }
@@ -164,10 +163,10 @@ final class YamlTests {
         return verbs.get(0);
     }
 
-    private static void run(ScriptContext context, Map<String, Object> plot, List<Map<?, ?>> steps) {
+    private static void run(ScriptContext context, Optional<Map<String, Object>> plot, List<Map<?, ?>> steps) {
         Map<String, Object> saved = new HashMap<>();
-        if (plot != null) {
-            saved.put("plot", context.plot(plot));
+        if (plot.isPresent()) {
+            saved.put("plot", context.plot(plot.get()));
         }
         run(context, steps, saved, "step ");
     }

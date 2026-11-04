@@ -198,7 +198,7 @@ final class ScriptScheduler {
     }
 
     /** Take {@code test}'s locks; all of them, alone, when it is isolated or the script tests run one at a time. */
-    AutoCloseable hold(Set<String> locks, boolean isolated) {
+    RunLocks.Hold hold(Set<String> locks, boolean isolated) {
         return RunLocks.hold(RunLocks.exclusive(locks), isolated || !parallel);
     }
 }

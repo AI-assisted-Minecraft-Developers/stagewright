@@ -175,97 +175,121 @@ final class RecipeGraph {
      * Walk every ingredient of an item down to raw materials. A walk that hits a bound stops and says so
      * ({@code truncated}), because a cut-off closure looks exactly like a healthy one otherwise.
      */
-    // One breadth-first walk sharing its frontier and result sets; splitting it would pass them all around.
-    @SuppressWarnings("checkstyle:javancss")
     Closure closure(String itemId, int maxNodes, int maxDepth) {
-        String root = item(itemId);
-        Set<String> seen = new LinkedHashSet<>();
-        Set<String> leaves = new LinkedHashSet<>();
-        Set<String> recipes = new LinkedHashSet<>();
-        List<String> unresolvable = new ArrayList<>();
-        Set<String> opaque = new LinkedHashSet<>();
-        Set<String> declared = new LinkedHashSet<>(); // reached through a real ingredient slot
-        Deque<String[]> frontier = new ArrayDeque<>(); // {itemId, depth}
-        boolean truncated = false;
-        int deepest = 0;
+        Walk walk = new Walk(item(itemId), maxNodes);
+        while (!walk.frontier.isEmpty()) {
+            String[] node = walk.frontier.removeFirst();
+            walk.visit(node[0], Integer.parseInt(node[1]), maxDepth);
+        }
+        return walk.result();
+    }
 
-        frontier.add(new String[] {root, "0"});
-        seen.add(root);
+    /** One breadth-first walk's frontier and the sets it fills; {@link #closure} drives it. */
+    private final class Walk {
+        private final String root;
 
-        while (!frontier.isEmpty()) {
-            String[] node = frontier.removeFirst();
-            String item = node[0];
-            int depth = Integer.parseInt(node[1]);
+        private final int maxNodes;
+
+        private final Set<String> seen = new LinkedHashSet<>();
+
+        private final Set<String> leaves = new LinkedHashSet<>();
+
+        private final Set<String> recipes = new LinkedHashSet<>();
+
+        private final List<String> unresolvable = new ArrayList<>();
+
+        private final Set<String> opaque = new LinkedHashSet<>();
+
+        // Reached through a real ingredient slot.
+        private final Set<String> declared = new LinkedHashSet<>();
+
+        // {itemId, depth}
+        private final Deque<String[]> frontier = new ArrayDeque<>();
+
+        private boolean truncated;
+
+        private int deepest;
+
+        Walk(String root, int maxNodes) {
+            this.root = root;
+            this.maxNodes = maxNodes;
+            frontier.add(new String[] {root, "0"});
+            seen.add(root);
+        }
+
+        void visit(String item, int depth, int maxDepth) {
             deepest = Math.max(deepest, depth);
-
             List<String> makers = byResult.getOrDefault(item, List.of());
             if (makers.isEmpty()) {
                 leaves.add(item);
-                continue;
+                return;
             }
             if (depth >= maxDepth) {
                 truncated = true;
-                continue;
+                return;
             }
             for (String recipeId : makers) {
-                recipes.add(recipeId);
-                List<List<String>> slots = slotsOf(byId.get(recipeId));
-                // No slots at all is a different claim from a slot nothing satisfies. Keep walking on what the
-                // recipe's own serialization mentions: stopping here made a modded closure look healthy at
-                // eleven items. These edges are weaker, and `inferred` says which items came in on one.
-                if (slots.isEmpty()) {
-                    opaque.add(recipeId);
-                    for (String next : mentionedBy(byId.get(recipeId))) {
-                        if (seen.contains(next)) {
-                            continue;
-                        }
-                        if (seen.size() >= maxNodes) {
-                            truncated = true;
-                            continue;
-                        }
-                        seen.add(next);
-                        frontier.addLast(new String[] {next, String.valueOf(depth + 1)});
-                    }
+                expand(recipeId, depth);
+            }
+        }
+
+        private void expand(String recipeId, int depth) {
+            recipes.add(recipeId);
+            List<List<String>> slots = slotsOf(byId.get(recipeId));
+            // No slots at all is a different claim from a slot nothing satisfies. Keep walking on what the
+            // recipe's own serialization mentions: stopping here made a modded closure look healthy at
+            // eleven items. These edges are weaker, and `inferred` says which items came in on one.
+            if (slots.isEmpty()) {
+                opaque.add(recipeId);
+                for (String next : mentionedBy(byId.get(recipeId))) {
+                    enqueue(next, depth);
+                }
+                return;
+            }
+            for (int slot = 0; slot < slots.size(); slot++) {
+                List<String> accepted = slots.get(slot);
+                if (accepted.isEmpty()) {
+                    unresolvable.add(recipeId + " slot " + slot);
                     continue;
                 }
-                for (int slot = 0; slot < slots.size(); slot++) {
-                    List<String> accepted = slots.get(slot);
-                    if (accepted.isEmpty()) {
-                        unresolvable.add(recipeId + " slot " + slot);
-                        continue;
-                    }
-                    for (String next : accepted) {
-                        declared.add(next);
-                        if (seen.contains(next)) {
-                            continue;
-                        }
-                        if (seen.size() >= maxNodes) {
-                            truncated = true;
-                            continue;
-                        }
-                        seen.add(next);
-                        frontier.addLast(new String[] {next, String.valueOf(depth + 1)});
-                    }
+                for (String next : accepted) {
+                    declared.add(next);
+                    enqueue(next, depth);
                 }
             }
         }
-        // Set difference, not "which channel got there first": an item can arrive by a mention and later turn up
-        // in a real slot, and breadth-first order must not decide what counts as inferred.
-        Set<String> inferred = new LinkedHashSet<>(seen);
-        inferred.removeAll(declared);
-        inferred.remove(root);
-        return new Closure(
-                root,
-                List.copyOf(seen),
-                List.copyOf(leaves),
-                List.copyOf(recipes),
-                unresolvable.stream()
-                        .map(s -> s.length() > 512 ? s.substring(0, 512) : s)
-                        .toList(),
-                List.copyOf(opaque),
-                List.copyOf(inferred),
-                deepest,
-                truncated);
+
+        private void enqueue(String next, int depth) {
+            if (seen.contains(next)) {
+                return;
+            }
+            if (seen.size() >= maxNodes) {
+                truncated = true;
+                return;
+            }
+            seen.add(next);
+            frontier.addLast(new String[] {next, String.valueOf(depth + 1)});
+        }
+
+        Closure result() {
+            // Set difference, not "which channel got there first": an item can arrive by a mention and later turn up
+            // in a real slot, and breadth-first order must not decide what counts as inferred.
+            Set<String> inferred = new LinkedHashSet<>(seen);
+            inferred.removeAll(declared);
+            inferred.remove(root);
+            return new Closure(
+                    root,
+                    List.copyOf(seen),
+                    List.copyOf(leaves),
+                    List.copyOf(recipes),
+                    unresolvable.stream()
+                            .map(s -> s.length() > 512 ? s.substring(0, 512) : s)
+                            .toList(),
+                    List.copyOf(opaque),
+                    List.copyOf(inferred),
+                    deepest,
+                    truncated);
+        }
     }
 
     // ---- ids ----

@@ -64,9 +64,14 @@ final class ScriptHandles {
 
     private ScriptHandles() {}
 
-    // One table of the script's handles, each a few lines; splitting it would scatter the names it defines.
-    @SuppressWarnings("checkstyle:javancss")
     static void install(Map<String, Object> t, Game game, List<CloseableResource> leases, String test) {
+        installBodies(t, game, leases, test);
+        installWorld(t, game);
+        installOverrides(t, game);
+    }
+
+    /** {@code t.plot}, {@code t.bot}, {@code t.player} and {@code t.npc}: what a test leases or takes hold of. */
+    private static void installBodies(Map<String, Object> t, Game game, List<CloseableResource> leases, String test) {
         // t.plot({size, x, y, z, centered, dimension}), every option optional; x, y and z override size on their axis.
         t.put("plot", (Scripting.Function) args -> {
             Map<?, ?> options = args.length > 0 && args[0] instanceof Map<?, ?> m ? m : Map.of();
@@ -130,6 +135,10 @@ final class ScriptHandles {
             driven(out, npc);
             return out;
         });
+    }
+
+    /** {@code t.translate}, {@code t.client}, the capability handles and {@code t.hasClass}: what the game offers. */
+    private static void installWorld(Map<String, Object> t, Game game) {
         t.put("translate", (Scripting.Function) args ->
                 position(game.translate(blockPos(arg(args, 0)), dimension(arg(args, 1)), dimension(arg(args, 2)))));
         t.put("client", (Scripting.Function) args -> {
@@ -152,6 +161,12 @@ final class ScriptHandles {
         });
         // Whether a class by this name loads in the game; it is not initialised.
         t.put("hasClass", (Scripting.Function) args -> hasClass(ScriptContext.string(args, 0, "t.hasClass(name)")));
+    }
+
+    /**
+     * The {@code t.override*} handles, {@code t.perf} and {@code t.freezeTicks}: what a test changes about the game.
+     */
+    private static void installOverrides(Map<String, Object> t, Game game) {
         t.put("override", (Scripting.Function) args -> {
             String rule = ScriptContext.string(args, 0, "t.override(rule, value)");
             Object value = args.length > 1 ? args[1] : null;

@@ -227,8 +227,6 @@ public final class Quests {
     }
 
     /** The internal long id, read from the field FTB Quests exposes on every quest object. */
-    // The fallback's parse failure is described in the message; only the field read's cause is worth chaining.
-    @SuppressWarnings("PMD.PreserveStackTrace")
     private static long idOf(Object questObject) {
         try {
             return questObject.getClass().getField("id").getLong(questObject);
@@ -237,7 +235,9 @@ public final class Quests {
             try {
                 return Long.parseUnsignedLong(codeOf(questObject), 16);
             } catch (NumberFormatException nfe) {
-                throw new IllegalStateException("cannot read this quest's id: " + e, e);
+                // The field read's failure is the message; both traces stay attached.
+                nfe.addSuppressed(e);
+                throw new IllegalStateException("cannot read this quest's id: " + e, nfe);
             }
         }
     }

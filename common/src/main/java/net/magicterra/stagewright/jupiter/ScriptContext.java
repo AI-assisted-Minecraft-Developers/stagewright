@@ -202,7 +202,6 @@ final class ScriptContext {
      * to {@code failure}, or becomes it when the test had passed. Answers the test's failure.
      */
     // A cleanup that throws the very throwable already recorded is one failure, so the identity check is intended.
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     static Throwable runAfterTest(List<Scripting.Function> cleanups, Throwable failure, CatchableErrors errors) {
         for (int i = cleanups.size() - 1; i >= 0; i--) {
             try {
@@ -404,7 +403,7 @@ final class ScriptContext {
         Object actual = args.length > 0 ? args[0] : null;
         Map<String, Object> ops = new LinkedHashMap<>();
         ops.put("equals", (Scripting.Function) a -> {
-            Expectations.equals(actual, arg(a));
+            Expectations.equalTo(actual, arg(a));
             return null;
         });
         ops.put("contains", (Scripting.Function) a -> {
@@ -459,10 +458,8 @@ final class ScriptContext {
         return null;
     }
 
-    // The array selects the varargs overload below; a two-argument call here would recurse into this method.
-    @SuppressWarnings("PMD.UnnecessaryVarargsArrayCreation")
     void record(String name, Object value) {
-        record(new Object[] {name, value});
+        publishRecord(name, value);
     }
 
     /**
@@ -470,17 +467,19 @@ final class ScriptContext {
      * string is kept as it is, an empty one included; anything else as JSON.
      */
     private Object record(Object... args) {
-        String name = string(args, 0, "t.record(name, value)");
+        publishRecord(string(args, 0, "t.record(name, value)"), args.length > 1 ? args[1] : null);
+        return null;
+    }
+
+    private void publishRecord(String name, Object value) {
         if (name.isBlank()) {
             throw new IllegalArgumentException("t.record(name, value): the name must not be blank");
         }
-        Object value = args.length > 1 ? args[1] : null;
         Records.publish(
                 test.getUniqueId().toString(),
                 Records.label(test.getSource().orElse(null), test.getDisplayName()),
                 name,
                 value instanceof String s ? s : GSON.toJson(value));
-        return null;
     }
 
     /** A script's value as JSON; its numbers are all doubles, so a whole one is written as an integer. */

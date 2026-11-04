@@ -56,8 +56,6 @@ final class Handovers {
      * test's plots is released and the test fails, since the plot is put back under it. The exception to throw, or
      * null.
      */
-    // The first plot that holds the bot settles it: a bot standing in two plots must not be released or reported twice.
-    @SuppressWarnings("PMD.AvoidBranchingStatementAsLastInLoop")
     static IllegalStateException endOfTest(
             Collection<BodyImpl.BotImpl> bots, Collection<PlotImpl> plots, boolean failed) {
         IllegalStateException misplaced = null;
@@ -69,19 +67,17 @@ final class Handovers {
                 bot.release();
                 continue;
             }
-            for (PlotImpl plot : plots) {
-                if (!plot.contains(bot.dimension(), bot.blockPos())) {
-                    continue;
-                }
-                bot.release();
-                IllegalStateException e = new IllegalStateException(bot.name() + " is kept for a later test but"
-                        + " stands in this test's plot, which is put back when the test ends: move it out first");
-                if (misplaced == null) {
-                    misplaced = e;
-                } else {
-                    misplaced.addSuppressed(e);
-                }
-                break;
+            // Any one plot holding the bot settles it: a bot standing in two plots is released and reported once.
+            if (plots.stream().noneMatch(plot -> plot.contains(bot.dimension(), bot.blockPos()))) {
+                continue;
+            }
+            bot.release();
+            IllegalStateException e = new IllegalStateException(bot.name() + " is kept for a later test but"
+                    + " stands in this test's plot, which is put back when the test ends: move it out first");
+            if (misplaced == null) {
+                misplaced = e;
+            } else {
+                misplaced.addSuppressed(e);
             }
         }
         return misplaced;

@@ -39,8 +39,7 @@ public final class Main {
         }
     }
 
-    @SuppressWarnings("PMD.UseVarargs") // the array is main()'s argv; keep the signature
-    static int run(String[] args) throws IOException {
+    static int run(String... args) throws IOException {
         if (args.length == 0 || "--help".equals(args[0]) || "-h".equals(args[0])) {
             usage(System.out);
             return 0;

@@ -455,8 +455,6 @@ public final class ScriptTestEngine implements TestEngine {
         }
 
         /** Run, or skip, this test and report it; answers how it ended. */
-        // The hold is a try-with-resources handle: it is used by the block and released when the block ends.
-        @SuppressWarnings("PMD.UnusedLocalVariable")
         TestExecutionResult.Status execute(EngineExecutionListener listener, ScriptScheduler scheduler) {
             if (requirement.any()) {
                 List<String> missing = RequiresCondition.missing(requirement.capabilities(), requirement.mods());
@@ -470,7 +468,7 @@ public final class ScriptTestEngine implements TestEngine {
             listener.executionStarted(this);
             TestExecutionResult result = upstream(scheduler);
             if (result == null) {
-                try (AutoCloseable held = scheduler.hold(locks, isolated)) {
+                try (RunLocks.Hold ignored = scheduler.hold(locks, isolated)) {
                     result = run();
                 } catch (Exception e) {
                     result = TestExecutionResult.failed(e);

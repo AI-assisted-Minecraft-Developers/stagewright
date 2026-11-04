@@ -23,7 +23,7 @@ public final class DriverRuntime {
      * Register once per API instance; publish the marker only after all registrations succeed. A client asks every
      * tick, so an API already registered is answered without the lock.
      */
-    @SuppressWarnings("PMD.CompareObjectsWithEquals") // The marker is identity: one registration per API instance.
+    // The marker is identity: one registration per API instance.
     public static void registerVerbs() {
         ApiRegistry api = requireApi();
         if (api == registeredApi) {

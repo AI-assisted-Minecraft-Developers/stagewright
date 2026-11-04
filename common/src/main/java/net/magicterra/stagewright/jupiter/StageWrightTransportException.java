@@ -19,6 +19,13 @@ public class StageWrightTransportException extends RuntimeException {
         this.error = error;
     }
 
+    /** {@link #StageWrightTransportException(String, String)}, with the failure that caused it. */
+    public StageWrightTransportException(String method, String error, Throwable cause) {
+        super(method + " -> error: " + error, cause);
+        this.method = method;
+        this.error = error;
+    }
+
     /** The RPC method the socket could not carry, or {@code <connect>} for the handshake. */
     public String method() {
         return method;

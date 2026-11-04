@@ -30,8 +30,6 @@ import org.yaml.snakeyaml.error.YAMLException;
  * saying so. The game evaluates the same file again and runs the bodies. A YAML test file is read for its test names
  * and scenes only.
  */
-// The ": " between a resource and its failure is the shape every scan message takes; one constant would hide it.
-@SuppressWarnings("checkstyle:multiplestringliterals")
 final class ScriptScan {
 
     /** Where script tests live under a test root. */
@@ -43,7 +41,14 @@ final class ScriptScan {
     /** A file and what it registered, or why it could not be read. */
     record Scanned(String resource, List<Test> tests, String error) {}
 
+    private static final String SCENE = "scene";
+
     private ScriptScan() {}
+
+    /** A file that could not be read: {@code where} (the file, or the line in it) and then why. */
+    private static Scanned failed(String resource, String where, String why) {
+        return new Scanned(resource, List.of(), where + ": " + why);
+    }
 
     /** Every {@code .js} file under {@value #DIRECTORY} of {@code root}, as class-path resource names, sorted. */
     static List<String> scriptsUnder(Path root) {
@@ -71,7 +76,7 @@ final class ScriptScan {
             }
             source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            return new Scanned(resource, List.of(), "could not read " + resource + ": " + e.getMessage());
+            return failed(resource, "could not read " + resource, e.getMessage());
         }
         Map<String, Test> tests = new LinkedHashMap<>();
         if (isYaml(resource)) {
@@ -86,22 +91,20 @@ final class ScriptScan {
         } catch (WrappedException e) {
             // A registration the recorder refused, at the line that made it.
             String where = e.lineNumber() > 0 ? resource + ":" + e.lineNumber() : resource;
-            return new Scanned(
-                    resource, List.of(), where + ": " + e.getWrappedException().getMessage());
+            return failed(resource, where, e.getWrappedException().getMessage());
         } catch (EvaluatorException e) {
             // A syntax error: the game's engine is this same Rhino, so the file would not load there either.
             String where = e.lineNumber() > 0 ? resource + ":" + e.lineNumber() : resource;
-            return new Scanned(
-                    resource, List.of(), where + ": " + (e.details() != null ? e.details() : e.getMessage()));
+            return failed(resource, where, e.details() != null ? e.details() : e.getMessage());
         } catch (RhinoException e) {
             String where = e.lineNumber() > 0 ? resource + ":" + e.lineNumber() : resource;
-            return new Scanned(
+            return failed(
                     resource,
-                    List.of(),
-                    where + ": " + (e.details() != null ? e.details() : e.getMessage())
+                    where,
+                    (e.details() != null ? e.details() : e.getMessage())
                             + " (outside the game a file only registers its tests: its top level cannot use the game)");
         } catch (RuntimeException e) {
-            return new Scanned(resource, List.of(), resource + ": " + e.getMessage());
+            return failed(resource, resource, e.getMessage());
         }
         return new Scanned(resource, List.copyOf(tests.values()), null);
     }
@@ -128,7 +131,7 @@ final class ScriptScan {
                 if (!(t instanceof Map<?, ?> test) || !(test.get("name") instanceof String name)) {
                     return new Scanned(resource, List.of(), resource + ": each test is a map with a name");
                 }
-                List<String> scenes = scenes(test.containsKey("scene") ? test.get("scene") : file.get("scene"));
+                List<String> scenes = scenes(test.containsKey(SCENE) ? test.get(SCENE) : file.get(SCENE));
                 if (scenes.isEmpty()) {
                     return new Scanned(
                             resource,
@@ -140,7 +143,7 @@ final class ScriptScan {
                 }
             }
         } catch (YAMLException e) {
-            return new Scanned(resource, List.of(), resource + ": " + e.getMessage());
+            return failed(resource, resource, e.getMessage());
         }
         return new Scanned(resource, List.copyOf(tests.values()), null);
     }
@@ -175,7 +178,7 @@ final class ScriptScan {
             }
             String name = n.toString();
             List<String> scenes =
-                    scenes(args.length > 2 && args[1] instanceof Map<?, ?> options ? options.get("scene") : null);
+                    scenes(args.length > 2 && args[1] instanceof Map<?, ?> options ? options.get(SCENE) : null);
             if (scenes.isEmpty()) {
                 throw new IllegalArgumentException("test '" + name + "' names no scene: give it options with scene,"
                         + " a scene's name or a list of them");

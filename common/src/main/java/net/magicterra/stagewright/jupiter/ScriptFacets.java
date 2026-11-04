@@ -9,6 +9,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import net.magicterra.stagewright.test.Body;
 import net.magicterra.stagewright.test.Game;
@@ -29,9 +30,8 @@ final class ScriptFacets {
 
     private ScriptFacets() {}
 
-    // The first overload that takes the arguments answers the call, so the loop ends on its return; a method
-    // answering its own receiver is handed back as the facet itself, which is an identity test by definition.
-    @SuppressWarnings({"PMD.AvoidBranchingStatementAsLastInLoop", "PMD.CompareObjectsWithEquals"})
+    // The first overload that takes the arguments answers the call; a method answering its own receiver is
+    // handed back as the facet itself, which is an identity test by definition.
     static Map<String, Object> wrap(Game game, Object target) {
         if (target.getClass().getName().startsWith("net.minecraft.")) {
             throw new IllegalArgumentException(
@@ -51,12 +51,11 @@ final class ScriptFacets {
         Map<String, Object> out = new LinkedHashMap<>();
         byName.forEach((name, methods) -> out.put(name, (Scripting.Function) args -> {
             for (Method m : methods) {
-                Object[] converted = arguments(game, m, args);
-                if (converted == null) {
-                    continue;
+                Optional<Object[]> converted = arguments(game, m, args);
+                if (converted.isPresent()) {
+                    Object result = invoke(m, target, converted.get());
+                    return result == target ? out : plain(game, result);
                 }
-                Object result = invoke(m, target, converted);
-                return result == target ? out : plain(game, result);
             }
             List<String> shapes = new ArrayList<>();
             for (Method m : methods) {
@@ -107,20 +106,18 @@ final class ScriptFacets {
         }
     }
 
-    /** The arguments {@code m} takes made from {@code args}, or null when they do not fit it. */
-    // Null is the answer for arguments that do not fit the overload, and the caller tests for it.
-    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
-    private static Object[] arguments(Game game, Method m, Object... args) {
+    /** The arguments {@code m} takes made from {@code args}, or empty when they do not fit it. */
+    private static Optional<Object[]> arguments(Game game, Method m, Object... args) {
         Class<?>[] params = m.getParameterTypes();
         int fixed = m.isVarArgs() ? params.length - 1 : params.length;
         if (m.isVarArgs() ? args.length < fixed : args.length != fixed) {
-            return null;
+            return Optional.empty();
         }
         Object[] out = new Object[params.length];
         for (int i = 0; i < fixed; i++) {
             Object v = convert(game, params[i], args[i]);
             if (v == NO) {
-                return null;
+                return Optional.empty();
             }
             out[i] = v;
         }
@@ -130,13 +127,13 @@ final class ScriptFacets {
             for (int i = fixed; i < args.length; i++) {
                 Object v = convert(game, component, args[i]);
                 if (v == NO) {
-                    return null;
+                    return Optional.empty();
                 }
                 Array.set(rest, i - fixed, v);
             }
             out[fixed] = rest;
         }
-        return out;
+        return Optional.of(out);
     }
 
     private static Object convert(Game game, Class<?> type, Object v) {

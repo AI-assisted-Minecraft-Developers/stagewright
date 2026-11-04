@@ -44,7 +44,7 @@ class GameLaunchTest {
                 gameDir.resolve("run.sh"),
                 "java @user_jvm_args.txt @libraries/net/neoforged/neoforge/21.1.248/unix_args.txt \"$@\"\n");
 
-        List<String> command = GameLaunch.detect(gameDir, "java", line -> {});
+        List<String> command = GameLaunch.detect(gameDir, "java", line -> {}).orElseThrow();
 
         // The beta is newer by every ordering rule and is NOT what this pack boots.
         assertTrue(command.stream().anyMatch(a -> a.contains("/21.1.248/")), command.toString());
@@ -57,7 +57,7 @@ class GameLaunchTest {
         installLoader(gameDir, "21.1.117");
 
         List<String> log = new ArrayList<>();
-        List<String> command = GameLaunch.detect(gameDir, "java", log::add);
+        List<String> command = GameLaunch.detect(gameDir, "java", log::add).orElseThrow();
 
         assertTrue(command.stream().anyMatch(a -> a.contains("/21.1.117/")), command.toString());
         assertTrue(log.stream().anyMatch(l -> l.contains("--launch")), log.toString());
@@ -69,7 +69,7 @@ class GameLaunchTest {
         Path vanilla = Files.createFile(gameDir.resolve("server.jar"));
         // Newer, as it is once the launcher has downloaded it on its first start.
         vanilla.toFile().setLastModified(launcher.toFile().lastModified() + 60_000);
-        List<String> command = GameLaunch.detect(gameDir, "java", line -> {});
+        List<String> command = GameLaunch.detect(gameDir, "java", line -> {}).orElseThrow();
         assertEquals(List.of("java", "-jar", launcher.toString(), "nogui"), command);
     }
 
@@ -82,7 +82,7 @@ class GameLaunchTest {
                 gameDir.resolve("run.bat"),
                 "java @user_jvm_args.txt @libraries\\net\\neoforged\\neoforge\\21.1.190\\win_args.txt %*\r\n");
 
-        List<String> command = GameLaunch.detect(gameDir, "java", line -> {});
+        List<String> command = GameLaunch.detect(gameDir, "java", line -> {}).orElseThrow();
 
         assertTrue(command.stream().anyMatch(a -> a.contains("/21.1.190/")), command.toString());
     }

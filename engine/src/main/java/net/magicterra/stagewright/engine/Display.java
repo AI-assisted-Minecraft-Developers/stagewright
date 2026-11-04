@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -129,7 +130,8 @@ public final class Display {
         Path authority = xauthority != null
                 ? Path.of(xauthority.toString())
                 : home != null ? Path.of(home + "/.Xauthority") : null;
-        byte[] cookie = authority == null ? null : cookie(authority, n, hostname);
+        byte[] cookie =
+                authority == null ? null : cookie(authority, n, hostname).orElse(null);
         Answer answer = server.connect(n, local.group(1) == null, cookie);
         return switch (answer.kind()) {
             case ACCEPTED, NOT_ASKED -> null;
@@ -166,24 +168,22 @@ public final class Display {
     }
 
     /**
-     * The {@code MIT-MAGIC-COOKIE-1} an authority file holds for local display {@code n}, or null — the entry libxcb
+     * The {@code MIT-MAGIC-COOKIE-1} an authority file holds for local display {@code n}, or empty — the entry libxcb
      * would present. A wildcard entry counts, and a local one only if it names {@code hostname}: a home shared between
      * machines, or kept across a rename, holds entries for {@code :0} that belong to another host. An entry without a
      * display number applies to every display.
      *
      * @param hostname this machine's name, or null when unknown and every local entry counts
      */
-    // Null means no entry matched: an empty array would read as a present, empty cookie to libxcb's caller.
-    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull")
-    static byte[] cookie(Path authority, int n, String hostname) {
+    static Optional<byte[]> cookie(Path authority, int n, String hostname) {
         byte[] file;
         try {
             if (!Files.isRegularFile(authority)) {
-                return null;
+                return Optional.empty();
             }
             file = Files.readAllBytes(authority);
         } catch (IOException e) {
-            return null;
+            return Optional.empty();
         }
         ByteBuffer in = ByteBuffer.wrap(file).order(ByteOrder.BIG_ENDIAN);
         try {
@@ -197,13 +197,13 @@ public final class Display {
                         || family == FAMILY_LOCAL && (hostname == null || hostname.equals(address));
                 boolean thisDisplay = number.isEmpty() || number.equals(String.valueOf(n));
                 if (here && thisDisplay && COOKIE.equals(name)) {
-                    return data;
+                    return Optional.of(data);
                 }
             }
         } catch (RuntimeException e) {
             // A truncated file: whatever came before the damage has already been searched.
         }
-        return null;
+        return Optional.empty();
     }
 
     /** The name libxcb looks up a local entry by — {@code gethostname()} — or null if unreadable. */

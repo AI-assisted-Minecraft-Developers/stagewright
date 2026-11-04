@@ -68,9 +68,8 @@ public final class StageWrightRpc implements AutoCloseable {
      * returning. Throws {@link StageWrightTransportException} if the connection cannot be established within
      * {@code connectTimeoutMs}.
      */
-    // The client is shut down here on any failed attempt and otherwise owned by the returned rpc; the handshake's
-    // failure text is folded into the transport error's message, which is the shape callers rely on.
-    @SuppressWarnings({"PMD.CloseResource", "PMD.PreserveStackTrace"})
+    // The client is shut down here on any failed attempt and otherwise owned by the returned rpc.
+    @SuppressWarnings("PMD.CloseResource")
     public static StageWrightRpc connect(String wsUri, long connectTimeoutMs) {
         HttpClient client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(connectTimeoutMs))
@@ -87,13 +86,13 @@ public final class StageWrightRpc implements AutoCloseable {
             return rpc;
         } catch (TimeoutException e) {
             throw new StageWrightTransportException(
-                    "<connect>", "websocket handshake to " + wsUri + " timed out after " + connectTimeoutMs + "ms");
+                    "<connect>", "websocket handshake to " + wsUri + " timed out after " + connectTimeoutMs + "ms", e);
         } catch (ExecutionException e) {
             throw new StageWrightTransportException(
-                    "<connect>", "websocket handshake to " + wsUri + " failed: " + e.getCause());
+                    "<connect>", "websocket handshake to " + wsUri + " failed: " + e.getCause(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new StageWrightTransportException("<connect>", "interrupted while connecting to " + wsUri);
+            throw new StageWrightTransportException("<connect>", "interrupted while connecting to " + wsUri, e);
         } finally {
             // Otherwise each failed attempt keeps a selector thread until the client is collected,
             // and attach retries many times. shutdownNow, as close waits out a handshake in flight.
@@ -117,8 +116,6 @@ public final class StageWrightRpc implements AutoCloseable {
      * {@link #call}, answering the reply envelope as it came, {@code error} or {@code result}, for a caller that
      * rebuilds the error itself. Throws as {@link #call} does for everything but a refusal.
      */
-    // Transport errors carry the failure's text, not the exception, so callers see one error shape for every failure.
-    @SuppressWarnings("PMD.PreserveStackTrace")
     public JsonObject envelope(String method, JsonObject params, long timeoutMs) {
         long id = ids.incrementAndGet();
         CompletableFuture<JsonObject> fut = new CompletableFuture<>();
@@ -148,14 +145,15 @@ public final class StageWrightRpc implements AutoCloseable {
                 throw new StageWrightTransportException(
                         method,
                         "the request could not be sent within " + timeoutMs
-                                + "ms: the server has stopped reading the socket");
+                                + "ms: the server has stopped reading the socket",
+                        e);
             }
-            throw new StageWrightTimeoutException("RPC call " + method + " timed out after " + timeoutMs + "ms");
+            throw new StageWrightTimeoutException("RPC call " + method + " timed out after " + timeoutMs + "ms", e);
         } catch (ExecutionException e) {
-            throw new StageWrightTransportException(method, "transport error: " + e.getCause());
+            throw new StageWrightTransportException(method, "transport error: " + e.getCause(), e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new StageWrightTransportException(method, "interrupted while awaiting reply");
+            throw new StageWrightTransportException(method, "interrupted while awaiting reply", e);
         } finally {
             pending.remove(id);
         }

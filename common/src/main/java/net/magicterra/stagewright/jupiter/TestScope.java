@@ -47,7 +47,7 @@ final class TestScope {
 
     private final List<AssertionError> failedChecks = new ArrayList<>();
 
-    private AutoCloseable held;
+    private RunLocks.Hold held;
 
     /** Whether the test froze the server's ticks, so its waits step them; see {@code Game.freezeTicks}. */
     private volatile boolean frozeTicks;
@@ -118,13 +118,10 @@ final class TestScope {
     }
 
     /** Give back what {@link #hold} took, if it took anything. */
-    // The AutoCloseable hold is the one this scope took, and close() is what its owner expects to throw.
-    @SuppressWarnings({"PMD.SignatureDeclareThrowsException", "PMD.CloseResource"})
-    void release() throws Exception {
-        AutoCloseable h = held;
-        held = null;
-        if (h != null) {
-            h.close();
+    void release() {
+        // A null resource is skipped, so a scope that took no hold closes nothing.
+        try (RunLocks.Hold ignored = held) {
+            held = null;
         }
     }
 

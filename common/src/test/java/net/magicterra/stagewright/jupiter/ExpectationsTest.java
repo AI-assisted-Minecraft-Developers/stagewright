@@ -14,8 +14,8 @@ class ExpectationsTest {
 
     @Test
     void numbersCompareByValueWhateverTheirType() {
-        Expectations.equals(7L, 7.0);
-        Expectations.equals(Map.of("n", List.of(1, 2)), Map.of("n", List.of(1.0, 2.0)));
+        Expectations.equalTo(7L, 7.0);
+        Expectations.equalTo(Map.of("n", List.of(1, 2)), Map.of("n", List.of(1.0, 2.0)));
         Expectations.atLeast(3, 3.0);
         assertThrows(AssertionError.class, () -> Expectations.gt(3, 3.0));
         assertThrows(AssertionError.class, () -> Expectations.lt("3", 4));

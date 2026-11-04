@@ -179,9 +179,7 @@ final class PerfSampler {
      * of {@code Minecraft} on every sample of a dedicated server's window and logged each attempt. Any throwable means
      * no client: Fabric refuses the class with a plain {@code RuntimeException}.
      */
-    // Called only from the server thread's sampling, so the lazily cached reflective handles have one writer.
-    @SuppressWarnings("PMD.NonThreadSafeSingleton")
-    private static int clientFps() {
+    private static synchronized int clientFps() {
         if (fpsAbsent) {
             return -1;
         }

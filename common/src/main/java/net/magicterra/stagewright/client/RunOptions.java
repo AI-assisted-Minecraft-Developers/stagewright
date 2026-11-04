@@ -58,9 +58,7 @@ public final class RunOptions {
      * dialog that waits for a click forever. The game is not yet running here, so {@code OptionInstance.set} stores the
      * value without firing its callbacks.
      */
-    // Client setup runs on the game thread before any tick, so the check-then-set on original cannot race.
-    @SuppressWarnings("PMD.NonThreadSafeSingleton")
-    public static void apply(Options options, File file) {
+    public static synchronized void apply(Options options, File file) {
         if (!ClientDirector.directed()) {
             return;
         }

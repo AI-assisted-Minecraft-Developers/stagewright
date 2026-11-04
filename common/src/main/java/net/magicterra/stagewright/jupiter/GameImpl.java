@@ -105,8 +105,7 @@ final class GameImpl implements Game {
     public void leaveWorld() {
         integratedOnly("leaveWorld");
         String left = WorldSwitch.current();
-        between = true;
-        WorldSwitch.leave();
+        leaveCurrentWorld();
         if (returnTo == null) {
             returnTo = left;
         }
@@ -125,8 +124,6 @@ final class GameImpl implements Game {
     }
 
     /** As a test ends: the world it started on open again, when it switched to another. */
-    // between is volatile and read by other threads while the client changes worlds, and stays set if that fails.
-    @SuppressWarnings("PMD.UnusedAssignment")
     void putWorldBack() {
         String back = returnTo;
         returnTo = null;
@@ -134,12 +131,17 @@ final class GameImpl implements Game {
             return;
         }
         if (!between) {
-            between = true;
-            WorldSwitch.leave();
+            leaveCurrentWorld();
         }
         server = WorldSwitch.open(back);
         between = false;
         applySceneWorld();
+    }
+
+    // between is volatile and read by other threads while the client changes worlds, and stays set if leaving fails.
+    private void leaveCurrentWorld() {
+        between = true;
+        WorldSwitch.leave();
     }
 
     /**

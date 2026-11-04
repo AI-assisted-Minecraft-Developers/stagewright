@@ -109,7 +109,8 @@ final class JavaSteps {
         return named.get(0);
     }
 
-    // The unwrapped cause is what the step failed with; the reflective wrapper adds nothing a reader needs.
+    // The target's own RuntimeException or Error is rethrown unchanged, so the original trace is what the step fails
+    // with; the reflective wrapper adds nothing a reader needs.
     @SuppressWarnings("PMD.PreserveStackTrace")
     static Object invoke(Method method, Game game, Object args) {
         Class<?>[] types = method.getParameterTypes();
@@ -127,13 +128,14 @@ final class JavaSteps {
         try {
             result = method.invoke(null, values);
         } catch (InvocationTargetException e) {
-            if (e.getCause() instanceof RuntimeException r) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException r) {
                 throw r;
             }
-            if (e.getCause() instanceof Error r) {
+            if (cause instanceof Error r) {
                 throw r;
             }
-            throw new IllegalStateException(e.getCause());
+            throw new IllegalStateException(cause);
         } catch (IllegalAccessException e) {
             throw new IllegalArgumentException(method + " is not accessible", e);
         }

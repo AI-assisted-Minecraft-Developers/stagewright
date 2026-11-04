@@ -139,7 +139,7 @@ public final class BlockFluids implements Fluids {
     }
 
     /** The no-side view first, then the six faces, deduplicated. See {@link BlockEnergy#handlers}. */
-    @SuppressWarnings("PMD.CompareObjectsWithEquals") // identity on purpose: equals() may compare contents
+    // Identity on purpose: equals() may compare contents.
     private static List<IFluidHandler> handlers(ServerLevel level, BlockPos pos) {
         List<IFluidHandler> out = new ArrayList<>();
         IFluidHandler noSide = level.getCapability(Capabilities.FluidHandler.BLOCK, pos, null);

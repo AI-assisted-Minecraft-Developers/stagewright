@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -254,8 +255,7 @@ public final class Supervisor implements AutoCloseable {
     }
 
     /** The endings the supervisor can see for itself. The lock is held. */
-    // The dead-game branch comes first on purpose: the live checks below only apply while the process runs.
-    @SuppressWarnings("PMD.ConfusingTernary")
+    // The live checks only apply while the process runs; a dead one is judged by what it left in flight.
     private Ended evaluate(ProcessHandle game, Limits limits) {
         if (done) {
             return Ended.DONE;
@@ -266,7 +266,17 @@ public final class Supervisor implements AutoCloseable {
             return Ended.CRASHED;
         }
         long now = System.nanoTime();
-        if (!game.isAlive()) {
+        if (game.isAlive()) {
+            if (!connected && now - openedNanos >= nanos(limits.connect())) {
+                return Ended.NEVER_CONNECTED;
+            }
+            if (connected && now - lastBeatNanos >= nanos(limits.heartbeat())) {
+                return Ended.HEARTBEAT_LOST;
+            }
+            if (connected && now - lastProgressNanos >= nanos(limits.stall())) {
+                return Ended.STALLED;
+            }
+        } else {
             // Its last lines may still be in flight. Once the connection has closed they have all been
             // read; a game that never connected has none to wait for.
             if (exitSeenNanos == 0) {
@@ -275,12 +285,6 @@ public final class Supervisor implements AutoCloseable {
             if (!connected || connectionClosed || now - exitSeenNanos >= DRAIN_NANOS) {
                 return Ended.PROCESS_DIED;
             }
-        } else if (!connected && now - openedNanos >= nanos(limits.connect())) {
-            return Ended.NEVER_CONNECTED;
-        } else if (connected && now - lastBeatNanos >= nanos(limits.heartbeat())) {
-            return Ended.HEARTBEAT_LOST;
-        } else if (connected && now - lastProgressNanos >= nanos(limits.stall())) {
-            return Ended.STALLED;
         }
         return now - openedNanos >= nanos(limits.total()) ? Ended.TIMED_OUT : null;
     }
@@ -454,10 +458,11 @@ public final class Supervisor implements AutoCloseable {
                         new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = in.readLine()) != null) {
-                Map<String, Object> event = parse(line);
-                if (event == null) {
+                Optional<Map<String, Object>> parsed = parse(line);
+                if (parsed.isEmpty()) {
                     continue;
                 }
+                Map<String, Object> event = parsed.get();
                 if (!mine) {
                     // The first line must be a hello that carries our token, and only one game counts.
                     if (!"hello".equals(event.get("event")) || !token.equals(event.get("token"))) {
@@ -494,13 +499,15 @@ public final class Supervisor implements AutoCloseable {
         }
     }
 
-    // Null marks a line that is not a JSON object; the reader skips it.
-    @SuppressWarnings({"unchecked", "PMD.ReturnEmptyCollectionRatherThanNull"})
-    private static Map<String, Object> parse(String line) {
+    // Empty marks a line that is not a JSON object; the reader skips it.
+    @SuppressWarnings("unchecked")
+    private static Optional<Map<String, Object>> parse(String line) {
         try {
-            return Json.parse(line) instanceof Map<?, ?> map ? (Map<String, Object>) map : null;
+            return Json.parse(line) instanceof Map<?, ?> map
+                    ? Optional.of((Map<String, Object>) map)
+                    : Optional.empty();
         } catch (IllegalArgumentException e) {
-            return null;
+            return Optional.empty();
         }
     }
 

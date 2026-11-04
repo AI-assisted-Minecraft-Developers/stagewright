@@ -25,11 +25,18 @@ final class RunLocks {
 
     private RunLocks() {}
 
+    /** The locks a test holds; closing it gives them back and throws nothing. */
+    @FunctionalInterface
+    interface Hold extends AutoCloseable {
+        @Override
+        void close();
+    }
+
     /**
      * Block until the test holds every lock it named, {@code true} meaning read-write, and the isolation lock; closing
      * the answer gives them back, on the same thread.
      */
-    static AutoCloseable hold(Map<String, Boolean> locks, boolean alone) {
+    static Hold hold(Map<String, Boolean> locks, boolean alone) {
         List<Lock> held = new ArrayList<>();
         held.add(alone ? ISOLATION.writeLock() : ISOLATION.readLock());
         new TreeMap<>(locks).forEach((name, write) -> {

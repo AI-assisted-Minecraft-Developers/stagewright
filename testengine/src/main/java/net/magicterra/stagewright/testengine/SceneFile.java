@@ -26,7 +26,8 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  * @param excludedMods {@code mods.exclude}: mods the game starts without, each a mod id or a jar file name pattern
  */
 // One validator for the whole file: keys are checked in one fixed order and the first bad one is reported, so the
-// checks stay together. The messages share the "scene '…': " shape by design.
+// checks stay together; splitting it into a second class would only move the same table. The messages share the
+// "scene '…': " shape by design, and a file that names every key in turn writes that prefix once per key.
 @SuppressWarnings({"checkstyle:javancss", "checkstyle:multiplestringliterals"})
 record SceneFile(
         String name,

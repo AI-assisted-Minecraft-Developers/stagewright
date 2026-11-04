@@ -59,7 +59,8 @@ final class CatchableErrors {
                 if (isAbort(e)) {
                     throw new Abort(e);
                 }
-                if (!catchable(e)) {
+                // Nothing is thrown on an interrupted thread, which is the test being stopped.
+                if (Thread.currentThread().isInterrupted()) {
                     throw e;
                 }
                 return refusal(e);
@@ -124,13 +125,6 @@ final class CatchableErrors {
         return value;
     }
 
-    /** Nothing thrown on an interrupted thread, which is the test being stopped. */
-    // The exception stays in the signature to mirror the catch it guards; only the thread state decides.
-    @SuppressWarnings("PMD.UnusedFormalParameter")
-    private static boolean catchable(RuntimeException e) {
-        return !Thread.currentThread().isInterrupted();
-    }
-
     /** Whether {@code e} is an abort ({@code TestAbortedException}), which skips the rest of the test as in Java. */
     static boolean isAbort(Throwable e) {
         for (Class<?> c = e.getClass(); c != null; c = c.getSuperclass()) {
@@ -173,7 +167,6 @@ final class CatchableErrors {
 
     /** The abort {@code failure} carries, wherever in its causes, or {@code failure} as it is. */
     // A self-cause is the one cycle to stop on, and that test is identity by definition.
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     static Throwable unwrapAbort(Throwable failure) {
         for (Throwable t = failure; t != null; t = t.getCause()) {
             if (t instanceof Abort) {

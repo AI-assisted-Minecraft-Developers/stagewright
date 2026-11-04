@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -28,7 +29,7 @@ final class GameLaunch {
     private GameLaunch() {}
 
     /**
-     * The command to start the server in {@code gameDir}, or null if the layout is unrecognised.
+     * The command to start the server in {@code gameDir}, or empty if the layout is unrecognised.
      *
      * <p>The java executable is index 0 so the caller can insert system properties immediately after it — before any
      * {@code @argfile}, which is where the JVM stops accepting them.
@@ -37,9 +38,9 @@ final class GameLaunch {
      *     directory accumulates every loader it has ever had installed, so "which one did you just launch" is the first
      *     question a mismatched dependency error raises.
      */
-    static List<String> detect(Path gameDir, String javaBinary, Consumer<String> log) {
-        List<String> forge = modLauncher(gameDir, javaBinary, log);
-        if (forge != null) {
+    static Optional<List<String>> detect(Path gameDir, String javaBinary, Consumer<String> log) {
+        Optional<List<String>> forge = modLauncher(gameDir, javaBinary, log);
+        if (forge.isPresent()) {
             return forge;
         }
         return fabricOrVanilla(gameDir, javaBinary, log);
@@ -82,13 +83,11 @@ final class GameLaunch {
      * yields a classpath the JVM reads as a single enormous entry and a {@code ClassNotFoundException} for the
      * launcher's main class.
      */
-    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull") // null means unrecognised; detect() tests for it
-    private static List<String> modLauncher(Path gameDir, String javaBinary, Consumer<String> log) {
+    private static Optional<List<String>> modLauncher(Path gameDir, String javaBinary, Consumer<String> log) {
         String argsName =
                 System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("win")
                         ? "win_args.txt"
                         : "unix_args.txt";
-        List<String> command = null;
         for (String vendor : new String[] {"net/neoforged/neoforge", "net/minecraftforge/forge"}) {
             Path base = gameDir.resolve("libraries").resolve(vendor);
             if (!Files.isDirectory(base)) {
@@ -99,7 +98,7 @@ final class GameLaunch {
                 args = newestVersionFile(base, vendor, argsName, log);
             }
             if (args != null) {
-                command = new ArrayList<>();
+                List<String> command = new ArrayList<>();
                 command.add(javaBinary);
                 Path jvmArgs = gameDir.resolve("user_jvm_args.txt");
                 if (Files.isRegularFile(jvmArgs)) {
@@ -107,10 +106,10 @@ final class GameLaunch {
                 }
                 command.add("@" + args);
                 command.add("nogui");
-                break;
+                return Optional.of(command);
             }
         }
-        return command;
+        return Optional.empty();
     }
 
     /**
@@ -120,8 +119,7 @@ final class GameLaunch {
      * — an author who upgraded loaders has both, and the old one still launches a server that loads none of the pack's
      * mods.
      */
-    @SuppressWarnings("PMD.ReturnEmptyCollectionRatherThanNull") // null means unrecognised; detect() tests for it
-    private static List<String> fabricOrVanilla(Path gameDir, String javaBinary, Consumer<String> log) {
+    private static Optional<List<String>> fabricOrVanilla(Path gameDir, String javaBinary, Consumer<String> log) {
         // A loader's launcher first: in Fabric's own layout the vanilla server.jar sits beside it, as the jar its
         // fabric-server-launcher.properties names, and starting that one starts a server with no mods at all.
         Path jar = newestJar(gameDir, n -> n.contains("fabric") || n.contains("quilt"));
@@ -129,10 +127,10 @@ final class GameLaunch {
             jar = newestJar(gameDir, n -> n.contains("server"));
         }
         if (jar == null) {
-            return null;
+            return Optional.empty();
         }
         log.accept("launching " + jar.getFileName() + " (newest jar in " + gameDir + ")");
-        return new ArrayList<>(List.of(javaBinary, "-jar", jar.toString(), "nogui"));
+        return Optional.of(new ArrayList<>(List.of(javaBinary, "-jar", jar.toString(), "nogui")));
     }
 
     /** The most recently modified top-level jar whose lower-case name {@code accepts}, never an installer. */

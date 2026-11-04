@@ -38,6 +38,8 @@ import org.junit.platform.engine.reporting.ReportEntry;
 @SuppressWarnings("checkstyle:multiplestringliterals")
 final class SceneRun {
 
+    private static final System.Logger LOG = System.getLogger(SceneRun.class.getName());
+
     private static final Duration CONNECT_LIMIT = Duration.ofMinutes(2);
 
     private static final Duration HEARTBEAT_LIMIT = Duration.ofSeconds(60);
@@ -178,8 +180,17 @@ final class SceneRun {
             boolean passed =
                     result != null && result.getStatus() == TestExecutionResult.Status.SUCCESSFUL && !relay.anyFailed();
             for (Path dir : spec.directories()) {
-                SceneDirectory.finish(dir, passed);
+                finish(scene, dir, passed);
             }
+        }
+    }
+
+    /** Tidy {@code dir} after the scene: a file that will not go must not replace the scene's own result. */
+    private static void finish(TestDescriptor scene, Path dir, boolean passed) {
+        try {
+            SceneDirectory.finish(dir, passed);
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "scene " + scene.getDisplayName() + ": left " + dir + " untidied", e);
         }
     }
 
@@ -202,8 +213,6 @@ final class SceneRun {
     }
 
     /** {@code spec} with both its games started without {@code exclude}, and a report entry saying which jars went. */
-    // The console line is how a build's log shows which mods a scene dropped, beside the scene's own output.
-    @SuppressWarnings("PMD.SystemPrintln")
     private LaunchSpec withoutMods(LaunchSpec spec, List<String> exclude, Path scratch) throws IOException {
         SceneMods.Applied primary = SceneMods.apply(spec.primary(), exclude, scratch.resolve("primary"));
         SceneMods.Applied companion = spec.companion() == null
@@ -218,7 +227,7 @@ final class SceneRun {
                 : unmatched("the server", primary) + unmatched("the client", companion);
         if (!unmatched.isEmpty()) {
             report += unmatched;
-            System.out.println("[stagewright] scene " + scene.getDisplayName() + ": mods.exclude" + unmatched);
+            LOG.log(System.Logger.Level.WARNING, "scene " + scene.getDisplayName() + ": mods.exclude" + unmatched);
         }
         listener.reportingEntryPublished(scene, ReportEntry.from("mods", report));
         return new LaunchSpec(
@@ -239,8 +248,6 @@ final class SceneRun {
         return applied.unmatched().isEmpty() ? "" : "; matched no mod of " + which + ": " + applied.unmatched();
     }
 
-    // The round loop below is long because each round is one game, its companion and their supervision in turn.
-    @SuppressWarnings("checkstyle:javancss")
     private TestExecutionResult supervise(
             LaunchSpec spec,
             SceneFile.World world,
@@ -251,20 +258,19 @@ final class SceneRun {
             ClassLoader loader,
             int serverPort)
             throws IOException, InterruptedException {
-        List<String> classes = new ArrayList<>();
-        List<String> scripts = new ArrayList<>();
-        for (TestDescriptor c : scene.getChildren()) {
-            if (c instanceof Nodes.ScriptFile f) {
-                scripts.add(f.resource);
-            } else {
-                classes.add(((Nodes.TestClass) c).className);
-            }
-        }
+        final List<String> classes = scene.getChildren().stream()
+                .filter(c -> !(c instanceof Nodes.ScriptFile))
+                .map(c -> ((Nodes.TestClass) c).className)
+                .toList();
+        final List<String> scripts = scene.getChildren().stream()
+                .filter(Nodes.ScriptFile.class::isInstance)
+                .map(c -> ((Nodes.ScriptFile) c).resource)
+                .toList();
 
         // What the rounds before handed to the ones after; a scene's first round starts with neither.
-        Files.deleteIfExists(artifacts.resolve("store.json"));
-        Files.deleteIfExists(artifacts.resolve("rounds.json"));
-        Files.deleteIfExists(artifacts.resolve("handovers.json"));
+        for (String handover : List.of("store.json", "rounds.json", "handovers.json")) {
+            Files.deleteIfExists(artifacts.resolve(handover));
+        }
         // One entry per round whose game had to be forced down after its run.
         List<String> forced = new ArrayList<>();
         // Staged once for every round: each round's game loads the same agent.
@@ -314,21 +320,7 @@ final class SceneRun {
                     Supervisor.Ending ending =
                             supervisor.await(game.toHandle(), limits, joined, companion.toHandle(), limits);
                     if (ending.companion()) {
-                        // The run cannot go on without its player: end the game, and say it was the client.
-                        Supervisor.kill(game.toHandle());
-                        String why = describeCompanion(
-                                ending.ended(),
-                                joined.phase(),
-                                joined.ticks(),
-                                joined.crashReport(),
-                                joined.stacks(),
-                                companionLog);
-                        listener.reportingEntryPublished(scene, ReportEntry.from("companion", why));
-                        appendToLog(companionLog, "the joined client ended " + why);
-                        relay.closeOut(scene, "the joined client ended " + why);
-                        return TestExecutionResult.failed(new AssertionError("the joined client ended " + why
-                                + "\nthe game's log is " + gameLog
-                                + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
+                        return companionEnded(ending, game, joined, relay, forced, gameLog, companionLog);
                     }
                     ended = ending.ended();
                 }
@@ -342,13 +334,7 @@ final class SceneRun {
                     Supervisor.kill(game.toHandle());
                 }
                 if (ended == Supervisor.Ended.DONE && (supervisor.forcedDown() || !exited)) {
-                    String report = forcedDown(round, supervisor.leaks(), exited, agentGraceSeconds);
-                    // Reported the same either way; only the verdict is the topology's to choose.
-                    if (spec.leaks() == LaunchSpec.Leaks.FAIL) {
-                        forced.add(report);
-                    }
-                    listener.reportingEntryPublished(scene, ReportEntry.from("forcedDown", report));
-                    appendToLog(gameLog, report);
+                    reportForcedDown(spec, supervisor, round, exited, forced, gameLog);
                 }
                 boolean again = ended == Supervisor.Ended.DONE && relay.ended() && relay.restart() == round + 1;
                 if (again) {
@@ -360,29 +346,63 @@ final class SceneRun {
                             ReportEntry.from("restart", "round " + (round + 1) + " on world " + worlds.current()));
                     continue;
                 }
-                String why = describe(
-                        ended,
-                        supervisor.phase(),
-                        supervisor.ticks(),
-                        supervisor.crashReport(),
-                        supervisor.stacks(),
-                        gameLog);
-                relay.closeOut(scene, why);
-                if (ended == Supervisor.Ended.DONE && relay.ended()) {
-                    // Every test passed or failed on its own; a game that would not end is the scene's failure.
-                    return forced.isEmpty()
-                            ? TestExecutionResult.successful()
-                            : TestExecutionResult.failed(
-                                    new AssertionError(String.join("\n", forced) + "\nits log is " + gameLog));
-                }
-                return TestExecutionResult.failed(new AssertionError(
-                        "the game ended " + why + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
+                return verdict(supervisor, ended, relay, forced, gameLog);
             } finally {
                 if (companion != null) {
                     Supervisor.kill(companion.toHandle());
                 }
             }
         }
+    }
+
+    /** The joined client ended the run: end the game too, and fail the scene saying it was the client. */
+    private TestExecutionResult companionEnded(
+            Supervisor.Ending ending,
+            Process game,
+            Supervisor joined,
+            Relay relay,
+            List<String> forced,
+            File gameLog,
+            File companionLog)
+            throws IOException, InterruptedException {
+        // The run cannot go on without its player.
+        Supervisor.kill(game.toHandle());
+        String why = describeCompanion(
+                ending.ended(), joined.phase(), joined.ticks(), joined.crashReport(), joined.stacks(), companionLog);
+        listener.reportingEntryPublished(scene, ReportEntry.from("companion", why));
+        appendToLog(companionLog, "the joined client ended " + why);
+        relay.closeOut(scene, "the joined client ended " + why);
+        return TestExecutionResult.failed(new AssertionError("the joined client ended " + why + "\n"
+                + "the game's log is " + gameLog + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
+    }
+
+    private void reportForcedDown(
+            LaunchSpec spec, Supervisor supervisor, int round, boolean exited, List<String> forced, File gameLog)
+            throws IOException {
+        String report = forcedDown(round, supervisor.leaks(), exited, agentGraceSeconds);
+        // Reported the same either way; only the verdict is the topology's to choose.
+        if (spec.leaks() == LaunchSpec.Leaks.FAIL) {
+            forced.add(report);
+        }
+        listener.reportingEntryPublished(scene, ReportEntry.from("forcedDown", report));
+        appendToLog(gameLog, report);
+    }
+
+    /** The scene's result once the last round's game has ended, closing out every test it did not finish. */
+    private TestExecutionResult verdict(
+            Supervisor supervisor, Supervisor.Ended ended, Relay relay, List<String> forced, File gameLog) {
+        String why = describe(
+                ended, supervisor.phase(), supervisor.ticks(), supervisor.crashReport(), supervisor.stacks(), gameLog);
+        relay.closeOut(scene, why);
+        if (ended == Supervisor.Ended.DONE && relay.ended()) {
+            // Every test passed or failed on its own; a game that would not end is the scene's failure.
+            return forced.isEmpty()
+                    ? TestExecutionResult.successful()
+                    : TestExecutionResult.failed(
+                            new AssertionError(String.join("\n", forced) + "\n" + "its log is " + gameLog));
+        }
+        return TestExecutionResult.failed(new AssertionError(
+                "the game ended " + why + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
     }
 
     private static Process start(LaunchSpec.Process p, List<String> extra, File log) throws IOException {

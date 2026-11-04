@@ -59,12 +59,26 @@ public final class StageWrightTestEngine implements TestEngine {
         return Optional.of("stagewright-testengine");
     }
 
-    // Discovery reads as one pass over the selectors and the classes they name; splitting it per selector kind
-    // would spread the single ordering of scenes across helpers.
     @Override
-    @SuppressWarnings("checkstyle:javancss")
     public TestDescriptor discover(EngineDiscoveryRequest request, UniqueId uniqueId) {
-        // What was asked for: whole classes, or particular methods of a class, optionally in one scene only.
+        Map<String, Predicate<ClassScan.Method>> wanted = wantedClasses(request);
+        Map<String, Predicate<String>> wantedScripts = wantedScripts(request);
+        Map<String, Set<String>> scenesOf = new LinkedHashMap<>();
+        for (UniqueIdSelector s : request.getSelectorsByType(UniqueIdSelector.class)) {
+            selectById(s.getUniqueId(), uniqueId, wanted, scenesOf, wantedScripts);
+        }
+
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        Map<String, Nodes.Scene> scenes = new LinkedHashMap<>();
+        addClasses(uniqueId, loader, wanted, scenesOf, scenes);
+        EngineDescriptor engine = new EngineDescriptor(uniqueId, "StageWright");
+        addScripts(engine, uniqueId, loader, wantedScripts, scenesOf, scenes);
+        scenes.values().stream().filter(s -> !s.getChildren().isEmpty()).forEach(engine::addChild);
+        return engine;
+    }
+
+    /** What was asked for: whole classes, or particular methods of a class, optionally in one scene only. */
+    private static Map<String, Predicate<ClassScan.Method>> wantedClasses(EngineDiscoveryRequest request) {
         Map<String, Predicate<ClassScan.Method>> wanted = new LinkedHashMap<>();
         for (ClassSelector s : request.getSelectorsByType(ClassSelector.class)) {
             wanted.put(s.getClassName(), m -> true);
@@ -81,8 +95,14 @@ public final class StageWrightTestEngine implements TestEngine {
                     && (parameters.isEmpty() || m.parameters().equals(parameters));
             wanted.merge(s.getClassName(), one, Predicate::or);
         }
-        // Scripts: every file under the suite's test roots when the request is for whole classes, as a Gradle Test
-        // task's is, and whatever files and tests are named directly.
+        return wanted;
+    }
+
+    /**
+     * Scripts: every file under the suite's test roots when the request is for whole classes, as a Gradle Test task's
+     * is, and whatever files and tests are named directly.
+     */
+    private static Map<String, Predicate<String>> wantedScripts(EngineDiscoveryRequest request) {
         Map<String, Predicate<String>> wantedScripts = new LinkedHashMap<>();
         if (!request.getSelectorsByType(ClassSelector.class).isEmpty()) {
             for (String root : System.getProperty(TEST_ROOTS, "").split(java.io.File.pathSeparator)) {
@@ -104,13 +124,15 @@ public final class StageWrightTestEngine implements TestEngine {
                 wantedScripts.put(s.getClasspathResourceName(), t -> true);
             }
         }
-        Map<String, Set<String>> scenesOf = new LinkedHashMap<>();
-        for (UniqueIdSelector s : request.getSelectorsByType(UniqueIdSelector.class)) {
-            selectById(s.getUniqueId(), uniqueId, wanted, scenesOf, wantedScripts);
-        }
+        return wantedScripts;
+    }
 
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        Map<String, Nodes.Scene> scenes = new LinkedHashMap<>();
+    private static void addClasses(
+            UniqueId uniqueId,
+            ClassLoader loader,
+            Map<String, Predicate<ClassScan.Method>> wanted,
+            Map<String, Set<String>> scenesOf,
+            Map<String, Nodes.Scene> scenes) {
         for (Map.Entry<String, Predicate<ClassScan.Method>> entry : wanted.entrySet()) {
             Optional<ClassScan.Scanned> scanned;
             try {
@@ -139,7 +161,15 @@ public final class StageWrightTestEngine implements TestEngine {
                 }
             }
         }
-        EngineDescriptor engine = new EngineDescriptor(uniqueId, "StageWright");
+    }
+
+    private static void addScripts(
+            EngineDescriptor engine,
+            UniqueId uniqueId,
+            ClassLoader loader,
+            Map<String, Predicate<String>> wantedScripts,
+            Map<String, Set<String>> scenesOf,
+            Map<String, Nodes.Scene> scenes) {
         for (Map.Entry<String, Predicate<String>> entry : wantedScripts.entrySet()) {
             ScriptScan.Scanned scanned = ScriptScan.scan(entry.getKey(), loader);
             if (scanned.error() != null) {
@@ -169,8 +199,6 @@ public final class StageWrightTestEngine implements TestEngine {
                 }
             }
         }
-        scenes.values().stream().filter(s -> !s.getChildren().isEmpty()).forEach(engine::addChild);
-        return engine;
     }
 
     @Override

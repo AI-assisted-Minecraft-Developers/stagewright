@@ -185,7 +185,6 @@ final class GeneratedRuns {
 
     /** Declare the suite's runs in its loader project, once that project is evaluated. */
     // Identity on purpose: the plugin's own project has already run its afterEvaluate, so it is declared at once.
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     static void declare(Project plugin, StageWrightTestSuite suite) {
         Project loader = loader(plugin, suite);
         // The plugin's own project is in its afterEvaluate already, and another one nested there would be one level
@@ -298,7 +297,6 @@ final class GeneratedRuns {
      * identity: a mod may hold another project's source set, and every project's main is named {@code main}.
      */
     // Identity on purpose: a mod's source set is the project's own main only if it is that very object.
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     private static Object host(Project loader, StageWrightTestSuite suite, Iterable<Object> mods, Object copy) {
         SourceSet main = loader.getExtensions()
                 .getByType(JavaPluginExtension.class)
@@ -359,7 +357,6 @@ final class GeneratedRuns {
 
     /** The suite generating runs in {@code project}, or null. */
     // Identity on purpose: the project object Gradle hands in is the one the loader lookup returns.
-    @SuppressWarnings("PMD.CompareObjectsWithEquals")
     static StageWrightTestSuite suiteOf(Project project, Iterable<StageWrightTestSuite> suites) {
         for (StageWrightTestSuite suite : suites) {
             if (generates(suite) && loader(project, suite) == project) {

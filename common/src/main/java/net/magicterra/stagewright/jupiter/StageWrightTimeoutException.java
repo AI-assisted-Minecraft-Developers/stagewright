@@ -14,4 +14,9 @@ public class StageWrightTimeoutException extends RuntimeException {
     public StageWrightTimeoutException(String message) {
         super(message);
     }
+
+    /** A bounded wait that ran out, described by {@code message}, after {@code cause} said so. */
+    public StageWrightTimeoutException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

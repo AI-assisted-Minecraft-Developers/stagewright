@@ -33,9 +33,8 @@ final class Expectations {
 
     private Expectations() {}
 
-    // The name is the YAML operator's, and the operator is what the assertion is named after.
-    @SuppressWarnings("PMD.SuspiciousEqualsMethodName")
-    static void equals(Object actual, Object expected) {
+    /** The {@code equals} operator. */
+    static void equalTo(Object actual, Object expected) {
         if (!same(actual, expected)) {
             fail("expected " + show(expected) + BUT_WAS + show(actual));
         }
@@ -80,21 +79,21 @@ final class Expectations {
         }
     }
 
-    @SuppressWarnings("PMD.LogicInversion")
+    @SuppressWarnings("PMD.LogicInversion") // as gt
     static void lt(Object actual, Object bound) {
         if (!(number(actual, LT) < number(bound, LT))) {
             fail("expected less than " + show(bound) + BUT_WAS + show(actual));
         }
     }
 
-    @SuppressWarnings("PMD.LogicInversion")
+    @SuppressWarnings("PMD.LogicInversion") // as gt
     static void atLeast(Object actual, Object bound) {
         if (!(number(actual, AT_LEAST) >= number(bound, AT_LEAST))) {
             fail("expected at least " + show(bound) + BUT_WAS + show(actual));
         }
     }
 
-    @SuppressWarnings("PMD.LogicInversion")
+    @SuppressWarnings("PMD.LogicInversion") // as gt
     static void atMost(Object actual, Object bound) {
         if (!(number(actual, AT_MOST) <= number(bound, AT_MOST))) {
             fail("expected at most " + show(bound) + BUT_WAS + show(actual));
@@ -134,7 +133,7 @@ final class Expectations {
     private static void apply(String op, Object actual, Object arg, String where) {
         try {
             switch (op) {
-                case "equals" -> equals(actual, arg);
+                case "equals" -> equalTo(actual, arg);
                 case "contains" -> contains(actual, arg);
                 case "empty" -> {
                     if (Boolean.FALSE.equals(arg)) {
