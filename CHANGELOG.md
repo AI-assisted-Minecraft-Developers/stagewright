@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-05
 
+### An await condition that waits on the server thread fails at once, saying so
+
+An `await()` condition runs on the server thread after each tick. One that waited there for a future the server
+thread completes, as a mod's service does in a server task, held the only thread that could complete it: the wait
+ran out at its own timeout, and the test failed with that timeout, which read as the service not answering. The wait
+now watches its condition, and once the condition has kept the server thread waiting for two seconds the test fails
+with an assertion that names the condition, says why such a wait cannot end, and carries the server thread's stack.
+A condition that is only slow, still working, is left to its budget. Unit-tested on a thread of its own.
+
 ### A variable an earlier build had no longer reaches the game of a build without it
 
 A run task's environment starts as a copy of the whole environment it was configured in, and the configuration cache

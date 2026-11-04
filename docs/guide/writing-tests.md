@@ -77,6 +77,11 @@ things it does.
   counted in ticks, runs out. The description says what did not happen, not why. When the answer is in an entity's
   state, such as a mob's brain activity, running behaviours or target, catch the `AssertionError`, read that state
   with `game.onServer`, and fail with both, so the report holds what you would otherwise rerun the scene to find.
+  Because the condition runs on the server thread, it must not wait there: a wait for something the server thread
+  completes, such as `get()` or `join()` on a future a mod's service finishes in a server task, can never end, and
+  the test fails as soon as the condition has kept that thread waiting for two seconds, with the server thread's stack.
+  `game.onServer` inside the condition runs its work at once, on that thread. To poll something that takes waiting,
+  loop on the test thread: ask with `game.onServer`, then `game.ticks(1)`.
 - **Soft checks**: `game.check(holds, "what")` or `game.check(() -> assertEquals(a, b))` keeps a failure and lets the
   test go on; every failed check is reported together when the test ends, and fails it. A check may also be made
   inside the test's `game.onServer` work and its `await` conditions.
