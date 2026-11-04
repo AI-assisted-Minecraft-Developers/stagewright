@@ -19,7 +19,9 @@ thread completes, as a mod's service does in a server task, held the only thread
 ran out at its own timeout, and the test failed with that timeout, which read as the service not answering. The wait
 now watches its condition, and once the condition has kept the server thread waiting for two seconds the test fails
 with an assertion that names the condition, says why such a wait cannot end, and carries the server thread's stack.
-A condition that is only slow, still working, is left to its budget. Unit-tested on a thread of its own.
+A condition that is only slow, still working, is left to its budget. **Green in the self-test suite**: on both
+loaders, a `wd.jupiterSmoke` test whose condition waits for a task it queued on the server thread fails with that
+assertion, its stack the server thread's, before the condition's own wait would have ended.
 
 ### A variable an earlier build had no longer reaches the game of a build without it
 
