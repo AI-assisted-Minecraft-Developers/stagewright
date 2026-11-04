@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-04
 
+### A joined client answers `mc.test.*` from its first call
+
+A client joining a dedicated server registered StageWright's methods on the first tick it spent in the world. The server
+starts its tests once the player has joined, which can be before that tick, so a test's first `mc.test.*` call to the
+client could be answered `unknown method`. The client now registers them as soon as WorldDriver's API is up, before it
+joins. **Green in the self-test suite**: the toast test above, whose first call is to the client, failed this way on
+both loaders before.
+
 ### A game that ends while chunks are generating stops instead of hanging
 
 A run that ended with chunks still generating hung in vanilla's stop until it was forced down 30 s later, an

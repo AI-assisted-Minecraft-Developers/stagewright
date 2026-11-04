@@ -292,17 +292,13 @@ public final class ClientDirector {
                 || mc.screen instanceof JoinMultiplayerScreen;
     }
 
-    /** Independent of the launcher: bind this client's API once it is in a world. */
-    public static void onWorldReady() {
-        Minecraft mc = Minecraft.getInstance();
-        var connection = mc.getConnection();
-        if (mc.level == null
-                || mc.player == null
-                || connection == null
-                || !connection.getConnection().isConnected()) {
-            return;
-        }
-        StageWrightCommon.onClientWorldReady();
+    /**
+     * Independent of the launcher: bind this client's API as soon as WorldDriver's is up, before the client joins
+     * anything. A server starts its tests once the player has joined, and its first call to this client can arrive
+     * before the client has ticked in the world; a client that bound only then answered it {@code unknown method}.
+     */
+    public static void bindApi() {
+        StageWrightCommon.registerClientVerbs();
     }
 
     private static boolean exitWhenDone() {

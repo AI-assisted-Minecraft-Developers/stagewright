@@ -58,10 +58,10 @@ public final class StageWrightCommon {
     private StageWrightCommon() {}
 
     /**
-     * A joining client has its own API and never receives a local SERVER_STARTED event. Called every client tick, so a
-     * failure is logged and retried rather than thrown into the game's tick.
+     * A joining client has its own API and never receives a local SERVER_STARTED event. Called every client tick, from
+     * before WorldDriver's API is up, so a failure is logged and retried rather than thrown into the game's tick.
      */
-    public static void onClientWorldReady() {
+    public static void registerClientVerbs() {
         try {
             DriverRuntime.registerVerbs();
             clientVerbFailure = null;
@@ -97,7 +97,7 @@ public final class StageWrightCommon {
     }
 
     /** Called on the server thread while the world is still available for cleanup. */
-    @SuppressWarnings("PMD.CompareObjectsWithEquals") // Only the instance this run armed is torn down, by identity.
+    // Only the instance this run armed is torn down, by identity.
     public static synchronized void onServerStopping(MinecraftServer server) {
         if (server != armedServer) {
             return;

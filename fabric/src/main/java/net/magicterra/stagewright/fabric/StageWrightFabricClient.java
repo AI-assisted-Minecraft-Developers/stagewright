@@ -17,7 +17,7 @@ public final class StageWrightFabricClient implements ClientModInitializer {
     public void onInitializeClient() {
         boolean directed = ClientDirector.arm();
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
-            ClientDirector.onWorldReady();
+            ClientDirector.bindApi();
             if (directed) {
                 ClientDirector.tick();
             }

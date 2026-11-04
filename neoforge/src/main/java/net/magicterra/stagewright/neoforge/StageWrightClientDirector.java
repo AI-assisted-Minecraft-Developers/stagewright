@@ -22,7 +22,7 @@ public final class StageWrightClientDirector {
         // fails to bind and the listener silently never fires, which is exactly what happened: the
         // client sat at the title screen, ticking normally, while nothing drove it.
         NeoForge.EVENT_BUS.addListener(ClientTickEvent.Post.class, event -> {
-            ClientDirector.onWorldReady();
+            ClientDirector.bindApi();
             if (directed) {
                 ClientDirector.tick();
             }
