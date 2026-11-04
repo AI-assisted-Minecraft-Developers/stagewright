@@ -7,7 +7,7 @@
     "client.OptionsMixin"
   ],
   "mixins": [
-    "ChunkMapAccessor"
+    "MinecraftServerStopMixin"
   ],
   "injectors": {
     "defaultRequire": 1

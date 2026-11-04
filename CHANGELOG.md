@@ -19,9 +19,12 @@ execution error after every test had passed: 12 runs of 17 on a third party. Its
 the chunks around them loaded, so generations were cancelled after their last step had been queued for the main
 thread; each keeps its claim on its chunks until that step runs, at about twenty chunks a second, and the stop
 unloads with an always-true deadline, so a claimed chunk's unload requeues itself forever and the step never runs.
-The run now ticks on until no chunk is generating, a minute at most, saying how many it waits for, before it halts
-the server. **Green against a third party**: 10 runs of 10, each waiting 200 to 500 ticks, where a ten-second wait
-had still hung 6 of 10.
+The stop's loop is now given what it needs to finish. Each level's chunk tick has a 2 ms deadline, so it returns.
+Each round then leaves the main thread's queued tasks 10 ms, measured from the wait itself: vanilla sets the round's
+millisecond before the chunk ticks, so they use it up and the queued tasks never run. With the deadline alone, a stop
+still hung 6 runs of 10. The run halts the server as soon as the tests are done, with no wait. **Green against the third
+party**: 10 runs of 10, each stopping 1.2 to 2.4 s after `Stopping server`, and each whole build about 20 s quicker
+than with the minute's wait for the chunks to settle that this replaces.
 
 ### A ModDevGradle dedicated server opens no window
 

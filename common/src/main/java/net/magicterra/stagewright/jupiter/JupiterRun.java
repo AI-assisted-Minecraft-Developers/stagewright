@@ -25,10 +25,7 @@ import java.util.Set;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.client.WorldSwitch;
 import net.magicterra.stagewright.harness.AgentBridge;
-import net.magicterra.stagewright.mixin.ChunkMapAccessor;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ChunkHolder;
-import net.minecraft.server.level.ServerLevel;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.DiscoverySelector;
 import org.junit.platform.engine.FilterResult;
@@ -72,20 +69,6 @@ public final class JupiterRun {
 
     private static volatile boolean started;
 
-    /** The server to halt once no chunk is generating; set when the run is over. Server thread only. */
-    private static MinecraftServer haltWhenSettled;
-
-    private static int settleTicks;
-
-    /**
-     * How long a halt waits for chunks to finish generating: a minute of ticks. Measured on a third-party pack, the
-     * main thread finishes about twenty chunks a second, and a suite can end with a few hundred queued.
-     */
-    private static final int SETTLE_TICKS = 1200;
-
-    /** How often the wait says how many chunks it is still waiting for. */
-    private static final int SETTLE_REPORT_TICKS = 200;
-
     /** Grace between the server halting and forcing the JVM down: long enough for the save {@code halt} triggers. */
     private static final long EXIT_GRACE_MS = 30_000;
 
@@ -111,16 +94,9 @@ public final class JupiterRun {
         return System.getProperty(CLASSES) != null || System.getProperty(SCRIPTS) != null;
     }
 
-    /**
-     * Server thread, every settled tick: answer pending waits, start the run the first time it may, and once it is over
-     * halt the server as soon as no chunk is generating.
-     */
+    /** Server thread, every settled tick: answer pending waits, and start the run the first time it may. */
     public static void tick(MinecraftServer server) {
         ServerTicks.tick();
-        if (haltWhenSettled == server) {
-            settle(server);
-            return;
-        }
         if (started) {
             return;
         }
@@ -147,8 +123,6 @@ public final class JupiterRun {
         ClientConnection.close();
     }
 
-    // One ordered sequence (discover, prepare, run both plans, record outcomes); splitting it would scatter that order.
-    @SuppressWarnings("checkstyle:javancss")
     private static void run(MinecraftServer server, ClassLoader loader) {
         Path reports = server.getServerDirectory().resolve("stagewright/junit");
         AgentEvents relay = new AgentEvents(AgentBridge.system());
@@ -199,127 +173,112 @@ public final class JupiterRun {
             if (!cycles.isEmpty()) {
                 throw new IllegalStateException("@DependsOn cycles, so no test can go first: " + cycles);
             }
-            SummaryGeneratingListener scriptSummary = new SummaryGeneratingListener();
-            StringWriter xmlLog = new StringWriter();
-            Thread scriptThread = new Thread(
-                    () -> {
-                        try {
-                            launcher.execute(
-                                    scriptPlan,
-                                    scriptSummary,
-                                    relay,
-                                    new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
-                        } finally {
-                            Dependencies.scriptsOver();
-                        }
-                    },
-                    "stagewright-scripts");
-            scriptThread.setDaemon(true);
-            scriptThread.setContextClassLoader(loader);
-            scriptThread.start();
-            SummaryGeneratingListener javaSummary = new SummaryGeneratingListener();
-            try {
-                launcher.execute(
-                        javaPlan,
-                        javaSummary,
-                        relay,
-                        Dependencies.ENDINGS,
-                        new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
-            } finally {
-                Dependencies.javaOver();
-                scriptThread.join();
-            }
-            boolean restarting = Rounds.latest() > Rounds.current();
-            Handovers.sweep(artifacts, restarting);
-            Rounds.save(artifacts, Dependencies.outcomes());
-            if (restarting) {
-                if (StageWrightCommon.LOG.isInfoEnabled()) {
-                    StageWrightCommon.LOG.info(
-                            "[{}] round {} is over; tests remain for round {}, after a restart",
-                            StageWrightCommon.MOD_ID,
-                            Rounds.current(),
-                            Rounds.current() + 1);
-                }
-                relay.restart(Rounds.current() + 1, Rounds.world(Rounds.current() + 1));
-            }
-            relay.ended();
-            List<TestExecutionSummary> summaries = List.of(javaSummary.getSummary(), scriptSummary.getSummary());
-            writeSummary(reports.resolve("summary.json"), entries, summaries);
-            StringWriter text = new StringWriter();
-            for (TestExecutionSummary s : summaries) {
-                s.printTo(new PrintWriter(text));
-                s.printFailuresTo(new PrintWriter(text), 20);
-            }
-            StageWrightCommon.LOG.info("[{}] JUnit run finished:\n{}", StageWrightCommon.MOD_ID, text);
+            List<TestExecutionSummary> summaries = executePlans(launcher, scriptPlan, javaPlan, relay, reports, loader);
+            endRound(artifacts, relay);
+            report(reports, entries, summaries);
         } catch (Throwable t) {
-            StageWrightCommon.LOG.error("[{}] the JUnit run could not complete", StageWrightCommon.MOD_ID, t);
-            relay.error(t);
-            try {
-                Files.writeString(
-                        reports.resolve("summary.json"),
-                        "{\"error\":" + new com.google.gson.Gson().toJson(String.valueOf(t)) + "}");
-            } catch (IOException ignored) {
-                // the log line above is the record
-            }
+            recordFailure(reports, relay, t);
         } finally {
             if (Boolean.getBoolean(EXIT)) {
-                if (game != null && game.between()) {
-                    // A test left the client at the title screen: no server to halt, and the client ends itself.
-                    AgentBridge.system().done();
-                    WorldSwitch.end();
-                } else {
-                    // The world open now, which a test may have switched to.
-                    MinecraftServer current = game == null ? server : game.server();
-                    current.execute(() -> haltWhenSettled = current);
-                }
+                exitGame(server, game);
             }
         }
     }
 
-    /**
-     * One tick of the wait before the halt: halt once no chunk is generating, or once the wait is over.
-     *
-     * <p>Vanilla's stop cannot finish a chunk still generating. It unloads with an always-true deadline, a chunk whose
-     * generation holds a claim on it sends its own unload back to the queue being polled, and the main-thread step that
-     * would end the generation never gets a turn: the server spins in {@code stopServer} until it is forced down. A
-     * generation cancelled after its last step was queued for the main thread keeps its claims until that step runs,
-     * and the main thread works through that queue slowly, so a run that ends with chunks loading has them for a while.
-     */
-    private static void settle(MinecraftServer server) {
-        int generating = generating(server);
-        settleTicks++;
-        if (generating > 0 && settleTicks < SETTLE_TICKS) {
-            if (settleTicks % SETTLE_REPORT_TICKS == 0) {
+    /** Both plans run side by side; the Java tests' summary first, the scripts' second. */
+    private static List<TestExecutionSummary> executePlans(
+            Launcher launcher,
+            TestPlan scriptPlan,
+            TestPlan javaPlan,
+            AgentEvents relay,
+            Path reports,
+            ClassLoader loader)
+            throws InterruptedException {
+        SummaryGeneratingListener scriptSummary = new SummaryGeneratingListener();
+        StringWriter xmlLog = new StringWriter();
+        Thread scriptThread = new Thread(
+                () -> {
+                    try {
+                        launcher.execute(
+                                scriptPlan,
+                                scriptSummary,
+                                relay,
+                                new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
+                    } finally {
+                        Dependencies.scriptsOver();
+                    }
+                },
+                "stagewright-scripts");
+        scriptThread.setDaemon(true);
+        scriptThread.setContextClassLoader(loader);
+        scriptThread.start();
+        SummaryGeneratingListener javaSummary = new SummaryGeneratingListener();
+        try {
+            launcher.execute(
+                    javaPlan,
+                    javaSummary,
+                    relay,
+                    Dependencies.ENDINGS,
+                    new LegacyXmlReportGeneratingListener(reports, new PrintWriter(xmlLog)));
+        } finally {
+            Dependencies.javaOver();
+            scriptThread.join();
+        }
+        return List.of(javaSummary.getSummary(), scriptSummary.getSummary());
+    }
+
+    /** After both plans: hand over the kept bots, save the round's outcomes, and ask for a restart if tests remain. */
+    private static void endRound(Path artifacts, AgentEvents relay) throws IOException {
+        boolean restarting = Rounds.latest() > Rounds.current();
+        Handovers.sweep(artifacts, restarting);
+        Rounds.save(artifacts, Dependencies.outcomes());
+        if (restarting) {
+            if (StageWrightCommon.LOG.isInfoEnabled()) {
                 StageWrightCommon.LOG.info(
-                        "[{}] waiting for {} chunks to finish generating before stopping ({} ticks)",
+                        "[{}] round {} is over; tests remain for round {}, after a restart",
                         StageWrightCommon.MOD_ID,
-                        generating,
-                        settleTicks);
+                        Rounds.current(),
+                        Rounds.current() + 1);
             }
-            return;
+            relay.restart(Rounds.current() + 1, Rounds.world(Rounds.current() + 1));
         }
-        haltWhenSettled = null;
-        if (generating > 0) {
-            StageWrightCommon.LOG.warn(
-                    "[{}] {} chunks were still generating {} ticks after the run; stopping anyway",
-                    StageWrightCommon.MOD_ID,
-                    generating,
-                    SETTLE_TICKS);
-        }
-        halt(server);
+        relay.ended();
     }
 
-    /** How many chunks of all the levels are part way through generating: claimed by a generation not yet over. */
-    private static int generating(MinecraftServer server) {
-        int count = 0;
-        for (ServerLevel level : server.getAllLevels()) {
-            for (ChunkHolder holder : ((ChunkMapAccessor) level.getChunkSource().chunkMap).stagewright$chunks()) {
-                if (holder.getGenerationRefCount() != 0) {
-                    count++;
-                }
-            }
+    private static void report(Path reports, List<String> entries, List<TestExecutionSummary> summaries)
+            throws IOException {
+        writeSummary(reports.resolve("summary.json"), entries, summaries);
+        StringWriter text = new StringWriter();
+        for (TestExecutionSummary s : summaries) {
+            s.printTo(new PrintWriter(text));
+            s.printFailuresTo(new PrintWriter(text), 20);
         }
-        return count;
+        StageWrightCommon.LOG.info("[{}] JUnit run finished:\n{}", StageWrightCommon.MOD_ID, text);
+    }
+
+    private static void recordFailure(Path reports, AgentEvents relay, Throwable t) {
+        StageWrightCommon.LOG.error("[{}] the JUnit run could not complete", StageWrightCommon.MOD_ID, t);
+        relay.error(t);
+        try {
+            Files.writeString(
+                    reports.resolve("summary.json"),
+                    "{\"error\":" + new com.google.gson.Gson().toJson(String.valueOf(t)) + "}");
+        } catch (IOException ignored) {
+            // the log line above is the record
+        }
+    }
+
+    private static void exitGame(MinecraftServer server, GameImpl game) {
+        if (game != null && game.between()) {
+            // A test left the client at the title screen: no server to halt, and the client ends itself.
+            AgentBridge.system().done();
+            WorldSwitch.end();
+        } else {
+            // The world open now, which a test may have switched to.
+            MinecraftServer current = game == null ? server : game.server();
+            // A chunk still generating does not hold the stop up: MinecraftServerStopMixin.
+            current.execute(() -> halt(current));
+        }
     }
 
     /**
