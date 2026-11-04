@@ -12,6 +12,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-05
 
+### A variable an earlier build had no longer reaches the game of a build without it
+
+A run task's environment starts as a copy of the whole environment it was configured in, and the configuration cache
+keeps that copy. The launch spec compared it with the environment at execution to keep only what the run sets, so
+under the cache a variable an earlier invocation had, and the current one never set, read as the run's own: it was
+written into the launch spec and reached the game, which on a third party entered a branch the build had not asked
+for and held the scene until it timed out. What the run sets is now told apart where it is configured, so only
+that is written; each variable is then an input of the configuration cache, and a changed one configures anew.
+**Green in the plugin's functional tests**: under `--configuration-cache`, a build with a variable and then one
+without it writes it the second time no more than the first, and keeps what the run task sets itself.
+
 ### A test that did not run says why in Gradle's JUnit XML
 
 Gradle writes a skipped test's `<skipped>` element with a message only for a test that was aborted, an assumption that

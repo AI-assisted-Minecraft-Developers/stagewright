@@ -31,6 +31,7 @@ class TestSuiteLaunchSpecsTest {
                     mainClass = 'Server'
                     args = ['--nogui', '--port', '25601']
                     jvmArgs '-Dserver.flag=1'
+                    environment 'STAGEWRIGHT_SET_BY_THE_RUN', 'yes'
                     workingDir = file('run-server')
                 }
                 tasks.register('runClient', JavaExec) {
@@ -126,6 +127,31 @@ class TestSuiteLaunchSpecsTest {
         assertTrue(
                 primary.indexOf("-Dserver.flag=1") < primary.indexOf("-Dserver.flag=2"),
                 "the run's own argument comes first, so the property's wins: " + primary);
+    }
+
+    @Test
+    void aVariableAnEarlierInvocationHadIsNotCarriedIntoOneWithoutIt() throws Exception {
+        consumer("classes.from(files('classes'))\n" + "topologies.put('dedicatedServerWithClient', 'withClient')");
+        java.util.Map<String, String> with = new java.util.HashMap<>(System.getenv());
+        with.put("STAGEWRIGHT_EARLIER_ONLY", "/tmp/hold");
+        Path file = dir.resolve("build/stagewright/launches/fabric/dedicatedServerWithClient.json");
+
+        runner("stagewrightLaunchSpecsFabric", "--configuration-cache")
+                .withEnvironment(with)
+                .build();
+        // Inherited, so the game gets it from the test worker; only what the run itself sets is written.
+        assertFalse(Files.readString(file).contains("STAGEWRIGHT_EARLIER_ONLY"), Files.readString(file));
+
+        runner("stagewrightLaunchSpecsFabric", "--configuration-cache")
+                .withEnvironment(System.getenv())
+                .build();
+        JsonObject environment = JsonObject.readFrom(Files.readString(file))
+                .get("primary")
+                .asObject()
+                .get("environment")
+                .asObject();
+        assertEquals(null, environment.getString("STAGEWRIGHT_EARLIER_ONLY", null), environment.toString());
+        assertEquals("yes", environment.getString("STAGEWRIGHT_SET_BY_THE_RUN", null), environment.toString());
     }
 
     @Test

@@ -78,8 +78,18 @@ final class CompanionLaunch {
             }
         }
         this.classpath = cp;
+        // Only what the run sets beyond the environment it was configured in. A run's environment starts as a copy of
+        // the whole of that one, which the configuration cache keeps: compared at execution instead, a variable an
+        // earlier invocation had and the current one never set read as the run's own and reached the game. Reading
+        // each variable here makes the environment an input of the cache, so a changed one configures anew.
         this.environment = new LinkedHashMap<>();
-        spec.getEnvironment().forEach((k, v) -> environment.put(k, String.valueOf(v)));
+        Map<String, String> configuredIn = System.getenv();
+        spec.getEnvironment().forEach((k, v) -> {
+            String value = String.valueOf(v);
+            if (!value.equals(configuredIn.get(k))) {
+                environment.put(k, value);
+            }
+        });
         this.lateEnvironment = new ArrayList<>();
         this.workingDirectories = new ArrayList<>();
         for (Toolchain toolchain : toolchains) {
