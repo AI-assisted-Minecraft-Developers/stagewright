@@ -29,6 +29,7 @@ import org.junit.platform.testkit.engine.EngineExecutionResults;
 import org.junit.platform.testkit.engine.EngineTestKit;
 import org.junit.platform.testkit.engine.Event;
 import org.junit.platform.testkit.engine.Events;
+import org.opentest4j.TestAbortedException;
 
 /** The outer engine against a scripted fake game in a real JVM with the real supervision agent. */
 class StageWrightTestEngineTest {
@@ -153,14 +154,14 @@ class StageWrightTestEngineTest {
     @Test
     void aSceneWhoseTestsAreAllDisabledSkipsThemWithoutStartingAGame() {
         EngineExecutionResults all = run("AllDisabledFixture");
-        assertEquals(2, all.testEvents().skipped().count());
-        assertEquals(0, all.testEvents().started().count(), "nothing ran");
+        assertEquals(2, notRun(all));
+        assertEquals(0, all.testEvents().succeeded().count(), "nothing ran");
         assertEquals(0, containersFailed(all).count());
         assertEquals("environment variable STAGEWRIGHT_TEST_NEVER_SET does not match .*", skipReason(all, "a()"));
         assertFalse(Files.exists(temp.resolve("game-allDisabled/stagewright/runs/allDisabled")), "no game started");
 
         EngineExecutionResults each = run("MethodsDisabledFixture");
-        assertEquals(2, each.testEvents().skipped().count());
+        assertEquals(2, notRun(each));
         assertEquals("not yet", skipReason(each, "a()"));
         assertEquals("environment variable PATH matches .*", skipReason(each, "b()"));
         assertFalse(Files.exists(temp.resolve("game-methodsDisabled/stagewright/runs/methodsDisabled")));
@@ -468,12 +469,23 @@ class StageWrightTestEngineTest {
                 () -> String.valueOf(engineResult(r).getThrowable().orElse(null)));
     }
 
+    /**
+     * Why the test {@code displayName} did not run. A test not run is reported aborted with the reason, which Gradle's
+     * XML keeps, rather than skipped, whose reason it drops.
+     */
     private static String skipReason(EngineExecutionResults r, String displayName) {
-        return r.testEvents().skipped().stream()
+        assertEquals(0, r.testEvents().skipped().count(), "a test not run is reported aborted, never skipped");
+        return r.testEvents().aborted().stream()
                 .filter(e -> e.getTestDescriptor().getDisplayName().equals(displayName))
-                .map(e -> e.getPayload(String.class).orElse(null))
+                .map(e -> failure(e))
+                .map(t -> assertInstanceOf(TestAbortedException.class, t).getMessage())
                 .findFirst()
-                .orElseThrow(() -> new AssertionError("not reported skipped: " + displayName));
+                .orElseThrow(() -> new AssertionError("not reported as not run: " + displayName));
+    }
+
+    /** How many tests were reported as not run. */
+    private static long notRun(EngineExecutionResults r) {
+        return r.testEvents().aborted().count() + r.testEvents().skipped().count();
     }
 
     @Test
@@ -487,7 +499,7 @@ class StageWrightTestEngineTest {
         assertTrue(message.contains("this game has no CLIENT"), message);
         assertTrue(!message.contains("ReqSkipFixture#a"), message);
         // The test itself is skipped, not failed; the failure belongs to the run.
-        assertEquals(1, r.testEvents().skipped().count());
+        assertEquals(1, notRun(r));
         assertTrue(skipReason(r, "b()").startsWith("@Requires: "));
         assertEquals(0, r.testEvents().failed().count());
         assertEquals(1, r.testEvents().succeeded().count());
@@ -498,7 +510,7 @@ class StageWrightTestEngineTest {
         EngineExecutionResults r = run("TwoScenesFixture");
         assertEngineSuccessful(r);
         assertEquals(0, r.testEvents().failed().count());
-        assertEquals(1, r.testEvents().skipped().count());
+        assertEquals(1, notRun(r));
         assertEquals(3, r.testEvents().succeeded().count());
     }
 
@@ -545,20 +557,23 @@ class StageWrightTestEngineTest {
         assertEngineSuccessful(r);
     }
 
-    /** How the scene node named {@code scene} was skipped; fails when it was not. */
+    /** Why the tests of the scene named {@code scene} were not run; fails when one of them ran. */
     private static String sceneSkipReason(EngineExecutionResults r, String scene) {
-        return r.containerEvents().skipped().stream()
-                .filter(e -> e.getTestDescriptor() instanceof Nodes.Scene s && s.name.equals(scene))
-                .map(e -> e.getPayload(String.class).orElse(null))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("scene not reported skipped: " + scene));
+        List<String> reasons = r.testEvents().aborted().stream()
+                .filter(e -> e.getTestDescriptor().getUniqueId().toString().contains("[scene:" + scene + "]"))
+                .map(e -> failure(e).getMessage())
+                .distinct()
+                .toList();
+        assertEquals(1, reasons.size(), () -> "one reason for the scene's tests: " + reasons);
+        return reasons.get(0);
     }
 
     @Test
     void aSceneWhoseTopologyTheRunCannotLaunchIsSkippedWithTheReason() {
         EngineExecutionResults r = run("UnlaunchableFixture");
         assertEquals(0, r.testEvents().failed().count());
-        assertEquals(0, r.testEvents().started().count(), "no game was started for it");
+        assertEquals(0, r.testEvents().succeeded().count(), "no game was started for it");
+        assertEquals(2, notRun(r));
         assertEquals(0, containersFailed(r).count());
         String reason = sceneSkipReason(r, "unlaunchable");
         assertTrue(reason.contains("no --client was given"), reason);
@@ -569,7 +584,9 @@ class StageWrightTestEngineTest {
     void aTestOnlyAnUnlaunchableSceneCouldRunDoesNotFailTheRunForCoverage() {
         EngineExecutionResults r = run("ReqSkipOrUnlaunchableFixture");
         assertEquals(0, r.testEvents().failed().count());
-        assertEquals("@Requires: this game has no CLIENT", skipReason(r, "b()"));
+        assertTrue(r.testEvents().aborted().stream()
+                .map(e -> failure(e).getMessage())
+                .anyMatch("@Requires: this game has no CLIENT"::equals));
         sceneSkipReason(r, "unlaunchable");
         assertEngineSuccessful(r);
     }

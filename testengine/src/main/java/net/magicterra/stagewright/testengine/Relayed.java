@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.junit.platform.engine.EngineExecutionListener;
+import org.junit.platform.engine.TestDescriptor;
+import org.junit.platform.engine.TestExecutionResult;
 import org.opentest4j.TestAbortedException;
 
 /**
@@ -38,6 +41,32 @@ final class Relayed {
         }
         t.setStackTrace(frames(f.get("trace")));
         return t;
+    }
+
+    /**
+     * Report {@code d} as not run for {@code reason}: each test under it as aborted with that reason, rather than
+     * skipped. Gradle's JUnit XML keeps the message of an aborted test in its {@code <skipped>} element and drops a
+     * skip's reason, so a skipped test read there, as CI reads it, said nothing of why; both count as skipped. A
+     * container is started and finished around its children; one with none yet, a parameterized test whose invocations
+     * the game registers, is skipped as before, there being no test to carry the reason.
+     */
+    static void skip(EngineExecutionListener listener, TestDescriptor d, String reason) {
+        if (!d.isTest() && d.getChildren().isEmpty()) {
+            listener.executionSkipped(d, reason);
+            return;
+        }
+        listener.executionStarted(d);
+        if (d.isTest()) {
+            TestAbortedException why = new TestAbortedException(reason);
+            // The reason is the whole of it; this engine's frames would only bury it in the report.
+            why.setStackTrace(new StackTraceElement[0]);
+            listener.executionFinished(d, TestExecutionResult.aborted(why));
+            return;
+        }
+        for (TestDescriptor child : d.getChildren()) {
+            skip(listener, child, reason);
+        }
+        listener.executionFinished(d, TestExecutionResult.successful());
     }
 
     /** A non-assertion throwable from the game, under its own class's name. */

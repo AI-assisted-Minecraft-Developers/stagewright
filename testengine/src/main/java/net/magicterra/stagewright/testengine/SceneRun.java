@@ -104,7 +104,7 @@ final class SceneRun {
                     coverage.unlaunched(t.key());
                 }
             }
-            listener.executionSkipped(scene, "scene '" + scene.name + "' was not run: " + e.getMessage());
+            Relayed.skip(listener, scene, "scene '" + scene.name + "' was not run: " + e.getMessage());
             return;
         } catch (Exception e) {
             early = e;
@@ -396,7 +396,7 @@ final class SceneRun {
         for (TestDescriptor child : scene.getChildren()) {
             listener.executionStarted(child);
             for (TestDescriptor d : child.getChildren()) {
-                listener.executionSkipped(d, reasons.get((Nodes.TestMethod) d));
+                Relayed.skip(listener, d, reasons.get((Nodes.TestMethod) d));
             }
             listener.executionFinished(child, TestExecutionResult.successful());
         }

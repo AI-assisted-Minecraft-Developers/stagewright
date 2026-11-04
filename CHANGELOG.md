@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-05
 
+### A test that did not run says why in Gradle's JUnit XML
+
+Gradle writes a skipped test's `<skipped>` element with a message only for a test that was aborted, an assumption that
+failed; the reason given with a skip it drops. So every test the engine reported skipped, for an unmet `@Requires`, a
+condition in the game, a disabled scene or a topology the run could not launch, read as a bare `<skipped/>` in CI,
+which a third party noticed. Each such test is now reported aborted with the reason, which Gradle, the command-line
+runner's report and the IDEs all still count as skipped; a container is started and finished around its tests. **Green
+in the unit tests**.
+
 ### A scene whose tests are all disabled starts no game
 
 Jupiter's conditions were judged only inside the game, so a scene whose every test was disabled by an environment

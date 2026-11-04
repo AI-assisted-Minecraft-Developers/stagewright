@@ -154,7 +154,7 @@ final class Relay implements Consumer<Map<String, Object>> {
         TestDescriptor d = byGameId.get(String.valueOf(event.get(ID)));
         String reason = String.valueOf(event.get("reason"));
         if (d != null && !started.contains(d) && finished.add(d)) {
-            listener.executionSkipped(d, reason);
+            Relayed.skip(listener, d, reason);
             if (key(d) != null) {
                 coverage.skipped(key(d), sceneName, reason);
             }
