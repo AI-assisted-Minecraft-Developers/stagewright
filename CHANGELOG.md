@@ -12,6 +12,14 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-04
 
+### A test can read the toasts its client shows
+
+`mc.test.toasts` (`TestQueriesBlockingApi.toasts`, through `client.api`) lists the toasts the client shows and the ones
+queued behind them: each one's class, and for vanilla's system, tutorial and advancement toasts its title and message
+as plain text. A mod's own toast class is named only, its text being wherever that class keeps it. A dedicated server
+answers `capability_unavailable`. **Green in the self-test suite**: on both loaders, an advancement the server grants
+shows its toast on the joined client.
+
 ### A joined client answers `mc.test.*` from its first call
 
 A client joining a dedicated server registered StageWright's methods on the first tick it spent in the world. The server

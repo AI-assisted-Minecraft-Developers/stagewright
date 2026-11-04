@@ -9,8 +9,10 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.capability.Mods;
+import net.magicterra.stagewright.driver.ClientReads;
 import net.magicterra.stagewright.jupiter.ServerTicks;
 import net.magicterra.stagewright.test.methods.AdvancementsContracts;
 import net.magicterra.stagewright.test.methods.ChunksContracts.ChunksOp;
@@ -24,6 +26,7 @@ import net.magicterra.stagewright.test.methods.ModsContracts;
 import net.magicterra.stagewright.test.methods.RecipesContracts;
 import net.magicterra.stagewright.test.methods.StructuresContracts;
 import net.magicterra.stagewright.test.methods.TestQueriesApi;
+import net.magicterra.stagewright.test.methods.ToastsContracts;
 import net.magicterra.worlddriver.api.call.CallContext;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.BlockPosition;
 import net.magicterra.worlddriver.api.schema.ApiError;
@@ -295,6 +298,19 @@ final class TestQueriesService implements TestQueriesApi {
                                 Mods.loaded(h.id()),
                                 Mods.loaded(h.id()) ? Optional.of(clip(Mods.version(h.id()), 256)) : Optional.empty());
                 });
+    }
+
+    /** The client's toasts, read on its thread; a dedicated server has none to read. */
+    @Override
+    public CompletionStage<ToastsContracts.ToastsReply> toasts(ToastsContracts.ToastsOp op, CallContext ctx) {
+        Supplier<CompletionStage<ToastsContracts.ToastList>> reader = ClientReads.toasts();
+        if (reader == null) {
+            return CompletableFuture.failedFuture(ApiException.of(
+                    ApiError.Code.CAPABILITY_UNAVAILABLE, "mc.test.toasts not available (client only)"));
+        }
+        return switch (op) {
+            case ToastsContracts.ListToasts() -> reader.get().thenApply(list -> list);
+        };
     }
 
     private static String clip(String s, int max) {

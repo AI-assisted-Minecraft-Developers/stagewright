@@ -3,6 +3,7 @@ package net.magicterra.stagewright.fabric;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.magicterra.stagewright.client.ClientDirector;
+import net.magicterra.stagewright.client.ToastReadout;
 
 /**
  * Fabric's half of the client director: a tick source, and nothing else.
@@ -15,6 +16,7 @@ public final class StageWrightFabricClient implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        ToastReadout.install();
         boolean directed = ClientDirector.arm();
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
             ClientDirector.bindApi();

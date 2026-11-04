@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.neoforge;
 
 import net.magicterra.stagewright.client.ClientDirector;
+import net.magicterra.stagewright.client.ToastReadout;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
@@ -16,6 +17,7 @@ public final class StageWrightClientDirector {
 
     /** Install the director if a directive was given. Called from the mod entry on the client only. */
     public static void install() {
+        ToastReadout.install();
         boolean directed = ClientDirector.arm();
         // Explicit event class. The single-argument overload infers the event type from the lambda,
         // and a METHOD REFERENCE carries no generic signature for it to read — registration then
