@@ -34,6 +34,25 @@ public interface Bot extends Body, Driven {
      */
     Bot respawn();
 
+    /**
+     * Disconnect the bot as a client that loses its connection does, and return once it has left: its connection
+     * closes, and on a later server task the server takes it off the player list through the same path, so every
+     * loader's logout event fires, and saves its data. Until {@link #reconnect} nothing may ask the handle about the
+     * player, which is not in the game.
+     *
+     * @throws IllegalStateException when the bot is not in the game
+     */
+    Bot disconnect();
+
+    /**
+     * Join the bot again under its name after {@link #disconnect}, as a client reconnecting does: the same player, by
+     * UUID, from its save, in the dimension and at the place it left, with what it had, and the login event fired.
+     * StageWright resets nothing of it, as it does a bot that joins for a test. It comes back parked if it left parked.
+     *
+     * @throws IllegalStateException when the bot is in the game, or another player took its name
+     */
+    Bot reconnect();
+
     /** The name a parameter's bot joins under; without it, one StageWright makes up. */
     @Documented
     @Retention(RetentionPolicy.RUNTIME)

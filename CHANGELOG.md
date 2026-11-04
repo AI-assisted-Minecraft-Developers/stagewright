@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-04
 
+### A test can disconnect a bot and reconnect it
+
+`bot.disconnect()` closes the bot's connection and returns once the server has taken it off the player list, through
+the path a client's departure takes, so each loader's logout event fires and the player is saved. `bot.reconnect()`
+joins it again under its name, the same player from that save, with the login event fired and nothing reset, where a
+bot joining for a test starts with an empty inventory. Until now a bot only left with its test, or across a restart.
+**Green in the self-test suite** on both loaders: a bot left in the nether with diamonds logs out once with them, and
+logs in again as the same UUID, in the nether, where it stood, with them.
+
 ### The tests a quit or a crash kept from starting run in the next game
 
 A test that called `game.quitNow()` or `game.crashNow()` left the round's tests it had not started skipped, and the

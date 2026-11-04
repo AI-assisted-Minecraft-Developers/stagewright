@@ -15,6 +15,7 @@ import net.magicterra.worlddriver.bot.PlayerBot;
 import net.magicterra.worlddriver.bot.Roster;
 import net.magicterra.worlddriver.game.body.BotBody;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -115,8 +116,17 @@ class BodyImpl implements Body {
 
         private static final AtomicInteger NEXT = new AtomicInteger(1);
 
+        /**
+         * Ticks a disconnected bot has to leave in: its departure is a server task, run before the next tick, so one
+         * would do; the rest is room for a busy server.
+         */
+        private static final int LEAVE_TICKS = 20;
+
         /** The test keeping this bot for a later one; null when the bot leaves with its test. */
         private volatile String keeper;
+
+        /** Whether the bot was parked when it disconnected, so it reconnects parked. */
+        private volatile boolean parkedWhenLeft;
 
         private BotImpl(Game game, String name) {
             super(game, name);
@@ -228,6 +238,45 @@ class BodyImpl implements Body {
         @Override
         public Bot respawn() {
             Drive.respawn(game, ref());
+            return this;
+        }
+
+        @Override
+        public Bot disconnect() {
+            boolean wasParked = game.onServer(server -> {
+                if (!(BotRegistry.get(ref()) instanceof PlayerBot player)) {
+                    throw new IllegalStateException(name() + " is not in the game: it left already");
+                }
+                boolean byHand = player.fakePlayer() instanceof BotBody body && body.handTicked();
+                if (Roster.disconnect(ref(), Component.literal("disconnected by a test"))
+                        instanceof Roster.Refusal refused) {
+                    throw new IllegalStateException("could not disconnect " + name() + ": " + refused.message());
+                }
+                return byHand;
+            });
+            parkedWhenLeft = wasParked;
+            game.await()
+                    .within(LEAVE_TICKS)
+                    .as(name() + " leaves the game")
+                    .until(() -> game.onServerHolds(s -> s.getPlayerList().getPlayerByName(name()) == null));
+            return this;
+        }
+
+        @Override
+        public Bot reconnect() {
+            boolean parked = parkedWhenLeft;
+            game.runOnServer(server -> {
+                if (BotRegistry.get(ref()) != null) {
+                    throw new IllegalStateException(name() + " is in the game: bot.disconnect() first");
+                }
+                // No place: it joins where its save left it, and nothing of it is reset.
+                if (Roster.spawn(server, null, null, name()) instanceof Roster.Refusal refused) {
+                    throw new IllegalStateException("could not reconnect " + name() + ": " + refused.message());
+                }
+                if (parked) {
+                    ((PlayerBot) BotRegistry.get(ref())).parked(true);
+                }
+            });
             return this;
         }
 

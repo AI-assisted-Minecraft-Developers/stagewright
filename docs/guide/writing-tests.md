@@ -114,6 +114,23 @@ ticks after it joins, and after each respawn, it takes no damage, and a parked b
 ticked, so a test that hurts it right away should tick or step it 61 times first; and on
 `peaceful` the damage a mob deals is scaled to nothing.
 
+`bot.disconnect()` and `bot.reconnect()` are a client losing its connection and coming back, for what a mod saves when
+a player leaves and loads when one joins. The first closes the bot's connection and returns once the server has taken
+it off the player list, through the same path as for a client, so each loader's logout event has fired and the player
+is saved. The second joins it again under its name: the same UUID, from that save, where it left and with what it had,
+the login event fired, and nothing reset, as a bot joining for a test is. Between the two the handle has no player to
+ask about. A kept bot must be connected when its test ends.
+
+```java
+@Test
+void theBalanceSurvivesARelog(Game game, @Bot.Name("payer") Bot bot) {
+    bot.give(Items.EMERALD, 3);
+    bot.disconnect(); // PlayerLoggedOut, saved
+    bot.reconnect();  // PlayerLoggedIn, the same player
+    assertEquals(3, bot.count(Items.EMERALD));
+}
+```
+
 `game.npc(EntityType.PIGLIN, feet)` spawns a mob and hands it to WorldDriver as a body, `mob:<name>`, for the rest of the
 test. While WorldDriver drives it, the mob's own AI is off.
 
