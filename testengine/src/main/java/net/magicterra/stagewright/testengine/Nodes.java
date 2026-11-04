@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.testengine;
 
+import java.util.List;
 import org.junit.platform.engine.TestSource;
 import org.junit.platform.engine.UniqueId;
 import org.junit.platform.engine.support.descriptor.AbstractTestDescriptor;
@@ -44,12 +45,16 @@ final class Nodes {
     static final class TestClass extends AbstractTestDescriptor {
         final String className;
 
+        /** The conditions on the class itself, which disable each of its tests when one is not met. */
+        final List<ClassScan.Condition> conditions;
+
         TestClass(Scene scene, ClassScan.Scanned scanned) {
             super(
                     scene.getUniqueId().append("class", scanned.className()),
                     scanned.displayName().orElse(simpleName(scanned.className())),
                     ClassSource.from(scene.name + "/" + scanned.className()));
             this.className = scanned.className();
+            this.conditions = scanned.conditions();
         }
 
         @Override

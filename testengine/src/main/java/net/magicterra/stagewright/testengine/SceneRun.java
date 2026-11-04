@@ -14,10 +14,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import net.magicterra.stagewright.engine.RunDirectory;
@@ -106,6 +108,9 @@ final class SceneRun {
             return;
         } catch (Exception e) {
             early = e;
+        }
+        if (early == null && skipAllDisabled(spec)) {
+            return;
         }
         listener.executionStarted(scene);
         Relay relay = new Relay(scene, listener, coverage);
@@ -355,6 +360,48 @@ final class SceneRun {
                 }
             }
         }
+    }
+
+    /**
+     * When every test of the scene is known to be disabled in its game, report each skipped with its reason, and the
+     * scene as passed without a game: starting one only to have it skip them all took a pack's suite most of a minute
+     * per scene. Known means by a condition {@link ClassScan.Condition} reads, judged with the environment the game
+     * would start with; a script test, or a test no such condition disables, and the game starts as before.
+     */
+    private boolean skipAllDisabled(LaunchSpec spec) {
+        Map<String, String> env = new HashMap<>(System.getenv());
+        env.putAll(spec.primary().environment());
+        Map<Nodes.TestMethod, String> reasons = new LinkedHashMap<>();
+        for (TestDescriptor child : scene.getChildren()) {
+            if (!(child instanceof Nodes.TestClass c)) {
+                return false;
+            }
+            Optional<String> classWhy = ClassScan.Condition.firstDisabling(c.conditions, env);
+            for (TestDescriptor d : c.getChildren()) {
+                Optional<String> why = d instanceof Nodes.TestMethod m
+                        ? classWhy.or(() -> ClassScan.Condition.firstDisabling(m.method.conditions(), env))
+                        : Optional.empty();
+                if (why.isEmpty()) {
+                    return false;
+                }
+                reasons.put((Nodes.TestMethod) d, why.get());
+            }
+        }
+        if (reasons.isEmpty()) {
+            return false;
+        }
+        listener.executionStarted(scene);
+        listener.reportingEntryPublished(
+                scene, ReportEntry.from("notLaunched", "every test in it is disabled, so no game was started"));
+        for (TestDescriptor child : scene.getChildren()) {
+            listener.executionStarted(child);
+            for (TestDescriptor d : child.getChildren()) {
+                listener.executionSkipped(d, reasons.get((Nodes.TestMethod) d));
+            }
+            listener.executionFinished(child, TestExecutionResult.successful());
+        }
+        listener.executionFinished(scene, TestExecutionResult.successful());
+        return true;
     }
 
     /** The output of {@code round}'s {@code process}, the game or the companion client, in {@code logs}. */

@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.testengine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.platform.engine.discovery.DiscoverySelectors.selectClass;
@@ -58,9 +59,18 @@ class StageWrightTestEngineTest {
                 "script",
                 "restart",
                 "leak",
-                "leakReport")) {
+                "leakReport",
+                "allDisabled",
+                "methodsDisabled",
+                "onePlain")) {
             writeSpec(specs, topology, true);
         }
+        writeSpec(specs, "enabledBySpec", true);
+        Path bySpec = specs.resolve("enabledBySpec.json");
+        String spec = Files.readString(bySpec).strip();
+        Files.writeString(
+                bySpec,
+                spec.substring(0, spec.length() - 2) + ", \"environment\": {\"STAGEWRIGHT_TEST_SPEC_ENV\": \"yes\"}}}");
         writeSpec(specs, "worldDirty", false);
         writeSpec(specs, "clientStays", true, "companionStays");
         writeSpec(specs, "clientLeaves", true, "companionLeaves");
@@ -138,6 +148,29 @@ class StageWrightTestEngineTest {
 
     private static Events containersFailed(EngineExecutionResults r) {
         return r.containerEvents().failed();
+    }
+
+    @Test
+    void aSceneWhoseTestsAreAllDisabledSkipsThemWithoutStartingAGame() {
+        EngineExecutionResults all = run("AllDisabledFixture");
+        assertEquals(2, all.testEvents().skipped().count());
+        assertEquals(0, all.testEvents().started().count(), "nothing ran");
+        assertEquals(0, containersFailed(all).count());
+        assertEquals("environment variable STAGEWRIGHT_TEST_NEVER_SET does not match .*", skipReason(all, "a()"));
+        assertFalse(Files.exists(temp.resolve("game-allDisabled/stagewright/runs/allDisabled")), "no game started");
+
+        EngineExecutionResults each = run("MethodsDisabledFixture");
+        assertEquals(2, each.testEvents().skipped().count());
+        assertEquals("not yet", skipReason(each, "a()"));
+        assertEquals("environment variable PATH matches .*", skipReason(each, "b()"));
+        assertFalse(Files.exists(temp.resolve("game-methodsDisabled/stagewright/runs/methodsDisabled")));
+    }
+
+    @Test
+    void aSceneWithOneTestNotDisabledStartsItsGame() {
+        assertEquals(2, run("OnePlainFixture").testEvents().succeeded().count(), "the game judges the rest itself");
+        // Enabled by its launch's own environment, which this JVM does not have.
+        assertEquals(2, run("EnabledBySpecFixture").testEvents().succeeded().count());
     }
 
     @Test

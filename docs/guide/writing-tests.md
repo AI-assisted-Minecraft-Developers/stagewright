@@ -276,6 +276,11 @@ Three things to know before you reach for it:
 - `@Requires(CLIENT)`, `@Requires(DEDICATED_SERVER)`, `@Requires(INTEGRATED_SERVER)` or `@Requires(mods = "id")` runs
   the test only in a game that has it; elsewhere it is reported as disabled. A test that no scene it names can run
   fails the run, since it would otherwise never run and never fail.
+- Jupiter's own conditions apply too, judged in the game. A scene whose every test is disabled by `@Disabled`,
+  `@EnabledIfEnvironmentVariable` or `@DisabledIfEnvironmentVariable`, on the class or on each method, starts no game
+  at all: its tests are reported as skipped with their reasons. An environment condition is judged with the
+  environment the game would get, this run's plus the topology's `environment`. Any other condition, a system
+  property or one of your own, is judged in the game only, so a scene holding such a test still starts.
 - `@KnownIssue("why")` keeps a failing test running: its failure is reported as aborted with the reason, and its
   passing as a failure, so the annotation is removed once the issue is fixed.
 

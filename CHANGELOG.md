@@ -10,6 +10,18 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-11-05
+
+### A scene whose tests are all disabled starts no game
+
+Jupiter's conditions were judged only inside the game, so a scene whose every test was disabled by an environment
+variable that was not set still started its game, about 50 s on a third party's pack, only to skip them all. The
+engine now reads `@Disabled`, `@EnabledIfEnvironmentVariable` and `@DisabledIfEnvironmentVariable` from the class
+files and judges them with the environment the game would get; when they disable every test of a scene, each is
+reported skipped with its reason and no game starts. A scene with a test that any other condition guards starts as
+before. **Green in the unit tests**: class-level and method-level conditions skip without a game, and a test left
+enabled, or enabled only by the topology's environment, still starts it.
+
 ## 2026-11-04
 
 ### Stopping the runner stops the games it started

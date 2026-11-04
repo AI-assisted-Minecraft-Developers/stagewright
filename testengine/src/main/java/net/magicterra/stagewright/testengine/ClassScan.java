@@ -39,16 +39,90 @@ final class ClassScan {
 
     /**
      * One test method. {@code parameters} is spelled as JUnit's {@code MethodSource} spells it; a {@code container}
-     * (parameterized, repeated, a factory) has its invocations registered while the game runs it.
+     * (parameterized, repeated, a factory) has its invocations registered while the game runs it. {@code conditions}:
+     * the Jupiter conditions on it that {@link Condition} reads.
      */
-    record Method(String name, String parameters, Optional<String> displayName, boolean container) {
+    record Method(
+            String name,
+            String parameters,
+            Optional<String> displayName,
+            boolean container,
+            List<Condition> conditions) {
         String key() {
             return name + "(" + parameters + ")";
         }
     }
 
-    /** A class that declares scenes; {@code methods} in the order the class file lists them, inherited ones last. */
-    record Scanned(String className, List<String> scenes, Optional<String> displayName, List<Method> methods) {}
+    /**
+     * A class that declares scenes; {@code methods} in the order the class file lists them, inherited ones last.
+     * {@code conditions}: those declared on the class itself.
+     */
+    record Scanned(
+            String className,
+            List<String> scenes,
+            Optional<String> displayName,
+            List<Method> methods,
+            List<Condition> conditions) {}
+
+    /**
+     * A Jupiter condition this JVM can judge for the game before starting it: {@code @Disabled}, and
+     * {@code @EnabledIfEnvironmentVariable} / {@code @DisabledIfEnvironmentVariable}, repeated ones too, since the game
+     * is started with this JVM's environment and its launch's additions. A system property, a custom condition or a
+     * meta-annotation is left to the game, whose JVM is not this one; reading none of them only means a test is not
+     * known to be disabled, and its game starts as before.
+     */
+    record Condition(Kind kind, String named, String matches, String reason) {
+        enum Kind {
+            DISABLED,
+            ENABLED_IF_ENV,
+            DISABLED_IF_ENV
+        }
+
+        /** Why this disables a test in a game with {@code env}, or empty when it does not. */
+        Optional<String> disables(Map<String, String> env) {
+            String why = reason.isEmpty() ? null : reason;
+            switch (kind) {
+                case DISABLED:
+                    return Optional.of(why == null ? "@Disabled" : why);
+                case ENABLED_IF_ENV: {
+                    String v = env.get(named);
+                    boolean met = v != null && v.matches(matches);
+                    return met
+                            ? Optional.empty()
+                            : Optional.of(
+                                    why == null ? "environment variable " + named + " does not match " + matches : why);
+                }
+                default: {
+                    String v = env.get(named);
+                    boolean met = v != null && v.matches(matches);
+                    return met
+                            ? Optional.of(why == null ? "environment variable " + named + " matches " + matches : why)
+                            : Optional.empty();
+                }
+            }
+        }
+
+        /** The first of {@code conditions} that disables a test in a game with {@code env}. */
+        static Optional<String> firstDisabling(List<Condition> conditions, Map<String, String> env) {
+            for (Condition c : conditions) {
+                Optional<String> why = c.disables(env);
+                if (why.isPresent()) {
+                    return why;
+                }
+            }
+            return Optional.empty();
+        }
+    }
+
+    private static final String DISABLED = "Lorg/junit/jupiter/api/Disabled;";
+
+    private static final String ENABLED_IF_ENV = "Lorg/junit/jupiter/api/condition/EnabledIfEnvironmentVariable;";
+
+    private static final String DISABLED_IF_ENV = "Lorg/junit/jupiter/api/condition/DisabledIfEnvironmentVariable;";
+
+    private static final String ENABLED_IF_ENVS = "Lorg/junit/jupiter/api/condition/EnabledIfEnvironmentVariables;";
+
+    private static final String DISABLED_IF_ENVS = "Lorg/junit/jupiter/api/condition/DisabledIfEnvironmentVariables;";
 
     private ClassScan() {}
 
@@ -75,7 +149,8 @@ final class ClassScan {
                 className,
                 List.copyOf(top.scenes),
                 Optional.ofNullable(top.displayName),
-                List.copyOf(methods.values())));
+                List.copyOf(methods.values()),
+                List.copyOf(top.conditions)));
     }
 
     private static Reading read(String className, ClassLoader loader) throws IOException {
@@ -106,6 +181,8 @@ final class ClassScan {
 
         final Map<String, Method> methods = new LinkedHashMap<>();
 
+        final List<Condition> conditions = new ArrayList<>();
+
         String superName;
 
         String displayName;
@@ -134,7 +211,7 @@ final class ClassScan {
             if (DISPLAY_NAME.equals(descriptor)) {
                 return value(v -> displayName = v);
             }
-            return null;
+            return condition(descriptor, conditions);
         }
 
         @Override
@@ -145,6 +222,7 @@ final class ClassScan {
             }
             String parameters = parameters(descriptor);
             return new MethodVisitor(Opcodes.ASM9) {
+                final List<Condition> on = new ArrayList<>();
                 boolean testable;
                 boolean container;
                 String display;
@@ -158,7 +236,7 @@ final class ClassScan {
                     if (DISPLAY_NAME.equals(annotation)) {
                         return value(v -> display = v);
                     }
-                    return null;
+                    return condition(annotation, on);
                 }
 
                 @Override
@@ -166,11 +244,65 @@ final class ClassScan {
                     if (!testable) {
                         return;
                     }
-                    Method m = new Method(name, parameters, Optional.ofNullable(display), container);
+                    Method m = new Method(name, parameters, Optional.ofNullable(display), container, List.copyOf(on));
                     methods.put(m.key(), m);
                 }
             };
         }
+    }
+
+    /**
+     * A visitor adding the condition {@code descriptor} names to {@code into}, or null when it names none read here.
+     */
+    private static AnnotationVisitor condition(String descriptor, List<Condition> into) {
+        switch (descriptor) {
+            case DISABLED:
+                return conditionValues(Condition.Kind.DISABLED, into);
+            case ENABLED_IF_ENV:
+                return conditionValues(Condition.Kind.ENABLED_IF_ENV, into);
+            case DISABLED_IF_ENV:
+                return conditionValues(Condition.Kind.DISABLED_IF_ENV, into);
+            case ENABLED_IF_ENVS:
+                return repeated(Condition.Kind.ENABLED_IF_ENV, into);
+            case DISABLED_IF_ENVS:
+                return repeated(Condition.Kind.DISABLED_IF_ENV, into);
+            default:
+                return null;
+        }
+    }
+
+    /** One condition's values: {@code named} and {@code matches} for the environment ones, the reason for each. */
+    private static AnnotationVisitor conditionValues(Condition.Kind kind, List<Condition> into) {
+        return new AnnotationVisitor(Opcodes.ASM9) {
+            final Map<String, String> values = new LinkedHashMap<>();
+
+            @Override
+            public void visit(String name, Object value) {
+                values.put(name, String.valueOf(value));
+            }
+
+            @Override
+            public void visitEnd() {
+                String reason = values.getOrDefault(kind == Condition.Kind.DISABLED ? "value" : "disabledReason", "");
+                into.add(new Condition(
+                        kind, values.getOrDefault("named", ""), values.getOrDefault("matches", ""), reason));
+            }
+        };
+    }
+
+    /** A repeatable condition's container: each annotation in its {@code value}. */
+    private static AnnotationVisitor repeated(Condition.Kind kind, List<Condition> into) {
+        return new AnnotationVisitor(Opcodes.ASM9) {
+            @Override
+            public AnnotationVisitor visitArray(String name) {
+                return new AnnotationVisitor(Opcodes.ASM9) {
+                    @Override
+                    public AnnotationVisitor visitAnnotation(String n, String descriptor) {
+                        return conditionValues(kind, into);
+                    }
+                };
+            }
+        };
     }
 
     private static AnnotationVisitor values(List<String> into) {
