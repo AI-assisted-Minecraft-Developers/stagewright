@@ -19,7 +19,8 @@ the end of the tick under way and saves nothing more, not a chunk and not a play
 the round's results are sent the JVM ends with `Runtime.halt`, and a test with `@DependsOn(afterRestart = true)` starts
 on the same save with only what had reached the disk. After the call nothing may touch the game: a `game` call fails
 and says why, and nothing the test changed is put back. **Green in the self-test suite** on both loaders: a block placed
-and diamonds given after a save are gone after the restart, the ones before it are there.
+and diamonds given after a save are gone after the restart, the ones before it are there. **Green against a third
+party**: a mod's crash test, transactions at every stage settled once after the restart, in a full suite of 224.
 
 ### A test can read the toasts its client shows
 
