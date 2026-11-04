@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.capability.Mods;
+import net.magicterra.stagewright.driver.LogCapture;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -20,6 +21,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 public final class StageWrightNeoForge {
     /** Registers this entry point on the event bus and, on a client, the client director. */
     public StageWrightNeoForge() {
+        LogCapture.install();
         installModList();
         NeoForge.EVENT_BUS.register(this);
         // Reached only on a client, and only then is StageWrightClientDirector ever loaded — the

@@ -43,6 +43,10 @@ public interface TestQueriesApi {
     @Spec(value = ModsContracts.class, spec = "MODS")
     CompletionStage<ModsContracts.ModsReply> mods(ModsContracts.ModsOp op, CallContext ctx);
 
+    /** The warnings and errors this JVM has logged since a mark. */
+    @Spec(value = LogsContracts.class, spec = "LOGS")
+    CompletionStage<LogsContracts.LogsReply> logs(LogsContracts.LogsOp op, CallContext ctx);
+
     /** The toasts a client shows and the ones queued behind them. Client only. */
     @Spec(value = ToastsContracts.class, spec = "TOASTS")
     CompletionStage<ToastsContracts.ToastsReply> toasts(ToastsContracts.ToastsOp op, CallContext ctx);

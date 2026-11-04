@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-04
 
+### A test can assert what the server or the client logged
+
+`mc.test.logs` lists the warnings and errors a JVM of the game logged after a mark, by level and by logger prefix, each
+with its thread, formatted message and exception; asked through `game` it reads the server's log, through `client` the
+client's. `Logs.of(registry)` wraps it for a Java test, and throws rather than answer empty when lines that may match
+are no longer kept. A test could only read `latest.log` after the run until now. **Green in the self-test suite** on
+both loaders: a warning the dedicated server logs and an error the joined client logs are each read from their own
+side's log, with the error's exception.
+
 ### A download that stops halfway is retried instead of waited for
 
 The command-line runner's downloads had a time limit only until a response's headers arrived, so a mirror that sent

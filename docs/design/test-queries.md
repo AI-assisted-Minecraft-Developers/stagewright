@@ -5,7 +5,7 @@ close, what a loot table can give, whether an advancement is held, where a struc
 chunk leaving memory. They are WorldDriver methods that StageWright registers, so a test in the game, a script and an
 outside client reach them the same way.
 
-## Six methods
+## Eight methods
 
 One method per subject, the question named by `op`, as WorldDriver's `mc.bot.roster` names its own:
 
@@ -17,6 +17,21 @@ One method per subject, the question named by `op`, as WorldDriver's `mc.bot.ros
 | `mc.test.advancements` | `grant`, `revoke`, `progress`, `list` |
 | `mc.test.structures` | `registered`, `at`, `locate`, `list` |
 | `mc.test.mods` | `list`, `has` |
+| `mc.test.logs` | `mark`, `since` |
+| `mc.test.toasts` | `list` (a client only) |
+
+`mc.test.logs` reads the warnings and errors of the JVM that answers it: the server's through `game`, the client's
+through `client`, one log on an integrated server. An appender on log4j's root logger keeps the latest 4096 from the
+JVM's start, each with its logger, level, thread, formatted message and exception. `mark` answers where the log stands,
+and `since` lists what came after a mark at a level and by a logger prefix, saying how many it left out and how many
+are no longer kept. `Logs` wraps the two for a Java test, and refuses an answer it cannot vouch is complete:
+
+```java
+Logs logs = Logs.of(client.registry());
+long mark = logs.mark();
+// ... what must not warn
+assertEquals(List.of(), logs.since(mark, LogsContracts.Level.WARN, "com.example.mymod"));
+```
 
 What a pack has, a test can count and list: `list` names every loot table, advancement or structure, sorted, or only
 those of a `namespace`, with a `count` that holds even when the list is cut at 100000; `mc.test.mods` lists the loaded

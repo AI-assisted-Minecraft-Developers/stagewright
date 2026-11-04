@@ -13,6 +13,7 @@ import java.util.function.Supplier;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.capability.Mods;
 import net.magicterra.stagewright.driver.ClientReads;
+import net.magicterra.stagewright.driver.LogCapture;
 import net.magicterra.stagewright.jupiter.ServerTicks;
 import net.magicterra.stagewright.test.methods.AdvancementsContracts;
 import net.magicterra.stagewright.test.methods.ChunksContracts.ChunksOp;
@@ -21,6 +22,7 @@ import net.magicterra.stagewright.test.methods.ChunksContracts.Reload;
 import net.magicterra.stagewright.test.methods.ChunksContracts.Reloaded;
 import net.magicterra.stagewright.test.methods.ChunksContracts.Unload;
 import net.magicterra.stagewright.test.methods.ChunksContracts.Unloaded;
+import net.magicterra.stagewright.test.methods.LogsContracts;
 import net.magicterra.stagewright.test.methods.LootContracts;
 import net.magicterra.stagewright.test.methods.ModsContracts;
 import net.magicterra.stagewright.test.methods.RecipesContracts;
@@ -297,6 +299,16 @@ final class TestQueriesService implements TestQueriesApi {
                         new ModsContracts.Present(
                                 Mods.loaded(h.id()),
                                 Mods.loaded(h.id()) ? Optional.of(clip(Mods.version(h.id()), 256)) : Optional.empty());
+                });
+    }
+
+    /** This JVM's warnings and errors: the server's when asked of a game, the client's when asked of a client. */
+    @Override
+    public CompletionStage<LogsContracts.LogsReply> logs(LogsContracts.LogsOp op, CallContext ctx) {
+        return CompletableFuture.completedFuture(
+                switch (op) {
+                    case LogsContracts.Mark() -> new LogsContracts.Marked(LogCapture.mark());
+                    case LogsContracts.Since s -> LogCapture.since(s.after(), s.atLeast(), s.logger());
                 });
     }
 

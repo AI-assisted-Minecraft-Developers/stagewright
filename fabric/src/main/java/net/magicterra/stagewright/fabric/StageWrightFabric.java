@@ -11,6 +11,7 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.capability.Mods;
+import net.magicterra.stagewright.driver.LogCapture;
 import net.minecraft.resources.ResourceLocation;
 
 /** Fabric entry point: connects {@code StageWrightCommon}'s server hooks to Fabric's lifecycle events. */
@@ -20,6 +21,7 @@ public final class StageWrightFabric implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        LogCapture.install();
         installModList();
         ServerLifecycleEvents.SERVER_STARTED.register(StageWrightCommon::onServerStarted);
         // WorldDriverFabric detaches WorldDriver from SERVER_STOPPING's default phase, and its mod may
