@@ -100,7 +100,7 @@ public final class ScriptTestEngine implements TestEngine {
         Rounds.scripts(upstream);
         for (TestDescriptor child : engine.getChildren()) {
             for (TestDescriptor t : new ArrayList<>(child.getChildren())) {
-                if (Rounds.of(((Test) t).key()) != Rounds.current()) {
+                if (!Rounds.runsNow(((Test) t).key())) {
                     child.removeChild(t);
                 }
             }

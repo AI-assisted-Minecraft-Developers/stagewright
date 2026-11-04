@@ -213,8 +213,11 @@ round's in the `restart` event. The game always opens the topology's world direc
 out of it rather than telling the game another path: the one there goes to `stagewright/saves/<its name>`, and the
 named one comes back from there, or is unpacked from its save, or is left absent for the game to create. The scene's
 first world is moved back when the scene ends, so a topology that keeps its world between runs keeps the one it had.
-`Game.quitNow()` skips the round's tests not yet started, so the run, and the game, end right after the test that
-called it. `Game.crashNow()` skips them too, and first parks the server thread in a task of its own, so the server
+`Game.quitNow()` holds back the round's tests not yet started, so the run, and the game, end right after the test that
+called it. Those tests are not reported: `rounds.json` keeps no outcome for them and counts the round as left over,
+and every test not run yet runs in its declared round plus the rounds left over so far. So the next game runs them, on
+the same save, and the rounds after it move on by one; a test that is never run fails when the scene closes out, as
+any test the game did not finish does. `Game.crashNow()` holds them back too, and first parks the server thread in a task of its own, so the server
 stops between two ticks and nothing after that saves. Whatever would ask that thread for something once the test
 returns is skipped: its overrides are not undone, its plots not put back, its bots not removed or saved, and a kept
 bot's name still goes to the next round, which joins it from its last save. The run then sends `done` and ends the JVM

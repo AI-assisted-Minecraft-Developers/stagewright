@@ -73,6 +73,10 @@ final class AgentEvents implements TestExecutionListener {
 
     @Override
     public void executionSkipped(TestIdentifier id, String reason) {
+        // Left to the next game, which reports how it ends.
+        if (Quit.left(id)) {
+            return;
+        }
         JsonObject o = event("skipped");
         o.addProperty(ID, id.getUniqueId());
         o.addProperty("reason", reason);
@@ -81,6 +85,9 @@ final class AgentEvents implements TestExecutionListener {
 
     @Override
     public void executionFinished(TestIdentifier id, TestExecutionResult result) {
+        if (result.getStatus() == TestExecutionResult.Status.ABORTED && Quit.left(id)) {
+            return;
+        }
         JsonObject o = event("finished");
         o.addProperty(ID, id.getUniqueId());
         o.addProperty("status", result.getStatus().name());

@@ -208,8 +208,9 @@ Three things to know before you reach for it:
   ```
 
 - `game.quitNow()` ends the game as soon as the calling test returns, as a player saving and quitting does, with
-  whatever the world is in the middle of; the tests of the round that have not started are skipped, and the next
-  round begins on the world as it was saved. Call it from a class marked `@Isolated`, since a test running beside it holds
+  whatever the world is in the middle of. The tests of the round that have not started run in the next game, on the
+  world as it was saved, and each later round one game after that: a test restarting after the one that quit sees
+  what those tests left in the world, plots put back but anything else they changed kept. Call it from a class marked `@Isolated`, since a test running beside it holds
   the game until it ends. It is for Java tests: script tests running beside them are not stopped. A restart is a new
   game process, so leaving a world this way does not test what one client keeps from one world to the next.
 

@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-04
 
+### The tests a quit or a crash kept from starting run in the next game
+
+A test that called `game.quitNow()` or `game.crashNow()` left the round's tests it had not started skipped, and the
+build passed with them never run: 24 tests of a third party's scene. They now run in the next game, on the same save,
+and every later round moves one game on, so a test restarting after the one that quit or crashed runs after them. A
+test that is still not run when the scene ends fails. **Green in the self-test suite** on both loaders: a test waiting
+on the crash test runs in the game after the crash, and the crash test's dependent in the one after that. **Green
+against a third party**: a scene whose classes the crash kept from starting ran all 39 of its tests over three games.
+
 ### A test can crash its game and check what the next round comes back with
 
 `game.crashNow()` ends the game as a killed process ends, for a mod whose data must survive one: the server stops at

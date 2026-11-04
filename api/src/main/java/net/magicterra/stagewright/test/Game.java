@@ -111,9 +111,10 @@ public interface Game {
 
     /**
      * End this game as soon as the calling test returns, as a player saving and quitting would, with whatever the world
-     * is in the middle of. Tests of this round not started by then are skipped, and a later round starts where this one
-     * stopped ({@link DependsOn#afterRestart()}). Tests still running beside it hold the game until they end, so it
-     * belongs in a class marked {@code @Isolated}. Java tests only; a script test running beside it is not stopped.
+     * is in the middle of. Tests of this round not started by then run in the next game, on the same save, and every
+     * later round ({@link DependsOn#afterRestart()}) one game after that. Tests still running beside it hold the game
+     * until they end, so it belongs in a class marked {@code @Isolated}. Java tests only; a script test running beside
+     * it is not stopped.
      */
     void quitNow();
 
@@ -122,7 +123,8 @@ public interface Game {
      * autosave, no chunk, no player's data, a kept {@link Bot} included — and once the round's results are sent the JVM
      * ends with {@link Runtime#halt}, as a killed process does. A later round starts on the same save
      * ({@link DependsOn#afterRestart()}), with only what had reached the disk: a test there sees what a server that
-     * lost its power comes back with. Tests of this round not started by then are skipped.
+     * lost its power comes back with. Tests of this round not started by then run in the game after this one, as after
+     * {@link #quitNow}, so a test that restarts after this one finds the save as they left it.
      *
      * <p>Returns once the server has stopped; from then on nothing may ask it for anything, so the rest of the calling
      * test, and any test running beside it, must not touch the game: a call through this {@code Game} fails, and one

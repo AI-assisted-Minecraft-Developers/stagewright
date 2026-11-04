@@ -25,6 +25,10 @@ import org.junit.platform.engine.TestExecutionResult;
  * a restart runs in that one's round or later. Each game runs one round, {@value #PROPERTY}, records how its tests
  * ended in {@value #FILE} in the game's {@code stagewright/}, and asks for another game when a later round has tests.
  * The test engine outside deletes the file before a scene's first game.
+ *
+ * <p>A round a test ended early ({@link Quit}) leaves the tests it had not started to the game after it, on the same
+ * save, and every later round moves one game later with them: a test runs in its declared round plus the {@code shift}
+ * of such rounds so far, once, the file holding both.
  */
 final class Rounds {
 
@@ -33,6 +37,10 @@ final class Rounds {
 
     /** How the tests of the rounds before ended, by key. */
     static final String FILE = "rounds.json";
+
+    private static final String OUTCOMES = "outcomes";
+
+    private static final String SHIFT = "shift";
 
     /** What a test depends on, and whether only after a restart. */
     record Upstream(List<String> keys, boolean afterRestart, World world) {
@@ -84,6 +92,9 @@ final class Rounds {
 
     private static volatile Map<String, String> before = Map.of();
 
+    /** How many games so far ran a round that left tests to the next; every test not run yet moves on by as many. */
+    private static volatile int shift;
+
     private static volatile int latest;
 
     private Rounds() {}
@@ -126,9 +137,12 @@ final class Rounds {
         }
     }
 
-    /** The world the tests of {@code round} named, or null when none did: that round runs on the one before's. */
+    /**
+     * The world the tests of {@code round} named, or null when none did: that round runs on the one before's. A round
+     * of tests left over is a declared round once more, so it names that round's world, the one open when it was left.
+     */
     static World world(int round) {
-        return WORLDS.get(round);
+        return WORLDS.get(round - shift);
     }
 
     /**
@@ -140,14 +154,18 @@ final class Rounds {
         Path file = dir.resolve(FILE);
         if (current() == 0 || !Files.isRegularFile(file)) {
             before = Map.of();
+            shift = 0;
             return;
         }
         try {
             JsonObject o = JsonParser.parseString(Files.readString(file, StandardCharsets.UTF_8))
                     .getAsJsonObject();
             Map<String, String> outcomes = new HashMap<>();
-            o.entrySet().forEach(e -> outcomes.put(e.getKey(), e.getValue().getAsString()));
+            o.getAsJsonObject(OUTCOMES)
+                    .entrySet()
+                    .forEach(e -> outcomes.put(e.getKey(), e.getValue().getAsString()));
             before = Map.copyOf(outcomes);
+            shift = o.get(SHIFT).getAsInt();
         } catch (IOException | RuntimeException e) {
             throw new IllegalStateException("could not read how the rounds before ended from " + file, e);
         }
@@ -158,23 +176,51 @@ final class Rounds {
         return before.get(key);
     }
 
-    /** Add this round's outcomes to the file in {@code dir}. */
-    static void save(Path dir, Map<String, TestExecutionResult.Status> outcomes) throws IOException {
+    /**
+     * Add this round's outcomes to the file in {@code dir}, but for the tests in {@code left}, which it did not start:
+     * when there are any, they and every later round move to the next game.
+     */
+    static void save(Path dir, Map<String, TestExecutionResult.Status> outcomes, Set<String> left) throws IOException {
+        JsonObject ended = new JsonObject();
+        before.forEach(ended::addProperty);
+        outcomes.forEach((k, v) -> {
+            if (!left.contains(k)) {
+                ended.addProperty(k, v.name());
+            }
+        });
+        if (!left.isEmpty()) {
+            shift++;
+            latest++;
+        }
         JsonObject all = new JsonObject();
-        before.forEach(all::addProperty);
-        outcomes.forEach((k, v) -> all.addProperty(k, v.name()));
+        all.add(OUTCOMES, ended);
+        all.addProperty(SHIFT, shift);
         Files.createDirectories(dir);
         Files.writeString(dir.resolve(FILE), new Gson().toJson(all), StandardCharsets.UTF_8);
     }
 
-    /** The latest round a test asked about needs; another game is wanted while it is past {@link #current()}. */
+    /**
+     * The latest round a test not run yet needs; another game is wanted while it is past {@link #current()}. After
+     * {@link #save}, the latest with any tests left over.
+     */
     static int latest() {
         return latest;
     }
 
-    /** The round {@code key} runs in, remembering the latest round any test of the scene needs. */
+    /** Whether this game runs {@code key}: a test of its round that no earlier game ran. */
+    static boolean runsNow(String key) {
+        return of(key) == current();
+    }
+
+    /**
+     * The round {@code key} runs in, its declared one moved on by the rounds left over so far; for a test an earlier
+     * game ran, the round it ran in or a later one. Remembers the latest round any test not run yet needs.
+     */
     static int of(String key) {
-        int round = of(key, new HashSet<>());
+        if (before.containsKey(key)) {
+            return -1;
+        }
+        int round = of(key, new HashSet<>()) + shift;
         latest = Math.max(latest, round);
         return round;
     }

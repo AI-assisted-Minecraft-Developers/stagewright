@@ -33,9 +33,20 @@ class QuitTest {
     }
 
     @Test
+    void aTestIsLeftByItselfOrWithItsClass() {
+        Quit.leave("p.A#one");
+        Quit.leave("p.B");
+        assertTrue(Quit.left("p.A#one"));
+        assertFalse(Quit.left("p.A#two"), "its class started, and this one ran");
+        assertTrue(Quit.left("p.B#any"), "its class never started");
+    }
+
+    @Test
     void aNewRunHasNeitherQuitNorCrashed() {
         Quit.crash("a");
+        Quit.leave("p.A#one");
         Quit.reset();
+        assertFalse(Quit.left("p.A#one"));
         assertNull(Quit.reason());
         assertFalse(Quit.crashed());
     }

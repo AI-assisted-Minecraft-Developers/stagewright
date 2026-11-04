@@ -2,6 +2,7 @@ package net.magicterra.stagewright.jupiter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import net.magicterra.stagewright.test.Bot;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.DependsOn;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.extension.InvocationInterceptor;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.ParameterResolver;
+import org.opentest4j.TestAbortedException;
 
 /**
  * Injects the {@link Game}, leased {@link Plot}s and {@link Bot}s, the client's {@link Player} and the {@link Client}
@@ -79,13 +81,27 @@ public final class GameExtension
         }
     }
 
-    /** Skips whatever has not started once a test called {@code game.quitNow()}. */
+    /** Leaves whatever has not started to the next game once a test called {@code game.quitNow()} or crashed it. */
     @Override
     public ConditionEvaluationResult evaluateExecutionCondition(ExtensionContext context) {
         String quit = Quit.reason();
-        return quit == null
-                ? ConditionEvaluationResult.enabled("the game runs")
-                : ConditionEvaluationResult.disabled(quit);
+        if (quit == null) {
+            return ConditionEvaluationResult.enabled("the game runs");
+        }
+        // A test, or a whole class when it is the class not started.
+        Optional<String> left = context.getTestClass()
+                .map(type -> context.getTestMethod()
+                        .map(m -> type.getName() + "#" + m.getName())
+                        .orElse(type.getName()));
+        left.ifPresent(Quit::leave);
+        return ConditionEvaluationResult.disabled(quit);
+    }
+
+    /** The test of {@code context} is not started now, and is left to the next game; never returns. */
+    private static void leaveForTheNextGame(ExtensionContext context, String quit) {
+        Quit.leave(context.getRequiredTestClass().getName() + "#"
+                + context.getRequiredTestMethod().getName());
+        Assumptions.abort(quit);
     }
 
     @Override
@@ -189,11 +205,20 @@ public final class GameExtension
     /** Waits for the test's dependencies first, so it holds none of its locks while it waits. */
     @Override
     public void beforeEach(ExtensionContext context) throws InterruptedException {
-        Dependencies.awaitUpstream(context);
+        try {
+            Dependencies.awaitUpstream(context);
+        } catch (TestAbortedException e) {
+            // An upstream test the quit left to the next game is run there, and this one after it.
+            String quit = Quit.reason();
+            if (quit != null) {
+                leaveForTheNextGame(context, quit);
+            }
+            throw e;
+        }
         // Passed the condition before the test it waited for quit.
         String quit = Quit.reason();
         if (quit != null) {
-            Assumptions.abort(quit);
+            leaveForTheNextGame(context, quit);
         }
         TestScope scope = TestScope.of(context);
         scope.hold(!context.getConfigurationParameter(PARALLEL)

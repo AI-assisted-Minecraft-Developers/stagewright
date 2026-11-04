@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.client.WorldSwitch;
 import net.magicterra.stagewright.harness.AgentBridge;
@@ -29,6 +30,7 @@ import net.minecraft.server.MinecraftServer;
 import org.junit.platform.engine.ConfigurationParameters;
 import org.junit.platform.engine.DiscoverySelector;
 import org.junit.platform.engine.FilterResult;
+import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.engine.support.descriptor.MethodSource;
 import org.junit.platform.launcher.EngineFilter;
@@ -77,10 +79,13 @@ public final class JupiterRun {
         if (!(descriptor.getSource().orElse(null) instanceof MethodSource m)) {
             return FilterResult.included("not a test");
         }
-        int round = Rounds.of(m.getClassName() + "#" + m.getMethodName());
-        return round == Rounds.current()
-                ? FilterResult.included("this round")
-                : FilterResult.excluded("runs in round " + round + " of the scene's restarts");
+        String key = m.getClassName() + "#" + m.getMethodName();
+        if (Rounds.runsNow(key)) {
+            return FilterResult.included("this round");
+        }
+        return Rounds.endedBefore(key) != null
+                ? FilterResult.excluded("ran in an earlier round")
+                : FilterResult.excluded("runs in round " + Rounds.of(key) + " of the scene's restarts");
     };
 
     private JupiterRun() {}
@@ -241,12 +246,24 @@ public final class JupiterRun {
         return List.of(javaSummary.getSummary(), scriptSummary.getSummary());
     }
 
-    /** After both plans: hand over the kept bots, save the round's outcomes, and ask for a restart if tests remain. */
+    /**
+     * After both plans: save the round's outcomes, leaving the tests a quit kept from starting to the next game, hand
+     * over the kept bots, and ask for a restart if tests remain.
+     */
     private static void endRound(Path artifacts, AgentEvents relay) throws IOException {
+        Map<String, TestExecutionResult.Status> outcomes = Dependencies.outcomes();
+        Set<String> left = outcomes.keySet().stream().filter(Quit::left).collect(Collectors.toSet());
+        Rounds.save(artifacts, outcomes, left);
         boolean restarting = Rounds.latest() > Rounds.current();
         Handovers.sweep(artifacts, restarting);
-        Rounds.save(artifacts, Dependencies.outcomes());
         if (restarting) {
+            if (!left.isEmpty() && StageWrightCommon.LOG.isInfoEnabled()) {
+                StageWrightCommon.LOG.info(
+                        "[{}] {}; the {} tests it had not started run in the next game",
+                        StageWrightCommon.MOD_ID,
+                        Quit.reason(),
+                        left.size());
+            }
             if (StageWrightCommon.LOG.isInfoEnabled()) {
                 StageWrightCommon.LOG.info(
                         "[{}] round {} is over; tests remain for round {}, after a restart",
