@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.supervise.AgentJar;
 import net.magicterra.stagewright.engine.supervise.Supervisor;
@@ -56,6 +57,13 @@ final class SceneRun {
 
     /** Frames of each leaked thread's stack a forced-down report names: enough to tell whose pool it is. */
     private static final int LEAK_FRAMES = 4;
+
+    /** How long a game the supervisor saw die may take to be reaped, for its exit code. */
+    private static final long EXIT_WAIT_SECONDS = 5;
+
+    /** The POSIX signals a game is ended by, by number, for an exit code above 128. */
+    private static final Map<Integer, String> SIGNALS =
+            Map.of(1, "HUP", 2, "INT", 3, "QUIT", 6, "ABRT", 9, "KILL", 11, "SEGV", 15, "TERM");
 
     private final Nodes.Scene scene;
 
@@ -375,7 +383,8 @@ final class SceneRun {
                             supervisor.await(game.toHandle(), limits, joined, companion.toHandle(), limits);
                     if (ending.companion()) {
                         String which = peer == null ? "the joined client" : "peer '" + peer.name() + "'";
-                        return companionEnded(ending, game, joined, relay, forced, gameLog, companionLog, which);
+                        return companionEnded(
+                                ending, game, companion, joined, relay, forced, gameLog, companionLog, which);
                     }
                     ended = ending.ended();
                 }
@@ -401,7 +410,7 @@ final class SceneRun {
                             ReportEntry.from("restart", "round " + (round + 1) + " on world " + worlds.current()));
                     continue;
                 }
-                return verdict(supervisor, ended, relay, forced, gameLog);
+                return verdict(supervisor, game, ended, relay, forced, gameLog);
             } finally {
                 if (companion != null) {
                     Supervisor.kill(companion.toHandle());
@@ -536,6 +545,7 @@ final class SceneRun {
     private TestExecutionResult companionEnded(
             Supervisor.Ending ending,
             Process game,
+            Process second,
             Supervisor joined,
             Relay relay,
             List<String> forced,
@@ -547,6 +557,9 @@ final class SceneRun {
         Supervisor.kill(game.toHandle());
         String why = describeCompanion(
                 ending.ended(), joined.phase(), joined.ticks(), joined.crashReport(), joined.stacks(), companionLog);
+        if (ending.ended() == Supervisor.Ended.PROCESS_DIED) {
+            why += exitCode(second);
+        }
         listener.reportingEntryPublished(scene, ReportEntry.from("companion", which + " ended " + why));
         appendToLog(companionLog, which + " ended " + why);
         relay.closeOut(scene, which + " ended " + why);
@@ -568,9 +581,14 @@ final class SceneRun {
 
     /** The scene's result once the last round's game has ended, closing out every test it did not finish. */
     private TestExecutionResult verdict(
-            Supervisor supervisor, Supervisor.Ended ended, Relay relay, List<String> forced, File gameLog) {
+            Supervisor supervisor, Process game, Supervisor.Ended ended, Relay relay, List<String> forced, File gameLog)
+            throws InterruptedException {
         String why = describe(
                 ended, supervisor.phase(), supervisor.ticks(), supervisor.crashReport(), supervisor.stacks(), gameLog);
+        // Dead before anything here ended it, so the code is the game's own, or the signal something else sent.
+        if (ended == Supervisor.Ended.PROCESS_DIED) {
+            why += exitCode(game);
+        }
         relay.closeOut(scene, why);
         if (ended == Supervisor.Ended.DONE && relay.ended()) {
             // Every test passed or failed on its own; a game that would not end is the scene's failure.
@@ -672,6 +690,21 @@ final class SceneRun {
             }
         }
         return out.toString();
+    }
+
+    /**
+     * How {@code process} ended, for a game that died: its exit code, and the signal a code above 128 means, as a JVM
+     * ends on one. A JVM's own {@code exit(n)} is {@code n}; SIGTERM, which runs its shutdown hooks, is 143; SIGKILL is
+     * 137. Empty while it is still alive after a short wait.
+     */
+    static String exitCode(Process process) throws InterruptedException {
+        if (!process.waitFor(EXIT_WAIT_SECONDS, TimeUnit.SECONDS)) {
+            return "";
+        }
+        int code = process.exitValue();
+        String signal = code > 128 ? SIGNALS.get(code - 128) : null;
+        return "; its exit code was " + code
+                + (signal == null ? "" : " (SIG" + signal + ", 128 + " + (code - 128) + ")");
     }
 
     /**
