@@ -12,6 +12,25 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-05
 
+### A scene can run a second dedicated server, and its script tests reach it
+
+A pack whose servers share an economy through a hub could test a listing made on one server and bought on another
+only by hand: two scenes could run at once but not see each other, and a test reached one game. A scene now declares
+`peers: {b: {files: …}}`, and the engine starts peer `b` beside its game from the same topology, with the same mods,
+in a scene directory, world, port and log of its own and with its own files. The peer runs no tests. It loads the
+scene's script files for the steps they register, and serves them over its WorldDriver: `t.peer('b')` in a game's test
+answers the peer's own `t`, with `step(name, args)`, `waitUntil(step, args, options)` and handles (`bot`, `plot`,
+`capability`, …) whose methods run there, all as JSON. A function cannot be sent, since the script engine keeps no
+source of one, so what runs on the peer is a named step, which the peer has too. A failure there is thrown in the game
+with the peer's message, stack and log; a peer that dies or stops before the run is over fails the scene, naming its
+log, and each failure names the peer's log beside the game's. What a test leased on the peer is given back with the
+test. A script's bots and player also now carry the name and UUID the server has for them, and `bot.disconnect()` and
+`bot.reconnect()` log a bot out and in the vanilla way, so the same name is the same player on both servers and its
+save is read back. One peer, beside a dedicated server alone, for now. **Green in the self-test suite**: on both
+loaders, `wd.peers` runs a step and a waitUntil on the peer, uses its bot and plot handles, sees a bot logged out of the
+game join the peer as the same UUID with the peer's own save, has a bot the peer leased gone after its test, and has a
+failure on the peer reported with its log; on NeoForge, killing the peer during a test failed the scene naming it.
+
 ### An await condition that waits on the server thread fails at once, saying so
 
 An `await()` condition runs on the server thread after each tick. One that waited there for a future the server

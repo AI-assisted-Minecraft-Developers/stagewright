@@ -348,6 +348,51 @@ that `dependsOn` the keeper takes it, as `@Bot.Keep` and `@Bot.Kept` do in Java 
 (`afterRestart: true`), where the bot comes back where the game before left it, with what it had. `parked: true` joins
 or takes the bot parked.
 
+A body's `name` and `uuid` are read from the server: the name in the game, which for `t.bot('alice')` is `alice`, and
+the UUID an offline server gives that name, so the same name is the same player on every server. `bot.disconnect()`
+logs the bot out the vanilla way, saving its player data and firing the logout events, and `bot.reconnect()` logs it
+back in, reading that data back and firing the login events.
+
+#### A second server: `t.peer(name)`
+
+A scene that declares a peer under [`peers`](../reference/scene-file.md#peers) runs a second dedicated server beside
+its game, with the same mods and a world and directory of its own. Its tests still run in the game; `t.peer('b')`
+reaches the peer from there. What runs on the peer is a step: the peer loads the scene's script files too, ignoring
+their tests and keeping the steps they register, so a file declares at its top level what the peer is to do, and a
+test calls it by name. The step gets the peer's own `t` — `bot`, `plot`, `capability`, `onServer`, `call`, `wait` and
+the rest — and its `args`:
+
+```javascript
+step('claim', (t, args) => {
+  const bot = t.bot(args.name);              // on the peer
+  return { got: bot.count('minecraft:diamond') };
+});
+step('credited', (t, args) => t.capability('mms:hub').balance(args.uuid) >= args.amount);
+
+test('a listing on the game is bought on the peer', { scene: 'mypack.twoServers' }, (t) => {
+  const seller = t.bot('alice');             // on the game
+  // … list something, check it …
+  seller.disconnect();
+  const b = t.peer('b');
+  const r = b.step('claim', { name: 'alice' });
+  b.waitUntil('credited', { uuid: seller.uuid, amount: 5 }, { within: 200, as: 'b sees the credit' });
+  const buyer = b.bot('bob');                // a handle whose methods run on the peer
+  buyer.give('minecraft:emerald', 3);
+  b.call('mc.world.block', { pos: b.plot({ size: 4 }).at(0, 0, 0) });
+});
+```
+
+`t.peer(name)` answers the peer's `t`: `step(name, args)`, `waitUntil(step, args, {within, as})` with a step as the
+condition, and the handles — `bot`, `plot`, `player`, `npc`, `capability`, `capabilities` — whose methods each run on
+the peer. What takes a function there (`onServer`, `settle`, `afterTest`, `perf`) is left out, since a function cannot
+be sent; use it inside a step. Arguments and answers go as JSON, so a step reads only its `args` and the file's
+top-level constants, never the test's own variables, and passing a function fails at once saying so. What a test
+leased on the peer is given back when the test ends. A step that throws fails the call in the game with the peer's
+message, its stack and where the peer logs; an assertion is still an assertion there, and anything else can be caught.
+The peer has its own player data: a bot that logs out of the game and joins the peer by the same name is the same UUID
+there, with whatever the peer saved for it. Nothing stops one name being online on both at once. The first
+`t.peer(name)` of a run waits for the peer to come up, up to fifteen minutes.
+
 A script runs on a test thread, so two `t.call`s may land in different ticks. `t.onServer(fn)` runs `fn` on the server
 thread as one task and answers what it returns; the `t.call`, `t.step` and `t.check` it makes run there and then, all
 in the same tick, with nothing else in between:

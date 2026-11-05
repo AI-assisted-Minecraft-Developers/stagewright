@@ -23,7 +23,7 @@ world:
 ```
 
 A key this version does not apply is refused, and so is a value of the wrong kind: a scene does not run on a world it
-did not ask for. There is no key for more than one client yet.
+did not ask for. There is no key for more than one client yet; a second server is a [peer](#peers).
 
 ## `mods`
 
@@ -74,6 +74,31 @@ clientFiles:
   config/fml.toml: |
     earlyWindowControl = false
 ```
+
+## `peers`
+
+Other dedicated servers the scene runs beside its game, each by name, for tests that need two: a listing made on one
+server and bought on the other through a hub both reach. A name is lower-case letters, digits and underscores. Each
+peer starts from the topology as the game does, with the same mods (`mods.exclude` applies to both), in a scene
+directory of its own (`stagewright/runs/<scene>-peer-<name>/`) with its own world, port and log, and with its own
+`files`. The world settings are the scene's, the same as the game's.
+
+```yaml
+topology: dedicatedServer
+files:
+  config/magic_server-bus.toml: |
+    serverName = "a"
+peers:
+  b:
+    files:
+      config/magic_server-bus.toml: |
+        serverName = "b"
+```
+
+A peer runs no tests; the game's tests reach it with [`t.peer(name)`](../guide/writing-tests.md#a-second-server-tpeername).
+If it crashes or stops before the game's run is over, the scene fails saying so, with its log; each test's failure
+names its log beside the game's. For now a scene has one peer, beside a topology that starts a dedicated server alone
+and gives each scene a clean world.
 
 ## `world.from`
 
