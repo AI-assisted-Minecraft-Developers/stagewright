@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-05
 
+### A game that died says its exit code, and the signal that ended it
+
+A game, or a scene's peer or joined client, that died before its run was over failed the scene with `PROCESS_DIED`
+alone, which could not tell a game that exited by itself from one that something on the machine ended: a third
+party's peer vanished once with nothing in its log and nothing in the system's, and that was all there was to go on.
+The failure now gives the exit code, and the signal a code above 128 stands for: 143 is SIGTERM, which lets the JVM
+run its shutdown hooks and so leaves a log that just stops, and 137 is SIGKILL. **Green in a local run of the
+command-line runner**: a peer sent SIGTERM during a test failed the scene with `its exit code was 143 (SIGTERM,
+128 + 15)`, its log ending as the third party's had.
+
 ### A scene can run a second dedicated server, and its script tests reach it
 
 A pack whose servers share an economy through a hub could test a listing made on one server and bought on another
