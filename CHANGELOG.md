@@ -21,6 +21,13 @@ two scenes. A jar's ids are now only those under `[[mods]]`, and the engine's ou
 `mods.exclude` left out, which before only a scene report entry the command-line runner does not record said.
 **Green in the unit tests**: a jar declaring an optional dependency on the excluded mod is kept.
 
+### A bot message's key is found under the empty component a command's failure wraps it in
+
+`Bot.Message.key()` read only the line's own component, so a refusal sent with `sendFailure`, which wraps the message
+in an empty red component, had no key: a third party's test asserting which refusal a command gave failed on it. The
+key is now the first translatable part's, the line itself first and then what is appended to it in order. **Green in
+the unit tests**, with the component `sendFailure` builds.
+
 ### A test can read what the server said to a bot
 
 A mod that answers a player with a message, a refusal on the action bar for one, could be tested for what it did

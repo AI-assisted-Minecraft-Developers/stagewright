@@ -139,7 +139,9 @@ void theBalanceSurvivesARelog(Game game, @Bot.Name("payer") Bot bot) {
 `bot.messages()` is what the server said to the bot since it last joined, oldest first: each chat line, system message
 and action bar text its client would have shown, from `sendSystemMessage`, `displayClientMessage`, a command's
 feedback or another player's chat, each with its `kind` (`CHAT`, `SYSTEM`, `ACTION_BAR`). `key()` is the translation key
-of a translatable line, so a test can tell which refusal a player was shown without depending on the language.
+of the line's first translatable part, the line itself first, so a test can tell which refusal a player was shown
+without depending on the language; a command's `sendFailure`, which wraps the message in an empty red component,
+gives the message's key.
 `bot.clearMessages()` forgets the lines so far. The last 256 are kept, a respawn keeps them and a reconnect starts
 afresh. Other tests in the same game broadcast too, so a test running beside others looks for its own lines rather than
 counting all of them.
