@@ -25,8 +25,9 @@ two scenes. A jar's ids are now only those under `[[mods]]`, and the engine's ou
 
 `Bot.Message.key()` read only the line's own component, so a refusal sent with `sendFailure`, which wraps the message
 in an empty red component, had no key: a third party's test asserting which refusal a command gave failed on it. The
-key is now the first translatable part's, the line itself first and then what is appended to it in order. **Green in
-the unit tests**, with the component `sendFailure` builds.
+key is now the first translatable part's, the line itself first and then what is appended to it in order. **Green
+against a third party**: the test that failed on it reads the key from `key()` directly and its suite passed on the
+republished snapshot.
 
 ### A test can read what the server said to a bot
 
