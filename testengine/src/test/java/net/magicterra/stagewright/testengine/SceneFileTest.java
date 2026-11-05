@@ -231,6 +231,24 @@ class SceneFileTest {
     }
 
     @Test
+    void aPeerHasFilesOfItsOwn() throws IOException {
+        SceneFile file =
+                load("topology: t\nfiles:\n  a.txt: game\npeers:\n  b:\n    files:\n      a.txt: peer\n  c:\n");
+        assertEquals(Map.of("a.txt", "game"), file.files());
+        assertEquals(Map.of("b", Map.of("a.txt", "peer"), "c", Map.of()), file.peers());
+    }
+
+    @Test
+    void aPeerIsNamedPlainlyAndTakesOnlyFiles() {
+        String badName = refusal("topology: t\npeers:\n  B-1: {}\n");
+        assertTrue(badName.contains("B-1"), badName);
+        String unknown = refusal("topology: t\npeers:\n  b: { mods: {} }\n");
+        assertTrue(unknown.contains("mods"), unknown);
+        String outside = refusal("topology: t\npeers:\n  b: { files: { ../x.txt: y } }\n");
+        assertTrue(outside.contains("../x.txt"), outside);
+    }
+
+    @Test
     void aClientFileOutsideTheClientDirectoryIsRefused() {
         String message = refusal("topology: t\nclientFiles:\n  ../escape.txt: x\n");
         assertTrue(message.contains("../escape.txt"), message);

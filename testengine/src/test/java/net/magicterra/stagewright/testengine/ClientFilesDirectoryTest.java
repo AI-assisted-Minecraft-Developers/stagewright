@@ -25,7 +25,7 @@ class ClientFilesDirectoryTest {
     }
 
     private static SceneFile scene(Map<String, String> clientFiles) {
-        return new SceneFile("s", "t", SceneFile.World.QUIET, null, Map.of(), clientFiles, List.of());
+        return new SceneFile("s", "t", SceneFile.World.QUIET, null, Map.of(), clientFiles, List.of(), Map.of());
     }
 
     @Test

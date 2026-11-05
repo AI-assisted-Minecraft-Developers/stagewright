@@ -24,6 +24,8 @@ import org.yaml.snakeyaml.constructor.SafeConstructor;
  * @param clientFiles {@code clientFiles}: the same for the game client's directory, the joining client's or, when the
  *     game is itself a client, the game's
  * @param excludedMods {@code mods.exclude}: mods the game starts without, each a mod id or a jar file name pattern
+ * @param peers {@code peers}: the scene's other dedicated servers, by name, each with the {@code files} written into
+ *     its directory
  */
 // One validator for the whole file: keys are checked in one fixed order and the first bad one is reported, so the
 // checks stay together; splitting it into a second class would only move the same table. The messages share the
@@ -36,14 +38,15 @@ record SceneFile(
         String from,
         Map<String, String> files,
         Map<String, String> clientFiles,
-        List<String> excludedMods) {
+        List<String> excludedMods,
+        Map<String, Map<String, String>> peers) {
 
     static final String DIRECTORY = "stagewright/scenes/";
 
     /** What {@code world.from} is relative to on the test class path. */
     static final String ROOT = "stagewright/";
 
-    private static final Set<String> TOP = Set.of("topology", "world", "files", "clientFiles", "mods");
+    private static final Set<String> TOP = Set.of("topology", "world", "files", "clientFiles", "mods", "peers");
 
     private static final Set<String> WORLD = Set.of(
             "preset",
@@ -62,6 +65,9 @@ record SceneFile(
     private static final Set<String> GAMEMODES = Set.of("survival", "creative", "adventure", "spectator");
 
     private static final Set<String> DIFFICULTIES = Set.of("peaceful", "easy", "normal", "hard");
+
+    /** A peer's name: what a test asks for it by, and part of its directory's name. */
+    private static final java.util.regex.Pattern PEER_NAME = java.util.regex.Pattern.compile("[a-z][a-z0-9_]*");
 
     private static final Map<String, Long> NAMED_TIMES =
             Map.of("day", 1000L, "noon", 6000L, "night", 13_000L, "midnight", 18_000L);
@@ -224,7 +230,29 @@ record SceneFile(
                 from,
                 files(name, path + " files", map.get("files")),
                 files(name, path + " clientFiles", map.get("clientFiles")),
-                excludedMods(name, path + " mods", map.get("mods")));
+                excludedMods(name, path + " mods", map.get("mods")),
+                peers(name, path + " peers", map.get("peers")));
+    }
+
+    private static Map<String, Map<String, String>> peers(String name, String at, Object value) {
+        if (value == null) {
+            return Map.of();
+        }
+        Map<String, Map<String, String>> peers = new LinkedHashMap<>();
+        mapping(name, at, value).forEach((k, v) -> {
+            String peer = String.valueOf(k);
+            if (!PEER_NAME.matcher(peer).matches()) {
+                throw new IllegalStateException("scene '" + name + "': " + at + "." + peer + ": a peer's name is"
+                        + " lower-case letters, digits and underscores, starting with a letter");
+            }
+            Map<?, ?> declared = v == null ? Map.of() : mapping(name, at + "." + peer, v);
+            only(name, at + "." + peer, declared, Set.of("files"));
+            peers.put(peer, files(name, at + "." + peer + ".files", declared.get("files")));
+        });
+        if (peers.isEmpty()) {
+            throw new IllegalStateException("scene '" + name + "': " + at + " names no peer");
+        }
+        return peers;
     }
 
     private static List<String> excludedMods(String name, String at, Object value) {

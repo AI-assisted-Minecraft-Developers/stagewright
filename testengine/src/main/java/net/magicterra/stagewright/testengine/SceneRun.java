@@ -155,6 +155,7 @@ final class SceneRun {
         Path modsScratch = artifacts.resolve("scene-mods");
         SceneFile.World world = declaration.world();
         TestExecutionResult result = null;
+        Peer peer = null;
         try {
             if (declaration.from() != null) {
                 SceneSetup.installSave(declaration.from(), loader, spec.worldDirectory());
@@ -177,9 +178,10 @@ final class SceneRun {
             SceneDirectory.writable(spec.primary().workingDirectory(), serverProperties);
             RunDirectory.provision(spec.primary().workingDirectory(), spec.server());
             writeServerProperties(serverProperties, world);
+            peer = declaration.peers().isEmpty() ? null : peer(topology, spec, declaration, modsScratch);
             SceneWorlds worlds = new SceneWorlds(spec.worldDirectory(), artifacts.resolve("saves"));
             try {
-                result = supervise(spec, world, relay, artifacts, logs, worlds, loader, serverPort);
+                result = supervise(spec, world, relay, artifacts, logs, worlds, loader, serverPort, peer);
             } finally {
                 worlds.restoreFirst();
             }
@@ -190,7 +192,54 @@ final class SceneRun {
             for (Path dir : spec.directories()) {
                 finish(scene, dir, passed);
             }
+            if (peer != null) {
+                for (Path dir : peer.spec().directories()) {
+                    finish(scene, dir, passed);
+                }
+            }
         }
+    }
+
+    /** A scene's peer: its name, and where and how it is started. */
+    record Peer(String name, LaunchSpec spec) {}
+
+    /**
+     * The scene's peer, its directory made ready: a scene directory of its own derived from the topology's, as the
+     * game's is, so it runs the same mods with its own world and settings; the scene's {@code peers.<name>.files} in
+     * it, and its own free port. One peer, beside a dedicated server alone, for now.
+     */
+    private Peer peer(LaunchSpec topology, LaunchSpec spec, SceneFile declaration, Path scratch) throws IOException {
+        if (declaration.peers().size() > 1) {
+            throw new IllegalStateException("scene '" + scene.name + "' declares the peers "
+                    + declaration.peers().keySet() + ", and one peer is run beside a game for now");
+        }
+        if (!spec.server() || spec.companion() != null) {
+            throw new IllegalStateException("scene '" + scene.name + "' declares a peer, which runs beside a dedicated"
+                    + " server alone, and topology '" + spec.topology() + "' starts "
+                    + (spec.server() ? "a client with it" : "a client"));
+        }
+        if (!spec.cleanWorld()) {
+            throw new IllegalStateException("scene '" + scene.name + "' declares a peer, and topology '"
+                    + spec.topology() + "' keeps its world between scenes, which the peer would share");
+        }
+        String name = declaration.peers().keySet().iterator().next();
+        LaunchSpec peer = topology.inSceneDirectories(scene.name + "-peer-" + name);
+        Path dir = peer.primary().workingDirectory();
+        SceneSetup.writeFiles(dir, declaration.peers().get(name));
+        if (!declaration.excludedMods().isEmpty()) {
+            peer = withoutMods(peer, declaration.excludedMods(), scratch.resolve("peer-" + name));
+        }
+        if (peer.wantsFreePort()) {
+            int port = freePort();
+            peer = peer.withServerPort(port, scratch.resolve("peer-" + name + "-port"));
+            listener.reportingEntryPublished(scene, ReportEntry.from("peerPort", name + "=" + port));
+        }
+        Path serverProperties = dir.resolve("server.properties");
+        SceneDirectory.writable(dir, serverProperties);
+        RunDirectory.provision(dir, true);
+        writeServerProperties(serverProperties, declaration.world());
+        listener.reportingEntryPublished(scene, ReportEntry.from("peer", name + " in " + dir));
+        return new Peer(name, peer);
     }
 
     /** Tidy {@code dir} after the scene: a file that will not go must not replace the scene's own result. */
@@ -264,7 +313,8 @@ final class SceneRun {
             Path logs,
             SceneWorlds worlds,
             ClassLoader loader,
-            int serverPort)
+            int serverPort,
+            Peer peer)
             throws IOException, InterruptedException {
         final List<String> classes = scene.getChildren().stream()
                 .filter(c -> !(c instanceof Nodes.ScriptFile))
@@ -285,12 +335,13 @@ final class SceneRun {
         Path agentJar = AgentJar.stage(SceneRun.class, artifacts);
         for (int round = 0; ; round++) {
             File gameLog = roundLog(logs, round, "game");
-            File companionLog = roundLog(logs, round, "companion");
-            relay.logsAt(logsAt(spec, gameLog, companionLog));
+            File companionLog = roundLog(logs, round, peer == null ? "companion" : "peer-" + peer.name());
+            relay.logsAt(logsAt(spec, gameLog, companionLog, peer));
             Process companion = null;
-            // The joined client carries the agent too, reporting to a supervisor of its own: one serves one process.
+            // The joined client, or the peer, carries the agent too, reporting to a supervisor of its own: one serves
+            // one process. Either is the run's second game, which may not end before the first.
             try (Supervisor supervisor = Supervisor.open();
-                    Supervisor joined = spec.companion() == null ? null : Supervisor.open()) {
+                    Supervisor joined = spec.companion() == null && peer == null ? null : Supervisor.open()) {
                 supervisor.onTest(relay);
                 List<String> extra = new ArrayList<>(List.of(
                         supervisor.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS),
@@ -307,15 +358,11 @@ final class SceneRun {
                     extra.add("-Dstagewright.companion.dir="
                             + spec.companion().workingDirectory().toAbsolutePath());
                 }
+                extra.addAll(reachPeer(peer, companionLog));
                 Process game = start(spec.primary(), extra, gameLog);
                 if (joined != null) {
-                    List<String> companionExtra = new ArrayList<>(
-                            List.of(joined.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS)));
-                    // The free port the server was given; the client's own connect address carries none that fits.
-                    if (serverPort > 0) {
-                        companionExtra.add("-Dstagewright.client.port=" + serverPort);
-                    }
-                    companion = start(spec.companion(), companionExtra, companionLog);
+                    String agent = joined.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS);
+                    companion = startSecond(spec, peer, agent, scripts, world, serverPort, companionLog);
                 }
                 Duration total = Duration.ofMinutes(spec.timeoutMinutes());
                 Duration stall = spec.stallMinutes() == 0 ? total : Duration.ofMinutes(spec.stallMinutes());
@@ -327,7 +374,8 @@ final class SceneRun {
                     Supervisor.Ending ending =
                             supervisor.await(game.toHandle(), limits, joined, companion.toHandle(), limits);
                     if (ending.companion()) {
-                        return companionEnded(ending, game, joined, relay, forced, gameLog, companionLog);
+                        String which = peer == null ? "the joined client" : "peer '" + peer.name() + "'";
+                        return companionEnded(ending, game, joined, relay, forced, gameLog, companionLog, which);
                     }
                     ended = ending.ended();
                 }
@@ -360,6 +408,47 @@ final class SceneRun {
                 }
             }
         }
+    }
+
+    /** Where the peer writes its WorldDriver port, and its log, for the game's {@code t.peer}; none without a peer. */
+    private static List<String> reachPeer(Peer peer, File log) {
+        if (peer == null) {
+            return List.of();
+        }
+        return List.of(
+                "-Dstagewright.peer." + peer.name() + ".dir="
+                        + peer.spec().primary().workingDirectory().toAbsolutePath(),
+                "-Dstagewright.peer." + peer.name() + ".log=" + log);
+    }
+
+    /** The run's second game: the peer, which serves and runs no tests, or else the joined client. */
+    private Process startSecond(
+            LaunchSpec spec,
+            Peer peer,
+            String agent,
+            List<String> scripts,
+            SceneFile.World world,
+            int serverPort,
+            File log)
+            throws IOException {
+        if (peer != null) {
+            return start(
+                    peer.spec().primary(),
+                    List.of(
+                            agent,
+                            // It loads the scripts for the steps they register; their tests are the game's.
+                            "-Dstagewright.peer.serve=" + peer.name(),
+                            "-Dstagewright.junit.scripts=" + String.join(",", scripts),
+                            "-Dstagewright.junit.scene=" + scene.name,
+                            "-Dstagewright.scene.world=" + world.runtimeJson()),
+                    log);
+        }
+        List<String> extra = new ArrayList<>(List.of(agent));
+        // The free port the server was given; the client's own connect address carries none that fits.
+        if (serverPort > 0) {
+            extra.add("-Dstagewright.client.port=" + serverPort);
+        }
+        return start(spec.companion(), extra, log);
     }
 
     /**
@@ -415,6 +504,16 @@ final class SceneRun {
      * scene's history ({@link SceneDirectory#keepLogs}).
      */
     static String logsAt(LaunchSpec spec, File gameLog, File companionLog) {
+        return logsAt(spec, gameLog, companionLog, null);
+    }
+
+    /** {@link #logsAt(LaunchSpec, File, File)}, with the peer's log when the scene has one. */
+    static String logsAt(LaunchSpec spec, File gameLog, File companionLog, Peer peer) {
+        if (peer != null) {
+            return logsAt(spec, gameLog, null) + "; peer '" + peer.name() + "' logs to " + companionLog
+                    + ", its crash reports go to "
+                    + peer.spec().primary().workingDirectory().resolve(CRASH_REPORTS);
+        }
         // Sized for both processes' paths, which run long under a scene's directory.
         StringBuilder out = new StringBuilder(512)
                 .append("the game's log is ")
@@ -430,7 +529,10 @@ final class SceneRun {
         return out.toString();
     }
 
-    /** The joined client ended the run: end the game too, and fail the scene saying it was the client. */
+    /**
+     * The run's second game, {@code which}, the joined client or the peer, ended the run: end the game too, and fail
+     * the scene saying which it was.
+     */
     private TestExecutionResult companionEnded(
             Supervisor.Ending ending,
             Process game,
@@ -438,17 +540,18 @@ final class SceneRun {
             Relay relay,
             List<String> forced,
             File gameLog,
-            File companionLog)
+            File companionLog,
+            String which)
             throws IOException, InterruptedException {
-        // The run cannot go on without its player.
+        // The run cannot go on without its player, or the server its tests reach.
         Supervisor.kill(game.toHandle());
         String why = describeCompanion(
                 ending.ended(), joined.phase(), joined.ticks(), joined.crashReport(), joined.stacks(), companionLog);
-        listener.reportingEntryPublished(scene, ReportEntry.from("companion", why));
-        appendToLog(companionLog, "the joined client ended " + why);
-        relay.closeOut(scene, "the joined client ended " + why);
-        return TestExecutionResult.failed(new AssertionError("the joined client ended " + why + "\n"
-                + "the game's log is " + gameLog + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
+        listener.reportingEntryPublished(scene, ReportEntry.from("companion", which + " ended " + why));
+        appendToLog(companionLog, which + " ended " + why);
+        relay.closeOut(scene, which + " ended " + why);
+        return TestExecutionResult.failed(new AssertionError(which + " ended " + why + "\n" + "the game's log is "
+                + gameLog + (forced.isEmpty() ? "" : "\n" + String.join("\n", forced))));
     }
 
     private void reportForcedDown(
