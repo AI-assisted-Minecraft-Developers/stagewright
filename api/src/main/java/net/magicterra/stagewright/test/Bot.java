@@ -82,12 +82,26 @@ public interface Bot extends Body, Driven {
         }
 
         /**
-         * The translation key of the line, when it is a translatable component, as a mod's own messages usually are.
+         * The translation key of the line: of its first translatable part, the line itself first and then each part
+         * appended to it in order, as a mod's own messages usually are. First found that way rather than only the
+         * line's own, because a command's {@code sendFailure} wraps its message in an empty red component, so the key a
+         * mod refused with is one level down.
          */
         public Optional<String> key() {
-            return text.getContents() instanceof TranslatableContents translatable
-                    ? Optional.of(translatable.getKey())
-                    : Optional.empty();
+            return firstKey(text);
+        }
+
+        private static Optional<String> firstKey(Component part) {
+            if (part.getContents() instanceof TranslatableContents translatable) {
+                return Optional.of(translatable.getKey());
+            }
+            for (Component appended : part.getSiblings()) {
+                Optional<String> key = firstKey(appended);
+                if (key.isPresent()) {
+                    return key;
+                }
+            }
+            return Optional.empty();
         }
 
         /** The text as a client would show it, without its styling, in the server's language. */
