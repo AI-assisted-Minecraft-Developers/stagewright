@@ -1,12 +1,14 @@
 package net.magicterra.stagewright.jupiter;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.magicterra.stagewright.capability.Capabilities;
 import net.magicterra.stagewright.test.Body;
+import net.magicterra.stagewright.test.Bot;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Driven;
 import net.magicterra.stagewright.test.Game;
@@ -108,19 +110,7 @@ final class ScriptHandles {
             leases.add(bot);
             Map<String, Object> out = body(bot);
             driven(out, bot);
-            out.put("respawn", (Scripting.Function) unused -> {
-                bot.respawn();
-                return null;
-            });
-            // The vanilla logout and login: saved on the way out and read back on the way in, the events fired.
-            out.put("disconnect", (Scripting.Function) unused -> {
-                bot.disconnect();
-                return null;
-            });
-            out.put("reconnect", (Scripting.Function) unused -> {
-                bot.reconnect();
-                return null;
-            });
+            botOnly(out, bot);
             return out;
         });
         t.put("player", (Scripting.Function) args -> body(BodyImpl.player(game)));
@@ -315,6 +305,41 @@ final class ScriptHandles {
                     lookup(BuiltInRegistries.BLOCK, arg(a, 3), "block"));
             return null;
         });
+        return out;
+    }
+
+    /** The verbs a bot has and other bodies do not. */
+    private static void botOnly(Map<String, Object> out, Bot bot) {
+        out.put("respawn", (Scripting.Function) unused -> {
+            bot.respawn();
+            return null;
+        });
+        // The vanilla logout and login: saved on the way out and read back on the way in, the events fired.
+        out.put("disconnect", (Scripting.Function) unused -> {
+            bot.disconnect();
+            return null;
+        });
+        out.put("reconnect", (Scripting.Function) unused -> {
+            bot.reconnect();
+            return null;
+        });
+        out.put("messages", (Scripting.Function) unused -> messages(bot));
+        out.put("clearMessages", (Scripting.Function) unused -> {
+            bot.clearMessages();
+            return null;
+        });
+    }
+
+    /** {@link Bot#messages} as {@code [{text, kind, key}]}: the plain text, the kind's name, the key or null. */
+    private static List<Object> messages(Bot bot) {
+        List<Object> out = new ArrayList<>();
+        for (Bot.Message message : bot.messages()) {
+            Map<String, Object> line = new LinkedHashMap<>();
+            line.put("text", message.plain());
+            line.put("kind", message.kind().name());
+            line.put("key", message.key().orElse(null));
+            out.add(line);
+        }
         return out;
     }
 

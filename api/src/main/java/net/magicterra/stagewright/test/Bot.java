@@ -5,6 +5,10 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.util.List;
+import java.util.Optional;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 
 /**
  * A server-side player WorldDriver joins for one test, injected as a test method parameter: it is on the player list as
@@ -52,6 +56,45 @@ public interface Bot extends Body, Driven {
      * @throws IllegalStateException when the bot is in the game, or another player took its name
      */
     Bot reconnect();
+
+    /**
+     * What the server said to the bot since it last joined, oldest first: each chat line, system message and action bar
+     * text a client would have shown, whether from {@code sendSystemMessage}, {@code displayClientMessage}, a command's
+     * feedback or another player's chat. The last 256 are kept; a respawn keeps them, a {@link #reconnect} starts
+     * afresh. For example {@code assertEquals(Optional.of("mymod.error.taken"), bot.messages().getLast().key())}.
+     */
+    List<Message> messages();
+
+    /** Forget the messages so far, so {@link #messages} holds only what the server says after. */
+    Bot clearMessages();
+
+    /** One line the server sent the bot, as its client would show it. */
+    record Message(Component text, Kind kind) {
+
+        /** Where a client shows the line. */
+        public enum Kind {
+            /** Another player's chat, decorated as its chat type says: {@code <alice> hi}. */
+            CHAT,
+            /** A line in the chat that no player said: command feedback, a mod's message. */
+            SYSTEM,
+            /** Above the hotbar: a system message sent as an overlay, or {@code /title … actionbar}. */
+            ACTION_BAR
+        }
+
+        /**
+         * The translation key of the line, when it is a translatable component, as a mod's own messages usually are.
+         */
+        public Optional<String> key() {
+            return text.getContents() instanceof TranslatableContents translatable
+                    ? Optional.of(translatable.getKey())
+                    : Optional.empty();
+        }
+
+        /** The text as a client would show it, without its styling, in the server's language. */
+        public String plain() {
+            return text.getString();
+        }
+    }
 
     /** The name a parameter's bot joins under; without it, one StageWright makes up. */
     @Documented

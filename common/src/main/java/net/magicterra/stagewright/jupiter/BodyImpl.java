@@ -1,5 +1,6 @@
 package net.magicterra.stagewright.jupiter;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -14,6 +15,7 @@ import net.magicterra.worlddriver.bot.BotRegistry;
 import net.magicterra.worlddriver.bot.PlayerBot;
 import net.magicterra.worlddriver.bot.Roster;
 import net.magicterra.worlddriver.game.body.BotBody;
+import net.magicterra.worlddriver.game.body.Inbox;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -278,6 +280,33 @@ class BodyImpl implements Body {
                 }
             });
             return this;
+        }
+
+        @Override
+        public List<Message> messages() {
+            return inbox(inbox -> inbox.messages().stream()
+                    .map(line -> new Message(
+                            line.text(), Message.Kind.valueOf(line.kind().name())))
+                    .toList());
+        }
+
+        @Override
+        public Bot clearMessages() {
+            inbox(inbox -> {
+                inbox.clear();
+                return null;
+            });
+            return this;
+        }
+
+        private <T> T inbox(Function<Inbox, T> work) {
+            return onServer(player -> {
+                if (!(player instanceof BotBody body)) {
+                    throw new IllegalStateException(
+                            name() + " is not a joined bot, so nothing records what it is sent");
+                }
+                return work.apply(body.inbox());
+            });
         }
 
         @Override
