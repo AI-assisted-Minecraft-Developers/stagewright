@@ -12,6 +12,15 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-05
 
+### Excluding a mod no longer excludes the mods that depend on it
+
+`mods.exclude: [luckperms]` also left out every jar whose `neoforge.mods.toml` listed luckperms as a dependency,
+optional or not, and said nothing: a dependency's table names the mod it depends on as `modId`, the same key as the
+jar's own, and every `modId` in the file was read as one of the jar's ids. A third party's pack lost two such jars from
+two scenes. A jar's ids are now only those under `[[mods]]`, and the engine's output says what each scene's
+`mods.exclude` left out, which before only a scene report entry the command-line runner does not record said.
+**Green in the unit tests**: a jar declaring an optional dependency on the excluded mod is kept.
+
 ### A test can read what the server said to a bot
 
 A mod that answers a player with a message, a refusal on the action bar for one, could be tested for what it did
