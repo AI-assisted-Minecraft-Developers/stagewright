@@ -36,7 +36,9 @@ but not for what it said: a bot's connection threw every packet away, and a fake
 each with its kind and, for a translatable line, its key; `bot.clearMessages()` forgets them, and a script's bot handle
 has both. Needs WorldDriver's bot inbox from the same day. **Green in the self-test suite** on both loaders:
 worlddriver's `JupiterBotMessagesTest` reads an action bar key, a system line, `/say` as chat and the lines kept
-through a respawn, and `jupiter-handles.js` reads what `/title … actionbar` and `/tellraw` sent (NeoForge).
+through a respawn, and `jupiter-handles.js` reads what `/title … actionbar` and `/tellraw` sent (NeoForge). **Green
+against a third party**: a mod's 297-test gate, whose tests assert by key which refusal a bot was shown on the action
+bar, passed on the republished snapshot.
 
 ### A game that died says its exit code, and the signal that ended it
 
