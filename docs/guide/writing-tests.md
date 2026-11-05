@@ -136,6 +136,20 @@ void theBalanceSurvivesARelog(Game game, @Bot.Name("payer") Bot bot) {
 }
 ```
 
+`bot.messages()` is what the server said to the bot since it last joined, oldest first: each chat line, system message
+and action bar text its client would have shown, from `sendSystemMessage`, `displayClientMessage`, a command's
+feedback or another player's chat, each with its `kind` (`CHAT`, `SYSTEM`, `ACTION_BAR`). `key()` is the translation key
+of a translatable line, so a test can tell which refusal a player was shown without depending on the language.
+`bot.clearMessages()` forgets the lines so far. The last 256 are kept, a respawn keeps them and a reconnect starts
+afresh. Other tests in the same game broadcast too, so a test running beside others looks for its own lines rather than
+counting all of them.
+
+```java
+bot.clearMessages();
+bot.runOnServer(p -> MyMod.createGroup(p, "taken"));
+assertEquals(Optional.of("mymod.error.name_taken"), bot.messages().getLast().key());
+```
+
 `game.npc(EntityType.PIGLIN, feet)` spawns a mob and hands it to WorldDriver as a body, `mob:<name>`, for the rest of the
 test. While WorldDriver drives it, the mob's own AI is off.
 
@@ -351,7 +365,8 @@ or takes the bot parked.
 A body's `name` and `uuid` are read from the server: the name in the game, which for `t.bot('alice')` is `alice`, and
 the UUID an offline server gives that name, so the same name is the same player on every server. `bot.disconnect()`
 logs the bot out the vanilla way, saving its player data and firing the logout events, and `bot.reconnect()` logs it
-back in, reading that data back and firing the login events.
+back in, reading that data back and firing the login events. `bot.messages()` is what the server has said to it, as
+`[{text, kind, key}]`, the key `null` for a line that is not translatable, and `bot.clearMessages()` forgets them.
 
 #### A second server: `t.peer(name)`
 

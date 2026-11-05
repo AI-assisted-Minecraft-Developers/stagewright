@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-05
 
+### A test can read what the server said to a bot
+
+A mod that answers a player with a message, a refusal on the action bar for one, could be tested for what it did
+but not for what it said: a bot's connection threw every packet away, and a fake player drops messages too.
+`bot.messages()` now gives the chat, system and action bar lines the bot's client would have shown since it joined,
+each with its kind and, for a translatable line, its key; `bot.clearMessages()` forgets them, and a script's bot handle
+has both. Needs WorldDriver's bot inbox from the same day. **Green in the self-test suite** on both loaders:
+worlddriver's `JupiterBotMessagesTest` reads an action bar key, a system line, `/say` as chat and the lines kept
+through a respawn, and `jupiter-handles.js` reads what `/title … actionbar` and `/tellraw` sent (NeoForge).
+
 ### A game that died says its exit code, and the signal that ended it
 
 A game, or a scene's peer or joined client, that died before its run was over failed the scene with `PROCESS_DIED`
