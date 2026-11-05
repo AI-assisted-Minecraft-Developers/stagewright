@@ -36,7 +36,10 @@ final class SceneMods {
 
     private static final Pattern PATH_LIST = Pattern.compile("[^\\s\"']+");
 
-    private static final Pattern MOD_ID_TOML = Pattern.compile("(?m)^\\s*modId\\s*=\\s*\"([^\"]+)\"");
+    private static final Pattern MOD_ID_TOML = Pattern.compile("\\s*modId\\s*=\\s*\"([^\"]+)\"");
+
+    /** A TOML table header, {@code [name]} or {@code [[name]]}: the brackets, then the name. */
+    private static final Pattern TOML_TABLE = Pattern.compile("\\s*(\\[\\[?)\\s*([^\\]\\s]+)\\s*\\]");
 
     private static final Pattern MOD_ID_JSON = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
 
@@ -336,15 +339,34 @@ final class SceneMods {
                 if (e == null) {
                     continue;
                 }
-                Matcher m = MOD_ID_TOML.matcher(text(zip, e));
-                while (m.find()) {
-                    ids.add(m.group(1));
-                }
+                ids.addAll(tomlModIds(text(zip, e)));
             }
         } catch (IOException e) {
             // Not a zip: no mod.
         }
         return new Mod(jar, ids, fabric);
+    }
+
+    /**
+     * The ids a mods.toml declares: each {@code modId} under a {@code [[mods]]} table. Only there: every
+     * {@code [[dependencies.<mod>]]} table names the mod it depends on as {@code modId} too, and reading those took a
+     * jar that only depends on a mod, optionally or not, for that mod, so excluding it excluded the jar as well.
+     */
+    static Set<String> tomlModIds(String toml) {
+        Set<String> ids = new LinkedHashSet<>();
+        boolean inMods = false;
+        for (String line : toml.split("\\R")) {
+            Matcher header = TOML_TABLE.matcher(line);
+            if (header.lookingAt()) {
+                inMods = "[[".equals(header.group(1)) && "mods".equals(header.group(2));
+                continue;
+            }
+            Matcher id = MOD_ID_TOML.matcher(line);
+            if (inMods && id.lookingAt()) {
+                ids.add(id.group(1));
+            }
+        }
+        return ids;
     }
 
     private static String text(ZipFile zip, ZipEntry entry) throws IOException {

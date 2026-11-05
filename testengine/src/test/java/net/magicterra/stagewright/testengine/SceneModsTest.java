@@ -76,6 +76,27 @@ class SceneModsTest {
     }
 
     @Test
+    void aJarThatOnlyDependsOnAModIsNotThatMod() throws IOException {
+        neoforgeMod(game.resolve("mods/luckperms.jar"), "luckperms");
+        jar(
+                game.resolve("mods/compat.jar"),
+                "META-INF/neoforge.mods.toml",
+                "modLoader=\"javafml\"\n[[mods]]\n  modId = \"compat\"\n[[dependencies.compat]]\n"
+                        + "  modId = \"luckperms\"\n  type = \"optional\"\n[[mods]]\nmodId=\"compat_extra\"\n");
+        assertEquals(
+                java.util.Set.of("compat", "compat_extra"),
+                SceneMods.read(game.resolve("mods/compat.jar")).ids());
+        SceneMods.Applied applied = SceneMods.apply(
+                process(null, List.of("@libraries/net/neoforged/neoforge/21.1.230/unix_args.txt"), List.of("nogui")),
+                List.of("luckperms"),
+                game.resolve("stagewright/scene-mods/primary"));
+        Path view =
+                Path.of(applied.process().args().get(applied.process().args().indexOf("--gameDir") + 1));
+        assertTrue(Files.exists(view.resolve("mods/compat.jar")), "kept: it only depends on luckperms");
+        assertFalse(Files.exists(view.resolve("mods/luckperms.jar")));
+    }
+
+    @Test
     void neoforgeLosesTheJarFromEveryPathListInItsArgumentFiles() throws IOException {
         Path farmers = neoforgeMod(game.resolve("libs/farmersdelight.jar"), "farmersdelight");
         Path keep = neoforgeMod(game.resolve("libs/keep.jar"), "keep");

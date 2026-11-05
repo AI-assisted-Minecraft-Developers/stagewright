@@ -290,6 +290,8 @@ final class SceneRun {
         String unmatched = companion == null
                 ? unmatched("the game", primary)
                 : unmatched("the server", primary) + unmatched("the client", companion);
+        // In the output too: the report entry is the scene's, and the command-line runner records only a test's.
+        LOG.log(System.Logger.Level.INFO, "scene " + scene.getDisplayName() + ": mods.exclude " + report);
         if (!unmatched.isEmpty()) {
             report += unmatched;
             LOG.log(System.Logger.Level.WARNING, "scene " + scene.getDisplayName() + ": mods.exclude" + unmatched);
