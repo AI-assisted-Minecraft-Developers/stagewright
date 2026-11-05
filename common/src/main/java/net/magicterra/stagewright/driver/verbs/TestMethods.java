@@ -6,6 +6,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
+import net.magicterra.stagewright.jupiter.PeerServing;
 import net.magicterra.stagewright.test.methods.TestQueriesApiBinding;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.NoParams;
@@ -119,6 +120,7 @@ public final class TestMethods {
                 new ApiMethod<>(USE_ON_BLOCK, onClient(USE_ON_BLOCK, BotApi::useOnBlock))));
         all.addAll(TestHarnessApiBinding.methods(new HarnessService()));
         all.addAll(TestQueriesApiBinding.methods(new TestQueriesService()));
+        all.add(PeerServing.method());
         return all;
     }
 

@@ -112,9 +112,19 @@ final class ScriptHandles {
                 bot.respawn();
                 return null;
             });
+            // The vanilla logout and login: saved on the way out and read back on the way in, the events fired.
+            out.put("disconnect", (Scripting.Function) unused -> {
+                bot.disconnect();
+                return null;
+            });
+            out.put("reconnect", (Scripting.Function) unused -> {
+                bot.reconnect();
+                return null;
+            });
             return out;
         });
         t.put("player", (Scripting.Function) args -> body(BodyImpl.player(game)));
+        installPeer(t, leases, test);
         // t.npc(type, pos) in the overworld, or t.npc(type, pos, dimension).
         t.put("npc", (Scripting.Function) args -> {
             // Whether it is a mob is only known once one is spawned, which refuses anything else.
@@ -134,6 +144,17 @@ final class ScriptHandles {
             });
             driven(out, npc);
             return out;
+        });
+    }
+
+    /** {@code t.peer(name)}: this test's session on the scene's peer server of that name, opened the first time. */
+    private static void installPeer(Map<String, Object> t, List<CloseableResource> leases, String test) {
+        Map<String, Map<String, Object>> peers = new LinkedHashMap<>();
+        t.put("peer", (Scripting.Function) args -> {
+            String name = ScriptContext.string(args, 0, "t.peer(name)");
+            synchronized (peers) {
+                return peers.computeIfAbsent(name, n -> PeerConnection.open(n, test, leases));
+            }
         });
     }
 
@@ -299,7 +320,11 @@ final class ScriptHandles {
 
     private static Map<String, Object> body(Body body) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put(NAME, body.name());
+        // As the server has them: the name in the game, and the UUID, an offline server's for that name.
+        String[] profile = body.onServer(
+                p -> new String[] {p.getGameProfile().getName(), p.getUUID().toString()});
+        out.put(NAME, profile[0]);
+        out.put("uuid", profile[1]);
         out.put("ref", body.ref());
         out.put("pos", (Scripting.Function) a -> position(body.blockPos()));
         out.put(DIMENSION, (Scripting.Function) a -> body.dimension().location().toString());

@@ -105,6 +105,11 @@ public final class JupiterRun {
         if (started) {
             return;
         }
+        // A scene's peer runs no tests: it serves those of the scene's game.
+        if (PeerServing.serving()) {
+            PeerServing.tick(server);
+            return;
+        }
         if (!selected() && !Boolean.getBoolean(ENABLED)) {
             return;
         }
@@ -362,7 +367,7 @@ public final class JupiterRun {
                 .build();
     }
 
-    private static List<String> split(String listed) {
+    static List<String> split(String listed) {
         return Arrays.stream(listed.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
