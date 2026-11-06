@@ -10,6 +10,38 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-11-07
+
+### A test can disconnect the real client and connect it again
+
+`Client` gains `disconnect()` and `reconnect()`; in a script they are `t.client().disconnect()` and
+`t.client().reconnect()`. They do for the real client what `Bot.disconnect()` and `Bot.reconnect()` do for a bot,
+which has no client and so gets no mod's packets. This makes it possible to test what a player is sent on joining:
+change something on the server while the client is away, then reconnect it.
+- `disconnect()` leaves the server the way the pause menu's Disconnect does, and returns once the server has taken the
+  player off its list.
+- `reconnect()` joins the same server under the same account, and returns once the client is in the world, past the
+  loading screen.
+- Both work only where a client joins a dedicated server. On an integrated server they throw, because there the client
+  hosts the game.
+- A test that ends with the client disconnected has it reconnected before it releases its locks. Only that test does
+  this, whether it is a Java or a script test, and if the reconnect fails, the test's soft checks and bot handovers
+  still run first.
+- If the run ends with the client still disconnected, for example after a crash, the stopping server tells the client,
+  and the client closes as it does when the server stops under it. If the client never hears, it closes on its own
+  after 5 minutes.
+- A reconnect that fails stops dialling and leaves the client disconnected, so a later reconnect can try again. It
+  does not shut the client down.
+- A script test that uses `t.player()` or `t.client()` without `locks: ['client']` can now find the player missing,
+  because it may run while another test has the client off the server. Two of worlddriver's own script tests were
+  missing the lock and failed this way until they declared it.
+
+Green in the self-test suite on both loaders: worlddriver's `wd.jupiterSmoke`, every Java class plus
+`jupiter-handles.js`, 70 of 70. That includes a test checking that a line the server sends at login reaches the
+client that joined again, and that the player came back from its save with what it was given before leaving. It
+also includes one Java test and one script test that end with the client disconnected, each followed by a test that
+finds it back. Not run in a game: the run ending with the client disconnected, and a reconnect that fails.
+
 ## 2026-11-06
 
 ### Two tests that take the client no longer run at once

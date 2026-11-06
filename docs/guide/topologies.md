@@ -60,7 +60,9 @@ A test reaches the client through its `Client` parameter (`t.client()` in a scri
 methods. On an integrated server those run in the same JVM; on `dedicatedServerWithClient` they travel to the client
 over its WorldDriver connection, and the test reads the same either way. The `Player` parameter is the client's player
 on both. A test taking either carries `@Requires(CLIENT)`, so it is reported as disabled on a dedicated server rather
-than failed.
+than failed. Only on `dedicatedServerWithClient` can a test disconnect the client from the server and connect it again
+(`client.disconnect()`, `client.reconnect()`). That is how a test checks what a joining player is sent. An integrated
+server's client hosts the game it would leave, so both methods throw there.
 
 Frame rate is measured only where the client renders in the same JVM as the tests, which is `integratedServer`. A
 `Perf.Window` has `fps` there and `NaN` everywhere else, including the server of `dedicatedServerWithClient`; guard on

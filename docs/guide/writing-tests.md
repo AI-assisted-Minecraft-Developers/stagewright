@@ -136,6 +136,29 @@ void theBalanceSurvivesARelog(Game game, @Bot.Name("payer") Bot bot) {
 }
 ```
 
+A bot has no client, so it gets no mod's packets. To test what reaches a real client when it joins, use the `Client`
+parameter: `client.disconnect()` and `client.reconnect()` (`t.client().disconnect()` in a script). The first leaves
+the server the way the pause menu's Disconnect does, and returns once the server has taken the player off its list.
+The second joins the same server again under the same account, and returns once the client is in the world, past the
+loading screen. That makes it possible to change something on the server while the client is away and then check
+what it was sent on joining:
+
+```java
+@Test
+@Requires({Requires.Capability.CLIENT, Requires.Capability.DEDICATED_SERVER})
+void theSyncReachesAJoiningClient(Game game, Client client) {
+    client.disconnect();
+    game.runOnServer(server -> ShopPrices.set(server, "emerald", 7)); // sent to each player at login
+    client.reconnect();
+    // read it back on the client, e.g. through client.api(...)
+}
+```
+
+This works only where a client joins a dedicated server (`dedicatedServerWithClient`). On an integrated server the
+client hosts the game, so leaving would stop it, and both methods throw. A test that ends with the client still
+disconnected has it reconnected before it gives up its locks. A script test that uses the client therefore needs
+`locks: ['client']`, as below: without the lock, it can run while another test has the client off the server.
+
 `bot.messages()` is what the server said to the bot since it last joined, oldest first: each chat line, system message
 and action bar text its client would have shown, from `sendSystemMessage`, `displayClientMessage`, a command's
 feedback or another player's chat, each with its `kind` (`CHAT`, `SYSTEM`, `ACTION_BAR`). `key()` is the translation key
