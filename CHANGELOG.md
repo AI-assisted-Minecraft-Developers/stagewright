@@ -19,8 +19,66 @@ party's test closed a screen and opened the main menu while the other was clicki
 A test method taking a `Client` or a `Player` parameter now holds the new `Locks.CLIENT` without declaring it, so such
 tests run one after another. A script test can't be read for its use of the client ahead of running, so it names the
 lock in `locks`; one that calls `t.client()` or `t.player()` without it while script tests run concurrently logs a
-warning, once per test. **Green in the unit tests** only: which tests take the lock, and when the warning is given.
-That the lock keeps them apart in a game is not yet run, as no client can open a window here.
+warning, once per test. **Green in the unit tests**: which tests take the lock, and when the warning is given; in a
+game, see below.
+
+### A test may change on a peer what its locks let it change in its game
+
+A session on a peer was checked against no locks at all, so every `override`, `overrideTime`, `overrideWeather`,
+`overrideTickRate` and `freezeTicks` a test called there was refused, with advice to add a lock that the test already
+had. The game now sends what the test holds when it opens the session, and the session is checked against that; the
+locks themselves stay held in the game, which keeps its other tests off the peer too. A peer the test reaches without
+those locks still refuses, naming the lock. **Green in the unit tests**; in-game result below.
+
+### A peer's failures arrive as what they were, and a refused session leaks nothing
+
+A soft check that failed on a peer reached the game as an error: ending the session there wrapped it in an
+`IllegalStateException`, and giving the session back here wrapped it again. Both now keep an assertion one, and the test
+fails rather than errs. A session the peer refused left its connection open, one more for each `t.peer(name)` a script
+retried; and one whose answer was lost could stay open on the peer. The connection is now closed, after asking the peer
+to end the session in case it holds one. A `NaN` or an infinity sent to a peer failed inside the JSON layer with a
+message about something else; it is refused now, saying JSON has no such number, while a big integer past a double's
+range is sent as it is. **Green in the unit tests**.
+
+### Tests waiting on ticks give up once the game has crashed
+
+After `game.crashNow()`, a test running beside the crashing one and waiting on ticks waited out its whole budget, up to
+twenty minutes for a long wait, before the run could halt the game: a crashed server runs no ticks, and the wait never
+asked. It now stops waiting at once and is left to the next game, as a test the crash kept from starting is, rather
+than reported skipped. **Compiled** only: the crash scene's test runs alone, so no test of this suite waits beside it.
+
+### A condition that loads a chunk is no longer called parked
+
+An await condition that loaded or generated a chunk on the server thread, which a pack's worldgen can take seconds to
+do, failed as one that kept the server thread waiting: there the thread parks a tenth of a millisecond at a time between
+the tasks it runs, so it read as waiting on every sample. A thread whose innermost wait is the loop's own,
+`BlockableEventLoop.managedBlock`, is doing the work it waits for, and is now let be. Only the innermost counts: a
+future's `get` waits in `ForkJoinPool.managedBlock`, and one a task run inside the loop's wait waits on is still caught.
+**Green in the unit tests**: a condition that waits that way for three seconds passes, and one waiting on a future,
+on its own or inside the loop's wait, still fails.
+
+### `mc.test.logs` hears loggers that keep their events from the root
+
+The capture listened on the root logger only, so a logger a pack's log4j2.xml sets `additivity="false"` on was never
+heard, and neither was anything after a mod loaded a configuration of its own: a test asserting no error from a mod
+passed while the log showed one. It now also listens on each logger that keeps its events from the root, which hears
+each event once, and again on any configuration loaded later, started again if the old configuration stopped it.
+**Green in the unit tests**, through log4j itself.
+
+### A deactivated condition no longer skips a scene's tests outside the game
+
+A scene whose tests were all disabled by a condition read outside the game started no game. With
+`junit.jupiter.conditions.deactivate` naming that condition's evaluator, which tells Jupiter not to run it, that skipped
+tests the game would have run. Its patterns are now read as Jupiter reads them, from this engine's configuration and
+from the game's `-D`, on its command line or in `JAVA_TOOL_OPTIONS` or `JDK_JAVA_OPTIONS`, and a condition they name
+disables nothing outside the game either. **Green in the unit tests**.
+
+### Two tests that take the client run one after the other in a game
+
+The client lock above, in a game on NeoForge with its client: WorldDriver's client scenes ran under it, one test at a
+time, and one of them, which read the client's chunks around the player at its start, failed every time. Run
+concurrently it had always come early; run in turn, it came right after a test that moved the player, before the client
+had the chunks there. That test now waits for them. The lock is **green in the self-test suite**; the results are below.
 
 ## 2026-11-05
 
