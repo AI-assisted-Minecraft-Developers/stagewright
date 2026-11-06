@@ -77,6 +77,8 @@ final class PeerConnection implements CloseableResource {
     }
 
     /** {@code t.peer(name)} for the test {@code test}: its session opened, and what it is given back by. */
+    // The connection is closed here when the peer refuses the session, and otherwise with the test, as its lease.
+    @SuppressWarnings("PMD.CloseResource")
     static Map<String, Object> open(String peer, String test, List<CloseableResource> leases) {
         String dir = System.getProperty(PREFIX + peer + ".dir");
         if (dir == null) {
@@ -84,12 +86,41 @@ final class PeerConnection implements CloseableResource {
                     + " peers under peers, each by name");
         }
         String log = System.getProperty(PREFIX + peer + ".log", "(not named)");
-        PeerConnection connection = new PeerConnection(peer, connect(peer, Path.of(dir), log), log);
+        StageWrightRpc rpc = connect(peer, Path.of(dir), log);
+        PeerConnection connection = new PeerConnection(peer, rpc, log);
         JsonObject open = new JsonObject();
         open.addProperty(NAME, test);
-        JsonElement root = connection.call("open", open);
+        open.add("options", held(TestScope.bound()));
+        JsonElement root;
+        try {
+            root = connection.call("open", open);
+        } catch (RuntimeException | Error e) {
+            // A refusal opened nothing, but a reply lost or late may have left the session open there: ending one
+            // that is not there answers nothing, so it is asked to end in any case, and its own failure rides along.
+            try (rpc) {
+                connection.call("close", new JsonObject());
+            } catch (RuntimeException | Error closing) {
+                e.addSuppressed(closing);
+            }
+            throw e;
+        }
         leases.add(connection);
         return connection.proxy(0, root);
+    }
+
+    /**
+     * What the test holds here, {@code {locks, isolated}}, for its session there to be checked against: the locks
+     * themselves are held here, in this game's {@link RunLocks}, which keeps the scene's other tests off the peer too.
+     */
+    static JsonObject held(TestScope scope) {
+        JsonObject out = new JsonObject();
+        JsonArray locks = new JsonArray();
+        if (scope != null) {
+            scope.locks().stream().sorted().forEach(locks::add);
+        }
+        out.add("locks", locks);
+        out.addProperty("isolated", scope != null && scope.isolated());
+        return out;
     }
 
     /** A connection to {@code peer} once it serves, waiting for it the first time. */
@@ -272,7 +303,7 @@ final class PeerConnection implements CloseableResource {
     }
 
     /** A script's value as JSON for the peer; a function cannot go, and says what to send instead. */
-    private static JsonElement tree(Object v, String member) {
+    static JsonElement tree(Object v, String member) {
         if (v instanceof Scripting.Function) {
             throw new IllegalArgumentException(member + ": a function cannot be sent to a peer. Register it with"
                     + " step(name, (t, args) => …), which the peer loads too, and call t.peer(…).step(name, args) or"
@@ -280,6 +311,11 @@ final class PeerConnection implements CloseableResource {
         }
         return switch (v) {
             case null -> JsonNull.INSTANCE;
+            case Number n
+            // Only these are ever not finite; a big integer past a double's range is exact in JSON.
+            when (n instanceof Double || n instanceof Float) && !Double.isFinite(n.doubleValue()) ->
+                throw new IllegalArgumentException(
+                        member + ": " + n + " cannot be sent to a peer, as JSON has no such number");
             case Number n
             when n.doubleValue() == Math.rint(n.doubleValue()) && Math.abs(n.doubleValue()) < 0x1p53 ->
                 new JsonPrimitive(n.longValue());

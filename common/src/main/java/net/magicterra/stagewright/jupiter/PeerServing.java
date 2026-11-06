@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,7 +111,8 @@ public final class PeerServing {
             @Doc("invoke: the arguments, a list; waitUntil: the step's argument.")
             Optional<JsonValue> args,
 
-            @Doc("waitUntil: the options, {within, as}.") Optional<JsonValue> options) {}
+            @Doc("waitUntil: the options, {within, as}; open: what the game's test holds, {locks, isolated}.")
+            Optional<JsonValue> options) {}
 
     /** The answer: a value, or {@code {error: {class, message, assertion, stack}}}. */
     @Named("TestPeerAnswer")
@@ -230,7 +232,24 @@ public final class PeerServing {
         }
         String id = call.session().orElseThrow(() -> new IllegalArgumentException("open: no session"));
         String test = call.name().orElse(id);
-        return SESSIONS.computeIfAbsent(id, unused -> new Session(game, test)).root();
+        TestScope scope = scope(test, call.options());
+        return SESSIONS.computeIfAbsent(id, unused -> new Session(game, scope)).root();
+    }
+
+    /**
+     * The session's scope: under the locks the game's test holds, {@code {locks, isolated}}, so what the test may
+     * change in its game it may change here. The game holds them, which keeps its other tests off this peer as well.
+     */
+    static TestScope scope(String test, Optional<JsonValue> held) {
+        Set<String> locks = new HashSet<>();
+        boolean isolated = false;
+        if (held.isPresent() && held.get().json() instanceof JsonObject o) {
+            if (o.get("locks") instanceof JsonArray names) {
+                names.forEach(n -> locks.add(n.getAsString()));
+            }
+            isolated = o.get("isolated") instanceof JsonPrimitive p && p.getAsBoolean();
+        }
+        return TestScope.ofScript(test, locks, isolated);
     }
 
     private static Session session(Call call) {
@@ -249,9 +268,21 @@ public final class PeerServing {
         }
         Throwable failure = s.end();
         if (failure != null) {
-            throw new IllegalStateException("ending the test's session: " + failure, failure);
+            throwEnding(failure);
         }
         return JsonNull.INSTANCE;
+    }
+
+    /**
+     * Throw what ending a session that failed with {@code failure} throws: an assertion still one, a failed soft check
+     * among them, so the game reports the test failed rather than in error.
+     */
+    static void throwEnding(Throwable failure) {
+        String message = "ending the test's session: " + failure;
+        if (failure instanceof AssertionError) {
+            throw new AssertionError(message, failure);
+        }
+        throw new IllegalStateException(message, failure);
     }
 
     /** What the game rebuilds a failure from: its class, message, whether an assertion, and this game's stack. */
@@ -283,9 +314,9 @@ public final class PeerServing {
 
         private int next = 1;
 
-        Session(GameImpl game, String test) {
-            this.scope = TestScope.ofScript(test, Set.of(), false);
-            this.context = new ScriptContext(game, STEPS, JavaSteps.none(), new PeerTest(test));
+        Session(GameImpl game, TestScope scope) {
+            this.scope = scope;
+            this.context = new ScriptContext(game, STEPS, JavaSteps.none(), new PeerTest(scope.name()));
             handles.put(0, inScope(context::asScript));
         }
 

@@ -125,6 +125,20 @@ final class ScriptContext {
     }
 
     /**
+     * Close {@code lease}. An assertion it ends on stays one, as a check that failed where the lease was, on a peer,
+     * means the test failed rather than erred; anything else is a lease that could not be given back.
+     */
+    static void giveBack(CloseableResource lease) {
+        try {
+            lease.close();
+        } catch (AssertionError e) {
+            throw new AssertionError("giving back " + lease + ": " + e.getMessage(), e);
+        } catch (Throwable e) {
+            throw new IllegalStateException("could not give back " + lease, e);
+        }
+    }
+
+    /**
      * After the body, whatever it did: undo its overrides, then give back what it leased, last first. {@code failure}
      * is the body's; what ending throws is added to it, or becomes the failure when the body passed.
      */
@@ -167,13 +181,7 @@ final class ScriptContext {
         }
         for (int i = leases.size() - 1; i >= 0; i--) {
             CloseableResource lease = leases.get(i);
-            undo.add(() -> {
-                try {
-                    lease.close();
-                } catch (Throwable e) {
-                    throw new IllegalStateException("could not give back " + lease, e);
-                }
-            });
+            undo.add(() -> giveBack(lease));
         }
         for (Runnable step : undo) {
             try {
