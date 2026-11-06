@@ -171,6 +171,10 @@ Tests in a game run concurrently by default, classes and methods alike. What two
   `overrideTime`, `overrideWeather` or `overrideTickRate`, which is undone when the test ends and is refused unless
   the test holds the matching lock read-write: `@ResourceLock(Locks.WORLD_RULES)`, `Locks.WORLD_CLOCK`,
   `Locks.WEATHER`, `Locks.TICK_RATE`. `Locks.player(name)` names one player.
+- The game has one client, and one player on it. A test method that takes a `Client` or a `Player` parameter
+  holds `Locks.CLIENT` without saying so, so two such tests never run at once and close each other's screens. A
+  script test that calls `t.client()` or `t.player()` adds `locks: ['client']` itself: a script can't be read for it
+  ahead, so StageWright only logs a warning, once per test, when one runs without the lock beside others.
 - `game.freezeTicks()` freezes the world for the rest of the test, as `/tick freeze` does, and needs
   `Locks.TICK_RATE`; it thaws when the test ends, whether it passed or not. While it is frozen, `game.ticks(n)` moves
   the world on by exactly `n` ticks instead of waiting for them, and `game.await()` moves it on one tick at a time until
@@ -347,7 +351,7 @@ test('name', { scene: 'mymod', requires: 'client', locks: ['weather'] }, (t) => 
 The options are `scene` — one scene's name, or a list of them (`scene: ['mymod', 'mymod.integrated']`) to run the
 test once in each, as `@Scene({…})` does for a class — `requires` (`client`, `dedicatedServer`, `integratedServer` or `mod:<id>`), `dependsOn` (a
 test in the same file, `file.js#name`, or a Java test as `com.example.SomeTest#method`), `afterRestart`, `knownIssue`,
-`locks` (the `Locks` names without `stagewright.`: `worldRules`, `worldClock`, `weather`, `tickRate`, `player:<name>`)
+`locks` (the `Locks` names without `stagewright.`: `worldRules`, `worldClock`, `weather`, `tickRate`, `client`, `player:<name>`)
 and `isolated`.
 
 `t` offers `call(method, params)` for any WorldDriver method, `wait(ticks)`, `waitUntil(fn, {within, as})`,

@@ -12,6 +12,7 @@ import net.magicterra.stagewright.test.Bot;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Driven;
 import net.magicterra.stagewright.test.Game;
+import net.magicterra.stagewright.test.Locks;
 import net.magicterra.stagewright.test.Npc;
 import net.magicterra.stagewright.test.Perf;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes.BlockPosition;
@@ -64,7 +65,26 @@ final class ScriptHandles {
     private static final List<String> PRESS_KEYS =
             List.of(FORWARD, LEFT, JUMP, "sneak", SPRINT, ATTACK, "use", "aimAt", "toolFor", HIT, "release");
 
+    private static final System.Logger LOG = System.getLogger(ScriptHandles.class.getName());
+
     private ScriptHandles() {}
+
+    /**
+     * Warn, once a test, that a script test reached the game's one client without {@link Locks#CLIENT} while script
+     * tests run concurrently: another such test may close its screen or press its keys under it, which fails only now
+     * and then. A Java test that takes the client holds the lock without asking; a script cannot be read for it ahead.
+     */
+    private static void warnIfTheClientIsShared(String what) {
+        TestScope scope = TestScope.bound();
+        if (scope != null && scope.script() && ScriptScheduler.concurrent() && scope.firstUnlockedClientUse()) {
+            LOG.log(
+                    System.Logger.Level.WARNING,
+                    "{0} calls {1} without locks: [''client''] and may run beside another test driving the same"
+                            + " client; add the lock, or isolated: true",
+                    scope.name(),
+                    what);
+        }
+    }
 
     static void install(Map<String, Object> t, Game game, List<CloseableResource> leases, String test) {
         installBodies(t, game, leases, test);
@@ -113,7 +133,10 @@ final class ScriptHandles {
             botOnly(out, bot);
             return out;
         });
-        t.put("player", (Scripting.Function) args -> body(BodyImpl.player(game)));
+        t.put("player", (Scripting.Function) args -> {
+            warnIfTheClientIsShared("t.player()");
+            return body(BodyImpl.player(game));
+        });
         installPeer(t, leases, test);
         // t.npc(type, pos) in the overworld, or t.npc(type, pos, dimension).
         t.put("npc", (Scripting.Function) args -> {
@@ -154,6 +177,7 @@ final class ScriptHandles {
                 position(game.translate(blockPos(arg(args, 0)), dimension(arg(args, 1)), dimension(arg(args, 2)))));
         t.put("client", (Scripting.Function) args -> {
             Client client = ClientConnection.client(game);
+            warnIfTheClientIsShared("t.client()");
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("call", (Scripting.Function) a -> ScriptContext.route(client.registry(), "client.call", a));
             return out;

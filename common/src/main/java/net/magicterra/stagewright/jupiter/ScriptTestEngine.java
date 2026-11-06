@@ -384,7 +384,7 @@ public final class ScriptTestEngine implements TestEngine {
     /**
      * {@code locks}: what the test shares with others, by a {@link net.magicterra.stagewright.test.Locks} value's name
      * after {@code stagewright.} ({@code worldRules}, {@code worldClock}, {@code weather}, {@code tickRate},
-     * {@code player:<name>}), or any name the tests agree on. Tests naming one lock never run at once.
+     * {@code client}, {@code player:<name>}), or any name the tests agree on. Tests naming one lock never run at once.
      */
     private static Set<String> locks(String test, Object value) {
         List<Object> items =

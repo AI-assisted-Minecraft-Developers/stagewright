@@ -2,6 +2,7 @@ package net.magicterra.stagewright.jupiter;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -9,7 +10,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Set;
+import net.magicterra.stagewright.test.Bot;
+import net.magicterra.stagewright.test.Client;
+import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Locks;
+import net.magicterra.stagewright.test.Player;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.MultipleFailuresError;
 
@@ -22,6 +27,32 @@ class TestScopeTest {
                 IllegalStateException.class,
                 () -> scope.require(Locks.WEATHER, "Locks.WEATHER", "game.overrideWeather"));
         assertTrue(e.getMessage().contains("locks: ['weather']"), e.getMessage());
+    }
+
+    @SuppressWarnings("unused")
+    private static void clicks(Client client) {}
+
+    @SuppressWarnings("unused")
+    private static void walks(Player player, Game game) {}
+
+    @SuppressWarnings("unused")
+    private static void joins(Bot bot, Game game) {}
+
+    @Test
+    void aTestTakingTheClientOrItsPlayerDrivesTheClientAndABotDoesNot() throws Exception {
+        assertTrue(TestScope.drivesTheClient(TestScopeTest.class.getDeclaredMethod("clicks", Client.class)));
+        assertTrue(TestScope.drivesTheClient(TestScopeTest.class.getDeclaredMethod("walks", Player.class, Game.class)));
+        assertFalse(TestScope.drivesTheClient(TestScopeTest.class.getDeclaredMethod("joins", Bot.class, Game.class)));
+    }
+
+    @Test
+    void aScriptReachingTheClientWithoutItsLockHearsOnceAndWithItNever() {
+        TestScope unlocked = TestScope.ofScript("clicks", Set.of(), false);
+        assertTrue(unlocked.firstUnlockedClientUse());
+        assertFalse(unlocked.firstUnlockedClientUse(), "once a test");
+        assertFalse(unlocked.dynamic("a dynamic one").firstUnlockedClientUse(), "its factory heard already");
+        assertFalse(TestScope.ofScript("locked", Set.of(Locks.CLIENT), false).firstUnlockedClientUse());
+        assertFalse(TestScope.ofScript("alone", Set.of(), true).firstUnlockedClientUse());
     }
 
     @Test

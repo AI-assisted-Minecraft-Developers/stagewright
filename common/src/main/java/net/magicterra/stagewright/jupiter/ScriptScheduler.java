@@ -35,6 +35,9 @@ final class ScriptScheduler {
     /** How many script tests may run at once; the processor count by default, and at least 2. */
     static final String THREADS = "stagewright.script.parallel.threads";
 
+    /** Whether the script tests running now run concurrently. */
+    private static volatile boolean concurrent;
+
     private final Map<String, CompletableFuture<TestExecutionResult.Status>> results = new HashMap<>();
 
     private final Map<ScriptTestEngine.Test, String> cycles = new HashMap<>();
@@ -45,6 +48,11 @@ final class ScriptScheduler {
         this.parallel = parallel;
     }
 
+    /** Whether the script tests running now run concurrently, so one may run beside another. */
+    static boolean concurrent() {
+        return concurrent;
+    }
+
     /** Run {@code tests}, each reporting itself through {@code run}, and return when every one has ended. */
     // The pool is shut down in the finally block below, after every submitted test has been joined.
     @SuppressWarnings("PMD.CloseResource")
@@ -53,6 +61,7 @@ final class ScriptScheduler {
                 .orElseGet(() -> config.getBoolean("junit.jupiter.execution.parallel.enabled")
                         .orElse(false));
         ScriptScheduler scheduler = new ScriptScheduler(parallel);
+        concurrent = parallel;
         List<ScriptTestEngine.Test> order = scheduler.plan(tests);
         if (!parallel) {
             for (ScriptTestEngine.Test test : order) {

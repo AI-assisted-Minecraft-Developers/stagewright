@@ -19,6 +19,13 @@ public final class Locks {
     /** The server's tick rate. */
     public static final String TICK_RATE = "stagewright.tickRate";
 
+    /**
+     * The game's one client and its {@link Player}: its screens, its keys, where it stands. A test method that takes a
+     * {@link Client} or a {@link Player} parameter holds it read-write without saying so, so two of them never drive
+     * the client at once; a script test that calls {@code t.client()} names it, {@code locks: ['client']}.
+     */
+    public static final String CLIENT = "stagewright.client";
+
     private Locks() {}
 
     /** One player, by name. */

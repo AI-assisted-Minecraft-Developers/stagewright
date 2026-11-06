@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.jupiter;
 
 import java.lang.reflect.AnnotatedElement;
+import java.lang.reflect.Method;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -8,8 +9,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import net.magicterra.stagewright.test.Client;
+import net.magicterra.stagewright.test.Locks;
+import net.magicterra.stagewright.test.Player;
 import net.minecraft.server.MinecraftServer;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -51,6 +56,9 @@ final class TestScope {
 
     /** Whether the test froze the server's ticks, so its waits step them; see {@code Game.freezeTicks}. */
     private volatile boolean frozeTicks;
+
+    /** Whether a script test already heard it reached the client without {@link Locks#CLIENT}; once is enough. */
+    private final AtomicBoolean warnedClient = new AtomicBoolean();
 
     /**
      * The factory's scope, for a dynamic test's: what it changes and freezes is the factory's; only its checks are its
@@ -96,8 +104,36 @@ final class TestScope {
             }
             isolated |= AnnotationSupport.isAnnotated(element, Isolated.class);
         }
+        // Unless the test asked for it read-only, which it then means.
+        if (context.getTestMethod().filter(TestScope::drivesTheClient).isPresent() && !reads.contains(Locks.CLIENT)) {
+            locks.add(Locks.CLIENT);
+        }
         reads.removeAll(locks);
         return new TestScope(context.getDisplayName(), locks, reads, isolated, false);
+    }
+
+    /**
+     * Whether {@code test} takes the client or its player: two such tests running at once would close each other's
+     * screens and press each other's keys, so it holds {@link Locks#CLIENT}.
+     */
+    static boolean drivesTheClient(Method test) {
+        for (Class<?> type : test.getParameterTypes()) {
+            if (type == Client.class || type == Player.class) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Whether the test holds {@code lock} read-write, or runs alone. */
+    boolean holds(String lock) {
+        return isolated || locks.contains(lock);
+    }
+
+    /** Whether this is the first time the test reached the client without holding it; see {@link #warnedClient}. */
+    boolean firstUnlockedClientUse() {
+        TestScope root = parent == null ? this : parent;
+        return !root.holds(Locks.CLIENT) && !root.warnedClient.getAndSet(true);
     }
 
     /** A script test's, with the locks its {@code locks} option names, already prefixed. */
@@ -195,7 +231,7 @@ final class TestScope {
 
     /** Refuse {@code what} unless the test holds {@code lock} read-write or is isolated. */
     void require(String lock, String constant, String what) {
-        if (isolated || locks.contains(lock)) {
+        if (holds(lock)) {
             return;
         }
         String fix = script

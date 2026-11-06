@@ -10,6 +10,18 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-11-06
+
+### Two tests that take the client no longer run at once
+
+Tests run concurrently by default, and two in one class that both took the `Client` drove the same screens: a third
+party's test closed a screen and opened the main menu while the other was clicking in it, which failed only under load.
+A test method taking a `Client` or a `Player` parameter now holds the new `Locks.CLIENT` without declaring it, so such
+tests run one after another. A script test can't be read for its use of the client ahead of running, so it names the
+lock in `locks`; one that calls `t.client()` or `t.player()` without it while script tests run concurrently logs a
+warning, once per test. **Green in the unit tests** only: which tests take the lock, and when the warning is given.
+That the lock keeps them apart in a game is not yet run, as no client can open a window here.
+
 ## 2026-11-05
 
 ### Excluding a mod no longer excludes the mods that depend on it
