@@ -10,6 +10,11 @@ comment next to it. This file is only for what is *not done*.
 `JupiterRun.halt` arms an exit watchdog for a dedicated server started without the agent, by hand or
 through a run task the plugin cannot put an argument on. It goes if and when neither is supported.
 
+## A server that hangs after its run, with a joined client, is waited for twice
+
+`SceneRun.awaitClientStop` waits for the server to go before it gives the client its notice, and `awaitExit` then
+waits for it again before killing it: about twice the agent's grace, when the agent fails to end it.
+
 ## The plugin does not run on Gradle 9
 
 `StageWrightLaunchSpecsTask` resolves the run's classpath while executing (`CompanionLaunch.writeClasspathArgFile`),
