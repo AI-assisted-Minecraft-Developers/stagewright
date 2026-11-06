@@ -238,6 +238,8 @@ public final class GameExtension
         // After a crash nothing is undone or put back: the server runs nothing more, and the save stays as it was.
         boolean crashed = Quit.crashed();
         boolean between = g instanceof GameImpl impl && impl.between();
+        // Kept for after the checks and the handovers, which a reconnect that failed must not skip.
+        RuntimeException rejoin = null;
         try {
             // Undone on the world open now; a test between worlds has none to undo them on.
             if (scope != null && scope.changedAnything() && !between && !crashed) {
@@ -250,9 +252,19 @@ public final class GameExtension
                     impl.putWorldBack();
                 }
             } finally {
-                TestScope.unbind();
-                if (scope != null) {
-                    scope.release();
+                try {
+                    // Likewise the client this test left disconnected: the next test to take it finds it in the game.
+                    // After a crash the run is over, and its end closes the client.
+                    if (!crashed) {
+                        ClientHandle.rejoinIfLeftBy(scope, g);
+                    }
+                } catch (RuntimeException e) {
+                    rejoin = e;
+                } finally {
+                    TestScope.unbind();
+                    if (scope != null) {
+                        scope.release();
+                    }
                 }
             }
         }
@@ -268,10 +280,19 @@ public final class GameExtension
             if (misplaced != null) {
                 checks.addSuppressed(misplaced);
             }
+            if (rejoin != null) {
+                checks.addSuppressed(rejoin);
+            }
             throw checks;
         }
         if (misplaced != null) {
+            if (rejoin != null) {
+                misplaced.addSuppressed(rejoin);
+            }
             throw misplaced;
+        }
+        if (rejoin != null) {
+            throw new IllegalStateException("the client this test disconnected did not get back in: " + rejoin, rejoin);
         }
     }
 

@@ -1,12 +1,9 @@
 package net.magicterra.stagewright.client;
 
-import java.util.function.BooleanSupplier;
 import net.magicterra.stagewright.StageWrightCommon;
 import net.magicterra.stagewright.test.DependsOn;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.GenericMessageScreen;
-import net.minecraft.client.gui.screens.LevelLoadingScreen;
-import net.minecraft.client.gui.screens.ReceivingLevelScreen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
@@ -23,8 +20,6 @@ public final class WorldSwitch {
 
     /** How long leaving or opening a world may take, a new world's spawn generation included. */
     private static final long TIMEOUT_MS = 300_000;
-
-    private static final long POLL_MS = 50;
 
     /** While a test has the client between worlds, losing the world does not end the run. */
     private static volatile boolean active;
@@ -58,8 +53,9 @@ public final class WorldSwitch {
                 mc.setScreen(new TitleScreen());
             }
         });
-        await(
+        ClientWaits.until(
                 () -> mc.level == null && mc.getSingleplayerServer() == null && mc.screen instanceof TitleScreen,
+                TIMEOUT_MS,
                 "leaving world " + current());
         StageWrightCommon.LOG.info("[{}] a test left world '{}'", StageWrightCommon.MOD_ID, current());
     }
@@ -80,16 +76,12 @@ public final class WorldSwitch {
                 ClientDirector.openOrCreate(mc, save);
             }
         });
-        await(
+        ClientWaits.until(
                 () -> {
                     IntegratedServer s = mc.getSingleplayerServer();
-                    return s != null
-                            && mc.level != null
-                            && mc.player != null
-                            && StageWrightCommon.armedServer() == s
-                            && !(mc.screen instanceof LevelLoadingScreen)
-                            && !(mc.screen instanceof ReceivingLevelScreen);
+                    return s != null && StageWrightCommon.armedServer() == s && ClientWaits.inWorld(mc);
                 },
+                TIMEOUT_MS,
                 "opening world " + save);
         current = save;
         active = false;
@@ -100,20 +92,5 @@ public final class WorldSwitch {
     /** The run ended with the client between worlds: the director ends the client, as after any run. */
     public static void end() {
         active = false;
-    }
-
-    private static void await(BooleanSupplier done, String what) {
-        long deadline = System.currentTimeMillis() + TIMEOUT_MS;
-        while (!done.getAsBoolean()) {
-            if (System.currentTimeMillis() > deadline) {
-                throw new IllegalStateException(what + " did not finish in " + TIMEOUT_MS / 1000 + " s");
-            }
-            try {
-                Thread.sleep(POLL_MS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IllegalStateException("interrupted while " + what, e);
-            }
-        }
     }
 }

@@ -9,7 +9,6 @@ import java.util.Optional;
 import net.magicterra.stagewright.capability.Capabilities;
 import net.magicterra.stagewright.test.Body;
 import net.magicterra.stagewright.test.Bot;
-import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Driven;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Locks;
@@ -88,7 +87,7 @@ final class ScriptHandles {
 
     static void install(Map<String, Object> t, Game game, List<CloseableResource> leases, String test) {
         installBodies(t, game, leases, test);
-        installWorld(t, game);
+        installWorld(t, game, leases);
         installOverrides(t, game);
     }
 
@@ -172,14 +171,31 @@ final class ScriptHandles {
     }
 
     /** {@code t.translate}, {@code t.client}, the capability handles and {@code t.hasClass}: what the game offers. */
-    private static void installWorld(Map<String, Object> t, Game game) {
+    private static void installWorld(Map<String, Object> t, Game game, List<CloseableResource> leases) {
         t.put("translate", (Scripting.Function) args ->
                 position(game.translate(blockPos(arg(args, 0)), dimension(arg(args, 1)), dimension(arg(args, 2)))));
+        boolean[] rejoins = {false};
         t.put("client", (Scripting.Function) args -> {
-            Client client = ClientConnection.client(game);
+            ClientHandle client = ClientConnection.client(game);
             warnIfTheClientIsShared("t.client()");
+            // Back in the game, if the test left it disconnected, when the test gives back its leases; once a test.
+            synchronized (rejoins) {
+                if (!rejoins[0]) {
+                    rejoins[0] = true;
+                    leases.add(client.rejoinAtTheEnd());
+                }
+            }
             Map<String, Object> out = new LinkedHashMap<>();
             out.put("call", (Scripting.Function) a -> ScriptContext.route(client.registry(), "client.call", a));
+            // Leaving and joining again as a player does; see Client.disconnect and Client.reconnect.
+            out.put("disconnect", (Scripting.Function) unused -> {
+                client.disconnect();
+                return null;
+            });
+            out.put("reconnect", (Scripting.Function) unused -> {
+                client.reconnect();
+                return null;
+            });
             return out;
         });
         // A capability's facet, its methods by name; absent aborts the test, as game.capability does.

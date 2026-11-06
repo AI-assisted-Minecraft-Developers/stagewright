@@ -49,10 +49,10 @@ final class ClientConnection {
 
     private ClientConnection() {}
 
-    static synchronized Client client(Game game) {
+    static synchronized ClientHandle client(Game game) {
         boolean dedicated = game.onServer(MinecraftServer::isDedicatedServer);
         if (!dedicated) {
-            return game::registry;
+            return new ClientHandle(game, game.registry(), true);
         }
         String dir = System.getProperty(COMPANION_DIR);
         if (dir == null || !Boolean.getBoolean(JupiterRun.AWAIT_PLAYER)) {
@@ -70,12 +70,13 @@ final class ClientConnection {
             rpc = StageWrightRpc.connect("ws://127.0.0.1:" + port + "/rpc", CONNECT_MS);
             remote = forwarding(rpc, game.registry());
         }
-        ApiRegistry registry = remote;
-        return () -> registry;
+        return new ClientHandle(game, remote, false);
     }
 
     /** As the server stops: the connection goes with the run. */
     static synchronized void close() {
+        // Before the connection goes: a client a test left disconnected has no other way to hear the run is over.
+        ClientHandle.end(remote);
         if (rpc != null) {
             rpc.close();
         }

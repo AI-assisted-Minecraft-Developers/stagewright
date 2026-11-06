@@ -1,7 +1,10 @@
 package net.magicterra.stagewright.client;
 
 import java.util.Locale;
+import java.util.concurrent.CompletionException;
+import java.util.function.Supplier;
 import net.magicterra.stagewright.StageWrightCommon;
+import net.magicterra.stagewright.driver.verbs.ClientSession;
 import net.magicterra.stagewright.harness.AgentBridge;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.AccessibilityOnboardingScreen;
@@ -73,10 +76,13 @@ public final class ClientDirector {
         WAITING_FOR_TITLE,
         DRIVING,
         IN_WORLD,
+        /** A test disconnected the client from the server and will have it join again. */
+        PARTED,
         FINISHING
     }
 
-    private static Phase phase = Phase.WAITING_FOR_TITLE;
+    /** Written on the render thread; read there and by a session method waiting on it. */
+    private static volatile Phase phase = Phase.WAITING_FOR_TITLE;
 
     private static int settleTicks;
 
@@ -84,6 +90,9 @@ public final class ClientDirector {
     private static String waitingOn;
 
     private static int driveTicks;
+
+    /** Ticks spent {@link Phase#PARTED}. */
+    private static int partedTicks;
 
     private static int exitCountdown = -1;
 
@@ -107,6 +116,9 @@ public final class ClientDirector {
             return false;
         }
         StageWrightCommon.LOG.info("[{}] client director armed: {}", StageWrightCommon.MOD_ID, directive);
+        if (joinsServer()) {
+            ClientSession.install(new Session());
+        }
         return true;
     }
 
@@ -209,6 +221,18 @@ public final class ClientDirector {
                 if (mc.level == null && !WorldSwitch.active()) {
                     StageWrightCommon.LOG.info(
                             "[{}] the server ended the run; closing client", StageWrightCommon.MOD_ID);
+                    finish();
+                }
+            }
+            case PARTED -> {
+                // Off the server until the test that disconnected the client reconnects it, or the run ends, which
+                // the server says (Session.end). Its saying so is lost when the server dies first, so a client left
+                // parted this long ends as one that never reached a world does.
+                if (++partedTicks > DRIVE_TIMEOUT_TICKS) {
+                    StageWrightCommon.LOG.error(
+                            "[{}] client left disconnected for {} ticks; closing client",
+                            StageWrightCommon.MOD_ID,
+                            DRIVE_TIMEOUT_TICKS);
                     finish();
                 }
             }
@@ -379,6 +403,119 @@ public final class ClientDirector {
             StageWrightCommon.LOG.error("[{}] opening world '{}' failed", StageWrightCommon.MOD_ID, world, e);
             if (access != null) {
                 access.safeClose();
+            }
+        }
+    }
+
+    /**
+     * {@code Client.disconnect} and {@code Client.reconnect} here: the player leaving and joining again by what a
+     * player uses, the pause menu's Disconnect and the dial this director made. Called from a method's thread, never
+     * the render thread, which does the work.
+     */
+    private static final class Session implements ClientSession {
+
+        /**
+         * How long a reconnect may take, the server's own login work included. Less than the director's own drive
+         * timeout, so a reconnect that fails comes back here, parted, rather than ending the client.
+         */
+        private static final long JOIN_MS = 120_000;
+
+        /** How long leaving may take: a disconnect is one frame, and saving is the server's. */
+        private static final long LEAVE_MS = 30_000;
+
+        @Override
+        public String leave() {
+            Minecraft mc = Minecraft.getInstance();
+            // The server starts the tests once it has the player, a few ticks before the client has the world: a
+            // client still joining is waited for, not refused.
+            ClientWaits.until(
+                    () -> phase != Phase.WAITING_FOR_TITLE && phase != Phase.DRIVING, JOIN_MS, "joining the server");
+            String name = onRenderThread(mc, () -> {
+                if (phase != Phase.IN_WORLD || mc.level == null) {
+                    throw new IllegalStateException("the client is not in the game: it is " + describe(phase));
+                }
+                part(mc);
+                return mc.getUser().getName();
+            });
+            ClientWaits.until(() -> mc.level == null, LEAVE_MS, "leaving the server");
+            StageWrightCommon.LOG.info("[{}] a test disconnected the client", StageWrightCommon.MOD_ID);
+            return name;
+        }
+
+        @Override
+        public String join() {
+            Minecraft mc = Minecraft.getInstance();
+            String name = onRenderThread(mc, () -> {
+                if (phase != Phase.PARTED) {
+                    throw new IllegalStateException(
+                            "the client cannot join the server again: it is " + describe(phase));
+                }
+                driveTicks = 0;
+                enter(Phase.DRIVING);
+                drive(mc);
+                return mc.getUser().getName();
+            });
+            try {
+                ClientWaits.until(() -> phase == Phase.IN_WORLD && ClientWaits.inWorld(mc), JOIN_MS, "joining again");
+            } catch (IllegalStateException e) {
+                // Stop dialling and stand parted again, as the test still believes the client is, so a later
+                // reconnect can try once more.
+                onRenderThread(mc, () -> {
+                    if (phase == Phase.DRIVING || phase == Phase.IN_WORLD) {
+                        part(mc);
+                    }
+                    return null;
+                });
+                throw e;
+            }
+            StageWrightCommon.LOG.info("[{}] a test reconnected the client", StageWrightCommon.MOD_ID);
+            return name;
+        }
+
+        @Override
+        public boolean end() {
+            boolean closing = phase == Phase.PARTED;
+            Minecraft.getInstance().execute(() -> {
+                if (phase == Phase.PARTED) {
+                    StageWrightCommon.LOG.info(
+                            "[{}] the run ended with the client disconnected; closing client",
+                            StageWrightCommon.MOD_ID);
+                    finish();
+                }
+            });
+            return closing;
+        }
+
+        /** Off the server, as the pause screen's Disconnect leaves it; also cancels a dial in flight. Render thread. */
+        private static void part(Minecraft mc) {
+            // Parted before the world goes, so the director does not read losing it as the end of the run.
+            enter(Phase.PARTED);
+            partedTicks = 0;
+            if (mc.level != null) {
+                mc.level.disconnect();
+            }
+            mc.disconnect();
+            mc.setScreen(new JoinMultiplayerScreen(new TitleScreen()));
+        }
+
+        private static String describe(Phase p) {
+            return switch (p) {
+                case WAITING_FOR_TITLE -> "still starting";
+                case DRIVING -> "joining the server";
+                case IN_WORLD -> "in the game";
+                case PARTED -> "disconnected";
+                case FINISHING -> "shutting down";
+            };
+        }
+
+        private static <T> T onRenderThread(Minecraft mc, Supplier<T> work) {
+            if (mc.isSameThread()) {
+                throw new IllegalStateException("a session change waits for the render thread, so not from it");
+            }
+            try {
+                return mc.submit(work).join();
+            } catch (CompletionException e) {
+                throw e.getCause() instanceof RuntimeException r ? r : e;
             }
         }
     }

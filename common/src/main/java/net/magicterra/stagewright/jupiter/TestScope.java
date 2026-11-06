@@ -127,6 +127,11 @@ final class TestScope {
         return parent != null ? parent.key() : key;
     }
 
+    /** The test's own scope: this one, or for a dynamic test the scope of the test that made it. */
+    TestScope root() {
+        return parent != null ? parent : this;
+    }
+
     /**
      * Whether {@code test} takes the client or its player: two such tests running at once would close each other's
      * screens and press each other's keys, so it holds {@link Locks#CLIENT}.

@@ -20,4 +20,26 @@ public interface Client {
     default <T> T api(Function<ApiRegistry, T> caller) {
         return caller.apply(registry());
     }
+
+    /**
+     * Disconnect the client from the game's server as a player who presses Disconnect does, and return once the server
+     * has taken its player off the list: every loader's logout event fired and the player saved. The client stays up,
+     * on the server list screen, and its methods still answer; until {@link #reconnect} there is no {@link Player} in
+     * the game. A test that ends with the client disconnected has it reconnected before the next test takes it.
+     *
+     * <p>Only where the client joined a dedicated server. A client that opened a world hosts the game's server, and
+     * leaving would stop it.
+     *
+     * @throws IllegalStateException when the client hosts the game, or is not in it
+     */
+    Client disconnect();
+
+    /**
+     * Join the game's server again after {@link #disconnect}, under the same account, as a player reconnecting does:
+     * the same player, by UUID, from its save, with the login event fired and whatever the server sends a joining
+     * player sent. Returns once the client is in the world, past the loading screen, and the server has the player.
+     *
+     * @throws IllegalStateException when the client is in the game, or did not get back in
+     */
+    Client reconnect();
 }

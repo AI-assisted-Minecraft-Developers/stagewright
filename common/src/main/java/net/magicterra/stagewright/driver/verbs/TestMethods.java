@@ -6,6 +6,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import net.magicterra.stagewright.jupiter.PeerServing;
 import net.magicterra.stagewright.test.methods.TestQueriesApiBinding;
 import net.magicterra.worlddriver.api.methods.shared.CommonTypes;
@@ -35,7 +36,8 @@ import net.magicterra.worlddriver.bot.BotHooks;
  *
  * <p>The client-side three delegate through {@link BotHooks#impl()}, null on a dedicated server, where they answer
  * {@code capability_unavailable} before any client type is touched; this class imports no
- * {@code net.minecraft.client.*} type, so publishing it on a server loads none.
+ * {@code net.minecraft.client.*} type, so publishing it on a server loads none. The two {@code mc.test.client.*}
+ * session methods delegate the same way, through {@link ClientSession#installed()}.
  */
 public final class TestMethods {
 
@@ -73,6 +75,50 @@ public final class TestMethods {
                     .hidden()
                     .effects(Effect.CLIENT_INPUT, Effect.WORLD_WRITE)
                     .mayWait();
+
+    private static final RecordType<SessionPlayer> SESSION_PLAYER = ApiTypes.record(SessionPlayer.class);
+
+    /** {@code Client.disconnect}'s half on the client; see {@link ClientSession#leave}. */
+    public static final MethodSpec<NoParams, SessionPlayer> CLIENT_LEAVE = MethodSpec.of(
+                    "mc.test.client.leave",
+                    CommonTypes.NO_PARAMS,
+                    SESSION_PLAYER,
+                    "Disconnect this client from the server it joined, as the pause menu's Disconnect does, and answer "
+                            + "once it has no world. Only a client that joined a server.")
+            .hidden()
+            .effects(Effect.CLIENT_INPUT)
+            .mayWait();
+
+    /** {@code Client.reconnect}'s half on the client; see {@link ClientSession#join}. */
+    public static final MethodSpec<NoParams, SessionPlayer> CLIENT_JOIN = MethodSpec.of(
+                    "mc.test.client.join",
+                    CommonTypes.NO_PARAMS,
+                    SESSION_PLAYER,
+                    "Join the server this client left again and answer once it is in the world, past the loading "
+                            + "screen. Only a client that joined a server.")
+            .hidden()
+            .effects(Effect.CLIENT_INPUT)
+            .mayWait();
+
+    /** The run's end on the client; see {@link ClientSession#end}. */
+    public static final MethodSpec<NoParams, SessionEnded> CLIENT_END = MethodSpec.of(
+                    "mc.test.client.end",
+                    CommonTypes.NO_PARAMS,
+                    ApiTypes.record(SessionEnded.class),
+                    "The run is over: close this client if a test left it disconnected. Only a client that joined a "
+                            + "server.")
+            .hidden()
+            .effects(Effect.CLIENT_INPUT);
+
+    /** The {@code mc.test.client.*} result: the client's player, by profile name. */
+    @Named("TestSessionPlayer")
+    public record SessionPlayer(@Length(min = 1, max = 64) String name) {}
+
+    /** The {@code mc.test.client.end} result. */
+    @Named("TestSessionEnded")
+    public record SessionEnded(
+            @Doc("A test had left the client disconnected, so it is closing.")
+            boolean closing) {}
 
     /**
      * The client hooks hop to the client thread and wait for it. They wait here, never on the caller's thread: a scene
@@ -113,11 +159,27 @@ public final class TestMethods {
         };
     }
 
+    private static <R> ApiHandler<NoParams, R> onSession(
+            MethodSpec<NoParams, R> spec, Function<ClientSession, R> body) {
+        return (p, ctx) -> {
+            ClientSession session = ClientSession.installed();
+            if (session == null) {
+                return CompletableFuture.failedFuture(ApiException.of(
+                        ApiError.Code.CAPABILITY_UNAVAILABLE,
+                        spec.name() + " not available: only a client that joined a server has a session to leave"));
+            }
+            return CompletableFuture.supplyAsync(() -> body.apply(session), CLIENT_WAITS);
+        };
+    }
+
     private static List<ApiMethod<?, ?>> methods() {
         List<ApiMethod<?, ?>> all = new ArrayList<>(List.of(
                 new ApiMethod<>(RESET_ENTRY, onClient(RESET_ENTRY, (bot, p) -> new Reset(bot.resetClientEntry()))),
                 new ApiMethod<>(HELD_KEYS, onClient(HELD_KEYS, (bot, p) -> new Keys(bot.heldKeys()))),
-                new ApiMethod<>(USE_ON_BLOCK, onClient(USE_ON_BLOCK, BotApi::useOnBlock))));
+                new ApiMethod<>(USE_ON_BLOCK, onClient(USE_ON_BLOCK, BotApi::useOnBlock)),
+                new ApiMethod<>(CLIENT_LEAVE, onSession(CLIENT_LEAVE, s -> new SessionPlayer(s.leave()))),
+                new ApiMethod<>(CLIENT_JOIN, onSession(CLIENT_JOIN, s -> new SessionPlayer(s.join()))),
+                new ApiMethod<>(CLIENT_END, onSession(CLIENT_END, session -> new SessionEnded(session.end())))));
         all.addAll(TestHarnessApiBinding.methods(new HarnessService()));
         all.addAll(TestQueriesApiBinding.methods(new TestQueriesService()));
         all.add(PeerServing.method());
