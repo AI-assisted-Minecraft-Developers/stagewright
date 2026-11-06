@@ -12,6 +12,19 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-07
 
+### What a game leaves running is reported
+
+Once a round's games have ended, any process still running in their directories, or naming them on its command line,
+is reported: as a `leftover` report entry, as a warning, and in the game's log. Such a process is reported, not ended.
+Ending a game already ends what it started while it ran. This catches what it starts as it goes down, such as a crash
+watcher's own JVM, which is no longer below the game once the game is gone. A process found gets three seconds to exit
+first, so one still going down with its game is not reported. Only processes started after the round's game count:
+a scene's directories are made again on each run, so what an earlier run or round left there would name them too. On Linux the scan also reads each process's working
+directory; elsewhere it has only command lines, and on Windows, where the system shows a process's executable but not
+its arguments, it finds nothing.
+
+Verified: in unit tests.
+
 ### The joined client stops itself before it is killed
 
 When its server is gone, a client that joined a dedicated server now gets the time to stop on its own, through

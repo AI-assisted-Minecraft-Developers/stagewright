@@ -13,18 +13,23 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.supervise.AgentJar;
 import net.magicterra.stagewright.engine.supervise.Supervisor;
@@ -58,6 +63,13 @@ final class SceneRun {
     private static final long CLIENT_NOTICE_SECONDS = 10;
 
     private static final long POLL_MILLIS = 100;
+
+    /**
+     * When each game this runner started was started, until its round has ended; by the process, as a pid is reused.
+     * Taken here because a game's own start time can no longer be read once it has exited, which is when its leftovers
+     * are looked for.
+     */
+    private static final Map<Process, Instant> STARTED = new ConcurrentHashMap<>();
 
     /** Where a game writes its crash reports, under its working directory. */
     private static final String CRASH_REPORTS = "crash-reports";
@@ -468,21 +480,27 @@ final class SceneRun {
                 }
                 return verdict(supervisor, game, ended, relay, forced, gameLog);
             } finally {
-                endRound(game, companion);
+                endRound(spec, peer, game, companion, gameLog);
             }
         }
     }
 
-    /** End what the round started, the server first. */
-    private static void endRound(Process game, Process second) throws InterruptedException {
+    /** End what the round started, the server first, then report what the games left behind. */
+    private void endRound(LaunchSpec spec, Peer peer, Process game, Process second, File gameLog)
+            throws InterruptedException {
         try {
-            if (game != null) {
-                Supervisor.kill(game.toHandle());
+            try {
+                if (game != null) {
+                    Supervisor.kill(game.toHandle());
+                }
+            } finally {
+                if (second != null) {
+                    Supervisor.kill(second.toHandle());
+                }
             }
+            reportLeftovers(spec, peer, game, second, gameLog);
         } finally {
-            if (second != null) {
-                Supervisor.kill(second.toHandle());
-            }
+            Stream.of(game, second).filter(Objects::nonNull).forEach(STARTED::remove);
         }
     }
 
@@ -518,6 +536,42 @@ final class SceneRun {
         }
         if (!client.isAlive()) {
             started.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
+        }
+    }
+
+    /**
+     * Say which processes the round's games left running in their directories; they are reported, not ended. Only what
+     * started after the round's game did: a scene's directories are made again on every run, so what an earlier run or
+     * round left there names them too. Only a report, run from the round's {@code finally}, so it throws nothing in
+     * place of the round's outcome: a scan that fails says so, and one interrupted, or in a cancelled run, stops.
+     */
+    private void reportLeftovers(LaunchSpec spec, Peer peer, Process game, Process second, File gameLog) {
+        if (game == null || Thread.currentThread().isInterrupted()) {
+            return;
+        }
+        List<Path> dirs = new ArrayList<>(spec.directories());
+        if (peer != null) {
+            dirs.addAll(peer.spec().directories());
+        }
+        Set<Long> games = Stream.of(game, second)
+                .filter(Objects::nonNull)
+                .map(Process::pid)
+                .collect(Collectors.toSet());
+        Instant since = STARTED.getOrDefault(game, Instant.MIN);
+        try {
+            List<String> left = Leftovers.in(dirs, games, since);
+            if (left.isEmpty()) {
+                return;
+            }
+            String report =
+                    left.size() + " process(es) the games left running in " + dirs + ": " + String.join("; ", left);
+            LOG.log(System.Logger.Level.WARNING, "scene " + scene.getDisplayName() + ": " + report);
+            listener.reportingEntryPublished(scene, ReportEntry.from("leftover", report));
+            appendToLog(gameLog, report);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "scene " + scene.getDisplayName() + ": no leftover scan: " + e, e);
         }
     }
 
@@ -722,6 +776,8 @@ final class SceneRun {
                 .redirectOutput(log);
         builder.environment().putAll(p.environment());
         Process started = builder.start();
+        // The system's own record, on the clock it keeps for every process; without one, nothing is filtered by it.
+        started.toHandle().info().startInstant().ifPresent(at -> STARTED.put(started, at));
         LiveGames.add(started);
         return started;
     }
