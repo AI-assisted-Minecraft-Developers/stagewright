@@ -40,6 +40,7 @@ import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.storage.ServerLevelData;
+import org.junit.jupiter.api.Assumptions;
 
 /** The {@link Game} of the server this JVM runs. */
 final class GameImpl implements Game {
@@ -484,6 +485,15 @@ final class GameImpl implements Game {
                     if (parked.isPresent()) {
                         done.cancel(false);
                         throw ParkedCondition.failure(parked.get(), description);
+                    }
+                    // A crashed server runs no more ticks: waiting out the deadline would only hold the halt up. The
+                    // test is left to the next game, as one the crash kept from starting is, rather than skipped.
+                    if (Quit.crashed()) {
+                        done.cancel(false);
+                        if (scope != null && scope.key() != null) {
+                            Quit.leave(scope.key());
+                        }
+                        Assumptions.abort("the game stopped before " + description + " was known: " + Quit.reason());
                     }
                     if (System.nanoTime() - deadline > 0) {
                         throw e;

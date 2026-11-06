@@ -57,6 +57,9 @@ final class TestScope {
     /** Whether the test froze the server's ticks, so its waits step them; see {@code Game.freezeTicks}. */
     private volatile boolean frozeTicks;
 
+    /** See {@link #key()}. */
+    private String key;
+
     /** Whether a script test already heard it reached the client without {@link Locks#CLIENT}; once is enough. */
     private final AtomicBoolean warnedClient = new AtomicBoolean();
 
@@ -109,7 +112,19 @@ final class TestScope {
             locks.add(Locks.CLIENT);
         }
         reads.removeAll(locks);
-        return new TestScope(context.getDisplayName(), locks, reads, isolated, false);
+        TestScope scope = new TestScope(context.getDisplayName(), locks, reads, isolated, false);
+        scope.key = context.getTestMethod()
+                .map(m -> context.getRequiredTestClass().getName() + "#" + m.getName())
+                .orElse(null);
+        return scope;
+    }
+
+    /**
+     * The Java test's key, {@code Class#method}, by which {@link Quit} leaves it to the next game; null for a script
+     * test's.
+     */
+    String key() {
+        return parent != null ? parent.key() : key;
     }
 
     /**
@@ -123,6 +138,16 @@ final class TestScope {
             }
         }
         return false;
+    }
+
+    /** The locks the test holds read-write. */
+    Set<String> locks() {
+        return Set.copyOf(locks);
+    }
+
+    /** Whether the test runs alone. */
+    boolean isolated() {
+        return isolated;
     }
 
     /** Whether the test holds {@code lock} read-write, or runs alone. */
