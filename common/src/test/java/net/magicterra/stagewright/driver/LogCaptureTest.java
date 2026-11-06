@@ -6,8 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Optional;
 import net.magicterra.stagewright.test.methods.LogsContracts;
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.config.DefaultConfiguration;
+import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.junit.jupiter.api.Test;
 
 /** Through log4j itself, as a game's loggers reach it. */
@@ -47,6 +51,49 @@ class LogCaptureTest {
                         .size(),
                 "all loggers");
         assertEquals(0, errors.dropped());
+    }
+
+    @Test
+    void aLoggerKeepingItsEventsFromTheRootAndALaterConfigurationAreStillCaptured() {
+        LoggerContext context = new LoggerContext("log-capture-test");
+        context.start(new DefaultConfiguration());
+        try {
+            context.getConfiguration().addLogger("quiet.mod", new LoggerConfig("quiet.mod", Level.ALL, false));
+            context.updateLoggers();
+            LogCapture.capture(context);
+            long mark = LogCapture.mark();
+            context.getLogger("quiet.mod.Ledger").error("kept from the root");
+            // The default configuration's root takes ERROR and worse only.
+            context.getLogger("loud.mod").error("passed up to the root");
+            assertEquals(
+                    List.of("kept from the root"),
+                    messages(mark, "quiet.mod"),
+                    "once, though its logger does not pass it up");
+            assertEquals(List.of("passed up to the root"), messages(mark, "loud.mod"));
+
+            // As a mod loading its own log4j2.xml does.
+            context.setConfiguration(new DefaultConfiguration());
+            long after = LogCapture.mark();
+            context.getLogger("loud.mod").error("after the reconfiguration");
+            assertEquals(List.of("after the reconfiguration"), messages(after, "loud.mod"));
+            // Started, not reached only because log4j forgives a stopped appender that ignores exceptions.
+            assertTrue(context.getConfiguration().getRootLogger().getAppenders().values().stream()
+                    .filter(a -> a.getName().equals("StageWrightLogCapture"))
+                    .allMatch(org.apache.logging.log4j.core.Appender::isStarted));
+            assertEquals(
+                    1,
+                    context.getConfiguration().getRootLogger().getAppenders().values().stream()
+                            .filter(a -> a.getName().equals("StageWrightLogCapture"))
+                            .count());
+        } finally {
+            context.stop();
+        }
+    }
+
+    private static List<String> messages(long mark, String logger) {
+        return LogCapture.since(mark, LogsContracts.Level.WARN, Optional.of(logger)).lines().stream()
+                .map(LogsContracts.Line::message)
+                .toList();
     }
 
     @Test

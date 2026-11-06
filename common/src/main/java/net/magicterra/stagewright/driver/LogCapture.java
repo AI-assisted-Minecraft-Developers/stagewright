@@ -2,6 +2,7 @@ package net.magicterra.stagewright.driver;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.List;
 import java.util.Optional;
@@ -12,12 +13,14 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Configuration;
+import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.apache.logging.log4j.core.config.Property;
 
 /**
  * The warnings and errors this JVM logs, kept for {@code mc.test.logs}: an appender on log4j's root logger, which both
- * loaders log through, holding the most recent {@value #KEPT}. Installed once, as the mod initializes, so a test reads
- * what the game logged from its start.
+ * loaders log through, and on each logger that keeps its events from the root, holding the most recent {@value #KEPT}.
+ * Installed once, as the mod initializes, so a test reads what the game logged from its start, and put back on a
+ * configuration log4j loads later.
  */
 public final class LogCapture {
 
@@ -48,12 +51,55 @@ public final class LogCapture {
             return;
         }
         installed = true;
-        Configuration config = context.getConfiguration();
+        capture(context);
+    }
+
+    /** Keep what {@code context} logs at WARN or worse, under this configuration and any it loads later. */
+    static void capture(LoggerContext context) {
         Appender appender = new Appender();
         appender.start();
-        config.addAppender(appender);
-        config.getRootLogger().addAppender(appender, Level.WARN, null);
+        attach(context.getConfiguration(), appender);
         context.updateLoggers();
+        // A reconfiguration, a mod loading its own log4j2.xml, builds a configuration without it. Its logger configs
+        // are live: an appender added to one takes its next event, so the loggers need no update, and updating them
+        // here would fire this event again.
+        context.addPropertyChangeListener(change -> {
+            if (LoggerContext.PROPERTY_CONFIG.equals(change.getPropertyName())
+                    && change.getNewValue() instanceof Configuration fresh) {
+                // Stopped with the configuration before, which may stop its loggers' appenders too; it holds
+                // nothing to close, so it starts again.
+                if (!appender.isStarted()) {
+                    appender.start();
+                }
+                attach(fresh, appender);
+            }
+        });
+    }
+
+    /**
+     * Put {@code appender} on {@code config}'s root logger and on every logger that does not pass its events up, as a
+     * pack's log4j2.xml sets with {@code additivity="false"}: the events of each logger then reach it exactly once. Not
+     * on the configuration's own list of appenders, whose every one it stops when it is replaced.
+     */
+    static void attach(Configuration config, org.apache.logging.log4j.core.Appender appender) {
+        for (LoggerConfig logger :
+                targets(config.getRootLogger(), config.getLoggers().values())) {
+            if (!logger.getAppenders().containsKey(appender.getName())) {
+                logger.addAppender(appender, Level.WARN, null);
+            }
+        }
+    }
+
+    /** The root, and each logger that does not pass its events up to the root's appenders. */
+    static List<LoggerConfig> targets(LoggerConfig root, Collection<LoggerConfig> loggers) {
+        List<LoggerConfig> out = new ArrayList<>();
+        out.add(root);
+        for (LoggerConfig logger : loggers) {
+            if (logger != root && !logger.isAdditive()) {
+                out.add(logger);
+            }
+        }
+        return out;
     }
 
     /** Where the log stands: lines logged from now on come after it. */
