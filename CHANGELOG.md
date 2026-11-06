@@ -115,7 +115,9 @@ which a third party noticed. Each such test is now reported aborted with the rea
 runner's report and the IDEs all still count as skipped; a container is started and finished around its tests. **Green
 in the self-test suite**: on NeoForge, the three `DrownRiseTest` tests a dedicated server cannot run read
 `<skipped message="@Requires: this game has no CLIENT" type="org.opentest4j.TestAbortedException">` in Gradle's
-XML, still counted skipped, and the same tests pass in the scene with a client.
+XML, still counted skipped, and the same tests pass in the scene with a client. A class a mod's own
+`ExecutionCondition` disables, as a third party reported, gives each of its tests the condition's reason the same way:
+checked on NeoForge with a throwaway class against the snapshot (2026-11-06).
 
 ### A scene whose tests are all disabled starts no game
 
