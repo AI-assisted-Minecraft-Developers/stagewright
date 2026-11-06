@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.jupiter;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
@@ -21,6 +22,10 @@ final class ParkedCondition {
      * short spells between the tasks it runs; one sample alone could find it in any of them.
      */
     private static final int SAMPLES = 5;
+
+    /** {@code BlockableEventLoop.managedBlock} and {@code waitForTasks}, by their Mojang and intermediary names. */
+    private static final Set<String> LOOP_WAITS =
+            Set.of("managedBlock", "waitForTasks", "method_18857", "method_20813");
 
     /** The thread that last ran the condition. */
     private volatile Thread runner;
@@ -60,8 +65,33 @@ final class ParkedCondition {
             return Optional.empty();
         }
         StackTraceElement[] stack = thread.getStackTrace();
+        if (runningTasks(stack)) {
+            waitingSamples = 0;
+            return Optional.empty();
+        }
         // Returned in the time the stack was taken: not parked, only slow.
         return since == started ? Optional.of(stack) : Optional.empty();
+    }
+
+    /**
+     * Whether the thread waits in {@code BlockableEventLoop.managedBlock}, as the server thread does while a chunk the
+     * condition asked for is generated or loaded: it parks for a tenth of a millisecond at a time between the tasks it
+     * runs there, so it reads as waiting nearly always, but it does the work it waits for and returns. Judged by the
+     * innermost wait alone, the first frame from the top that is not the JDK's: a task run there may wait in turn on a
+     * future only this thread completes, which is the wait this is here to catch, and that frame is then above it. By
+     * the Mojang names of the loop's wait, {@code managedBlock} and {@code waitForTasks}, which the server overrides,
+     * and by their intermediary ones in a Fabric production game.
+     */
+    static boolean runningTasks(StackTraceElement... stack) {
+        return java.util.Arrays.stream(stack)
+                .filter(frame -> !isJdk(frame.getClassName()))
+                .findFirst()
+                .map(frame -> LOOP_WAITS.contains(frame.getMethodName()))
+                .orElse(false);
+    }
+
+    private static boolean isJdk(String type) {
+        return type.startsWith("java.") || type.startsWith("jdk.") || type.startsWith("sun.");
     }
 
     private static boolean waiting(Thread thread) {

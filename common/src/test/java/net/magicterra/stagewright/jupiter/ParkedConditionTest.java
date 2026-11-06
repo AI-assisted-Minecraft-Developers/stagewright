@@ -58,6 +58,50 @@ class ParkedConditionTest {
                 Arrays.toString(stack));
     }
 
+    /** Named as the game's: its {@code managedBlock} parks a tenth of a millisecond at a time while a chunk loads. */
+    private static final class BlockableEventLoop {
+        static void managedBlock(long nanos) {
+            long end = System.nanoTime() + nanos;
+            while (System.nanoTime() < end) {
+                java.util.concurrent.locks.LockSupport.parkNanos(100_000);
+            }
+        }
+
+        /** As the loop does when a task it runs while it waits there waits in turn: {@code task} inside it. */
+        static void managedBlock(Runnable task) {
+            task.run();
+        }
+    }
+
+    @Test
+    void aFutureWaitedOnInsideTheLoopsWaitIsStillParked() throws Exception {
+        CompletableFuture<Void> never = new CompletableFuture<>();
+        assertNotNull(
+                sample(() -> {
+                    BlockableEventLoop.managedBlock(() -> {
+                        try {
+                            never.get(4, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        } catch (java.util.concurrent.ExecutionException | TimeoutException e) {
+                            // Ends the sample.
+                        }
+                    });
+                    return false;
+                }),
+                "the innermost wait is the future's");
+    }
+
+    @Test
+    void aConditionLoadingAChunkThatTakesSecondsIsNotParked() throws Exception {
+        assertNull(
+                sample(() -> {
+                    BlockableEventLoop.managedBlock(TimeUnit.SECONDS.toNanos(3));
+                    return false;
+                }),
+                "the server thread runs tasks while it waits there");
+    }
+
     @Test
     void aSlowConditionThatKeepsWorkingIsNotParked() throws Exception {
         assertNull(sample(() -> {
