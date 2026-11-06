@@ -23,6 +23,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 import net.magicterra.stagewright.engine.RunDirectory;
 import net.magicterra.stagewright.engine.supervise.AgentJar;
 import net.magicterra.stagewright.engine.supervise.Supervisor;
@@ -65,16 +67,62 @@ final class SceneRun {
     private static final Map<Integer, String> SIGNALS =
             Map.of(1, "HUP", 2, "INT", 3, "QUIT", 6, "ABRT", 9, "KILL", 11, "SEGV", 15, "TERM");
 
+    /** Jupiter's own key for the conditions it is not to evaluate. */
+    static final String DEACTIVATE = "junit.jupiter.conditions.deactivate";
+
+    /** The variables the JVM reads more options from, as well as from its command line. */
+    private static final List<String> OPTION_VARIABLES = List.of("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS");
+
     private final Nodes.Scene scene;
 
     private final EngineExecutionListener listener;
 
     private final Coverage coverage;
 
-    SceneRun(Nodes.Scene scene, EngineExecutionListener listener, Coverage coverage) {
+    /** The conditions this engine's configuration deactivates, a {@link #DEACTIVATE} value; empty for none. */
+    private final String deactivated;
+
+    SceneRun(Nodes.Scene scene, EngineExecutionListener listener, Coverage coverage, String deactivated) {
         this.scene = scene;
         this.listener = listener;
         this.coverage = coverage;
+        this.deactivated = deactivated;
+    }
+
+    /**
+     * Which of Jupiter's condition evaluators the game is told not to run, by class name: the patterns this engine's
+     * configuration gives ({@code inEngine}: a {@code -D}, or a {@code junit-platform.properties} on the class path,
+     * which the game's is), and those a {@code -D} of the game's own gives, on its command line or in its
+     * {@code JAVA_TOOL_OPTIONS} or {@code JDK_JAVA_OPTIONS}. Read as Jupiter reads them: comma separated, each a class
+     * name in which {@code *} stands for anything, or {@code *} alone for every one.
+     */
+    static Predicate<String> deactivated(String inEngine, List<String> gameJvmArgs, Map<String, String> gameEnv) {
+        List<String> values = new ArrayList<>();
+        values.add(inEngine);
+        List<String> options = new ArrayList<>(gameJvmArgs);
+        for (String variable : OPTION_VARIABLES) {
+            String set = gameEnv.get(variable);
+            if (set != null) {
+                options.addAll(List.of(set.trim().split("\\s+")));
+            }
+        }
+        String flag = "-D" + DEACTIVATE + "=";
+        for (String option : options) {
+            if (option.startsWith(flag)) {
+                values.add(option.substring(flag.length()));
+            }
+        }
+        List<Pattern> patterns = new ArrayList<>();
+        for (String value : values) {
+            for (String each : value.split(",")) {
+                String p = each.trim();
+                if (!p.isEmpty()) {
+                    patterns.add(Pattern.compile(
+                            "*".equals(p) ? ".*" : Pattern.quote(p).replace("*", "\\E.*\\Q")));
+                }
+            }
+        }
+        return evaluator -> patterns.stream().anyMatch(p -> p.matcher(evaluator).matches());
     }
 
     /**
@@ -466,20 +514,22 @@ final class SceneRun {
      * When every test of the scene is known to be disabled in its game, report each skipped with its reason, and the
      * scene as passed without a game: starting one only to have it skip them all took a pack's suite most of a minute
      * per scene. Known means by a condition {@link ClassScan.Condition} reads, judged with the environment the game
-     * would start with; a script test, or a test no such condition disables, and the game starts as before.
+     * would start with; a script test, or a test no such condition disables, and the game starts as before. A condition
+     * whose evaluator the game is told not to run ({@link #deactivated}) disables nothing here either.
      */
     private boolean skipAllDisabled(LaunchSpec spec) {
         Map<String, String> env = new HashMap<>(System.getenv());
         env.putAll(spec.primary().environment());
+        Predicate<String> off = deactivated(deactivated, spec.primary().jvmArgs(), env);
         Map<Nodes.TestMethod, String> reasons = new LinkedHashMap<>();
         for (TestDescriptor child : scene.getChildren()) {
             if (!(child instanceof Nodes.TestClass c)) {
                 return false;
             }
-            Optional<String> classWhy = ClassScan.Condition.firstDisabling(c.conditions, env);
+            Optional<String> classWhy = ClassScan.Condition.firstDisabling(c.conditions, env, off);
             for (TestDescriptor d : c.getChildren()) {
                 Optional<String> why = d instanceof Nodes.TestMethod m
-                        ? classWhy.or(() -> ClassScan.Condition.firstDisabling(m.method.conditions(), env))
+                        ? classWhy.or(() -> ClassScan.Condition.firstDisabling(m.method.conditions(), env, off))
                         : Optional.empty();
                 if (why.isEmpty()) {
                     return false;

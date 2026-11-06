@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -165,6 +166,41 @@ class StageWrightTestEngineTest {
         assertEquals("not yet", skipReason(each, "a()"));
         assertEquals("environment variable PATH matches .*", skipReason(each, "b()"));
         assertFalse(Files.exists(temp.resolve("game-methodsDisabled/stagewright/runs/methodsDisabled")));
+    }
+
+    @Test
+    void aSceneWhoseConditionsAreDeactivatedStartsItsGameToJudgeThem() {
+        EngineExecutionResults r = EngineTestKit.engine("stagewright")
+                .selectors(selectClass(FIXTURES + "AllDisabledFixture"))
+                .configurationParameter(SceneRun.DEACTIVATE, "org.junit.*EnabledIfEnvironmentVariableCondition")
+                .execute();
+        assertEquals(2, r.testEvents().succeeded().count(), "the game, told so, does not evaluate them");
+
+        // Another condition deactivated leaves the ones read here as they were, and their scene starts no game.
+        EngineExecutionResults other = EngineTestKit.engine("stagewright")
+                .selectors(selectClass(FIXTURES + "AllDisabledFixture"))
+                .configurationParameter(SceneRun.DEACTIVATE, "org.junit.*DisabledCondition")
+                .execute();
+        assertEquals(2, notRun(other));
+    }
+
+    @Test
+    void theConditionsAGameIsToldNotToEvaluateAreReadAsJupiterReadsThem() {
+        String env = "org.junit.jupiter.api.condition.EnabledIfEnvironmentVariableCondition";
+        String disabled = "org.junit.jupiter.engine.extension.DisabledCondition";
+        assertTrue(SceneRun.deactivated("", List.of("-Xmx2G", "-D" + SceneRun.DEACTIVATE + "=*"), Map.of())
+                .test(disabled));
+        assertTrue(SceneRun.deactivated("org.junit.*Disabled*, x.Y", List.of(), Map.of())
+                .test(disabled));
+        assertFalse(SceneRun.deactivated("org.junit.*Disabled*", List.of(), Map.of())
+                .test(env));
+        assertTrue(SceneRun.deactivated(
+                        "",
+                        List.of(),
+                        Map.of("JAVA_TOOL_OPTIONS", "-Xss4m  -D" + SceneRun.DEACTIVATE + "=org.junit.*Environment*"))
+                .test(env));
+        assertFalse(SceneRun.deactivated("", List.of("-Dother=" + SceneRun.DEACTIVATE), Map.of())
+                .test(disabled));
     }
 
     @Test

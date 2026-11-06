@@ -207,12 +207,15 @@ public final class StageWrightTestEngine implements TestEngine {
         request.getEngineExecutionListener().executionStarted(engine);
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
         Coverage coverage = new Coverage();
+        String deactivated =
+                request.getConfigurationParameters().get(SceneRun.DEACTIVATE).orElse("");
         List<SceneScheduler.Job> scenes = new ArrayList<>();
         for (TestDescriptor child : new ArrayList<>(engine.getChildren())) {
             if (child instanceof Nodes.Scene scene) {
                 scenes.add(new SceneScheduler.Job(
                         SceneRun.needs(scene.name, loader),
-                        () -> new SceneRun(scene, request.getEngineExecutionListener(), coverage).run(loader)));
+                        () -> new SceneRun(scene, request.getEngineExecutionListener(), coverage, deactivated)
+                                .run(loader)));
             } else if (child instanceof Nodes.Unreadable unreadable) {
                 request.getEngineExecutionListener().executionStarted(unreadable);
                 request.getEngineExecutionListener()

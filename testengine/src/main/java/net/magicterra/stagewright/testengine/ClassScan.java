@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -73,9 +74,16 @@ final class ClassScan {
      */
     record Condition(Kind kind, String named, String matches, String reason) {
         enum Kind {
-            DISABLED,
-            ENABLED_IF_ENV,
-            DISABLED_IF_ENV
+            DISABLED("org.junit.jupiter.engine.extension.DisabledCondition"),
+            ENABLED_IF_ENV("org.junit.jupiter.api.condition.EnabledIfEnvironmentVariableCondition"),
+            DISABLED_IF_ENV("org.junit.jupiter.api.condition.DisabledIfEnvironmentVariableCondition");
+
+            /** The Jupiter class that evaluates it, as {@code junit.jupiter.conditions.deactivate} names one. */
+            final String evaluator;
+
+            Kind(String evaluator) {
+                this.evaluator = evaluator;
+            }
         }
 
         /** Why this disables a test in a game with {@code env}, or empty when it does not. */
@@ -104,7 +112,19 @@ final class ClassScan {
 
         /** The first of {@code conditions} that disables a test in a game with {@code env}. */
         static Optional<String> firstDisabling(List<Condition> conditions, Map<String, String> env) {
+            return firstDisabling(conditions, env, evaluator -> false);
+        }
+
+        /**
+         * {@link #firstDisabling(List, Map)}, leaving out each condition whose evaluator the game is told not to run:
+         * {@code deactivated} answers for an evaluator's class name.
+         */
+        static Optional<String> firstDisabling(
+                List<Condition> conditions, Map<String, String> env, Predicate<String> deactivated) {
             for (Condition c : conditions) {
+                if (deactivated.test(c.kind.evaluator)) {
+                    continue;
+                }
                 Optional<String> why = c.disables(env);
                 if (why.isPresent()) {
                     return why;
