@@ -17,6 +17,12 @@ and the run belongs to another project, which Gradle 9 refuses: "Resolution of t
 ':fabric:testmodRuntimeClasspath' was attempted without an exclusive lock". The classpath has to become a task input
 resolved at configuration time. Fabric Loom 1.19 needs Gradle 9.8, so worlddriver stays on Loom 1.13 until then.
 
+## Waiting on a display that can open a client window
+
+- That `Locks.CLIENT` keeps two tests taking the client apart is only unit-tested; run it in a game with a client.
+- `disconnect()` / `reconnect()` for the client, agreed with a consumer, is not started; it needs the same.
+- The client-lock change is committed but not yet in the published snapshot; it goes out with the next republish.
+
 ## What the third-party consumers found
 
 Moving six consumers to this path (2026-10-29) left this open: scene-level report entries (`world`, `mods`) reach
