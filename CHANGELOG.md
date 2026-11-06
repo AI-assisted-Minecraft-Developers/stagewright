@@ -12,6 +12,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-07
 
+### A test can read the custom payloads mods send a bot
+
+`Bot` gains `payloads(Class)` and `clearPayloads()`. A test could read what the server said to a bot, but not an update
+a mod pushed to it, such as a fresh snapshot sent to a player whose rank changed. `bot.payloads(MyPayload.class)` is
+each such payload of that type since the bot connected, configuration included, in the order sent, the object the mod
+sent: nothing encodes it for a bot. The last 256 on each channel are kept; a respawn keeps them and a reconnect
+starts afresh. WorldDriver keeps payloads only once a test run has started, so a game no test run started keeps none.
+A mod that checks first whether the player has its channel (NeoForge's `hasChannel`, Fabric's `canSend`) sends a bot
+nothing, as a bot negotiates none. Java tests only; scripts do
+not have it. Needs WorldDriver with `Inbox.payloads(Class)`.
+
 ### What a game leaves running is reported
 
 Once a round's games have ended, any process still running in their directories, or naming them on its command line,

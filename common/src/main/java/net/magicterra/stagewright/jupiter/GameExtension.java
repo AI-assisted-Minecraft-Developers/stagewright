@@ -9,6 +9,7 @@ import net.magicterra.stagewright.test.DependsOn;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.stagewright.test.Player;
 import net.magicterra.stagewright.test.Plot;
+import net.magicterra.worlddriver.game.body.Inbox;
 import net.minecraft.core.Vec3i;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
@@ -47,6 +48,8 @@ public final class GameExtension
     static void bind(Game g) {
         game = g;
         Quit.reset();
+        // For Bot.payloads: off for a bot nothing tests, as an agent's long-running one.
+        Inbox.keepPayloads(true);
     }
 
     /**

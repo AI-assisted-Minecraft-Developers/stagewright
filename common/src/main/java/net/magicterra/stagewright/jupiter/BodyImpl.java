@@ -18,6 +18,7 @@ import net.magicterra.worlddriver.game.body.BotBody;
 import net.magicterra.worlddriver.game.body.Inbox;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -293,7 +294,21 @@ class BodyImpl implements Body {
         @Override
         public Bot clearMessages() {
             inbox(inbox -> {
-                inbox.clear();
+                inbox.clearMessages();
+                return null;
+            });
+            return this;
+        }
+
+        @Override
+        public <T extends CustomPacketPayload> List<T> payloads(Class<T> type) {
+            return inbox(inbox -> inbox.payloads(type));
+        }
+
+        @Override
+        public Bot clearPayloads() {
+            inbox(inbox -> {
+                inbox.clearPayloads();
                 return null;
             });
             return this;

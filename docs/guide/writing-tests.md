@@ -175,6 +175,21 @@ bot.runOnServer(p -> MyMod.createGroup(p, "taken"));
 assertEquals(Optional.of("mymod.error.name_taken"), bot.messages().getLast().key());
 ```
 
+`bot.payloads(MyPayload.class)` is the custom payloads of that type mods sent the bot since it last connected, in the
+order sent. That window includes the configuration phase before the join. Each one is the object the mod sent: nothing
+encodes a payload for a bot, so a test reads its fields directly, and a mod that changes the object after sending
+changes what the test reads. `bot.clearPayloads()` forgets them. The last 256 on each channel (the payload's `type()`)
+are kept, so a mod that sends on one every tick does not push out another; a respawn keeps them and a reconnect starts
+afresh. A bot negotiates no channel, so a mod that checks first whether the player has its channel (NeoForge's
+`hasChannel`, Fabric's `ServerPlayNetworking.canSend`) sends a bot nothing; a mod that just sends reaches it on either
+loader. Script tests do not have it.
+
+```java
+bot.clearPayloads();
+bot.runOnServer(p -> MyMod.promote(p, Rank.OFFICER));
+assertEquals(Rank.OFFICER, bot.payloads(SnapshotUpdate.class).getLast().rank());
+```
+
 `game.npc(EntityType.PIGLIN, feet)` spawns a mob and hands it to WorldDriver as a body, `mob:<name>`, for the rest of the
 test. While WorldDriver drives it, the mob's own AI is off.
 

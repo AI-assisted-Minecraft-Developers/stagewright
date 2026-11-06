@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 /**
  * A server-side player WorldDriver joins for one test, injected as a test method parameter: it is on the player list as
@@ -67,6 +68,30 @@ public interface Bot extends Body, Driven {
 
     /** Forget the messages so far, so {@link #messages} holds only what the server says after. */
     Bot clearMessages();
+
+    /**
+     * The custom payloads of {@code type}, or a subtype, mods sent the bot since it last connected, its configuration
+     * included, in the order sent, a bundle's read into. Each is the object the mod sent, as nothing encodes it for a
+     * bot: a mod that changes it after sending changes what is read. The last 256 on each channel, the payload's
+     * {@code type()}, are kept, so a mod that sends on one every tick pushes out only its own; a respawn keeps them, a
+     * {@link #reconnect} starts afresh. For example, that a mod pushed a player a new snapshot when the player's rank
+     * changed: {@code assertEquals(2, bot.payloads(SnapshotUpdate.class).getLast().revision())}.
+     *
+     * <p>A bot negotiates no channel, so a mod that asks first whether the player has its channel, NeoForge's
+     * {@code hasChannel} or Fabric's {@code ServerPlayNetworking.canSend}, sends a bot nothing; one that just sends
+     * reaches it on either loader.
+     *
+     * <p>A default that refuses, so a class of a consumer's own that implements {@code Bot} still compiles; the bot a
+     * test is given has it.
+     */
+    default <T extends CustomPacketPayload> List<T> payloads(Class<T> type) {
+        throw new UnsupportedOperationException(getClass().getName() + " does not keep the payloads sent to it");
+    }
+
+    /** Forget the payloads so far, so {@link #payloads} holds only what mods send after. */
+    default Bot clearPayloads() {
+        throw new UnsupportedOperationException(getClass().getName() + " does not keep the payloads sent to it");
+    }
 
     /** One line the server sent the bot, as its client would show it. */
     record Message(Component text, Kind kind) {
