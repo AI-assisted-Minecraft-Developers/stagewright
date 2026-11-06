@@ -599,6 +599,16 @@ public final class Supervisor implements AutoCloseable {
         return out;
     }
 
+    /**
+     * Whether the agent said its game is done: its results are complete and it is ending itself, which a joined client
+     * says only when it is about to stop. The process is still the authority on being gone.
+     */
+    public boolean done() {
+        synchronized (lock) {
+            return done;
+        }
+    }
+
     /** Whether the agent said it was on its way out. Informational: the process is the authority on being gone. */
     public boolean exiting() {
         synchronized (lock) {

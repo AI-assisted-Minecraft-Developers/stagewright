@@ -51,6 +51,14 @@ final class SceneRun {
 
     private static final int AGENT_IDLE_SECONDS = 20;
 
+    /**
+     * How long a joined client has, once its server is gone, to say it is done: noticing the server went is what that
+     * takes. Its stop then gets the agent's grace, after which its agent ends it.
+     */
+    private static final long CLIENT_NOTICE_SECONDS = 10;
+
+    private static final long POLL_MILLIS = 100;
+
     /** Where a game writes its crash reports, under its working directory. */
     private static final String CRASH_REPORTS = "crash-reports";
 
@@ -395,6 +403,7 @@ final class SceneRun {
             File gameLog = roundLog(logs, round, "game");
             File companionLog = roundLog(logs, round, peer == null ? "companion" : "peer-" + peer.name());
             relay.logsAt(logsAt(spec, gameLog, companionLog, peer));
+            Process game = null;
             Process companion = null;
             // The joined client, or the peer, carries the agent too, reporting to a supervisor of its own: one serves
             // one process. Either is the run's second game, which may not end before the first.
@@ -411,13 +420,9 @@ final class SceneRun {
                         "-Dstagewright.junit.round=" + round,
                         "-Dstagewright.junit.exitWhenDone=true",
                         "-Dstagewright.scene.world=" + world.runtimeJson()));
-                // Where the companion client writes its WorldDriver port, for the tests' Client.
-                if (spec.companion() != null) {
-                    extra.add("-Dstagewright.companion.dir="
-                            + spec.companion().workingDirectory().toAbsolutePath());
-                }
+                extra.addAll(reachCompanion(spec));
                 extra.addAll(reachPeer(peer, companionLog));
-                Process game = start(spec.primary(), extra, gameLog);
+                game = start(spec.primary(), extra, gameLog);
                 if (joined != null) {
                     String agent = joined.agentArgument(agentJar, agentGraceSeconds, AGENT_IDLE_SECONDS);
                     companion = startSecond(spec, peer, agent, scripts, world, serverPort, companionLog);
@@ -438,6 +443,7 @@ final class SceneRun {
                     }
                     ended = ending.ended();
                 }
+                awaitClientStop(joined, companion, peer, game, ended);
                 if (ended != Supervisor.Ended.DONE) {
                     Supervisor.kill(game.toHandle());
                 }
@@ -462,11 +468,66 @@ final class SceneRun {
                 }
                 return verdict(supervisor, game, ended, relay, forced, gameLog);
             } finally {
-                if (companion != null) {
-                    Supervisor.kill(companion.toHandle());
-                }
+                endRound(game, companion);
             }
         }
+    }
+
+    /** End what the round started, the server first. */
+    private static void endRound(Process game, Process second) throws InterruptedException {
+        try {
+            if (game != null) {
+                Supervisor.kill(game.toHandle());
+            }
+        } finally {
+            if (second != null) {
+                Supervisor.kill(second.toHandle());
+            }
+        }
+    }
+
+    /**
+     * Once the server has finished its run, give the joined client the time to stop itself, if it is going to. A joined
+     * client ends itself when its server goes, through Minecraft's own stop; killed before that, a pack's crash watcher
+     * reads the stop that never came as a crash and opens its window on the desktop. Whether it is going to is what it
+     * tells {@code joined}: it says it is done only when it will stop, and a client still loading, or kept open on
+     * purpose, never says it, so it is not waited for past the time it has to say so once the server is gone. A peer
+     * waits to be ended, and is not waited for at all; nor is a client after a round that failed.
+     */
+    private static void awaitClientStop(
+            Supervisor joined, Process client, Peer peer, Process game, Supervisor.Ended ended)
+            throws InterruptedException {
+        if (joined == null || client == null || peer != null || ended != Supervisor.Ended.DONE) {
+            return;
+        }
+        // Taken while it runs, as it does until its server has gone: once it has stopped by itself, what it started can
+        // no longer be found from here.
+        List<ProcessHandle> started = client.toHandle().descendants().toList();
+        // The server's own time to go first, as its awaitExit allows; then the client's to notice.
+        long cap = System.nanoTime() + TimeUnit.SECONDS.toNanos(agentGraceSeconds + CLIENT_NOTICE_SECONDS);
+        long notice = Long.MAX_VALUE;
+        while (client.isAlive() && !joined.done() && System.nanoTime() - Math.min(cap, notice) < 0) {
+            if (notice == Long.MAX_VALUE && !game.isAlive()) {
+                notice = System.nanoTime() + TimeUnit.SECONDS.toNanos(CLIENT_NOTICE_SECONDS);
+            }
+            client.waitFor(POLL_MILLIS, TimeUnit.MILLISECONDS);
+        }
+        if (joined.done()) {
+            // Its agent ends it once the grace is over; the margin is for that.
+            client.waitFor(agentGraceSeconds + CLIENT_NOTICE_SECONDS, TimeUnit.SECONDS);
+        }
+        if (!client.isAlive()) {
+            started.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
+        }
+    }
+
+    /** Where the companion client writes its WorldDriver port, for the tests' Client; none without one. */
+    private static List<String> reachCompanion(LaunchSpec spec) {
+        if (spec.companion() == null) {
+            return List.of();
+        }
+        return List.of("-Dstagewright.companion.dir="
+                + spec.companion().workingDirectory().toAbsolutePath());
     }
 
     /** Where the peer writes its WorldDriver port, and its log, for the game's {@code t.peer}; none without a peer. */

@@ -12,6 +12,24 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-07
 
+### The joined client stops itself before it is killed
+
+When its server is gone, a client that joined a dedicated server now gets the time to stop on its own, through
+Minecraft's stop, before it is killed. Until now the runner killed it as soon as the server's run was over, so
+Minecraft's stop never ran. A pack's crash watcher, such as CrashAssistant, took that for a crash and opened its
+window on the desktop. It also left its own JVM running after the run.
+- Once the server has finished its run and gone, the client has 10 s to say it is done, which it says only when it is
+  about to stop.
+- A client that said so gets the agent's grace plus 10 s to exit. After that it is killed.
+- A client that does not say so is killed: one still loading, one kept open with
+  `stagewright.client.exitWhenDone=false`, or one that stalled.
+- After a round that failed, both games are killed at once, as before.
+- What the client started while it ran is still ended with it.
+- A peer server is ended at once, as before.
+
+Verified: green in the self-test suite. In worlddriver's `wd.jupiterSmoke` on NeoForge and on Fabric, 70/70 passed, and
+the client stopped itself ("Stopping!" in its log). Not run with CrashAssistant itself.
+
 ### A test can disconnect the real client and connect it again
 
 `Client` gains `disconnect()` and `reconnect()`; in a script they are `t.client().disconnect()` and
