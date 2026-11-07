@@ -621,6 +621,7 @@ final class TestCommand {
     private static int execute(Path root, Path reports, Map<String, String> parameters, Consumer<String> log)
             throws IOException {
         Files.createDirectories(reports);
+        SceneResults.clear(reports);
         ClassLoader previous = Thread.currentThread().getContextClassLoader();
         try (URLClassLoader tests = new URLClassLoader(new URL[] {root.toUri().toURL()}, previous)) {
             // The engine reads scene declarations and scripts as resources of the test class path.
@@ -642,8 +643,7 @@ final class TestCommand {
                     new LegacyXmlReportGeneratingListener(reports, out),
                     records,
                     new SceneResults(log));
-            records.writeInto(reports);
-            SceneResults.split(reports);
+            records.finish(reports);
             TestExecutionSummary result = summary.getSummary();
             result.printTo(out);
             result.printFailuresTo(out, 20);

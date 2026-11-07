@@ -64,4 +64,50 @@ class RecordPropertiesTest {
                 text.substring(client).contains("<property "), "the other scene's testcase recorded nothing: " + text);
         assertEquals(1, text.split("<properties>", -1).length - 1, text);
     }
+
+    /**
+     * What a scene itself reported, a process its games left running, goes on the suite of the scene's own file once
+     * the run's file is split by scene, after the properties already there, and on no other scene's: added before the
+     * split, it would be copied into every scene's file.
+     */
+    @Test
+    void aScenesOwnRecordsGoOnTheSuiteOfItsOwnFile(@TempDir Path reports) throws IOException {
+        TestIdentifier inMms = test("mms");
+        TestIdentifier inClient = test("mms-client");
+        Files.writeString(
+                reports.resolve("TEST-stagewright.xml"),
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuite name=\"StageWright\" tests=\"2\">\n"
+                        + "<properties><property name=\"java.version\" value=\"21\"/></properties>\n"
+                        + testcase(inMms) + testcase(inClient) + "</testsuite>\n");
+
+        RecordProperties records = new RecordProperties();
+        UniqueId scene = UniqueId.forEngine("stagewright").append("scene", "mms");
+        TestIdentifier mms = TestIdentifier.from(new AbstractTestDescriptor(scene, "mms") {
+            @Override
+            public Type getType() {
+                return Type.CONTAINER;
+            }
+        });
+        records.reportingEntryPublished(mms, ReportEntry.from("leftover", "pid 7: java\u001b[0m"));
+        records.finish(reports);
+
+        String text = Files.readString(reports.resolve("TEST-mms.xml"));
+        assertTrue(
+                text.contains("<property name=\"java.version\" value=\"21\"/>"
+                        + "<property name=\"leftover\" value=\"pid 7: java?[0m\"/></properties>"),
+                "after the suite's own, the control character replaced: " + text);
+        assertEquals(1, text.split("<properties>", -1).length - 1, "no testcase got it: " + text);
+        assertFalse(
+                Files.readString(reports.resolve("TEST-mms-client.xml")).contains("leftover"),
+                "the other scene's file got nothing");
+    }
+
+    @Test
+    void anEarlierRunsXmlIsClearedAndNothingElse(@TempDir Path reports) throws IOException {
+        Files.writeString(reports.resolve("TEST-mms.xml"), "<testsuite/>");
+        Files.writeString(reports.resolve("notes.xml"), "<notes/>");
+        SceneResults.clear(reports);
+        assertFalse(Files.exists(reports.resolve("TEST-mms.xml")));
+        assertTrue(Files.exists(reports.resolve("notes.xml")));
+    }
 }

@@ -178,6 +178,27 @@ final class SceneResults implements TestExecutionListener {
         return c;
     }
 
+    /**
+     * Delete the JUnit XML an earlier run left directly in {@code reports}, as Gradle does before a test task:
+     * {@link #split} would take an old {@code TEST-<scene>.xml} for this run's and keep it beside the new one.
+     */
+    static void clear(Path reports) throws IOException {
+        if (!Files.isDirectory(reports)) {
+            return;
+        }
+        List<Path> old;
+        try (Stream<Path> list = Files.list(reports)) {
+            old = list.filter(p -> {
+                        String name = p.getFileName().toString();
+                        return name.startsWith("TEST-") && name.endsWith(".xml");
+                    })
+                    .toList();
+        }
+        for (Path file : old) {
+            Files.deleteIfExists(file);
+        }
+    }
+
     /** Rewrite each XML file directly in {@code reports} whose testcases lie in scenes into one file per scene. */
     static void split(Path reports) throws IOException {
         if (!Files.isDirectory(reports)) {
