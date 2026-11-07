@@ -3,6 +3,7 @@ package net.magicterra.stagewright.testengine;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -12,7 +13,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Processes still running in, or naming, a scene's game directories once its games have ended.
@@ -30,18 +30,30 @@ final class Leftovers {
     /** Whether the system shows each process's directory there, as Linux does. */
     private static final boolean HAS_PROC = Files.isDirectory(PROC);
 
-    /** How long a process found gets to finish exiting, as one just killed with its game is still doing. */
-    private static final long SETTLE_MILLIS = 3_000;
+    /**
+     * How long a process found gets to finish exiting: one just killed with its game is still doing so, and a pack's
+     * crash watcher that saw the game stop cleanly checks a licence over the network before it goes, which took over 3
+     * seconds. Waited only while one is alive; {@link #SETTLE_PARAMETER} sets another.
+     */
+    static final long DEFAULT_SETTLE_SECONDS = 15;
+
+    /** The configuration parameter that sets how many seconds a process found gets to exit. */
+    static final String SETTLE_PARAMETER = "stagewright.leftovers.settleSeconds";
 
     private static final long SETTLE_POLL_MILLIS = 100;
+
+    /** A command line is cut here: a game's classpath alone runs to tens of kilobytes. */
+    private static final int COMMAND_CHARS = 300;
 
     private Leftovers() {}
 
     /**
-     * One line per process found, {@code pid N: command}, in pid order; empty when there is none. The run's own games
-     * are left out: one still alive here is being ended, which is not something it left.
+     * One line per process found still running {@code settle} after the games ended, {@code pid N: command}, in pid
+     * order; empty when there is none. The run's own games are left out: one still alive here is being ended, which is
+     * not something it left.
      */
-    static List<String> in(List<Path> directories, Set<Long> games, Instant since) throws InterruptedException {
+    static List<String> in(List<Path> directories, Set<Long> games, Instant since, Duration settle)
+            throws InterruptedException {
         List<String> roots = roots(directories);
         long self = ProcessHandle.current().pid();
         Map<ProcessHandle, String> found = new TreeMap<>(Comparator.comparingLong(ProcessHandle::pid));
@@ -55,14 +67,15 @@ final class Leftovers {
                 });
         // Polled: none of these is this JVM's child, and waiting on one's onExit would start a thread to poll it
         // anyway.
-        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(SETTLE_MILLIS);
+        long deadline = System.nanoTime() + settle.toNanos();
         while (found.keySet().stream().anyMatch(ProcessHandle::isAlive) && System.nanoTime() - deadline < 0) {
             Thread.sleep(SETTLE_POLL_MILLIS);
         }
         List<String> left = new ArrayList<>();
         found.forEach((p, command) -> {
             if (p.isAlive()) {
-                left.add("pid " + p.pid() + ": " + command);
+                left.add("pid " + p.pid() + ": "
+                        + (command.length() > COMMAND_CHARS ? command.substring(0, COMMAND_CHARS) + "…" : command));
             }
         });
         return left;

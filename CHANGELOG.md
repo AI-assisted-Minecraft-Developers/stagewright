@@ -12,6 +12,21 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-07
 
+### A process still exiting is given 15 seconds, and a scene's report reaches the CLI's XML
+
+A process found in a scene's directories once its games ended now gets 15 seconds to exit before it is reported,
+instead of three. A pack's crash watcher that saw the client stop cleanly checks its licence over the network before
+it goes, which took longer than three seconds, so it was reported as something the game left behind. The wait is spent
+only while such a process is alive, and the configuration parameter `stagewright.leftovers.settleSeconds` sets another
+(a system property works too). The report now says the process is still running that long after the games ended,
+rather than calling it left behind, and cuts each command line at 300 characters. The CLI's JUnit XML dropped every
+entry a scene itself reported, the `leftover` one included, since only a test's entries were written; a scene's
+entries now go into the `<properties>` of its own `<testsuite>`, after the ones there. That includes its `directory`,
+`serverPort` and `mods` entries. Characters XML 1.0 cannot hold become `?`. The CLI now deletes the `TEST-*.xml` an
+earlier run left in its reports directory before it runs, as Gradle does: splitting by scene took an old
+`TEST-<scene>.xml` for a new one and kept it as `TEST-<scene>-scene.xml`. Unit tests only; not yet run against the pack
+that showed it.
+
 ### A test can read the custom payloads mods send a bot
 
 `Bot` gains `payloads(Class)` and `clearPayloads()`. A test could read what the server said to a bot, but not an update
@@ -28,7 +43,7 @@ not have it. Needs WorldDriver with `Inbox.payloads(Class)`.
 Once a round's games have ended, any process still running in their directories, or naming them on its command line,
 is reported: as a `leftover` report entry, as a warning, and in the game's log. Such a process is reported, not ended.
 Ending a game already ends what it started while it ran. This catches what it starts as it goes down, such as a crash
-watcher's own JVM, which is no longer below the game once the game is gone. A process found gets three seconds to exit
+watcher's own JVM, which is no longer below the game once the game is gone. A process found gets three seconds (15 since the entry above) to exit
 first, so one still going down with its game is not reported. Only processes started after the round's game count:
 a scene's directories are made again on each run, so what an earlier run or round left there would name them too. On Linux the scan also reads each process's working
 directory; elsewhere it has only command lines, and on Windows, where the system shows a process's executable but not

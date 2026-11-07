@@ -77,6 +77,9 @@ final class SceneRun {
     /** How long a game may take to end after its run before the agent ends it. Shortened by the engine's own tests. */
     static volatile int agentGraceSeconds = 30;
 
+    /** How long a process found in a scene's directories gets to exit; set by {@link Leftovers#SETTLE_PARAMETER}. */
+    static volatile long leftoverSettleSeconds = Leftovers.DEFAULT_SETTLE_SECONDS;
+
     /** Frames of each leaked thread's stack a forced-down report names: enough to tell whose pool it is. */
     private static final int LEAK_FRAMES = 4;
 
@@ -558,13 +561,14 @@ final class SceneRun {
                 .map(Process::pid)
                 .collect(Collectors.toSet());
         Instant since = STARTED.getOrDefault(game, Instant.MIN);
+        long settle = leftoverSettleSeconds;
         try {
-            List<String> left = Leftovers.in(dirs, games, since);
+            List<String> left = Leftovers.in(dirs, games, since, Duration.ofSeconds(settle));
             if (left.isEmpty()) {
                 return;
             }
-            String report =
-                    left.size() + " process(es) the games left running in " + dirs + ": " + String.join("; ", left);
+            String report = left.size() + " process(es) in " + dirs + " still running " + settle
+                    + " s after the games ended: " + String.join("; ", left);
             LOG.log(System.Logger.Level.WARNING, "scene " + scene.getDisplayName() + ": " + report);
             listener.reportingEntryPublished(scene, ReportEntry.from("leftover", report));
             appendToLog(gameLog, report);

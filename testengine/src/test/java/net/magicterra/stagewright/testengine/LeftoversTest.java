@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -16,6 +17,9 @@ import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 class LeftoversTest {
+
+    /** Shorter than a run's, so a test with a process that stays does not wait out the real one. */
+    private static final Duration SETTLE = Duration.ofSeconds(3);
 
     @Test
     void aDirectoryAndWhatIsBelowItAreTheScenes() {
@@ -49,7 +53,7 @@ class LeftoversTest {
     void aProcessThatIsStillExitingIsNotReported(@TempDir Path dir) throws Exception {
         Process ending =
                 new ProcessBuilder("sleep", "1").directory(dir.toFile()).start();
-        assertTrue(Leftovers.in(List.of(dir), Set.of(), Instant.MIN).isEmpty());
+        assertTrue(Leftovers.in(List.of(dir), Set.of(), Instant.MIN, SETTLE).isEmpty());
         assertTrue(ending.waitFor(5, TimeUnit.SECONDS), "it had exited when the scan gave up on it");
     }
 
@@ -62,7 +66,7 @@ class LeftoversTest {
         try {
             Instant gameStarted =
                     earlier.toHandle().info().startInstant().orElseThrow().plusSeconds(1);
-            assertTrue(Leftovers.in(List.of(dir), Set.of(), gameStarted).isEmpty());
+            assertTrue(Leftovers.in(List.of(dir), Set.of(), gameStarted, SETTLE).isEmpty());
         } finally {
             earlier.destroyForcibly().waitFor(5, TimeUnit.SECONDS);
         }
@@ -75,10 +79,10 @@ class LeftoversTest {
         Process left = new ProcessBuilder("sleep", "60").directory(run.toFile()).start();
         Process game = new ProcessBuilder("sleep", "60").directory(run.toFile()).start();
         try {
-            List<String> found = Leftovers.in(List.of(run), Set.of(game.pid()), Instant.MIN);
+            List<String> found = Leftovers.in(List.of(run), Set.of(game.pid()), Instant.MIN, SETTLE);
             assertEquals(1, found.size(), found.toString());
             assertTrue(found.get(0).startsWith("pid " + left.pid() + ": "), found.toString());
-            assertTrue(Leftovers.in(List.of(dir.resolve("elsewhere")), Set.of(), Instant.MIN)
+            assertTrue(Leftovers.in(List.of(dir.resolve("elsewhere")), Set.of(), Instant.MIN, SETTLE)
                     .isEmpty());
         } finally {
             left.destroyForcibly().waitFor(5, TimeUnit.SECONDS);
