@@ -58,7 +58,10 @@ server JVM: client screens, keybindings, input handling, the client's own view o
 
 A test reaches the client through its `Client` parameter (`t.client()` in a script), calling WorldDriver's client
 methods. On an integrated server those run in the same JVM; on `dedicatedServerWithClient` they travel to the client
-over its WorldDriver connection, and the test reads the same either way. The `Player` parameter is the client's player
+over its WorldDriver connection, and the test reads the same either way. A method a mod registers on the client alone
+(`WorldDriver.whenReady(r -> r.registerBatch(...))` in its client setup) is called by name, with
+`client.call(method, params)` in Java or `t.client().call(...)` in a script; `client.registry()` offers only the
+methods the server has too. The `Player` parameter is the client's player
 on both. A test taking either carries `@Requires(CLIENT)`, so it is reported as disabled on a dedicated server rather
 than failed. Only on `dedicatedServerWithClient` can a test disconnect the client from the server and connect it again
 (`client.disconnect()`, `client.reconnect()`). That is how a test checks what a joining player is sent. An integrated

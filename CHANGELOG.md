@@ -12,6 +12,16 @@ does not control, which is the only level that proves a claim about such code).
 
 ## 2026-11-07
 
+### A method a mod registers on the client alone can be called on a joined client
+
+Where a client joined a dedicated server, the test's `Client` forwards the server's methods to it, built from the
+server's registry when the test first connects. A method a mod registers on the client side alone was not among them,
+so `t.client().call` answered `unknown method` from the server without asking the client. A name the forwarding lacks,
+outside `mc.*`, now goes to the client as given and comes back as the client answers, its errors included, a dropped
+connection or a timeout as the same error a forwarded method gives. Java tests get the same
+through the new `Client.call(method, params)`; `client.registry()` still offers only what the server has too, since the
+server cannot type a method it has no class for.
+
 ### A process still exiting is given 15 seconds, and a scene's report reaches the CLI's XML
 
 A process found in a scene's directories once its games ended now gets 15 seconds to exit before it is reported,

@@ -1,5 +1,8 @@
 package net.magicterra.stagewright.jupiter;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import java.util.function.BiFunction;
 import net.magicterra.stagewright.driver.verbs.TestMethods;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Game;
@@ -43,10 +46,17 @@ final class ClientHandle implements Client {
     /** Whether the client opened the world it is in, hosting the game's server. */
     private final boolean hosts;
 
-    ClientHandle(Game game, ApiRegistry registry, boolean hosts) {
+    /**
+     * A method by name on the joined client, over the connection {@link #registry} forwards on; null where the client
+     * hosts the game, whose registry is the client's own.
+     */
+    private final BiFunction<String, JsonObject, JsonElement> byName;
+
+    ClientHandle(Game game, ApiRegistry registry, BiFunction<String, JsonObject, JsonElement> byName) {
         this.game = game;
         this.registry = registry;
-        this.hosts = hosts;
+        this.hosts = byName == null;
+        this.byName = byName;
     }
 
     @Override
@@ -132,6 +142,19 @@ final class ClientHandle implements Client {
             throw new IllegalStateException("the client opened this game's world and hosts its server, so it cannot "
                     + what + ": that needs a topology where the client joins a dedicated server");
         }
+    }
+
+    /**
+     * The forwarding registry's methods are the server's; another name goes over the connection as is. Not a missing
+     * name, nor an unknown {@code mc.*} one: both sides serve the same driver and harness, so the registry's own answer
+     * is the client's.
+     */
+    @Override
+    public JsonElement call(String method, JsonObject params) {
+        if (byName != null && method != null && !method.startsWith("mc.") && registry.method(method) == null) {
+            return byName.apply(method, params);
+        }
+        return registry.route(method, params);
     }
 
     private <R> R call(MethodSpec<NoParams, R> spec) {

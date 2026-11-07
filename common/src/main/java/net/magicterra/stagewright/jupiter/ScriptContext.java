@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
@@ -261,13 +262,20 @@ final class ScriptContext {
 
     /** {@code method} of {@code registry} with {@code args[1]} as its parameters, answered as plain values. */
     static Object route(ApiRegistry registry, String usage, Object... args) {
+        // A Game's registry already waits as long as a test may for a busy server: see GameImpl.registry.
+        return route(registry::route, usage, args);
+    }
+
+    /**
+     * {@code args[0]} called through {@code caller} with {@code args[1]} as its parameters, answered as plain values.
+     */
+    static Object route(BiFunction<String, JsonObject, JsonElement> caller, String usage, Object... args) {
         String method = string(args, 0, usage + "(method, params)");
         JsonElement params = args.length > 1 && args[1] != null ? tree(args[1]) : new JsonObject();
         if (!params.isJsonObject()) {
             throw new IllegalArgumentException(usage + "(" + method + "): params must be an object");
         }
-        // A Game's registry already waits as long as a test may for a busy server: see GameImpl.registry.
-        return GSON.fromJson(registry.route(method, params.getAsJsonObject()), Object.class);
+        return GSON.fromJson(caller.apply(method, params.getAsJsonObject()), Object.class);
     }
 
     /** {@code t.step(name, args)}: a step a script registered, given this context and the arguments. */

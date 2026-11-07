@@ -1,6 +1,7 @@
 package net.magicterra.stagewright.jupiter;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.BiFunction;
 import net.magicterra.stagewright.test.Client;
 import net.magicterra.stagewright.test.Game;
 import net.magicterra.worlddriver.api.registry.ApiBatch;
@@ -47,12 +49,15 @@ final class ClientConnection {
 
     private static ApiRegistry remote;
 
+    /** Over the same connection as {@link #remote}: a method the server has no spec of, by name. */
+    private static BiFunction<String, JsonObject, JsonElement> remoteByName;
+
     private ClientConnection() {}
 
     static synchronized ClientHandle client(Game game) {
         boolean dedicated = game.onServer(MinecraftServer::isDedicatedServer);
         if (!dedicated) {
-            return new ClientHandle(game, game.registry(), true);
+            return new ClientHandle(game, game.registry(), null);
         }
         String dir = System.getProperty(COMPANION_DIR);
         if (dir == null || !Boolean.getBoolean(JupiterRun.AWAIT_PLAYER)) {
@@ -69,8 +74,9 @@ final class ClientConnection {
             }
             rpc = StageWrightRpc.connect("ws://127.0.0.1:" + port + "/rpc", CONNECT_MS);
             remote = forwarding(rpc, game.registry());
+            remoteByName = passThrough(rpc);
         }
-        return new ClientHandle(game, remote, false);
+        return new ClientHandle(game, remote, remoteByName);
     }
 
     /** As the server stops: the connection goes with the run. */
@@ -82,6 +88,7 @@ final class ClientConnection {
         }
         rpc = null;
         remote = null;
+        remoteByName = null;
     }
 
     /**
@@ -108,19 +115,35 @@ final class ClientConnection {
                 (params, context) -> CompletableFuture.supplyAsync(
                         () -> {
                             JsonElement sent = spec.input().encode(params);
-                            JsonObject envelope = rpc.envelope(
-                                    spec.name(), sent instanceof JsonObject o ? o : new JsonObject(), CALL_MS);
-                            JsonElement error = envelope.get("error");
-                            if (error instanceof JsonObject e) {
-                                ApiError rebuilt = ApiErrors.fromTree(e.get("data"));
-                                throw rebuilt != null
-                                        ? new ApiException(rebuilt)
-                                        : ApiException.of(
-                                                ApiError.Code.INTERNAL_ERROR,
-                                                "the client refused " + spec.name() + ": " + e);
-                            }
-                            return spec.output().decode(envelope.get("result"));
+                            return spec.output()
+                                    .decode(answer(
+                                            rpc, spec.name(), sent instanceof JsonObject o ? o : new JsonObject()));
                         },
                         CALLS));
+    }
+
+    /**
+     * A call of a method by name on the client over {@code rpc}, its result as the client gave it: for a method the
+     * server has no spec of, which a mod may register on the client alone. Run and waited for as a forwarded method is,
+     * so a dropped connection or a timeout is an {@link ApiException} here too.
+     */
+    private static BiFunction<String, JsonObject, JsonElement> passThrough(StageWrightRpc rpc) {
+        return (method, params) ->
+                ApiRegistry.await(CompletableFuture.supplyAsync(() -> answer(rpc, method, params), CALLS), CALL_MS);
+    }
+
+    /** The client's result for {@code method}, or the error it answered with, rebuilt. */
+    private static JsonElement answer(StageWrightRpc rpc, String method, JsonObject params) {
+        JsonObject envelope = rpc.envelope(method, params, CALL_MS);
+        JsonElement error = envelope.get("error");
+        if (error instanceof JsonObject e) {
+            ApiError rebuilt = ApiErrors.fromTree(e.get("data"));
+            throw rebuilt != null
+                    ? new ApiException(rebuilt)
+                    : ApiException.of(ApiError.Code.INTERNAL_ERROR, "the client refused " + method + ": " + e);
+        }
+        // A method with nothing to answer may leave result out; a forwarded one would answer JSON null.
+        JsonElement result = envelope.get("result");
+        return result != null ? result : JsonNull.INSTANCE;
     }
 }

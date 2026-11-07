@@ -1,5 +1,7 @@
 package net.magicterra.stagewright.test;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import java.util.function.Function;
 import net.magicterra.worlddriver.api.registry.ApiRegistry;
 
@@ -20,6 +22,14 @@ public interface Client {
     default <T> T api(Function<ApiRegistry, T> caller) {
         return caller.apply(registry());
     }
+
+    /**
+     * Call {@code method} on the client by name, as script tests' {@code client.call} does, and answer its result.
+     * Unlike {@link #registry}, which offers the methods this game's server also has, it reaches a method only the
+     * client registers too, such as one a mod registers on the client side alone: where the client joined a dedicated
+     * server, a name the registry lacks, outside {@code mc.*}, goes to the client as given.
+     */
+    JsonElement call(String method, JsonObject params);
 
     /**
      * Disconnect the client from the game's server as a player who presses Disconnect does, and return once the server

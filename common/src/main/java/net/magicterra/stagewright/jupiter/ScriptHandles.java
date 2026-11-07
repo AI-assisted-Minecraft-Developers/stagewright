@@ -186,7 +186,7 @@ final class ScriptHandles {
                 }
             }
             Map<String, Object> out = new LinkedHashMap<>();
-            out.put("call", (Scripting.Function) a -> ScriptContext.route(client.registry(), "client.call", a));
+            out.put("call", (Scripting.Function) a -> ScriptContext.route(client::call, "client.call", a));
             // Leaving and joining again as a player does; see Client.disconnect and Client.reconnect.
             out.put("disconnect", (Scripting.Function) unused -> {
                 client.disconnect();
