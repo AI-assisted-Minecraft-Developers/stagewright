@@ -87,4 +87,8 @@ jobs:
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-        run: ./gradlew publishAllPublicationsToGardelNexusRepository
+        # The Nexus may take longer than Gradle's 30 s to answer an upload it keeps: the retry then gets 409.
+        run: >-
+          ./gradlew publishAllPublicationsToGardelNexusRepository
+          -Dorg.gradle.internal.http.socketTimeout=300000
+          -Dorg.gradle.internal.http.connectionTimeout=60000
