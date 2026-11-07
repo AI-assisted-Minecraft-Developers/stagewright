@@ -209,10 +209,8 @@ public final class StageWrightTestEngine implements TestEngine {
         Coverage coverage = new Coverage();
         String deactivated =
                 request.getConfigurationParameters().get(SceneRun.DEACTIVATE).orElse("");
-        SceneRun.leftoverSettleSeconds = request.getConfigurationParameters()
-                .get(Leftovers.SETTLE_PARAMETER, Long::parseLong)
-                .filter(s -> s >= 0)
-                .orElse(Leftovers.DEFAULT_SETTLE_SECONDS);
+        SceneRun.leftoverSettleSeconds =
+                Leftovers.settleSeconds(request.getConfigurationParameters().get(Leftovers.SETTLE_PARAMETER));
         List<SceneScheduler.Job> scenes = new ArrayList<>();
         for (TestDescriptor child : new ArrayList<>(engine.getChildren())) {
             if (child instanceof Nodes.Scene scene) {

@@ -40,12 +40,52 @@ final class Leftovers {
     /** The configuration parameter that sets how many seconds a process found gets to exit. */
     static final String SETTLE_PARAMETER = "stagewright.leftovers.settleSeconds";
 
+    /** The most seconds {@link #SETTLE_PARAMETER} may ask for: an hour, well short of a nanosecond count's overflow. */
+    static final long MAX_SETTLE_SECONDS = 3600;
+
+    private static final System.Logger LOG = System.getLogger(Leftovers.class.getName());
+
     private static final long SETTLE_POLL_MILLIS = 100;
 
     /** A command line is cut here: a game's classpath alone runs to tens of kilobytes. */
     private static final int COMMAND_CHARS = 300;
 
     private Leftovers() {}
+
+    /**
+     * The seconds {@link #SETTLE_PARAMETER} asks for, or the default, said so, when it is not a whole number from 0 to
+     * {@link #MAX_SETTLE_SECONDS}: a mistyped wait is no reason to run no scene.
+     */
+    static long settleSeconds(Optional<String> value) {
+        if (value.isEmpty()) {
+            return DEFAULT_SETTLE_SECONDS;
+        }
+        try {
+            long seconds = Long.parseLong(value.get().strip());
+            if (seconds >= 0 && seconds <= MAX_SETTLE_SECONDS) {
+                return seconds;
+            }
+        } catch (NumberFormatException e) {
+            // said below, with the value
+        }
+        LOG.log(
+                System.Logger.Level.WARNING,
+                "{0}={1} is not a whole number of seconds from 0 to {2}; {3} are waited",
+                SETTLE_PARAMETER,
+                value.get(),
+                MAX_SETTLE_SECONDS,
+                DEFAULT_SETTLE_SECONDS);
+        return DEFAULT_SETTLE_SECONDS;
+    }
+
+    /** {@code command} cut to {@link #COMMAND_CHARS}, never between the two halves of a character outside the BMP. */
+    static String cut(String command) {
+        if (command.length() <= COMMAND_CHARS) {
+            return command;
+        }
+        int end = Character.isHighSurrogate(command.charAt(COMMAND_CHARS - 1)) ? COMMAND_CHARS - 1 : COMMAND_CHARS;
+        return command.substring(0, end) + "…";
+    }
 
     /**
      * One line per process found still running {@code settle} after the games ended, {@code pid N: command}, in pid
@@ -74,8 +114,7 @@ final class Leftovers {
         List<String> left = new ArrayList<>();
         found.forEach((p, command) -> {
             if (p.isAlive()) {
-                left.add("pid " + p.pid() + ": "
-                        + (command.length() > COMMAND_CHARS ? command.substring(0, COMMAND_CHARS) + "…" : command));
+                left.add("pid " + p.pid() + ": " + cut(command));
             }
         });
         return left;

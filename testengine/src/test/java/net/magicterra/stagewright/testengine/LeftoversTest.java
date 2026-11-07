@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,24 @@ class LeftoversTest {
 
     /** Shorter than a run's, so a test with a process that stays does not wait out the real one. */
     private static final Duration SETTLE = Duration.ofSeconds(3);
+
+    @Test
+    void aSettleThatIsNoWholeNumberOfSecondsInRangeIsTheDefault() {
+        assertEquals(Leftovers.DEFAULT_SETTLE_SECONDS, Leftovers.settleSeconds(Optional.empty()));
+        assertEquals(0, Leftovers.settleSeconds(Optional.of("0")));
+        assertEquals(30, Leftovers.settleSeconds(Optional.of(" 30 ")));
+        for (String bad : List.of("15s", "1.5", "-1", "10000000000", "")) {
+            assertEquals(Leftovers.DEFAULT_SETTLE_SECONDS, Leftovers.settleSeconds(Optional.of(bad)), bad);
+        }
+    }
+
+    @Test
+    void aCommandIsCutShortWithoutSplittingACharacter() {
+        assertEquals("java -jar a.jar", Leftovers.cut("java -jar a.jar"));
+        String astral = "x".repeat(299) + "😀" + "tail";
+        assertEquals("x".repeat(299) + "…", Leftovers.cut(astral));
+        assertEquals("y".repeat(300) + "…", Leftovers.cut("y".repeat(400)));
+    }
 
     @Test
     void aDirectoryAndWhatIsBelowItAreTheScenes() {

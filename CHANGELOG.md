@@ -18,7 +18,8 @@ A process found in a scene's directories once its games ended now gets 15 second
 instead of three. A pack's crash watcher that saw the client stop cleanly checks its licence over the network before
 it goes, which took longer than three seconds, so it was reported as something the game left behind. The wait is spent
 only while such a process is alive, and the configuration parameter `stagewright.leftovers.settleSeconds` sets another
-(a system property works too). The report now says the process is still running that long after the games ended,
+(a system property works too), from 0 to 3600; a value that is not one is warned about and the 15 seconds kept,
+rather than stopping the run. The report now says the process is still running that long after the games ended,
 rather than calling it left behind, and cuts each command line at 300 characters. The CLI's JUnit XML dropped every
 entry a scene itself reported, the `leftover` one included, since only a test's entries were written; a scene's
 entries now go into the `<properties>` of its own `<testsuite>`, after the ones there. That includes its `directory`,
