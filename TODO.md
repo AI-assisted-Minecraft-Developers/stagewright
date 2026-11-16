@@ -15,6 +15,11 @@ through a run task the plugin cannot put an argument on. It goes if and when nei
 `SceneRun.awaitClientStop` waits for the server to go before it gives the client its notice, and `awaitExit` then
 waits for it again before killing it: about twice the agent's grace, when the agent fails to end it.
 
+## A `--tests` pattern naming a method still runs the whole class in the game
+
+`SceneRun` passes the game class names only (`-Dstagewright.junit.classes`); a method the Gradle filter dropped runs
+anyway, unreported.
+
 ## The plugin does not run on Gradle 9
 
 `StageWrightLaunchSpecsTask` resolves the run's classpath while executing (`CompanionLaunch.writeClasspathArgFile`),
