@@ -76,6 +76,9 @@ clientFiles:
     earlyWindowControl = false
 ```
 
+A NeoForge client gets `earlyWindowControl = false` in its `config/fml.toml` without being asked, the rest of that file
+kept, unless the scene's `clientFiles` write the file themselves.
+
 ## `peers`
 
 Other dedicated servers the scene runs beside its game, each by name, for tests that need two: a listing made on one

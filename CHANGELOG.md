@@ -21,6 +21,15 @@ The wait now gives up only when no waiting plot has had a chunk become ready for
 all, and the failure says how many of the plot's chunks were ready and which of the two it was. **Compiled**, with
 unit tests of the rule.
 
+### A NeoForge scene client starts without FML's early window
+
+FML's early loading window crashed a scene's client once in its loading overlay, before the client reached the world
+(`BootstrapMethodError: FileSystemNotFoundException` in `RenderElement.memoryInfo`), failing the whole scene. Nobody
+watches that window in a scene, and FML reads its switch only from `config/fml.toml` in the game directory, so the
+engine now sets `earlyWindowControl = false` in the scene's own copy of that file, keeping its other lines, for a
+client launched with a `forgeclient` target. A scene whose `clientFiles` write `config/fml.toml` itself is left as it
+says. **Compiled**, with unit tests of the detection and the file edit.
+
 ## 2026-11-07
 
 ### A method a mod registers on the client alone can be called on a joined client

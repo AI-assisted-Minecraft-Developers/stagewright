@@ -241,6 +241,14 @@ final class SceneRun {
             }
             SceneSetup.writeFiles(spec.primary().workingDirectory(), declaration.files());
             SceneSetup.writeFiles(clientDirectory(spec, declaration), declaration.clientFiles());
+            LaunchSpec.Process client =
+                    spec.companion() != null ? spec.companion() : spec.server() ? null : spec.primary();
+            // A scene that writes FML's settings itself has said what it wants of the window.
+            if (client != null
+                    && !declaration.clientFiles().containsKey(EarlyWindow.CONFIG)
+                    && EarlyWindow.neoForgeClient(client)) {
+                EarlyWindow.turnOff(client.workingDirectory());
+            }
             if (!declaration.excludedMods().isEmpty()) {
                 spec = withoutMods(spec, declaration.excludedMods(), modsScratch);
             }
