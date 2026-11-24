@@ -10,6 +10,17 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-11-24
+
+### A plot waits for its chunks while any plot's keep coming
+
+A plot's lease waited a fixed 1200 ticks for its chunks. Every plot leased at once shares the server's chunk workers,
+so when a suite starts all its classes together the last plots in the queue wait behind the others, and one run
+failed 85 tests at once with "the chunks of Plot[…] to load did not hold within 1200 ticks" while generation went on.
+The wait now gives up only when no waiting plot has had a chunk become ready for 1200 ticks, or after 6000 ticks in
+all, and the failure says how many of the plot's chunks were ready and which of the two it was. **Compiled**, with
+unit tests of the rule.
+
 ## 2026-11-07
 
 ### A method a mod registers on the client alone can be called on a joined client

@@ -58,8 +58,11 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
     /** Distance 2 from full is the level {@code setChunkForced} gives: entity-ticking. */
     private static final int TICKET_DISTANCE = 2;
 
-    /** Generating fresh chunks is the slow case; a minute of ticks covers it while the whole suite starts at once. */
-    private static final int CHUNK_LOAD_TICKS = 1200;
+    /** A minute of ticks in which no waiting plot gets a chunk ready is a server that stopped generating. */
+    private static final int CHUNK_STALL_TICKS = 1200;
+
+    /** The longest a plot waits for its chunks while they keep coming, behind every other plot leased at once. */
+    private static final int CHUNK_LOAD_LIMIT_TICKS = 6000;
 
     private static final String LIST_SEPARATOR = ", ";
 
@@ -117,11 +120,7 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
                 plot.loadChunks(server, true);
                 return server;
             });
-            // Evaluated on the server thread, once a tick.
-            game.await()
-                    .within(CHUNK_LOAD_TICKS)
-                    .as("the chunks of " + plot + " to load")
-                    .until(() -> plot.chunksLoaded(held));
+            plot.awaitChunks(held);
             // One server task: nothing changes the box between keeping it and emptying it.
             game.runOnServer(server -> {
                 // Forcing a loaded chunk costs nothing, and a forced chunk keeps the dimension ticking with no player
@@ -325,21 +324,61 @@ final class PlotImpl implements Plot, ExtensionContext.Store.CloseableResource {
         }
     }
 
-    /** Server thread: whether every chunk of the plot is loaded, its entities included. */
-    private boolean chunksLoaded(MinecraftServer server) {
+    /** Wait until every chunk of the plot is ready, failing on a stall or past the limit with how far it got. */
+    private void awaitChunks(MinecraftServer server) {
+        int total = chunkCount();
+        long[] reading = new long[2];
+        ChunkProgress[] progress = new ChunkProgress[1];
+        // Evaluated on the server thread, once a tick; true also on a stall or at the limit, told apart below.
+        game.await()
+                .within(CHUNK_LOAD_LIMIT_TICKS + 1)
+                .as("the chunks of " + this + " to load")
+                .until(() -> {
+                    long tick = server.getTickCount();
+                    if (progress[0] == null) {
+                        progress[0] = new ChunkProgress(ChunkProgress.ANY_PROGRESS, CHUNK_STALL_TICKS, tick);
+                    }
+                    int ready = readyChunks(server);
+                    reading[0] = ready;
+                    reading[1] = tick;
+                    return ready == total
+                            || progress[0].stalled(ready, tick)
+                            || progress[0].waited(tick) >= CHUNK_LOAD_LIMIT_TICKS;
+                });
+        if (reading[0] == total) {
+            return;
+        }
+        ChunkProgress p = progress[0];
+        long tick = reading[1];
+        String got = reading[0] + " of " + total + " ready after " + p.waited(tick) + " ticks";
+        if (p.ticksWithoutProgress(tick) >= CHUNK_STALL_TICKS) {
+            throw new AssertionError("the chunks of " + this + " stopped loading: " + got + ", and no plot's chunks"
+                    + " became ready in the last " + CHUNK_STALL_TICKS + " ticks");
+        }
+        throw new AssertionError("the chunks of " + this + " did not all load within " + CHUNK_LOAD_LIMIT_TICKS
+                + " ticks, though they kept coming: " + got);
+    }
+
+    private int chunkCount() {
+        return ((box.maxX() >> 4) - (box.minX() >> 4) + 1) * ((box.maxZ() >> 4) - (box.minZ() >> 4) + 1);
+    }
+
+    /** Server thread: how many of the plot's chunks are loaded, their entities included. */
+    private int readyChunks(MinecraftServer server) {
         ServerLevel level = level(server);
+        int ready = 0;
         for (int cx = box.minX() >> 4; cx <= box.maxX() >> 4; cx++) {
             for (int cz = box.minZ() >> 4; cz <= box.maxZ() >> 4; cz++) {
                 // Entity-ticking too, the level the ticket asks for: a chunk is loaded well before it gets there, by
                 // hundreds of ticks while several games share the processor, and a mob placed meanwhile stands still.
-                if (level.getChunkSource().getChunkNow(cx, cz) == null
-                        || !level.areEntitiesLoaded(ChunkPos.asLong(cx, cz))
-                        || !level.isPositionEntityTicking(new ChunkPos(cx, cz).getWorldPosition())) {
-                    return false;
+                if (level.getChunkSource().getChunkNow(cx, cz) != null
+                        && level.areEntitiesLoaded(ChunkPos.asLong(cx, cz))
+                        && level.isPositionEntityTicking(new ChunkPos(cx, cz).getWorldPosition())) {
+                    ready++;
                 }
             }
         }
-        return true;
+        return ready;
     }
 
     /** Server thread: every cell to air and every non-player entity gone; the snapshot holds what was there. */
