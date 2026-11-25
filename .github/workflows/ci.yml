@@ -77,6 +77,14 @@ jobs:
         if: steps.companion.outputs.sha == ''
         run: python3 scripts/check_packaging.py --build
 
+      # The log names only the failing assertion's line; the reports hold what it got.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}-${{ github.run_attempt }}
+          path: '*/build/test-results/'
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v4
         with:
           name: stagewright-cli-0.1.0-alpha.${{ github.run_number }}
