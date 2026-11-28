@@ -64,6 +64,9 @@ final class SceneRun {
 
     private static final long POLL_MILLIS = 100;
 
+    /** Long enough for a slow answer from Mojang, short against the client's own wait for a world. */
+    private static final int URL_TIMEOUT_MS = 15_000;
+
     /**
      * When each game this runner started was started, until its round has ended; by the process, as a pid is reused.
      * Taken here because a game's own start time can no longer be read once it has exited, which is when its leftovers
@@ -122,15 +125,8 @@ final class SceneRun {
     static Predicate<String> deactivated(String inEngine, List<String> gameJvmArgs, Map<String, String> gameEnv) {
         List<String> values = new ArrayList<>();
         values.add(inEngine);
-        List<String> options = new ArrayList<>(gameJvmArgs);
-        for (String variable : OPTION_VARIABLES) {
-            String set = gameEnv.get(variable);
-            if (set != null) {
-                options.addAll(List.of(set.trim().split("\\s+")));
-            }
-        }
         String flag = "-D" + DEACTIVATE + "=";
-        for (String option : options) {
+        for (String option : gameOptions(gameJvmArgs, gameEnv)) {
             if (option.startsWith(flag)) {
                 values.add(option.substring(flag.length()));
             }
@@ -634,7 +630,40 @@ final class SceneRun {
         if (serverPort > 0) {
             extra.add("-Dstagewright.client.port=" + serverPort);
         }
+        extra.addAll(urlTimeouts(spec.companion(), System.getenv()));
         return start(spec.companion(), extra, log);
+    }
+
+    /**
+     * Default timeouts for the URL connections of a joining client that set none, unless its launch sets them. Vanilla
+     * fetches Mojang's blocked server list on the first dial with none; with one, a request never answered is given up
+     * on, the list is skipped, and the dial goes on. They hold for every such connection in that JVM, a mod's too.
+     */
+    static List<String> urlTimeouts(LaunchSpec.Process client, Map<String, String> engineEnv) {
+        // The client inherits the engine's environment, with its own on top.
+        Map<String, String> env = new HashMap<>(engineEnv);
+        env.putAll(client.environment());
+        List<String> options = gameOptions(client.jvmArgs(), env);
+        List<String> timeouts = new ArrayList<>();
+        for (String property : List.of("sun.net.client.defaultConnectTimeout", "sun.net.client.defaultReadTimeout")) {
+            String flag = "-D" + property + "=";
+            if (options.stream().noneMatch(a -> a.startsWith(flag))) {
+                timeouts.add(flag + URL_TIMEOUT_MS);
+            }
+        }
+        return timeouts;
+    }
+
+    /** The JVM options a game starts with: its command line's, then those its environment's option variables add. */
+    private static List<String> gameOptions(List<String> jvmArgs, Map<String, String> env) {
+        List<String> options = new ArrayList<>(jvmArgs);
+        for (String variable : OPTION_VARIABLES) {
+            String set = env.get(variable);
+            if (set != null) {
+                options.addAll(List.of(set.trim().split("\\s+")));
+            }
+        }
+        return options;
     }
 
     /**

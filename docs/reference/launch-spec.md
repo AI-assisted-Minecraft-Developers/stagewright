@@ -82,7 +82,15 @@ that a `-D` here overrides the run's and the JVM rather than a launcher reads it
 Before starting the primary, the engine also writes the scene's creation settings into `server.properties` in its
 working directory, the scene's own copy.
 
-The companion gets nothing added. Its output and the primary's go to
+The companion gets these added:
+
+| Argument | Why |
+|---|---|
+| `-javaagent:<agent jar>=…` | the supervision agent, which reports the client's ticks and its end |
+| `-Dstagewright.client.port=<port>` | only when the primary asks for a free port: the one the engine gave its server, which the client dials instead of its connect address's |
+| `-Dsun.net.client.defaultConnectTimeout=15000`, `-Dsun.net.client.defaultReadTimeout=15000` | each unless the launch sets it, on its command line or in `JAVA_TOOL_OPTIONS` or `JDK_JAVA_OPTIONS`: vanilla fetches Mojang's blocked server list on the first dial with no timeout, and without one a request Mojang never answers holds the dial. They hold for every URL connection in that JVM that sets none, a mod's too |
+
+Its output and the primary's go to
 `<gameDirectory>/stagewright/runs/<scene>/stagewright/logs/`.
 
 ## Scene directories

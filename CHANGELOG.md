@@ -10,6 +10,21 @@ does not control, which is the only level that proves a claim about such code).
 
 ---
 
+## 2026-11-28
+
+### A joining client no longer waits forever on Mojang before it dials
+
+On its first dial, vanilla fetches Mojang's list of blocked servers, and it sets no timeout. When Mojang's services
+stopped answering, a scene's client sat on the connect screen and sent the server nothing until the director gave up
+after 6000 ticks with "client never reached a world". The engine now starts a joining client with 15-second default
+timeouts for URL connections (`sun.net.client.defaultConnectTimeout` and `defaultReadTimeout`), unless its launch
+sets them itself, on its command line or in `JAVA_TOOL_OPTIONS` or `JDK_JAVA_OPTIONS`. They hold for every URL
+connection in that JVM that sets no timeout of its own, a mod's download too, so one that waits more than 15 seconds
+for a byte now fails. When the fetch is given up on, the list is skipped and the dial goes on. **Green in the self-test
+suite**: with Mojang's requests sent to a proxy that never answers, a WorldDriver client scene's client stayed on the
+connect screen for 6000 ticks before this change, and with it joined 16 seconds after its dial; a launch that set a
+45-second read timeout kept it. Unit tests cover which launches get the timeouts.
+
 ## 2026-11-24
 
 ### A plot waits for its chunks while any plot's keep coming
