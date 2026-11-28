@@ -25,6 +25,16 @@ suite**: with Mojang's requests sent to a proxy that never answers, a WorldDrive
 connect screen for 6000 ticks before this change, and with it joined 16 seconds after its dial; a launch that set a
 45-second read timeout kept it. Unit tests cover which launches get the timeouts.
 
+### A dial stuck on the connect screen says where it waits
+
+A dial stuck before its handshake logged nothing until the director's 6000-tick limit. One still on the connect
+screen after 30 seconds now logs a warning with the stack of vanilla's connector thread, marking threads an earlier
+dial left, or says that this dial's thread has ended, which means the login was sent and the server has not finished
+it. A warning rather than an error, because a large pack's login can hold the screen that long and still succeed.
+For scale, a real client of a 228-mod pack reached a test server's world 6.4 seconds after its dial. **Green in the
+self-test suite**: with Mojang's requests sent to a proxy that never answers, a WorldDriver client scene logged the
+warning after 600 ticks with the stack down to `MojangBlockListSupplier`, then joined once the request timed out.
+
 ## 2026-11-24
 
 ### A plot waits for its chunks while any plot's keep coming

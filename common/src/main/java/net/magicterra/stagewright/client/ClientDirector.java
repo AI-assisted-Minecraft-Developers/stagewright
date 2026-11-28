@@ -1,6 +1,9 @@
 package net.magicterra.stagewright.client;
 
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletionException;
 import java.util.function.Supplier;
 import net.magicterra.stagewright.StageWrightCommon;
@@ -67,6 +70,16 @@ public final class ClientDirector {
     private static final int DRIVE_TIMEOUT_TICKS = 20 * 300;
 
     /**
+     * Ticks a dial may sit on the connect screen before the log names where its connector thread is. A dial to a local
+     * server gets past the screen in seconds; one held this long is stuck in a call that logs nothing, often a request
+     * to Mojang made before the handshake.
+     */
+    private static final int STALLED_DIAL_TICKS = 20 * 30;
+
+    /** The name vanilla gives each dial's connector thread, before its number. */
+    private static final String CONNECTOR_THREAD = "Server Connector #";
+
+    /**
      * Ticks between "the run is over" and stopping the client, so the integrated server finishes saving before the JVM
      * goes away.
      */
@@ -90,6 +103,15 @@ public final class ClientDirector {
     private static String waitingOn;
 
     private static int driveTicks;
+
+    /** Ticks since the last dial. */
+    private static int dialTicks;
+
+    /** Whether the last dial's stall has been logged, so it is logged once. */
+    private static boolean stallReported;
+
+    /** The connector threads alive as the last dial began, which belong to dials before it. */
+    private static Set<Thread> earlierConnectors = Set.of();
 
     /** Ticks spent {@link Phase#PARTED}. */
     private static int partedTicks;
@@ -190,31 +212,7 @@ public final class ClientDirector {
                     drive(mc);
                 }
             }
-            case DRIVING -> {
-                if (mc.level != null) {
-                    StageWrightCommon.LOG.info(
-                            "[{}] client is in world after {} ticks", StageWrightCommon.MOD_ID, driveTicks);
-                    enter(Phase.IN_WORLD);
-                } else if (++driveTicks > DRIVE_TIMEOUT_TICKS) {
-                    if (StageWrightCommon.LOG.isErrorEnabled()) {
-                        StageWrightCommon.LOG.error(
-                                "[{}] client never reached a world within {} ticks ({})",
-                                StageWrightCommon.MOD_ID,
-                                DRIVE_TIMEOUT_TICKS,
-                                directive());
-                    }
-                    finish();
-                } else if (shouldRedial(mc)) {
-                    // Keep dialling. The E2E pair is two processes with no handshake between them,
-                    // and a single attempt would make the whole topology depend on which one Gradle
-                    // happened to start first: connect before the server is listening and the client
-                    // lands on the disconnected screen and sits there while the server waits for a
-                    // player that will never arrive. Retrying makes start order stop mattering.
-                    StageWrightCommon.LOG.info(
-                            "[{}] not connected yet ({} ticks) — dialling again", StageWrightCommon.MOD_ID, driveTicks);
-                    drive(mc);
-                }
-            }
+            case DRIVING -> driving(mc);
             case IN_WORLD -> {
                 // The server ends the run by halting itself, integrated or dedicated, which drops this
                 // client out of its world: losing the level is the completion signal in both topologies.
@@ -242,6 +240,35 @@ public final class ClientDirector {
                 }
             }
             default -> throw new IllegalStateException("unhandled director phase " + phase);
+        }
+    }
+
+    /** One tick of {@link Phase#DRIVING}: into the world, out of time, stalled on the dial, or dialling again. */
+    private static void driving(Minecraft mc) {
+        if (mc.level != null) {
+            StageWrightCommon.LOG.info("[{}] client is in world after {} ticks", StageWrightCommon.MOD_ID, driveTicks);
+            enter(Phase.IN_WORLD);
+        } else if (++driveTicks > DRIVE_TIMEOUT_TICKS) {
+            if (StageWrightCommon.LOG.isErrorEnabled()) {
+                StageWrightCommon.LOG.error(
+                        "[{}] client never reached a world within {} ticks ({})",
+                        StageWrightCommon.MOD_ID,
+                        DRIVE_TIMEOUT_TICKS,
+                        directive());
+            }
+            finish();
+        } else if (++dialTicks >= STALLED_DIAL_TICKS && !stallReported && mc.screen instanceof ConnectScreen) {
+            stallReported = true;
+            reportStalledDial();
+        } else if (shouldRedial(mc)) {
+            // Keep dialling. The E2E pair is two processes with no handshake between them,
+            // and a single attempt would make the whole topology depend on which one Gradle
+            // happened to start first: connect before the server is listening and the client
+            // lands on the disconnected screen and sits there while the server waits for a
+            // player that will never arrive. Retrying makes start order stop mattering.
+            StageWrightCommon.LOG.info(
+                    "[{}] not connected yet ({} ticks) — dialling again", StageWrightCommon.MOD_ID, driveTicks);
+            drive(mc);
         }
     }
 
@@ -334,6 +361,9 @@ public final class ClientDirector {
         if (connect != null && !connect.isBlank()) {
             String address = withPort(connect.trim(), System.getProperty(P_PORT));
             StageWrightCommon.LOG.info("[{}] connecting to {}", StageWrightCommon.MOD_ID, address);
+            dialTicks = 0;
+            stallReported = false;
+            earlierConnectors = connectors();
             ConnectScreen.startConnecting(
                     mc.screen,
                     mc,
@@ -357,6 +387,55 @@ public final class ClientDirector {
         int colon = address.lastIndexOf(':');
         String host = colon > close ? address.substring(0, colon) : address;
         return host + ":" + port.trim();
+    }
+
+    /** The connector threads alive now. */
+    private static Set<Thread> connectors() {
+        Set<Thread> alive = new HashSet<>();
+        for (Thread t : Thread.getAllStackTraces().keySet()) {
+            if (t.getName().startsWith(CONNECTOR_THREAD)) {
+                alive.add(t);
+            }
+        }
+        return alive;
+    }
+
+    /**
+     * Log where the connector threads are, this dial's and any an earlier dial left, once a dial has sat on the connect
+     * screen too long. A warning, not an error: a large pack's login can hold the screen this long and still succeed.
+     */
+    private static void reportStalledDial() {
+        boolean ours = false;
+        for (Map.Entry<Thread, StackTraceElement[]> e :
+                Thread.getAllStackTraces().entrySet()) {
+            Thread t = e.getKey();
+            if (!t.getName().startsWith(CONNECTOR_THREAD)) {
+                continue;
+            }
+            boolean earlier = earlierConnectors.contains(t);
+            ours |= !earlier;
+            // The whole stack: the call that holds the dial sits under some twenty frames of JDK networking.
+            StringBuilder frames = new StringBuilder();
+            for (StackTraceElement frame : e.getValue()) {
+                frames.append("\n\tat ").append(frame);
+            }
+            StageWrightCommon.LOG.warn(
+                    "[{}] still on the connect screen after {} ticks; {}, {}, is {}:{}",
+                    StageWrightCommon.MOD_ID,
+                    STALLED_DIAL_TICKS,
+                    t.getName(),
+                    earlier ? "left by an earlier dial" : "this dial's",
+                    t.getState(),
+                    frames);
+        }
+        if (!ours) {
+            // The connector ends once it has sent the login, so the wait is on the server's side of it.
+            StageWrightCommon.LOG.warn(
+                    "[{}] still on the connect screen after {} ticks; this dial's connector thread has ended,"
+                            + " so the login was sent and the server has not finished it",
+                    StageWrightCommon.MOD_ID,
+                    STALLED_DIAL_TICKS);
+        }
     }
 
     /** The save the client opens first, as the run names it. */
